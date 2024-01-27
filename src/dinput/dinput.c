@@ -21,7 +21,7 @@ HRESULT WINAPI DirectInputCreateA(uint32_t a, uint32_t b, uint32_t c, uint32_t d
 	static void(*Patch)() = NULL;
 
 	if (o_DirectInputCreateA == NULL) {
-		HMODULE patch_dll = LoadLibrary("patch.dll");
+		HMODULE patch_dll = LoadLibrary("annodue/patch.dll");
 		Patch = (void*)GetProcAddress(patch_dll, "Patch");
 		Patch();
 

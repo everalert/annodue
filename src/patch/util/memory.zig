@@ -30,27 +30,66 @@ pub fn patchAdd(offset: usize, comptime T: type, delta: T) usize {
     return write(offset, T, value + delta);
 }
 
-pub fn add_esp(memory_offset: usize, n: i32) usize {
+pub fn add_rm32_imm8(memory_offset: usize, rm32: u8, imm8: u8) usize {
+    var offset = memory_offset;
+    offset = write(offset, u8, 0x83);
+    offset = write(offset, u8, rm32);
+    offset = write(offset, u32, imm8);
+    return offset;
+}
+
+pub fn add_esp8(memory_offset: usize, value: u8) usize {
+    return add_rm32_imm8(memory_offset, 0xC4, value);
+}
+
+pub fn add_rm32_imm32(memory_offset: usize, rm32: u8, imm32: u32) usize {
     var offset = memory_offset;
     offset = write(offset, u8, 0x81);
-    offset = write(offset, u8, 0xC4);
-    offset = write(offset, i32, n);
-    //offset = write(offset, u32, @as(u32, @bitCast(n)));
+    offset = write(offset, u8, rm32);
+    offset = write(offset, u32, imm32);
+    return offset;
+}
+
+pub fn add_esp32(memory_offset: usize, value: u32) usize {
+    return add_rm32_imm32(memory_offset, 0xC4, value);
+}
+
+pub fn test_rm32_r32(memory_offset: usize, r32: u8) usize {
+    var offset = memory_offset;
+    offset = write(offset, u8, 0x85);
+    offset = write(offset, u8, r32);
     return offset;
 }
 
 pub fn test_eax_eax(memory_offset: usize) usize {
-    var offset = memory_offset;
-    offset = write(offset, u8, 0x85);
-    offset = write(offset, u8, 0xC0);
-    return offset;
+    return test_rm32_r32(memory_offset, 0xC0);
 }
 
 pub fn test_edx_edx(memory_offset: usize) usize {
+    return test_rm32_r32(memory_offset, 0xD2);
+}
+
+pub fn mov_r32_rm32(memory_offset: usize, r32: u8, value: u32) usize {
     var offset = memory_offset;
-    offset = write(offset, u8, 0x85);
-    offset = write(offset, u8, 0xD2);
+    offset = write(offset, u8, 0x8B);
+    offset = write(offset, u8, r32);
+    offset = write(offset, u32, value);
     return offset;
+}
+
+pub fn mov_edx(memory_offset: usize, value: u32) usize {
+    return mov_r32_rm32(memory_offset, 0x15, value);
+}
+
+pub fn mov_rm32_r32(memory_offset: usize, r32: u8) usize {
+    var offset = memory_offset;
+    offset = write(offset, u8, 0x89);
+    offset = write(offset, u8, r32);
+    return offset;
+}
+
+pub fn mov_edx_esp(memory_offset: usize) usize {
+    return mov_rm32_r32(memory_offset, 0xE2);
 }
 
 pub fn nop(memory_offset: usize) usize {
@@ -63,6 +102,18 @@ pub fn push_eax(memory_offset: usize) usize {
 
 pub fn push_edx(memory_offset: usize) usize {
     return write(memory_offset, u8, 0x52);
+}
+
+pub fn push_esi(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x56);
+}
+
+pub fn push_edi(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x57);
+}
+
+pub fn pop_eax(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x58);
 }
 
 pub fn pop_edx(memory_offset: usize) usize {
@@ -99,6 +150,16 @@ pub fn jnz(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = write(offset, u8, 0x0F);
     offset = write(offset, u8, 0x85);
+    offset = write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
+    //offset = write(offset, u32, address - (offset + 4));
+    return offset;
+}
+
+// WARN: could underflow, but not likely for our use case i guess
+pub fn jz(memory_offset: usize, address: usize) usize {
+    var offset = memory_offset;
+    offset = write(offset, u8, 0x0F);
+    offset = write(offset, u8, 0x84);
     offset = write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
     //offset = write(offset, u32, address - (offset + 4));
     return offset;

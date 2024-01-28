@@ -18,11 +18,27 @@ pub fn write(offset: usize, comptime T: type, value: T) usize {
     return offset + @sizeOf(T);
 }
 
+pub fn write_bytes(offset: usize, ptr_in: ?*anyopaque, len: usize) usize {
+    const addr: [*]u8 = @ptrFromInt(offset);
+    const data: []u8 = @as([*]u8, @ptrCast(ptr_in))[0..len];
+    var protect: DWORD = undefined;
+    _ = VirtualProtect(addr, len, PAGE_EXECUTE_READWRITE, &protect) catch unreachable;
+    @memcpy(addr, data);
+    _ = VirtualProtect(addr, len, protect, &protect) catch unreachable;
+    return offset + len;
+}
+
 pub fn read(offset: usize, comptime T: type) T {
     const addr: [*]align(1) T = @ptrFromInt(offset);
     var data: [1]T = undefined;
     @memcpy(&data, addr);
     return data[0];
+}
+
+pub fn read_bytes(offset: usize, ptr_out: ?*anyopaque, len: usize) void {
+    const addr: [*]u8 = @ptrFromInt(offset);
+    const data: []u8 = @as([*]u8, @ptrCast(ptr_out))[0..len];
+    @memcpy(data, addr);
 }
 
 pub fn patchAdd(offset: usize, comptime T: type, delta: T) usize {
@@ -94,6 +110,22 @@ pub fn mov_edx_esp(memory_offset: usize) usize {
 
 pub fn nop(memory_offset: usize) usize {
     return write(memory_offset, u8, 0x90);
+}
+
+pub fn nop_align(memory_offset: usize, increment: usize) usize {
+    var offset: usize = memory_offset;
+    while (offset % increment > 0) {
+        offset = nop(offset);
+    }
+    return offset;
+}
+
+pub fn nop_until(memory_offset: usize, end: usize) usize {
+    var offset: usize = memory_offset;
+    while (offset < end) {
+        offset = nop(offset);
+    }
+    return offset;
 }
 
 pub fn push_eax(memory_offset: usize) usize {

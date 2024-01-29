@@ -17,15 +17,15 @@ const ver_minor: u32 = 0;
 const ver_patch: u32 = 1;
 
 const mp = @import("patch_multiplayer.zig");
+const gen = @import("patch_general.zig");
 const mem = @import("util/memory.zig");
-const set = @import("util/settings.zig");
-const SettingsGroup = set.SettingsGroup;
-const SettingsManager = set.SettingsManager;
+const SettingsGroup = @import("util/settings.zig").SettingsGroup;
+const SettingsManager = @import("util/settings.zig").SettingsManager;
 const ini = @import("import/ini/ini.zig");
 
 const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 
-const s = struct {
+const s = struct { // FIXME: yucky
     var manager: SettingsManager = undefined;
     var gen: SettingsGroup = undefined;
     var mp: SettingsGroup = undefined;
@@ -36,52 +36,9 @@ fn PtrMessage(alloc: std.mem.Allocator, ptr: usize, label: []const u8) void {
     _ = MessageBoxA(null, buf, "patch.dll", MB_OK);
 }
 
-fn PatchDeathSpeed(min: f32, drop: f32) void {
-    _ = mem.write(0x4C7BB8, f32, min);
-    _ = mem.write(0x4C7BBC, f32, drop);
-}
-
-fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
-    const col = struct {
-        const min: u8 = 63;
-        const max: u8 = 255;
-        var rgb: [3]u8 = .{ 255, 63, 63 };
-        var i: u8 = 0;
-        var n: u8 = 1;
-        fn update() void {
-            n = (i + 1) % 3;
-            if (rgb[i] == min and rgb[n] == max) i = n;
-            n = (i + 1) % 3;
-            if (rgb[i] == max and rgb[n] < max) {
-                rgb[n] += 1;
-            } else {
-                rgb[i] -= 1;
-            }
-        }
-    };
-    col.update();
-    _ = mem.write(0x460E5E, u8, col.rgb[0]); // B, 255
-    _ = mem.write(0x460E60, u8, col.rgb[1]); // G, 255
-    _ = mem.write(0x460E62, u8, col.rgb[2]); // R, 255
-}
-
-fn PatchHudTimerCol(rgba: u32) void { // 0xFFFFFFBE
-    _ = mem.write(0x460E5C, u8, @as(u8, @truncate(rgba))); // A, 190
-    _ = mem.write(0x460E5E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
-    _ = mem.write(0x460E60, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
-    _ = mem.write(0x460E62, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
-}
-
-fn PatchHudTimerLabelCol(rgba: u32) void { // 0xFFFFFFBE
-    _ = mem.write(0x460E8C, u8, @as(u8, @truncate(rgba))); // A, 190
-    _ = mem.write(0x460E8E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
-    _ = mem.write(0x460E90, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
-    _ = mem.write(0x460E92, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
-}
-
 fn GameLoopAfter() void {
     if (s.gen.get("rainbow_timer_enable", bool)) {
-        PatchHudTimerColRotate();
+        gen.PatchHudTimerColRotate();
     }
 }
 
@@ -154,7 +111,7 @@ export fn Patch() void {
     if (s.gen.get("death_speed_mod_enable", bool)) {
         const dsm = s.gen.get("death_speed_min", f32);
         const dsd = s.gen.get("death_speed_drop", f32);
-        PatchDeathSpeed(dsm, dsd);
+        gen.PatchDeathSpeed(dsm, dsd);
     }
 
     // swe1r-patcher (multiplayer mod) stuff
@@ -199,6 +156,8 @@ export fn Patch() void {
             off = mp.PatchTriggerDisplay(off);
         }
     }
+
+    // debug
 
     if (false) {
         var mb_title = std.fmt.allocPrintZ(alloc, "Annodue {d}.{d}.{d}", .{

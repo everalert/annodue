@@ -160,6 +160,7 @@ pub fn push_u32(memory_offset: usize, value: usize) usize {
 }
 
 // WARN: could underflow, but not likely for our use case i guess
+// call_rel32
 pub fn call(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = write(offset, u8, 0xE8);
@@ -169,6 +170,7 @@ pub fn call(memory_offset: usize, address: usize) usize {
 }
 
 // WARN: could underflow, but not likely for our use case i guess
+// jmp_rel32
 pub fn jmp(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = write(offset, u8, 0xE9);
@@ -178,6 +180,7 @@ pub fn jmp(memory_offset: usize, address: usize) usize {
 }
 
 // WARN: could underflow, but not likely for our use case i guess
+// jcc jnz_rel32
 pub fn jnz(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = write(offset, u8, 0x0F);
@@ -188,6 +191,7 @@ pub fn jnz(memory_offset: usize, address: usize) usize {
 }
 
 // WARN: could underflow, but not likely for our use case i guess
+// jcc jz_rel32
 pub fn jz(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = write(offset, u8, 0x0F);

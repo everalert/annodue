@@ -33,7 +33,7 @@ const s = struct { // FIXME: yucky
 
 fn PtrMessage(alloc: std.mem.Allocator, ptr: usize, label: []const u8) void {
     var buf = std.fmt.allocPrintZ(alloc, "{s}: 0x{x}", .{ label, ptr }) catch unreachable;
-    _ = MessageBoxA(null, buf, "patch.dll", MB_OK);
+    _ = MessageBoxA(null, buf, "annodue.dll", MB_OK);
 }
 
 fn GameLoopAfter() void {
@@ -92,9 +92,9 @@ export fn Patch() void {
     s.mp = SettingsGroup.init(alloc, "multiplayer");
     //defer s_mp.deinit();
     s.mp.add("multiplayer_mod_enable", bool, false);
-    s.mp.add("patch_netplay", bool, false);
+    s.mp.add("patch_netplay", bool, false); // working? ups ok, coll ?
     s.mp.add("netplay_guid", bool, false); // working?
-    s.mp.add("netplay_r100", bool, false);
+    s.mp.add("netplay_r100", bool, false); // working
     s.mp.add("patch_audio", bool, false);
     s.mp.add("patch_fonts", bool, false); // working
     s.mp.add("fonts_dump", bool, false); // working?
@@ -147,7 +147,7 @@ export fn Patch() void {
             const sample_rate: u32 = 22050 * 2;
             const bits_per_sample: u8 = 16;
             const stereo: bool = true;
-            off = mp.PatchAudioStreamQuality(off, sample_rate, bits_per_sample, stereo);
+            mp.PatchAudioStreamQuality(sample_rate, bits_per_sample, stereo);
         }
         if (s.mp.get("patch_tga_loader", bool)) {
             off = mp.PatchSpriteLoaderToLoadTga(off);

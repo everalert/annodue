@@ -8,6 +8,20 @@ const MEM_RESERVE = std.os.windows.MEM_RESERVE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 const DWORD = std.os.windows.DWORD;
 
+// TODO: experiment with unprotected/raw memory access without the bullshit
+// - switching to PAGE_EXECUTE_READWRITE is required
+// - maybe add fns: write_unsafe, write_unsafe_enable, write_unsafe_disable ?
+//     then you could do something like:
+//     GameLoopAfter() {
+//        write_unsafe_enable();
+//        function_containing_write_unsafe();
+//        ...
+//        write_unsafe_disable();
+//     }
+//     and only have to set it a handful of times outside of special cases
+// - need to know exactly the perf cost of calling virtualprotect to know
+//     if making a arch shift is worth it tho
+
 pub fn write(offset: usize, comptime T: type, value: T) usize {
     const addr: [*]align(1) T = @ptrFromInt(offset);
     const data: [1]T = [1]T{value};
@@ -50,7 +64,7 @@ pub fn add_rm32_imm8(memory_offset: usize, rm32: u8, imm8: u8) usize {
     var offset = memory_offset;
     offset = write(offset, u8, 0x83);
     offset = write(offset, u8, rm32);
-    offset = write(offset, u32, imm8);
+    offset = write(offset, u8, imm8);
     return offset;
 }
 

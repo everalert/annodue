@@ -171,7 +171,6 @@ pub fn ModifyNetworkGuid(data: []u8) void {
     _ = mem.write(0x4AF9B0 + 0, u16, 0x00000000);
 }
 
-// WARNING: not tested
 pub fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_healths: *[7]u8, patch_guid: bool) usize {
     if (patch_guid) {
         ModifyNetworkGuid(@constCast("Upgrades"));
@@ -179,58 +178,39 @@ pub fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrad
         ModifyNetworkGuid(upgrade_healths);
     }
 
-    // Now do the actual upgrade for menus
+    var offset: usize = memory_offset;
+
+    // Update menu upgrades
     _ = mem.write(0x45CFC6, u8, 0x05); // levels
     _ = mem.write(0x45CFCB, u8, 0xFF); // healths
 
-    //FIXME: Upgrade network player creation
-    // 0x45B725 vs 0x45B9FF
-    //lea     edx, [esp+1Ch+upgrade_health]
-    //lea     eax, [esp+1Ch+upgrade_level]
-    //push    edx             ; upgrade_healths
-    //push    eax             ; upgrade_levels
-    //push    ebp             ; handling_in
-    //push    offset handling_out ; handling_out
-    //mov     [esp+esi+2Ch+upgrade_health], cl
-    //call    _sub_449D00_generate_upgraded_handling_table_data
-
-    var offset: usize = memory_offset;
-
     // Place upgrade data in memory
-
-    const memory_offset_upgrade_levels: usize = offset;
+    const off_up_lv: usize = offset;
     offset = mem.write(offset, @TypeOf(upgrade_levels.*), upgrade_levels.*);
-
-    const memory_offset_upgrade_healths: usize = offset;
+    const off_up_hp: usize = offset;
     offset = mem.write(offset, @TypeOf(upgrade_healths.*), upgrade_healths.*);
 
-    // Now inject the code
-
-    const memory_offset_upgrade_code: usize = offset;
-
+    // Construct our code
+    const off_upgrade_code: usize = offset;
     offset = mem.push_edx(offset);
     offset = mem.push_eax(offset);
-    offset = mem.push_u32(offset, memory_offset_upgrade_healths);
-    offset = mem.push_u32(offset, memory_offset_upgrade_levels);
-
+    offset = mem.push_u32(offset, off_up_hp);
+    offset = mem.push_u32(offset, off_up_lv);
     offset = mem.push_esi(offset);
     offset = mem.push_edi(offset);
-    offset = mem.call(offset, 0x449D00);
-
+    offset = mem.call(offset, 0x449D00); // ???
     offset = mem.add_esp8(offset, 0x10);
-
     offset = mem.pop_eax(offset);
     offset = mem.pop_edx(offset);
-
     offset = mem.retn(offset);
 
     // Install it by jumping from 0x45B765 and returning to 0x45B76C
-    _ = mem.write(0x45B765 + 0, u8, 0xE8);
-    _ = mem.write(0x45B765 + 1, u32, memory_offset_upgrade_code - (0x45B765 + 5));
-    _ = mem.write(0x45B765 + 5, u8, 0x90);
-    _ = mem.write(0x45B765 + 6, u8, 0x90);
+    var off_install: usize = 0x45B765;
+    off_install = mem.call(off_install, off_upgrade_code);
+    off_install = mem.nop(off_install);
+    off_install = mem.nop(off_install);
 
-    return memory_offset;
+    return offset;
 }
 
 // WARNING: not tested
@@ -258,24 +238,20 @@ pub fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
 }
 
 // WARNING: not tested
-pub fn PatchAudioStreamQuality(memory_offset: usize, sample_rate: u32, bits_per_sample: u8, stereo: bool) usize {
-    var offset: usize = memory_offset;
-
+pub fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) void {
     // Calculate a fitting buffer-size
     const buffer_stereo: u32 = if (stereo) 2 else 1;
     const buffer_size: u32 = 2 * sample_rate * (bits_per_sample / 8) * buffer_stereo;
 
     // Patch audio stream source setting
-    offset = mem.write(0x423215, u32, buffer_size);
-    offset = mem.write(0x42321A, u8, bits_per_sample);
-    offset = mem.write(0x42321E, u32, sample_rate);
+    _ = mem.write(0x423215, u32, buffer_size);
+    _ = mem.write(0x42321A, u8, bits_per_sample);
+    _ = mem.write(0x42321E, u32, sample_rate);
 
     // Patch audio stream buffer chunk size
-    offset = mem.write(0x423549, u32, buffer_size / 2);
-    offset = mem.write(0x42354E, u32, buffer_size / 2);
-    offset = mem.write(0x423555, u32, buffer_size / 2);
-
-    return offset;
+    _ = mem.write(0x423549, u32, buffer_size / 2);
+    _ = mem.write(0x42354E, u32, buffer_size / 2);
+    _ = mem.write(0x423555, u32, buffer_size / 2);
 }
 
 // WARNING: not tested

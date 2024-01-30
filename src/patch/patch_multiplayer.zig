@@ -128,37 +128,28 @@ pub fn PatchTextureTable(alloc: std.mem.Allocator, memory_offset: usize, table_o
     return offset;
 }
 
-pub fn SWAP(a: *u8, b: *u8) void {
-    if (a.* ^ b.* > 0) {
-        a.* ^= b.*;
-        b.* ^= a.*;
-        a.* ^= b.*;
-    }
-}
-
-// WARNING: not tested
-// FIXME: causes crash on startup
-pub fn ModifyNetworkGuid(data: [*]u8, size: usize) void {
+// NOTE: max data size 256
+// FIXME: new guid not equivalent to swe1r-patcher for some reason, but close
+pub fn ModifyNetworkGuid(data: []u8) void {
     // RC4 hash
     const state = struct {
         var s: [256]u8 = undefined;
         var initialized: bool = false;
     };
     if (!state.initialized) {
-        var i: u8 = 0;
+        var i: usize = 0;
         while (i < 256) : (i += 1) {
-            state.s[i] = i;
+            state.s[i] = @truncate(i);
         }
         state.initialized = true;
     }
 
-    assert(size <= 256);
-    const data_bytes: []u8 = data[0..size];
+    assert(data.len <= 256);
     var i: usize = 0;
-    var j: usize = 0;
+    var j: u8 = 0;
     while (i < 256) : (i += 1) {
-        j += state.s[i] + data_bytes[i % size];
-        SWAP(&state.s[i], &state.s[j]);
+        j +%= state.s[i] +% data[i % data.len];
+        std.mem.swap(u8, &state.s[i], &state.s[j]);
     }
 
     var k_i: u8 = 0;
@@ -168,9 +159,10 @@ pub fn ModifyNetworkGuid(data: [*]u8, size: usize) void {
     i = 0;
     while (i < 16) : (i += 1) {
         k_i += 1;
-        k_j += k_s[k_i];
-        SWAP(&k_s[k_i], &k_s[k_j]);
-        var rc4_output: u8 = k_s[(k_s[k_i] + k_s[k_j]) & 0xFF];
+        k_j +%= k_s[k_i];
+        std.mem.swap(u8, &k_s[k_i], &k_s[k_j]);
+        var idx: usize = (@as(usize, k_s[k_i]) + k_s[k_j]) % 0xFF;
+        var rc4_output: u8 = k_s[idx];
         _ = mem.write(0x4AF9B0 + i, u8, rc4_output);
     }
 
@@ -182,9 +174,9 @@ pub fn ModifyNetworkGuid(data: [*]u8, size: usize) void {
 // WARNING: not tested
 pub fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_healths: *[7]u8, patch_guid: bool) usize {
     if (patch_guid) {
-        ModifyNetworkGuid(@constCast("Upgrades"), 8);
-        ModifyNetworkGuid(upgrade_levels, 7);
-        ModifyNetworkGuid(upgrade_healths, 7);
+        ModifyNetworkGuid(@constCast("Upgrades"));
+        ModifyNetworkGuid(upgrade_levels);
+        ModifyNetworkGuid(upgrade_healths);
     }
 
     // Now do the actual upgrade for menus
@@ -245,7 +237,7 @@ pub fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrad
 pub fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     // Disable collision between network players
     if (patch_guid) {
-        ModifyNetworkGuid(@constCast("Collisions"), 10);
+        ModifyNetworkGuid(@constCast("Collisions"));
     }
 
     var offset: usize = memory_offset;

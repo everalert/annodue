@@ -93,7 +93,7 @@ export fn Patch() void {
     //defer s_mp.deinit();
     s.mp.add("multiplayer_mod_enable", bool, false);
     s.mp.add("patch_netplay", bool, false);
-    s.mp.add("netplay_guid", bool, false); // FIXME: crash on startup, all others don't
+    s.mp.add("netplay_guid", bool, false); // working?
     s.mp.add("netplay_r100", bool, false);
     s.mp.add("patch_audio", bool, false);
     s.mp.add("patch_fonts", bool, false); // working

@@ -91,4 +91,4 @@ make
 
 ## License
 
-
+This project is under the MIT License. The portions of the project this does not apply to have their own license notifications.

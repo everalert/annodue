@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const patch = b.addSharedLibrary(.{
-        .name = "patch",
+        .name = "annodue",
         .root_source_file = .{ .path = "src/patch/patch.zig" },
         .target = target,
         .optimize = optimize,

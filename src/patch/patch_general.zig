@@ -22,9 +22,9 @@ pub fn PatchHudTimerMs() void {
 
 pub fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
     const col = struct {
-        const min: u8 = 63;
+        const min: u8 = 95;
         const max: u8 = 255;
-        var rgb: [3]u8 = .{ 255, 63, 63 };
+        var rgb: [3]u8 = .{ 255, 95, 95 };
         var i: u8 = 0;
         var n: u8 = 1;
         fn update() void {

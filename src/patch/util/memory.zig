@@ -229,6 +229,12 @@ pub fn retn(memory_offset: usize) usize {
     return write(memory_offset, u8, 0xC3);
 }
 
+pub fn addr_from_call(src_call: usize) usize {
+    const orig_dest_rel: i32 = read(src_call + 1, i32);
+    const orig_dest_abs: usize = @bitCast(@as(i32, @bitCast(src_call + 5)) + orig_dest_rel);
+    return orig_dest_abs;
+}
+
 pub fn detour(memory: usize, addr: usize, len: usize, dest: *const fn () void) usize {
     std.debug.assert(len >= 5);
 

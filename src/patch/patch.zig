@@ -43,14 +43,12 @@ fn GameLoopAfter() void {
 }
 
 fn HookGameLoop(memory: usize) usize {
-    const off_this: usize = 0x49CE2A;
-    const off_next: usize = 0x49CE2F;
+    const off_call: usize = 0x49CE2A;
+    const off_gameloop: usize = mem.addr_from_call(off_call);
+
     var offset: usize = memory;
 
-    const call_old: i32 = mem.read(off_this + 1, i32);
-    const off_gameloop: usize = @bitCast(@as(i32, @bitCast(off_next)) + call_old);
-
-    _ = mem.call(0x49CE2A, offset);
+    _ = mem.call(off_call, offset);
 
     offset = mem.call(offset, off_gameloop);
     offset = mem.call(offset, @intFromPtr(&GameLoopAfter));
@@ -75,6 +73,27 @@ fn HookGameEnd(memory: usize) usize {
 
     offset = mem.detour(offset, exit1_off, exit1_len, &GameEnd);
     offset = mem.detour(offset, exit2_off, exit2_len, &GameEnd);
+
+    return offset;
+}
+
+fn TextRenderBefore() void {
+    //const swrText_CreateEntry: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, fmt: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+    //swrText_CreateEntry(16, 16, 255, 255, 127, 255, "Test text", 0, 0);
+}
+
+fn HookTextRender(memory: usize) usize {
+    const off_call: usize = 0x483F8B;
+    const off_orig_fn = mem.addr_from_call(off_call);
+
+    var offset: usize = memory;
+
+    _ = mem.call(off_call, offset);
+
+    offset = mem.call(offset, @intFromPtr(&TextRenderBefore));
+    offset = mem.call(offset, off_orig_fn);
+    offset = mem.retn(offset);
+    offset = mem.nop_align(offset, 16);
 
     return offset;
 }
@@ -126,6 +145,7 @@ export fn Patch() void {
 
     off = HookGameLoop(off);
     off = HookGameEnd(off);
+    off = HookTextRender(off);
 
     if (s.gen.get("death_speed_mod_enable", bool)) {
         const dsm = s.gen.get("death_speed_min", f32);

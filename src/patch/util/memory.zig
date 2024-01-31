@@ -1,10 +1,13 @@
-pub const memory = @This();
+pub const Self = @This();
 
 const std = @import("std");
 
 const VirtualProtect = std.os.windows.VirtualProtect;
+const VirtualAlloc = std.os.windows.VirtualAlloc;
+const VirtualFree = std.os.windows.VirtualFree;
 const MEM_COMMIT = std.os.windows.MEM_COMMIT;
 const MEM_RESERVE = std.os.windows.MEM_RESERVE;
+const MEM_RELEASE = std.os.windows.MEM_RELEASE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 const DWORD = std.os.windows.DWORD;
 
@@ -204,6 +207,13 @@ pub fn jnz(memory_offset: usize, address: usize) usize {
     return offset;
 }
 
+pub fn jz_rel8(memory: usize, value: i8) usize {
+    var offset = memory;
+    offset = write(offset, u8, 0x74);
+    offset = write(offset, i8, value);
+    return offset;
+}
+
 // WARN: could underflow, but not likely for our use case i guess
 // jcc jz_rel32
 pub fn jz(memory_offset: usize, address: usize) usize {
@@ -217,4 +227,26 @@ pub fn jz(memory_offset: usize, address: usize) usize {
 
 pub fn retn(memory_offset: usize) usize {
     return write(memory_offset, u8, 0xC3);
+}
+
+pub fn detour(memory: usize, addr: usize, len: usize, dest: *const fn () void) usize {
+    std.debug.assert(len >= 5);
+
+    const scr_alloc = MEM_COMMIT | MEM_RESERVE;
+    const scr_protect = PAGE_EXECUTE_READWRITE;
+    const scratch = VirtualAlloc(null, len, scr_alloc, scr_protect) catch unreachable;
+    defer VirtualFree(scratch, 0, MEM_RELEASE);
+    read_bytes(addr, scratch, len);
+
+    var offset: usize = memory;
+
+    const off_hook: usize = call(addr, offset);
+    _ = nop_until(off_hook, addr + len);
+
+    offset = call(offset, @intFromPtr(dest));
+    offset = write_bytes(offset, scratch, len);
+    offset = retn(offset);
+    offset = nop_align(offset, 16);
+
+    return offset;
 }

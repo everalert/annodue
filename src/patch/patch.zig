@@ -50,14 +50,31 @@ fn HookGameLoop(memory: usize) usize {
     const call_old: i32 = mem.read(off_this + 1, i32);
     const off_gameloop: usize = @bitCast(@as(i32, @bitCast(off_next)) + call_old);
 
-    // redirect to our code
     _ = mem.call(0x49CE2A, offset);
 
-    // call the game loop manually, do our thing, then send it back
     offset = mem.call(offset, off_gameloop);
     offset = mem.call(offset, @intFromPtr(&GameLoopAfter));
     offset = mem.retn(offset);
     offset = mem.nop_align(offset, 16);
+
+    return offset;
+}
+
+fn GameEnd() void {
+    defer s.manager.deinit();
+    defer s.gen.deinit();
+    defer s.mp.deinit();
+}
+
+fn HookGameEnd(memory: usize) usize {
+    const exit1_off: usize = 0x49CE31;
+    const exit2_off: usize = 0x49CE3D;
+    const exit1_len: usize = exit2_off - exit1_off - 1; // excluding retn
+    const exit2_len: usize = 0x49CE48 - exit2_off - 1; // excluding retn
+    var offset: usize = memory;
+
+    offset = mem.detour(offset, exit1_off, exit1_len, &GameEnd);
+    offset = mem.detour(offset, exit2_off, exit2_len, &GameEnd);
 
     return offset;
 }
@@ -72,8 +89,8 @@ export fn Patch() void {
 
     // settings
 
-    // FIXME: i guess we have to not deinit anything for now,
-    // since they need to be available in the game loop?
+    // FIXME: deinits happen in GameEnd, see HookGameEnd.
+    // probably not necessary to deinit at all tho.
     // one other strategy might be to set globals for stuff
     // we need to keep, and go back to deinit-ing. then we also
     // wouldn't have to do hash lookups constantly too.
@@ -91,7 +108,7 @@ export fn Patch() void {
 
     s.mp = SettingsGroup.init(alloc, "multiplayer");
     //defer s_mp.deinit();
-    s.mp.add("multiplayer_mod_enable", bool, false);
+    s.mp.add("multiplayer_mod_enable", bool, false); // working?
     s.mp.add("patch_netplay", bool, false); // working? ups ok, coll ?
     s.mp.add("netplay_guid", bool, false); // working?
     s.mp.add("netplay_r100", bool, false); // working
@@ -107,6 +124,7 @@ export fn Patch() void {
     // random stuff
 
     off = HookGameLoop(off);
+    off = HookGameEnd(off);
 
     if (s.gen.get("death_speed_mod_enable", bool)) {
         const dsm = s.gen.get("death_speed_min", f32);

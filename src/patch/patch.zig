@@ -104,6 +104,7 @@ export fn Patch() void {
     s.gen.add("death_speed_min", f32, 325);
     s.gen.add("death_speed_drop", f32, 140);
     s.gen.add("rainbow_timer_enable", bool, false);
+    s.gen.add("ms_timer_enable", bool, false);
     s.manager.add(&s.gen);
 
     s.mp = SettingsGroup.init(alloc, "multiplayer");
@@ -130,6 +131,9 @@ export fn Patch() void {
         const dsm = s.gen.get("death_speed_min", f32);
         const dsd = s.gen.get("death_speed_drop", f32);
         gen.PatchDeathSpeed(dsm, dsd);
+    }
+    if (s.gen.get("ms_timer_enable", bool)) {
+        gen.PatchHudTimerMs();
     }
 
     // swe1r-patcher (multiplayer mod) stuff

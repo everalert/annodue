@@ -8,6 +8,18 @@ pub fn PatchDeathSpeed(min: f32, drop: f32) void {
     _ = mem.write(0x4C7BBC, f32, drop);
 }
 
+// FIXME: adjust widths in hudDrawRaceResults fn
+pub fn PatchHudTimerMs() void {
+    const off_fnDrawTime3: usize = 0x450760;
+    // hudDrawRaceHud
+    _ = mem.call(0x460BD3, off_fnDrawTime3);
+    _ = mem.call(0x460E6B, off_fnDrawTime3);
+    _ = mem.call(0x460ED9, off_fnDrawTime3);
+    // hudDrawRaceResults
+    _ = mem.call(0x46252F, off_fnDrawTime3);
+    _ = mem.call(0x462660, off_fnDrawTime3);
+}
+
 pub fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
     const col = struct {
         const min: u8 = 63;

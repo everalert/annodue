@@ -185,6 +185,12 @@ pub fn call(memory_offset: usize, address: usize) usize {
     //offset = write(offset, u32, address - (offset + 4));
     return offset;
 }
+pub fn call_rm32(memory_offset: usize, address: usize) usize {
+    var offset = memory_offset;
+    offset = write(offset, u8, 0xFF);
+    offset = write(offset, u32, address);
+    return offset;
+}
 
 // WARN: could underflow, but not likely for our use case i guess
 // jmp_rel32
@@ -255,4 +261,19 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest: *const fn () void) u
     offset = nop_align(offset, 16);
 
     return offset;
+}
+
+// FIXME: error handling/path validation
+pub fn deref(path: []const usize) usize {
+    var i: u32 = 0;
+    var addr: usize = 0;
+    while (i < path.len - 1) : (i += 1) {
+        addr = read(addr + path[i], u32);
+    }
+    return addr + path[i];
+}
+
+pub fn deref_read(path: []const usize, comptime T: type) T {
+    const addr = deref(path);
+    return read(addr, T);
 }

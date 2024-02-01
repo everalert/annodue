@@ -28,6 +28,7 @@ const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 const s = struct { // FIXME: yucky
     var manager: SettingsManager = undefined;
     var gen: SettingsGroup = undefined;
+    var prac: SettingsGroup = undefined;
     var mp: SettingsGroup = undefined;
 };
 
@@ -78,20 +79,43 @@ fn HookGameEnd(memory: usize) usize {
 }
 
 fn TextRenderBefore() void {
-    //const swrText_CreateEntry: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, fmt: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
-    //swrText_CreateEntry(16, 16, 255, 255, 127, 255, "Test text", 0, 0);
+    //const swrText_CreateEntry: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+    const swrText_CreateEntry1: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+    //const swrText_CreateEntry2: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+
+    //const off_scene_id: usize = 0xE9BA62; // u16
+    const off_in_race: usize = 0xE9BB81; //u8
+    //const off_in_tournament: usize = 0x50C450; // u8
+    //const off_pause_state: usize = 0x50C5F0; // u8
+
+    if (s.prac.get("practice_tool_enable", bool) and s.prac.get("overlay_enable", bool)) {
+        const in_race: u8 = mem.read(off_in_race, u8);
+
+        if (in_race > 0) {
+            const flags1: u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x60 }, u32);
+            const heat_rate: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x8C }, f32);
+            const cool_rate: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x90 }, f32);
+            const heat: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x218 }, f32);
+            const is_boosting: bool = (flags1 & (1 << 23)) > 0;
+            const heat_timer: f32 = if (is_boosting) heat / heat_rate else (100 - heat) / cool_rate;
+            const heat_color: []const u8 = if (is_boosting) "~5" else if (heat < 100) "~2" else "~7";
+            var buf: [64:0]u8 = undefined;
+            _ = std.fmt.bufPrintZ(&buf, "~f4{s}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
+            swrText_CreateEntry1(320 - 68, 168, 255, 255, 255, 255, &buf);
+        }
+    }
 }
 
 fn HookTextRender(memory: usize) usize {
-    const off_call: usize = 0x483F8B;
+    const off_call: usize = 0x483F8B; // the first queue processing call
     const off_orig_fn = mem.addr_from_call(off_call);
 
     var offset: usize = memory;
 
     _ = mem.call(off_call, offset);
 
-    offset = mem.call(offset, @intFromPtr(&TextRenderBefore));
     offset = mem.call(offset, off_orig_fn);
+    offset = mem.call(offset, @intFromPtr(&TextRenderBefore));
     offset = mem.retn(offset);
     offset = mem.nop_align(offset, 16);
 
@@ -118,7 +142,7 @@ export fn Patch() void {
     //defer s.deinit();
 
     s.gen = SettingsGroup.init(alloc, "general");
-    //defer s_gen.deinit();
+    //defer s.gen.deinit();
     s.gen.add("death_speed_mod_enable", bool, false);
     s.gen.add("death_speed_min", f32, 325);
     s.gen.add("death_speed_drop", f32, 140);
@@ -126,8 +150,14 @@ export fn Patch() void {
     s.gen.add("ms_timer_enable", bool, false);
     s.manager.add(&s.gen);
 
+    s.prac = SettingsGroup.init(alloc, "practice");
+    //defer s.prac.deinit();
+    s.prac.add("practice_tool_enable", bool, false);
+    s.prac.add("overlay_enable", bool, false);
+    s.manager.add(&s.prac);
+
     s.mp = SettingsGroup.init(alloc, "multiplayer");
-    //defer s_mp.deinit();
+    //defer s.mp.deinit();
     s.mp.add("multiplayer_mod_enable", bool, false); // working?
     s.mp.add("patch_netplay", bool, false); // working? ups ok, coll ?
     s.mp.add("netplay_guid", bool, false); // working?

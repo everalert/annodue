@@ -237,7 +237,8 @@ pub fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     return offset;
 }
 
-// WARNING: not tested
+// FIXME: crashes, not sure why because the memory written should be identical
+// to swe1r-patcher, yet that doesn't crash
 pub fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) void {
     // Calculate a fitting buffer-size
     const buffer_stereo: u32 = if (stereo) 2 else 1;

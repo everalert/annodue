@@ -48,6 +48,25 @@ fn ErrMessage(label: []const u8, err: []const u8) void {
 }
 
 fn GameLoopAfter() void {
+    const state = struct {
+        var initialized: bool = false;
+    };
+
+    if (!state.initialized) {
+        const def_laps: u32 = s.gen.get("default_laps", u32);
+        if (def_laps >= 1 and def_laps <= 5) {
+            const laps: usize = mem.deref(&.{ 0x4BFDB8, 0x8F });
+            _ = mem.write(laps, u8, @as(u8, @truncate(def_laps)));
+        }
+        const def_racers: u32 = s.gen.get("default_racers", u32);
+        if (def_racers >= 1 and def_racers <= 12) {
+            const addr_racers: usize = 0x50C558;
+            _ = mem.write(addr_racers, u8, @as(u8, @truncate(def_racers)));
+        }
+
+        state.initialized = true;
+    }
+
     if (s.gen.get("rainbow_timer_enable", bool)) {
         gen.PatchHudTimerColRotate();
     }
@@ -388,6 +407,8 @@ export fn Patch() void {
     s.gen.add("death_speed_drop", f32, 140);
     s.gen.add("rainbow_timer_enable", bool, false);
     s.gen.add("ms_timer_enable", bool, false);
+    s.gen.add("default_laps", u32, 3);
+    s.gen.add("default_racers", u32, 12);
     s.manager.add(&s.gen);
 
     s.prac = SettingsGroup.init(alloc, "practice");

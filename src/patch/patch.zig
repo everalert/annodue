@@ -78,30 +78,220 @@ fn HookGameEnd(memory: usize) usize {
     return offset;
 }
 
-fn TextRenderBefore() void {
-    //const swrText_CreateEntry: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
-    const swrText_CreateEntry1: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
-    //const swrText_CreateEntry2: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+const swrText_CreateEntry: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
 
+const swrText_CreateEntry1: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+
+const swrText_CreateEntry2: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+
+fn RenderRaceResultStat(i: u8, label: [*:0]const u8, value: [*:0]const u8) void {
+    const col: u8 = 255;
+    const pad_x: u16 = 128;
+    const pad_y: u16 = 64;
+    var bufl: [96:0]u8 = undefined;
+    var bufv: [32:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&bufl, "~F0~s~r{s}", .{label}) catch unreachable;
+    _ = std.fmt.bufPrintZ(&bufv, "~F0~s{s}", .{value}) catch unreachable;
+    swrText_CreateEntry1(640 - pad_x - 8, pad_y + i * 12, col, col, col, 255, &bufl);
+    swrText_CreateEntry1(640 - pad_x + 8, pad_y + i * 12, col, col, col, 255, &bufv);
+}
+
+fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
+    var buf: [24:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "{d: <7}", .{value}) catch unreachable;
+    RenderRaceResultStat(i, label, &buf);
+}
+
+fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
+    var buf: [24:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "{d:4.3}", .{value}) catch unreachable;
+    RenderRaceResultStat(i, label, &buf);
+}
+
+fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
+    const sec: u32 = @as(u32, @intFromFloat(@round(time)));
+    const ms: u32 = @as(u32, @intFromFloat(@round(time * 1000))) % 1000;
+    var buf: [24:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "{d}.{d:0>3}", .{ sec, ms }) catch unreachable;
+    RenderRaceResultStat(i, label, &buf);
+}
+
+fn TextRenderBefore() void {
     //const off_scene_id: usize = 0xE9BA62; // u16
     const off_in_race: usize = 0xE9BB81; //u8
     //const off_in_tournament: usize = 0x50C450; // u8
     //const off_pause_state: usize = 0x50C5F0; // u8
 
     if (s.prac.get("practice_tool_enable", bool) and s.prac.get("overlay_enable", bool)) {
-        const in_race: u8 = mem.read(off_in_race, u8);
+        const state = struct {
+            var was_in_race: bool = false;
+            var was_in_race_count: bool = false;
+            var was_in_race_results: bool = false;
+            var was_boosting: bool = false;
+            var was_underheating: bool = true;
+            var was_overheating: bool = false;
+            var was_dead: bool = false;
+            var total_deaths: u32 = 0;
+            var total_boost_duration: f32 = 0;
+            var total_boost_ratio: f32 = 0;
+            var total_underheat: f32 = 0;
+            var total_overheat: f32 = 0;
+            var fire_finish_duration: f32 = 0;
+            var last_boost_started: f32 = 0;
+            var last_boost_started_total: f32 = 0;
+            var last_underheat_started: f32 = 0;
+            var last_underheat_started_total: f32 = 0;
+            var last_overheat_started: f32 = 0;
+            var last_overheat_started_total: f32 = 0;
+            var heat_rate: f32 = 0;
+            var cool_rate: f32 = 0;
 
-        if (in_race > 0) {
+            fn reset_race() void {
+                was_in_race_count = false;
+                was_in_race_results = false;
+                was_boosting = false;
+                was_underheating = true; // you start the race underheating
+                was_overheating = false;
+                was_dead = false;
+                total_deaths = 0;
+                total_boost_duration = 0;
+                total_boost_ratio = 0;
+                total_underheat = 0;
+                total_overheat = 0;
+                fire_finish_duration = 0;
+                last_boost_started = 0;
+                last_boost_started_total = 0;
+                last_underheat_started = 0;
+                last_underheat_started_total = 0;
+                last_overheat_started = 0;
+                last_overheat_started_total = 0;
+                heat_rate = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x8C }, f32);
+                cool_rate = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x90 }, f32);
+            }
+
+            fn set_last_boost_start(time: f32) void {
+                last_boost_started_total = total_boost_duration;
+                last_boost_started = time;
+            }
+
+            fn set_total_boost(time: f32) void {
+                total_boost_duration = last_boost_started_total + time - last_boost_started;
+                total_boost_ratio = total_boost_duration / time;
+            }
+
+            fn set_last_underheat_start(time: f32) void {
+                last_underheat_started_total = total_underheat;
+                last_underheat_started = time;
+            }
+
+            fn set_total_underheat(time: f32) void {
+                total_underheat = last_underheat_started_total + time - last_underheat_started;
+            }
+
+            fn set_last_overheat_start(time: f32) void {
+                last_overheat_started_total = total_overheat;
+                last_overheat_started = time;
+            }
+
+            fn set_total_overheat(time: f32) void {
+                total_overheat = last_overheat_started_total + time - last_overheat_started;
+            }
+
+            fn set_fire_finish_duration(time: f32) void {
+                fire_finish_duration = time - last_overheat_started;
+            }
+        };
+
+        const in_race: bool = mem.read(off_in_race, u8) > 0;
+        const in_race_new: bool = state.was_in_race != in_race;
+        state.was_in_race = in_race;
+
+        if (in_race) {
+            if (in_race_new) state.reset_race();
+
             const flags1: u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x60 }, u32);
-            const heat_rate: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x8C }, f32);
-            const cool_rate: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x90 }, f32);
-            const heat: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x218 }, f32);
-            const is_boosting: bool = (flags1 & (1 << 23)) > 0;
-            const heat_timer: f32 = if (is_boosting) heat / heat_rate else (100 - heat) / cool_rate;
-            const heat_color: []const u8 = if (is_boosting) "~5" else if (heat < 100) "~2" else "~7";
-            var buf: [64:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&buf, "~f4{s}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
-            swrText_CreateEntry1(320 - 68, 168, 255, 255, 255, 255, &buf);
+            const in_race_count: bool = (flags1 & (1 << 0)) > 0;
+            const in_race_count_new: bool = state.was_in_race_count != in_race_count;
+            state.was_in_race_count = in_race_count;
+            const in_race_results: bool = (flags1 & (1 << 5)) == 0;
+            const in_race_results_new: bool = state.was_in_race_results != in_race_results;
+            state.was_in_race_results = in_race_results;
+            const lap: u8 = mem.deref_read(&.{ 0x4D78A4, 0x78 }, u8);
+            const race_times: [6]f32 = mem.deref_read(&.{ 0x4D78A4, 0x60 }, [6]f32);
+            const lap_times: []const f32 = race_times[0..5];
+            const total_time: f32 = race_times[5];
+
+            if (in_race_count) {
+                if (in_race_count_new) {
+                    // ...
+                }
+            } else if (in_race_results) {
+                if (in_race_results_new) {
+                    if (state.was_boosting) state.set_total_boost(total_time);
+                    if (state.was_underheating) state.set_total_underheat(total_time);
+                    if (state.was_overheating) {
+                        state.set_fire_finish_duration(total_time);
+                        state.set_total_overheat(total_time);
+                    }
+                }
+                RenderRaceResultStatU(0, "Deaths", state.total_deaths);
+                RenderRaceResultStatTime(1, "Fire Finish", state.fire_finish_duration);
+                RenderRaceResultStatTime(2, "Boost Time", state.total_boost_duration);
+                RenderRaceResultStatF(3, "Boost Ratio", state.total_boost_ratio);
+                RenderRaceResultStatTime(4, "Underheat Time", state.total_underheat);
+                RenderRaceResultStatTime(5, "Overheat Time", state.total_overheat);
+            } else {
+                var i: u8 = 0;
+                while (i < lap_times.len and lap_times[i] >= 0) : (i += 1) {
+                    const min: u32 = @as(u32, @intFromFloat(@round(lap_times[i]))) / 60;
+                    const sec: u32 = @as(u32, @intFromFloat(@round(lap_times[i]))) % 60;
+                    const ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000))) % 1000;
+                    const col: u8 = if (lap == i) 255 else 170;
+                    var buf: [64:0]u8 = undefined;
+                    _ = std.fmt.bufPrintZ(&buf, "~F1~s{d}  {d}:{d:0>2}.{d:0>3}", .{ i + 1, min, sec, ms }) catch unreachable;
+                    swrText_CreateEntry1(48, 128 + i * 16, col, col, col, 255, &buf);
+                }
+
+                const dead: bool = (flags1 & (1 << 14)) > 0;
+                const dead_new: bool = state.was_dead != dead;
+                state.was_dead = dead;
+                if (dead and dead_new) state.total_deaths += 1;
+
+                const heat: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x218 }, f32);
+                const engine: [6]u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x2A0 }, [6]u32);
+
+                const boosting: bool = (flags1 & (1 << 23)) > 0;
+                const boosting_new: bool = state.was_boosting != boosting;
+                state.was_boosting = boosting;
+                if (boosting and boosting_new) state.set_last_boost_start(total_time);
+                if (boosting) state.set_total_boost(total_time);
+                if (!boosting and boosting_new) state.set_total_boost(total_time);
+
+                const underheating: bool = heat >= 100;
+                const underheating_new: bool = state.was_underheating != underheating;
+                state.was_underheating = underheating;
+                if (underheating and underheating_new) state.set_last_underheat_start(total_time);
+                if (underheating) state.set_total_underheat(total_time);
+                if (!underheating and underheating_new) state.set_total_underheat(total_time);
+
+                var j: u8 = 0;
+                const overheating: bool = while (j < 6) : (j += 1) {
+                    if (engine[j] & (1 << 3) > 0) break true;
+                } else false;
+                const overheating_new: bool = state.was_overheating != overheating;
+                state.was_overheating = overheating;
+                if (overheating and overheating_new) state.set_last_overheat_start(total_time);
+                if (overheating) state.set_total_overheat(total_time);
+                if (!overheating and overheating_new) state.set_total_overheat(total_time);
+
+                const heat_s: f32 = heat / state.heat_rate;
+                const cool_s: f32 = (100 - heat) / state.cool_rate;
+                const heat_timer: f32 = if (boosting) heat_s else cool_s;
+                const heat_color: []const u8 = if (boosting) "~5" else if (heat < 100) "~2" else "~7";
+                var buf: [64:0]u8 = undefined;
+                _ = std.fmt.bufPrintZ(&buf, "~F0{s}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
+                swrText_CreateEntry1((320 - 68) * 2, 168 * 2, 255, 255, 255, 255, &buf);
+            }
         }
     }
 }

@@ -19,6 +19,9 @@ const ver_patch: u32 = 1;
 const mp = @import("patch_multiplayer.zig");
 const gen = @import("patch_general.zig");
 const mem = @import("util/memory.zig");
+const UpgradeNames = @import("util/racer_const.zig").UpgradeNames;
+const UpgradeCategories = @import("util/racer_const.zig").UpgradeCategories;
+const swrText_CreateEntry1 = @import("util/racer_fn.zig").swrText_CreateEntry1;
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
 const ini = @import("import/ini/ini.zig");
@@ -35,6 +38,13 @@ const s = struct { // FIXME: yucky
 fn PtrMessage(alloc: std.mem.Allocator, ptr: usize, label: []const u8) void {
     var buf = std.fmt.allocPrintZ(alloc, "{s}: 0x{x}", .{ label, ptr }) catch unreachable;
     _ = MessageBoxA(null, buf, "annodue.dll", MB_OK);
+}
+
+fn ErrMessage(label: []const u8, err: []const u8) void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = gpa.allocator();
+    var bufe = std.fmt.allocPrintZ(alloc, "[ERROR] {s}: {s}", .{ label, err }) catch unreachable;
+    _ = MessageBoxA(null, bufe, "annodue.dll", MB_OK);
 }
 
 fn GameLoopAfter() void {
@@ -78,42 +88,51 @@ fn HookGameEnd(memory: usize) usize {
     return offset;
 }
 
-const swrText_CreateEntry: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+const race_stat_x: u16 = 160;
+const race_stat_y: u16 = 48;
+const race_stat_col: u8 = 255;
 
-const swrText_CreateEntry1: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+fn RenderRaceResultStat1(i: u8, label: [*:0]const u8) void {
+    var buf: [127:0]u8 = std.mem.zeroes([127:0]u8);
+    _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{s}", .{label}) catch unreachable;
+    swrText_CreateEntry1(640 - race_stat_x, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &buf);
+}
 
-const swrText_CreateEntry2: *fn (x: u16, y: u16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
-
-fn RenderRaceResultStat(i: u8, label: [*:0]const u8, value: [*:0]const u8) void {
-    const col: u8 = 255;
-    const pad_x: u16 = 128;
-    const pad_y: u16 = 64;
-    var bufl: [96:0]u8 = undefined;
-    var bufv: [32:0]u8 = undefined;
+fn RenderRaceResultStat2(i: u8, label: [*:0]const u8, value: [*:0]const u8) void {
+    var bufl: [127:0]u8 = std.mem.zeroes([127:0]u8);
+    var bufv: [127:0]u8 = std.mem.zeroes([127:0]u8);
     _ = std.fmt.bufPrintZ(&bufl, "~F0~s~r{s}", .{label}) catch unreachable;
     _ = std.fmt.bufPrintZ(&bufv, "~F0~s{s}", .{value}) catch unreachable;
-    swrText_CreateEntry1(640 - pad_x - 8, pad_y + i * 12, col, col, col, 255, &bufl);
-    swrText_CreateEntry1(640 - pad_x + 8, pad_y + i * 12, col, col, col, 255, &bufv);
+    swrText_CreateEntry1(640 - race_stat_x - 8, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &bufl);
+    swrText_CreateEntry1(640 - race_stat_x + 8, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &bufv);
 }
 
 fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
-    var buf: [24:0]u8 = undefined;
+    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
     _ = std.fmt.bufPrintZ(&buf, "{d: <7}", .{value}) catch unreachable;
-    RenderRaceResultStat(i, label, &buf);
+    RenderRaceResultStat2(i, label, &buf);
 }
 
 fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
-    var buf: [24:0]u8 = undefined;
+    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
     _ = std.fmt.bufPrintZ(&buf, "{d:4.3}", .{value}) catch unreachable;
-    RenderRaceResultStat(i, label, &buf);
+    RenderRaceResultStat2(i, label, &buf);
 }
 
 fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
-    const sec: u32 = @as(u32, @intFromFloat(@round(time)));
-    const ms: u32 = @as(u32, @intFromFloat(@round(time * 1000))) % 1000;
-    var buf: [24:0]u8 = undefined;
+    const t_ms: u32 = @as(u32, @intFromFloat(@round(time * 1000)));
+    const sec: u32 = (t_ms / 1000);
+    const ms: u32 = t_ms % 1000;
+    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
     _ = std.fmt.bufPrintZ(&buf, "{d}.{d:0>3}", .{ sec, ms }) catch unreachable;
-    RenderRaceResultStat(i, label, &buf);
+    RenderRaceResultStat2(i, label, &buf);
+}
+
+fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
+    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
+    const hp_col = if (hp < 255) "~5" else "~4";
+    _ = std.fmt.bufPrintZ(&buf, "{s}{d:0>3} ~1{s}", .{ hp_col, hp, UpgradeNames[cat * 6 + lv] }) catch unreachable;
+    RenderRaceResultStat2(i, UpgradeCategories[cat], &buf);
 }
 
 fn TextRenderBefore() void {
@@ -124,6 +143,10 @@ fn TextRenderBefore() void {
 
     if (s.prac.get("practice_tool_enable", bool) and s.prac.get("overlay_enable", bool)) {
         const state = struct {
+            var fps: f32 = 0;
+            var upgrades: bool = false;
+            var upgrades_lv: [7]u8 = undefined;
+            var upgrades_hp: [7]u8 = undefined;
             var was_in_race: bool = false;
             var was_in_race_count: bool = false;
             var was_in_race_results: bool = false;
@@ -167,6 +190,13 @@ fn TextRenderBefore() void {
                 last_overheat_started_total = 0;
                 heat_rate = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x8C }, f32);
                 cool_rate = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x90 }, f32);
+                const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
+                upgrades_lv = u[0..7].*;
+                upgrades_hp = u[7..14].*;
+                var i: u8 = 0;
+                upgrades = while (i < 7) : (i += 1) {
+                    if (u[i] > 0 and u[7 + i] > 0) break true;
+                } else false;
             }
 
             fn set_last_boost_start(time: f32) void {
@@ -206,6 +236,10 @@ fn TextRenderBefore() void {
         const in_race_new: bool = state.was_in_race != in_race;
         state.was_in_race = in_race;
 
+        const dt_f: f32 = mem.deref_read(&.{0xE22A50}, f32);
+        const fps_res: f32 = 10;
+        state.fps = (state.fps * (fps_res - 1) + (1 / dt_f)) / fps_res;
+
         if (in_race) {
             if (in_race_new) state.reset_race();
 
@@ -216,6 +250,7 @@ fn TextRenderBefore() void {
             const in_race_results: bool = (flags1 & (1 << 5)) == 0;
             const in_race_results_new: bool = state.was_in_race_results != in_race_results;
             state.was_in_race_results = in_race_results;
+
             const lap: u8 = mem.deref_read(&.{ 0x4D78A4, 0x78 }, u8);
             const race_times: [6]f32 = mem.deref_read(&.{ 0x4D78A4, 0x60 }, [6]f32);
             const lap_times: []const f32 = race_times[0..5];
@@ -234,20 +269,35 @@ fn TextRenderBefore() void {
                         state.set_total_overheat(total_time);
                     }
                 }
-                RenderRaceResultStatU(0, "Deaths", state.total_deaths);
-                RenderRaceResultStatTime(1, "Fire Finish", state.fire_finish_duration);
-                RenderRaceResultStatTime(2, "Boost Time", state.total_boost_duration);
-                RenderRaceResultStatF(3, "Boost Ratio", state.total_boost_ratio);
-                RenderRaceResultStatTime(4, "Underheat Time", state.total_underheat);
-                RenderRaceResultStatTime(5, "Overheat Time", state.total_overheat);
+
+                var buf_tfps: [63:0]u8 = undefined;
+                _ = std.fmt.bufPrintZ(&buf_tfps, "{d:>2.0}/{s}", .{ state.fps, UpgradeNames[state.upgrades_lv[0]] }) catch unreachable;
+                RenderRaceResultStat1(0, &buf_tfps);
+
+                var buf_upg: [63:0]u8 = undefined;
+                _ = std.fmt.bufPrintZ(&buf_upg, "{s}Upgrades", .{if (state.upgrades) "" else "NO "}) catch unreachable;
+                RenderRaceResultStat1(2, &buf_upg);
+
+                var i: u8 = 0;
+                while (i < 7) : (i += 1) {
+                    RenderRaceResultStatUpgrade(4 + i, i, state.upgrades_lv[i], state.upgrades_hp[i]);
+                }
+
+                RenderRaceResultStatU(12, "Deaths", state.total_deaths);
+                RenderRaceResultStatTime(13, "Fire Finish", state.fire_finish_duration);
+                RenderRaceResultStatTime(14, "Boost Time", state.total_boost_duration);
+                RenderRaceResultStatF(15, "Boost Ratio", state.total_boost_ratio);
+                RenderRaceResultStatTime(16, "Underheat Time", state.total_underheat);
+                RenderRaceResultStatTime(17, "Overheat Time", state.total_overheat);
             } else {
                 var i: u8 = 0;
                 while (i < lap_times.len and lap_times[i] >= 0) : (i += 1) {
-                    const min: u32 = @as(u32, @intFromFloat(@round(lap_times[i]))) / 60;
-                    const sec: u32 = @as(u32, @intFromFloat(@round(lap_times[i]))) % 60;
-                    const ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000))) % 1000;
+                    const t_ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000)));
+                    const min: u32 = (t_ms / 1000) / 60;
+                    const sec: u32 = (t_ms / 1000) % 60;
+                    const ms: u32 = t_ms % 1000;
                     const col: u8 = if (lap == i) 255 else 170;
-                    var buf: [64:0]u8 = undefined;
+                    var buf: [63:0]u8 = undefined;
                     _ = std.fmt.bufPrintZ(&buf, "~F1~s{d}  {d}:{d:0>2}.{d:0>3}", .{ i + 1, min, sec, ms }) catch unreachable;
                     swrText_CreateEntry1(48, 128 + i * 16, col, col, col, 255, &buf);
                 }
@@ -288,7 +338,7 @@ fn TextRenderBefore() void {
                 const cool_s: f32 = (100 - heat) / state.cool_rate;
                 const heat_timer: f32 = if (boosting) heat_s else cool_s;
                 const heat_color: []const u8 = if (boosting) "~5" else if (heat < 100) "~2" else "~7";
-                var buf: [64:0]u8 = undefined;
+                var buf: [63:0]u8 = undefined;
                 _ = std.fmt.bufPrintZ(&buf, "~F0{s}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
                 swrText_CreateEntry1((320 - 68) * 2, 168 * 2, 255, 255, 255, 255, &buf);
             }

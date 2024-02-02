@@ -107,19 +107,19 @@ fn HookGameEnd(memory: usize) usize {
     return offset;
 }
 
-const race_stat_x: u16 = 160;
+const race_stat_x: u16 = 192;
 const race_stat_y: u16 = 48;
 const race_stat_col: u8 = 255;
 
 fn RenderRaceResultStat1(i: u8, label: [*:0]const u8) void {
-    var buf: [127:0]u8 = std.mem.zeroes([127:0]u8);
+    var buf: [127:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{s}", .{label}) catch unreachable;
     swrText_CreateEntry1(640 - race_stat_x, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &buf);
 }
 
 fn RenderRaceResultStat2(i: u8, label: [*:0]const u8, value: [*:0]const u8) void {
-    var bufl: [127:0]u8 = std.mem.zeroes([127:0]u8);
-    var bufv: [127:0]u8 = std.mem.zeroes([127:0]u8);
+    var bufl: [127:0]u8 = undefined;
+    var bufv: [127:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&bufl, "~F0~s~r{s}", .{label}) catch unreachable;
     _ = std.fmt.bufPrintZ(&bufv, "~F0~s{s}", .{value}) catch unreachable;
     swrText_CreateEntry1(640 - race_stat_x - 8, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &bufl);
@@ -127,13 +127,13 @@ fn RenderRaceResultStat2(i: u8, label: [*:0]const u8, value: [*:0]const u8) void
 }
 
 fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
-    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
+    var buf: [23:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf, "{d: <7}", .{value}) catch unreachable;
     RenderRaceResultStat2(i, label, &buf);
 }
 
 fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
-    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
+    var buf: [23:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf, "{d:4.3}", .{value}) catch unreachable;
     RenderRaceResultStat2(i, label, &buf);
 }
@@ -142,13 +142,13 @@ fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
     const t_ms: u32 = @as(u32, @intFromFloat(@round(time * 1000)));
     const sec: u32 = (t_ms / 1000);
     const ms: u32 = t_ms % 1000;
-    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
+    var buf: [23:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf, "{d}.{d:0>3}", .{ sec, ms }) catch unreachable;
     RenderRaceResultStat2(i, label, &buf);
 }
 
 fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
-    var buf: [23:0]u8 = std.mem.zeroes([23:0]u8);
+    var buf: [23:0]u8 = undefined;
     const hp_col = if (hp < 255) "~5" else "~4";
     _ = std.fmt.bufPrintZ(&buf, "{s}{d:0>3} ~1{s}", .{ hp_col, hp, UpgradeNames[cat * 6 + lv] }) catch unreachable;
     RenderRaceResultStat2(i, UpgradeCategories[cat], &buf);

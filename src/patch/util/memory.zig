@@ -58,7 +58,7 @@ pub fn read_bytes(offset: usize, ptr_out: ?*anyopaque, len: usize) void {
     @memcpy(data, addr);
 }
 
-pub fn patchAdd(offset: usize, comptime T: type, delta: T) usize {
+pub fn patch_add(offset: usize, comptime T: type, delta: T) usize {
     const value: T = read(offset, T);
     return write(offset, T, value + delta);
 }

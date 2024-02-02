@@ -18,6 +18,11 @@ pub fn PatchHudTimerMs() void {
     // hudDrawRaceResults
     _ = mem.call(0x46252F, off_fnDrawTime3);
     _ = mem.call(0x462660, off_fnDrawTime3);
+    _ = mem.patch_add(0x4623D7, u8, 12);
+    _ = mem.patch_add(0x4623F1, u8, 12);
+    _ = mem.patch_add(0x46240B, u8, 12);
+    _ = mem.patch_add(0x46241E, u8, 12);
+    _ = mem.patch_add(0x46242D, u8, 12);
 }
 
 pub fn PatchHudTimerColRotate() void { // 0xFFFFFFBE

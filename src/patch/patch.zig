@@ -178,6 +178,7 @@ fn TextRenderBefore() void {
             var total_boost_ratio: f32 = 0;
             var total_underheat: f32 = 0;
             var total_overheat: f32 = 0;
+            var first_boost_time: f32 = 0;
             var fire_finish_duration: f32 = 0;
             var last_boost_started: f32 = 0;
             var last_boost_started_total: f32 = 0;
@@ -200,6 +201,7 @@ fn TextRenderBefore() void {
                 total_boost_ratio = 0;
                 total_underheat = 0;
                 total_overheat = 0;
+                first_boost_time = 0;
                 fire_finish_duration = 0;
                 last_boost_started = 0;
                 last_boost_started_total = 0;
@@ -221,6 +223,7 @@ fn TextRenderBefore() void {
             fn set_last_boost_start(time: f32) void {
                 last_boost_started_total = total_boost_duration;
                 last_boost_started = time;
+                if (first_boost_time == 0) first_boost_time = time;
             }
 
             fn set_total_boost(time: f32) void {
@@ -295,18 +298,19 @@ fn TextRenderBefore() void {
 
                 var buf_upg: [63:0]u8 = undefined;
                 _ = std.fmt.bufPrintZ(&buf_upg, "{s}Upgrades", .{if (state.upgrades) "" else "NO "}) catch unreachable;
-                RenderRaceResultStat1(2, &buf_upg);
+                RenderRaceResultStat1(1, &buf_upg);
 
                 var i: u8 = 0;
                 while (i < 7) : (i += 1) {
-                    RenderRaceResultStatUpgrade(4 + i, i, state.upgrades_lv[i], state.upgrades_hp[i]);
+                    RenderRaceResultStatUpgrade(3 + i, i, state.upgrades_lv[i], state.upgrades_hp[i]);
                 }
 
-                RenderRaceResultStatU(12, "Deaths", state.total_deaths);
-                RenderRaceResultStatTime(13, "Fire Finish", state.fire_finish_duration);
-                RenderRaceResultStatTime(14, "Boost Time", state.total_boost_duration);
-                RenderRaceResultStatF(15, "Boost Ratio", state.total_boost_ratio);
-                RenderRaceResultStatTime(16, "Underheat Time", state.total_underheat);
+                RenderRaceResultStatU(11, "Deaths", state.total_deaths);
+                RenderRaceResultStatTime(12, "Boost Time", state.total_boost_duration);
+                RenderRaceResultStatF(13, "Boost Ratio", state.total_boost_ratio);
+                RenderRaceResultStatTime(14, "First Boost", state.first_boost_time);
+                RenderRaceResultStatTime(15, "Underheat Time", state.total_underheat);
+                RenderRaceResultStatTime(16, "Fire Finish", state.fire_finish_duration);
                 RenderRaceResultStatTime(17, "Overheat Time", state.total_overheat);
             } else {
                 var i: u8 = 0;

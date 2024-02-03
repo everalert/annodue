@@ -25,6 +25,9 @@ const DWORD = std.os.windows.DWORD;
 // - need to know exactly the perf cost of calling virtualprotect to know
 //     if making a arch shift is worth it tho
 
+// NOTE: mod r/m table here
+// https://www.cs.uaf.edu/2016/fall/cs301/lecture/09_28_machinecode.html
+
 pub fn write(offset: usize, comptime T: type, value: T) usize {
     const addr: [*]align(1) T = @ptrFromInt(offset);
     const data: [1]T = [1]T{value};
@@ -102,16 +105,21 @@ pub fn test_edx_edx(memory_offset: usize) usize {
     return test_rm32_r32(memory_offset, 0xD2);
 }
 
-pub fn mov_r32_rm32(memory_offset: usize, r32: u8, value: u32) usize {
+pub fn mov_r32_rm32(memory_offset: usize, r32: u8, comptime T: type, rm32: T) usize {
+    std.debug.assert(T == u8 or T == u32);
     var offset = memory_offset;
     offset = write(offset, u8, 0x8B);
     offset = write(offset, u8, r32);
-    offset = write(offset, u32, value);
+    offset = write(offset, T, rm32);
     return offset;
 }
 
+pub fn mov_ecx_b(memory: usize, b: u8) usize {
+    return mov_r32_rm32(memory, 0x4E, u8, b);
+}
+
 pub fn mov_edx(memory_offset: usize, value: u32) usize {
-    return mov_r32_rm32(memory_offset, 0x15, value);
+    return mov_r32_rm32(memory_offset, 0x15, u32, value);
 }
 
 pub fn mov_rm32_r32(memory_offset: usize, r32: u8) usize {
@@ -153,6 +161,10 @@ pub fn push_edx(memory_offset: usize) usize {
     return write(memory_offset, u8, 0x52);
 }
 
+pub fn push_ebp(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x55);
+}
+
 pub fn push_esi(memory_offset: usize) usize {
     return write(memory_offset, u8, 0x56);
 }
@@ -167,6 +179,22 @@ pub fn pop_eax(memory_offset: usize) usize {
 
 pub fn pop_edx(memory_offset: usize) usize {
     return write(memory_offset, u8, 0x5A);
+}
+
+pub fn pop_edi(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x5F);
+}
+
+pub fn pop_esi(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x5E);
+}
+
+pub fn pop_ebp(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x5D);
+}
+
+pub fn pop_ebx(memory_offset: usize) usize {
+    return write(memory_offset, u8, 0x5B);
 }
 
 pub fn push_u32(memory_offset: usize, value: usize) usize {
@@ -261,6 +289,20 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest: *const fn () void) u
     offset = nop_align(offset, 16);
 
     return offset;
+}
+
+pub fn intercept_jump_table(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
+    const item_addr: usize = jt_addr + 4 * jt_idx;
+    const item_target: usize = read(item_addr, u32);
+    var off: usize = memory;
+
+    _ = write(item_addr, u32, off);
+
+    off = call(off, @intFromPtr(dest));
+    off = jmp(off, item_target);
+    off = nop_align(off, 16);
+
+    return off;
 }
 
 // FIXME: error handling/path validation

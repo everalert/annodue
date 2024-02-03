@@ -109,12 +109,13 @@ fn HookGameEnd(memory: usize) usize {
 
 const race_stat_x: u16 = 192;
 const race_stat_y: u16 = 48;
+const race_stat_h: u8 = 12;
 const race_stat_col: u8 = 255;
 
 fn RenderRaceResultStat1(i: u8, label: [*:0]const u8) void {
     var buf: [127:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{s}", .{label}) catch unreachable;
-    swrText_CreateEntry1(640 - race_stat_x, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &buf);
+    swrText_CreateEntry1(640 - race_stat_x, race_stat_y + i * race_stat_h, race_stat_col, race_stat_col, race_stat_col, 255, &buf);
 }
 
 fn RenderRaceResultStat2(i: u8, label: [*:0]const u8, value: [*:0]const u8) void {
@@ -122,8 +123,8 @@ fn RenderRaceResultStat2(i: u8, label: [*:0]const u8, value: [*:0]const u8) void
     var bufv: [127:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&bufl, "~F0~s~r{s}", .{label}) catch unreachable;
     _ = std.fmt.bufPrintZ(&bufv, "~F0~s{s}", .{value}) catch unreachable;
-    swrText_CreateEntry1(640 - race_stat_x - 8, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &bufl);
-    swrText_CreateEntry1(640 - race_stat_x + 8, race_stat_y + i * 12, race_stat_col, race_stat_col, race_stat_col, 255, &bufv);
+    swrText_CreateEntry1(640 - race_stat_x - 8, race_stat_y + i * race_stat_h, race_stat_col, race_stat_col, race_stat_col, 255, &bufl);
+    swrText_CreateEntry1(640 - race_stat_x + 8, race_stat_y + i * race_stat_h, race_stat_col, race_stat_col, race_stat_col, 255, &bufv);
 }
 
 fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
@@ -385,6 +386,76 @@ fn HookTextRender(memory: usize) usize {
     return offset;
 }
 
+fn MenuTitleScreen_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuTitleScreen_Before");
+}
+
+fn MenuVehicleSelect_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuVehicleSelect_Before");
+}
+
+fn MenuStartRace_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuStartRace_Before");
+}
+
+fn MenuJunkyard_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuJunkyard_Before");
+}
+
+fn MenuRaceResults_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuRaceResults_Before");
+}
+
+fn MenuWattosShop_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuWattosShop_Before");
+}
+
+fn MenuHangar_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuHangar_Before");
+}
+
+fn MenuTrackSelect_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuTrackSelect_Before");
+}
+
+fn MenuTrack_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuTrack_Before");
+}
+
+fn MenuCantinaEntry_Before() void {
+    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuCantinaEntry_Before");
+}
+
+const DrawMenuJumpTable: usize = 0x457A88;
+const DrawMenuScene3JumpTable: usize = 0x457AD4;
+
+fn HookMenuDrawing(memory: usize) usize {
+    var off: usize = memory;
+
+    // before 0x435240
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 1, &MenuTitleScreen_Before);
+    // before 0x______
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 3, &MenuStartRace_Before);
+    // before 0x______
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 4, &MenuJunkyard_Before);
+    // before 0x______
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 5, &MenuRaceResults_Before);
+    // before 0x______
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 7, &MenuWattosShop_Before);
+    // before 0x______; inspect vehicle, view upgrades, etc.
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 8, &MenuHangar_Before);
+    // before 0x435700
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 9, &MenuVehicleSelect_Before);
+    // before 0x______
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 12, &MenuTrackSelect_Before);
+    // before 0x______
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 13, &MenuTrack_Before);
+    // before 0x______
+    off = mem.intercept_jump_table(off, DrawMenuJumpTable, 18, &MenuCantinaEntry_Before);
+
+    return off;
+}
+
 export fn Patch() void {
     const mem_alloc = MEM_COMMIT | MEM_RESERVE;
     const mem_protect = PAGE_EXECUTE_READWRITE;
@@ -441,6 +512,7 @@ export fn Patch() void {
     off = HookGameLoop(off);
     off = HookGameEnd(off);
     off = HookTextRender(off);
+    off = HookMenuDrawing(off);
 
     if (s.gen.get("death_speed_mod_enable", bool)) {
         const dsm = s.gen.get("death_speed_min", f32);

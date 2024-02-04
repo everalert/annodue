@@ -13,7 +13,8 @@ const MessageBoxA = user32.MessageBoxA;
 const MB_OK = user32.MB_OK;
 const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
 
-const win = @import("util/windows.zig");
+const KS_DOWN: i16 = -1;
+const KS_PRESSED: i16 = 1; // since last call
 
 const mp = @import("patch_multiplayer.zig");
 const gen = @import("patch_general.zig");
@@ -31,7 +32,9 @@ const swrText_CreateEntry1 = @import("util/racer_fn.zig").swrText_CreateEntry1;
 
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
-const ini = @import("import/ini/ini.zig");
+const ini = @import("import/import.zig").ini;
+const win32 = @import("import/import.zig").win32;
+const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const ver_major: u32 = 0;
 const ver_minor: u32 = 0;
@@ -121,7 +124,16 @@ fn HookGameEnd(memory: usize) usize {
 // MENU DRAW CALLS in 'Hang' callback0x14
 
 fn MenuTitleScreen_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuTitleScreen_Before");
+    var buf_name: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf_name, "~F0~s~rAnnodue {d}.{d}.{d}", .{
+        ver_major,
+        ver_minor,
+        ver_patch,
+    }) catch return;
+    swrText_CreateEntry1(640 - 16, 16, 255, 255, 255, 255, &buf_name);
+    if (global.practice_mode) {
+        swrText_CreateEntry1(640 - 16, 24, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
+    }
 }
 
 fn MenuVehicleSelect_Before() void {
@@ -254,8 +266,8 @@ export fn Patch() void {
 
     // keyboard
 
-    const kb_shift: i32 = win.GetAsyncKeyState(win.VK_SHIFT);
-    const kb_shift_dn: bool = (kb_shift & win.KS_DOWN) != 0;
+    const kb_shift: i16 = win32kb.GetAsyncKeyState(@intFromEnum(win32kb.VK_SHIFT));
+    const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
     global.practice_mode = kb_shift_dn;
 
     // general stuff

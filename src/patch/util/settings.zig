@@ -1,7 +1,7 @@
 const settings = @This();
 
 const std = @import("std");
-const ini = @import("../import/ini/ini.zig");
+const ini = @import("../import/import.zig").ini;
 
 pub const IniValue = union(enum) {
     b: bool,

@@ -1,5 +1,16 @@
 pub const Self = @This();
 
+// Global State
+pub const ADDR_SCENE_ID: usize = 0xE9BA62; // u16
+pub const ADDR_IN_RACE: usize = 0xE9BB81; //u8
+pub const ADDR_IN_TOURNAMENT: usize = 0x50C450; // u8
+pub const ADDR_PAUSE_STATE: usize = 0x50C5F0; // u8
+
+// Menu / 'Hang'
+pub const ADDR_DRAW_MENU_JUMP_TABLE: usize = 0x457A88;
+pub const ADDR_DRAW_MENU_JUMP_TABLE_SCENE_3: usize = 0x457AD4;
+
+// Helper Strings
 pub const UpgradeCategories = [_][*:0]const u8{
     "Traction",
     "Turning",

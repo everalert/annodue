@@ -11,6 +11,8 @@ const MEM_RELEASE = std.os.windows.MEM_RELEASE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 const DWORD = std.os.windows.DWORD;
 
+const ALIGN_SIZE: usize = 16;
+
 // TODO: experiment with unprotected/raw memory access without the bullshit
 // - switching to PAGE_EXECUTE_READWRITE is required
 // - maybe add fns: write_unsafe, write_unsafe_enable, write_unsafe_disable ?
@@ -269,7 +271,7 @@ pub fn addr_from_call(src_call: usize) usize {
     return orig_dest_abs;
 }
 
-pub fn detour(memory: usize, addr: usize, len: usize, dest: *const fn () void) usize {
+pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
     std.debug.assert(len >= 5);
 
     const scr_alloc = MEM_COMMIT | MEM_RESERVE;
@@ -278,17 +280,34 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest: *const fn () void) u
     defer VirtualFree(scratch, 0, MEM_RELEASE);
     read_bytes(addr, scratch, len);
 
-    var offset: usize = memory;
+    var off: usize = memory;
 
-    const off_hook: usize = call(addr, offset);
+    const off_hook: usize = call(addr, off);
     _ = nop_until(off_hook, addr + len);
 
-    offset = call(offset, @intFromPtr(dest));
-    offset = write_bytes(offset, scratch, len);
-    offset = retn(offset);
-    offset = nop_align(offset, 16);
+    if (dest_before) |dest| off = call(off, @intFromPtr(dest));
+    off = write_bytes(off, scratch, len);
+    if (dest_after) |dest| off = call(off, @intFromPtr(dest));
+    off = retn(off);
+    off = nop_align(off, ALIGN_SIZE);
 
-    return offset;
+    return off;
+}
+
+pub fn intercept_call(memory: usize, off_call: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
+    const call_target: usize = addr_from_call(off_call);
+
+    var off: usize = memory;
+
+    _ = call(off_call, off);
+
+    if (dest_before) |dest| off = call(off, @intFromPtr(dest));
+    off = call(off, call_target);
+    if (dest_after) |dest| off = call(off, @intFromPtr(dest));
+    off = retn(off);
+    off = nop_align(off, ALIGN_SIZE);
+
+    return off;
 }
 
 pub fn intercept_jump_table(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
@@ -300,7 +319,7 @@ pub fn intercept_jump_table(memory: usize, jt_addr: usize, jt_idx: u32, dest: *c
 
     off = call(off, @intFromPtr(dest));
     off = jmp(off, item_target);
-    off = nop_align(off, 16);
+    off = nop_align(off, ALIGN_SIZE);
 
     return off;
 }

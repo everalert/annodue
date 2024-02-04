@@ -7,6 +7,7 @@ const MEM_COMMIT = std.os.windows.MEM_COMMIT;
 const MEM_RESERVE = std.os.windows.MEM_RESERVE;
 const MEM_RELEASE = std.os.windows.MEM_RELEASE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
+const WINAPI = std.os.windows.WINAPI;
 
 const MessageBoxA = user32.MessageBoxA;
 const MB_OK = user32.MB_OK;
@@ -15,6 +16,9 @@ const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
 const ver_major: u32 = 0;
 const ver_minor: u32 = 0;
 const ver_patch: u32 = 1;
+extern "user32" fn GetAsyncKeyState(vKey: i32) callconv(WINAPI) i16;
+const KS_DOWN: i32 = 0x8000;
+const KS_PRESSED: i32 = 0x0001;
 
 const mp = @import("patch_multiplayer.zig");
 const gen = @import("patch_general.zig");
@@ -33,6 +37,10 @@ const s = struct { // FIXME: yucky
     var gen: SettingsGroup = undefined;
     var prac: SettingsGroup = undefined;
     var mp: SettingsGroup = undefined;
+};
+
+const global = struct {
+    var practice_mode: bool = false;
 };
 
 fn PtrMessage(alloc: std.mem.Allocator, ptr: usize, label: []const u8) void {
@@ -266,6 +274,10 @@ fn TextRenderBefore() void {
         if (in_race) {
             if (in_race_new) state.reset_race();
 
+            if (global.practice_mode) {
+                swrText_CreateEntry1(640 - 16, 480 - 16, 255, 255, 255, 255, "~F0~s~rPractice Mode");
+            }
+
             const flags1: u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x60 }, u32);
             const in_race_count: bool = (flags1 & (1 << 0)) > 0;
             const in_race_count_new: bool = state.was_in_race_count != in_race_count;
@@ -314,18 +326,6 @@ fn TextRenderBefore() void {
                 RenderRaceResultStatTime(16, "Fire Finish", state.fire_finish_duration);
                 RenderRaceResultStatTime(17, "Overheat Time", state.total_overheat);
             } else {
-                var i: u8 = 0;
-                while (i < lap_times.len and lap_times[i] >= 0) : (i += 1) {
-                    const t_ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000)));
-                    const min: u32 = (t_ms / 1000) / 60;
-                    const sec: u32 = (t_ms / 1000) % 60;
-                    const ms: u32 = t_ms % 1000;
-                    const col: u8 = if (lap == i) 255 else 170;
-                    var buf: [63:0]u8 = undefined;
-                    _ = std.fmt.bufPrintZ(&buf, "~F1~s{d}  {d}:{d:0>2}.{d:0>3}", .{ i + 1, min, sec, ms }) catch unreachable;
-                    swrText_CreateEntry1(48, 128 + i * 16, col, col, col, 255, &buf);
-                }
-
                 const dead: bool = (flags1 & (1 << 14)) > 0;
                 const dead_new: bool = state.was_dead != dead;
                 state.was_dead = dead;
@@ -358,13 +358,27 @@ fn TextRenderBefore() void {
                 if (overheating) state.set_total_overheat(total_time);
                 if (!overheating and overheating_new) state.set_total_overheat(total_time);
 
-                const heat_s: f32 = heat / state.heat_rate;
-                const cool_s: f32 = (100 - heat) / state.cool_rate;
-                const heat_timer: f32 = if (boosting) heat_s else cool_s;
-                const heat_color: []const u8 = if (boosting) "~5" else if (heat < 100) "~2" else "~7";
-                var buf: [63:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&buf, "~F0{s}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
-                swrText_CreateEntry1((320 - 68) * 2, 168 * 2, 255, 255, 255, 255, &buf);
+                if (global.practice_mode) {
+                    const heat_s: f32 = heat / state.heat_rate;
+                    const cool_s: f32 = (100 - heat) / state.cool_rate;
+                    const heat_timer: f32 = if (boosting) heat_s else cool_s;
+                    const heat_color: []const u8 = if (boosting) "~5" else if (heat < 100) "~2" else "~7";
+                    var buf: [63:0]u8 = undefined;
+                    _ = std.fmt.bufPrintZ(&buf, "~F0{s}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
+                    swrText_CreateEntry1((320 - 68) * 2, 168 * 2, 255, 255, 255, 255, &buf);
+
+                    var i: u8 = 0;
+                    while (i < lap_times.len and lap_times[i] >= 0) : (i += 1) {
+                        const t_ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000)));
+                        const min: u32 = (t_ms / 1000) / 60;
+                        const sec: u32 = (t_ms / 1000) % 60;
+                        const ms: u32 = t_ms % 1000;
+                        const col: u8 = if (lap == i) 255 else 170;
+                        var buf_lap: [63:0]u8 = undefined;
+                        _ = std.fmt.bufPrintZ(&buf_lap, "~F1~s{d}  {d}:{d:0>2}.{d:0>3}", .{ i + 1, min, sec, ms }) catch unreachable;
+                        swrText_CreateEntry1(48, 128 + i * 16, col, col, col, 255, &buf_lap);
+                    }
+                }
             }
         }
     }
@@ -506,6 +520,12 @@ export fn Patch() void {
     s.manager.add(&s.mp);
 
     s.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
+
+    // keyboard
+
+    const kb_shift: i32 = GetAsyncKeyState(0x10);
+    const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
+    global.practice_mode = kb_shift_dn;
 
     // random stuff
 

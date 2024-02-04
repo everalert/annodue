@@ -1,5 +1,19 @@
 const std = @import("std");
-const user32 = std.os.windows.user32;
+
+const mp = @import("patch_multiplayer.zig");
+const gen = @import("patch_general.zig");
+const practice = @import("patch_practice.zig");
+const mem = @import("util/memory.zig");
+const rc = @import("util/racer_const.zig");
+const swrText_CreateEntry1 = @import("util/racer_fn.zig").swrText_CreateEntry1;
+
+const SettingsGroup = @import("util/settings.zig").SettingsGroup;
+const SettingsManager = @import("util/settings.zig").SettingsManager;
+const ini = @import("import/import.zig").ini;
+const win32 = @import("import/import.zig").win32;
+const win32kb = win32.ui.input.keyboard_and_mouse;
+const KS_DOWN: i16 = -1;
+const KS_PRESSED: i16 = 1; // since last call
 
 const VirtualAlloc = std.os.windows.VirtualAlloc;
 const VirtualFree = std.os.windows.VirtualFree;
@@ -9,32 +23,12 @@ const MEM_RELEASE = std.os.windows.MEM_RELEASE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 const WINAPI = std.os.windows.WINAPI;
 
+const user32 = std.os.windows.user32;
 const MessageBoxA = user32.MessageBoxA;
 const MB_OK = user32.MB_OK;
 const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
 
-const KS_DOWN: i16 = -1;
-const KS_PRESSED: i16 = 1; // since last call
-
-const mp = @import("patch_multiplayer.zig");
-const gen = @import("patch_general.zig");
-const practice = @import("patch_practice.zig");
-
-const mem = @import("util/memory.zig");
-
-const rc = @import("util/racer_const.zig");
-const UpgradeNames = rc.UpgradeNames;
-const UpgradeCategories = rc.UpgradeCategories;
-const ADDR_IN_RACE = rc.ADDR_IN_RACE;
-const ADDR_DRAW_MENU_JUMP_TABLE = rc.ADDR_DRAW_MENU_JUMP_TABLE;
-
-const swrText_CreateEntry1 = @import("util/racer_fn.zig").swrText_CreateEntry1;
-
-const SettingsGroup = @import("util/settings.zig").SettingsGroup;
-const SettingsManager = @import("util/settings.zig").SettingsManager;
-const ini = @import("import/import.zig").ini;
-const win32 = @import("import/import.zig").win32;
-const win32kb = win32.ui.input.keyboard_and_mouse;
+// STATE
 
 const ver_major: u32 = 0;
 const ver_minor: u32 = 0;
@@ -52,6 +46,8 @@ const s = struct { // FIXME: yucky
 const global = struct {
     var practice_mode: bool = false;
 };
+
+// ???
 
 fn PtrMessage(ptr: usize, label: []const u8) void {
     var buf: [255:0]u8 = undefined;
@@ -176,25 +172,25 @@ fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
 
     // before 0x435240
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 1, &MenuTitleScreen_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 1, &MenuTitleScreen_Before);
     // before 0x______
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 3, &MenuStartRace_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 3, &MenuStartRace_Before);
     // before 0x______
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 4, &MenuJunkyard_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 4, &MenuJunkyard_Before);
     // before 0x______
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 5, &MenuRaceResults_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 5, &MenuRaceResults_Before);
     // before 0x______
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 7, &MenuWattosShop_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 7, &MenuWattosShop_Before);
     // before 0x______; inspect vehicle, view upgrades, etc.
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 8, &MenuHangar_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 8, &MenuHangar_Before);
     // before 0x435700
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 9, &MenuVehicleSelect_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 9, &MenuVehicleSelect_Before);
     // before 0x______
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 12, &MenuTrackSelect_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 12, &MenuTrackSelect_Before);
     // before 0x______
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 13, &MenuTrack_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 13, &MenuTrack_Before);
     // before 0x______
-    off = mem.intercept_jump_table(off, ADDR_DRAW_MENU_JUMP_TABLE, 18, &MenuCantinaEntry_Before);
+    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 18, &MenuCantinaEntry_Before);
 
     return off;
 }

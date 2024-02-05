@@ -2,7 +2,8 @@ pub const Self = @This();
 const std = @import("std");
 const mem = @import("util/memory.zig");
 
-const rc = @import("util/racer_const.zig");
+const r = @import("util/racer.zig");
+const rc = r.constants;
 const UpgradeNames = rc.UpgradeNames;
 const UpgradeCategories = rc.UpgradeCategories;
 const ADDR_IN_RACE = rc.ADDR_IN_RACE;
@@ -58,8 +59,8 @@ pub const state = struct {
         last_underheat_started_total = 0;
         last_overheat_started = 0;
         last_overheat_started_total = 0;
-        heat_rate = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x8C }, f32);
-        cool_rate = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x90 }, f32);
+        heat_rate = r.ReadEntityValue(.Test, 0, 0x8C, f32);
+        cool_rate = r.ReadEntityValue(.Test, 0, 0x90, f32);
         const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
         upgrades_lv = u[0..7].*;
         upgrades_hp = u[7..14].*;
@@ -165,7 +166,8 @@ pub fn TextRender_Before(practice_mode: bool) void {
     if (in_race) {
         if (in_race_new) state.reset_race();
 
-        const flags1: u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x60 }, u32);
+        //const flags1: u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x60 }, u32);
+        const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
         const in_race_count: bool = (flags1 & (1 << 0)) > 0;
         const in_race_count_new: bool = state.was_in_race_count != in_race_count;
         state.was_in_race_count = in_race_count;
@@ -181,12 +183,7 @@ pub fn TextRender_Before(practice_mode: bool) void {
         if (practice_mode) {
             var flash: u8 = 255;
             if (total_time <= 0) {
-                const timer: f32 = mem.deref_read(&.{
-                    rc.ADDR_ENTITY_MANAGER_JUMP_TABLE,
-                    @intFromEnum(rc.ENTITY_ID.Jdge) * 4,
-                    0x10,
-                    0xC,
-                }, f32);
+                const timer: f32 = r.ReadEntityValue(.Jdge, 0, 0x0C, f32);
                 const flash_range: u8 = 128;
                 const flash_cycle: f32 = std.math.clamp((std.math.cos(timer * std.math.pi * 12) * 0.5 + 0.5) * std.math.pow(f32, timer / 3, 3), 0, 3);
                 flash -= @intFromFloat(flash_range * flash_cycle);
@@ -234,8 +231,10 @@ pub fn TextRender_Before(practice_mode: bool) void {
             state.was_dead = dead;
             if (dead and dead_new) state.total_deaths += 1;
 
-            const heat: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x218 }, f32);
-            const engine: [6]u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x2A0 }, [6]u32);
+            const heat: f32 = r.ReadEntityValue(.Test, 0, 0x218, f32);
+            const engine: [6]u32 = r.ReadEntityValue(.Test, 0, 0x2A0, [6]u32);
+            //const heat: f32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x218 }, f32);
+            //const engine: [6]u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x2A0 }, [6]u32);
 
             const boosting: bool = (flags1 & (1 << 23)) > 0;
             const boosting_new: bool = state.was_boosting != boosting;

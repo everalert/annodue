@@ -1,5 +1,8 @@
 pub const Self = @This();
 
+pub const ADDR_HWND: usize = 0x52EE70;
+pub const ADDR_HINSTANCE: usize = 0x52EE74;
+
 // Global State
 pub const ADDR_SCENE_ID: usize = 0xE9BA62; // u16
 pub const ADDR_IN_RACE: usize = 0xE9BB81; //u8

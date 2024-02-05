@@ -157,7 +157,6 @@ pub fn TextRender_Before(practice_mode: bool) void {
     state.was_in_race = in_race;
 
     const dt_f: f32 = mem.deref_read(&.{0xE22A50}, f32);
-    const fps_res: f32 = 100;
     const fps_res: f32 = 1 / dt_f * 2;
     state.fps = (state.fps * (fps_res - 1) + (1 / dt_f)) / fps_res;
 

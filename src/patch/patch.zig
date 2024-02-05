@@ -3,15 +3,18 @@ const std = @import("std");
 const mp = @import("patch_multiplayer.zig");
 const gen = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
+
 const mem = @import("util/memory.zig");
+const input = @import("util/input.zig");
 const rc = @import("util/racer_const.zig");
 const swrText_CreateEntry1 = @import("util/racer_fn.zig").swrText_CreateEntry1;
-
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
+
 const ini = @import("import/import.zig").ini;
 const win32 = @import("import/import.zig").win32;
 const win32kb = win32.ui.input.keyboard_and_mouse;
+const win32wm = win32.ui.windows_and_messaging;
 const KS_DOWN: i16 = -1;
 const KS_PRESSED: i16 = 1; // since last call
 
@@ -22,6 +25,11 @@ const MEM_RESERVE = std.os.windows.MEM_RESERVE;
 const MEM_RELEASE = std.os.windows.MEM_RELEASE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 const WINAPI = std.os.windows.WINAPI;
+const WPARAM = std.os.windows.WPARAM;
+const LPARAM = std.os.windows.LPARAM;
+const LRESULT = std.os.windows.LRESULT;
+const HINSTANCE = std.os.windows.HINSTANCE;
+const HWND = std.os.windows.HWND;
 
 const user32 = std.os.windows.user32;
 const MessageBoxA = user32.MessageBoxA;
@@ -30,11 +38,11 @@ const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
 
 // STATE
 
+const patch_size: u32 = 4 * 1024 * 1024; // 4MB
+
 const ver_major: u32 = 0;
 const ver_minor: u32 = 0;
 const ver_patch: u32 = 1;
-
-const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 
 const s = struct { // FIXME: yucky
     var manager: SettingsManager = undefined;
@@ -45,20 +53,22 @@ const s = struct { // FIXME: yucky
 
 const global = struct {
     var practice_mode: bool = false;
+    var hwnd: ?HWND = null;
+    var hinstance: ?HINSTANCE = null;
 };
 
 // ???
 
 fn PtrMessage(ptr: usize, label: []const u8) void {
     var buf: [255:0]u8 = undefined;
-    buf = std.fmt.bufPrintZ("{s}: 0x{s}", .{ label, ptr }) catch return;
-    _ = MessageBoxA(null, buf, "annodue.dll", MB_OK);
+    _ = std.fmt.bufPrintZ(&buf, "{s}: 0x{s}", .{ label, ptr }) catch return;
+    _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
 }
 
 fn ErrMessage(label: []const u8, err: []const u8) void {
     var buf: [2047:0]u8 = undefined;
-    buf = std.fmt.bufPrintZ("[ERROR] {s}: {s}", .{ label, err }) catch return;
-    _ = MessageBoxA(null, buf, "annodue.dll", MB_OK);
+    _ = std.fmt.bufPrintZ(&buf, "[ERROR] {s}: {s}", .{ label, err }) catch return;
+    _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
 }
 
 // GAME LOOP
@@ -67,6 +77,8 @@ fn GameLoop_Before() void {
     const state = struct {
         var initialized: bool = false;
     };
+
+    input.update_kb();
 
     if (!state.initialized) {
         const def_laps: u32 = s.gen.get("default_laps", u32);
@@ -81,6 +93,12 @@ fn GameLoop_Before() void {
         }
 
         state.initialized = true;
+    }
+
+    if (input.get_kb(@truncate(@intFromEnum(win32kb.VK_P)), true, true) and
+        (!(mem.read(rc.ADDR_IN_RACE, u8) > 0 and global.practice_mode)))
+    {
+        global.practice_mode = !global.practice_mode;
     }
 
     if (s.gen.get("rainbow_timer_enable", bool)) {
@@ -207,7 +225,7 @@ fn HookTextRender(memory: usize) usize {
     return mem.intercept_call(memory, 0x483F8B, null, &TextRender_Before);
 }
 
-// INITIALIZATION
+// DO THE THING!!!
 
 export fn Patch() void {
     const mem_alloc = MEM_COMMIT | MEM_RESERVE;
@@ -260,18 +278,23 @@ export fn Patch() void {
 
     s.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 
-    // keyboard
+    // input-based launch toggles
 
     const kb_shift: i16 = win32kb.GetAsyncKeyState(@intFromEnum(win32kb.VK_SHIFT));
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
     global.practice_mode = kb_shift_dn;
 
-    // general stuff
+    // hooking
+
+    global.hwnd = mem.read(rc.ADDR_HWND, HWND);
+    global.hinstance = mem.read(rc.ADDR_HINSTANCE, HINSTANCE);
 
     off = HookGameLoop(off);
     off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+
+    // init: general stuff
 
     if (s.gen.get("death_speed_mod_enable", bool)) {
         const dsm = s.gen.get("death_speed_min", f32);
@@ -282,7 +305,7 @@ export fn Patch() void {
         gen.PatchHudTimerMs();
     }
 
-    // swe1r-patcher (multiplayer mod) stuff
+    // init: swe1r-patcher (multiplayer mod) stuff
 
     if (s.mp.get("multiplayer_mod_enable", bool)) {
         if (s.mp.get("fonts_dump", bool)) {

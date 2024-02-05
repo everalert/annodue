@@ -3,6 +3,21 @@ pub const Self = @This();
 pub const ADDR_HWND: usize = 0x52EE70;
 pub const ADDR_HINSTANCE: usize = 0x52EE74;
 
+// Entity System
+pub const ADDR_ENTITY_MANAGER_JUMP_TABLE: usize = 0x4BFEC0;
+pub const ENTITY_MANAGER_SIZE: usize = 0x28;
+pub const ENTITY_ID = enum(u32) {
+    Test = 0,
+    Toss = 1,
+    Trig = 2,
+    Hang = 3,
+    Jdge = 4,
+    Scen = 5,
+    Elmo = 6,
+    Smok = 7,
+    cMan = 8,
+};
+
 // Global State
 pub const ADDR_SCENE_ID: usize = 0xE9BA62; // u16
 pub const ADDR_IN_RACE: usize = 0xE9BB81; //u8

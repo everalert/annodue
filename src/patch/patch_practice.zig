@@ -151,21 +151,19 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat2(i, UpgradeCategories[cat], &buf);
 }
 
+pub fn GameLoop_Before() void {
+    const dt_f: f32 = mem.deref_read(&.{0xE22A50}, f32);
+    const fps_res: f32 = 1 / dt_f * 2;
+    state.fps = (state.fps * (fps_res - 1) + (1 / dt_f)) / fps_res;
+}
+
 pub fn TextRender_Before(practice_mode: bool) void {
     const in_race: bool = mem.read(ADDR_IN_RACE, u8) > 0;
     const in_race_new: bool = state.was_in_race != in_race;
     state.was_in_race = in_race;
 
-    const dt_f: f32 = mem.deref_read(&.{0xE22A50}, f32);
-    const fps_res: f32 = 1 / dt_f * 2;
-    state.fps = (state.fps * (fps_res - 1) + (1 / dt_f)) / fps_res;
-
     if (in_race) {
         if (in_race_new) state.reset_race();
-
-        if (practice_mode) {
-            swrText_CreateEntry1(640 - 16, 480 - 16, 255, 255, 255, 190, "~F0~s~rPractice Mode");
-        }
 
         const flags1: u32 = mem.deref_read(&.{ 0x4D78A4, 0x84, 0x60 }, u32);
         const in_race_count: bool = (flags1 & (1 << 0)) > 0;
@@ -179,6 +177,22 @@ pub fn TextRender_Before(practice_mode: bool) void {
         const race_times: [6]f32 = mem.deref_read(&.{ 0x4D78A4, 0x60 }, [6]f32);
         const lap_times: []const f32 = race_times[0..5];
         const total_time: f32 = race_times[5];
+
+        if (practice_mode) {
+            var flash: u8 = 255;
+            if (total_time <= 0) {
+                const timer: f32 = mem.deref_read(&.{
+                    rc.ADDR_ENTITY_MANAGER_JUMP_TABLE,
+                    @intFromEnum(rc.ENTITY_ID.Jdge) * 4,
+                    0x10,
+                    0xC,
+                }, f32);
+                const flash_range: u8 = 128;
+                const flash_cycle: f32 = std.math.clamp((std.math.cos(timer * std.math.pi * 12) * 0.5 + 0.5) * std.math.pow(f32, timer / 3, 3), 0, 3);
+                flash -= @intFromFloat(flash_range * flash_cycle);
+            }
+            swrText_CreateEntry1(640 - 16, 480 - 16, flash, flash, flash, 190, "~F0~s~rPractice Mode");
+        }
 
         if (in_race_count) {
             if (in_race_count_new) {

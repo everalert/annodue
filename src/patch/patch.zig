@@ -71,6 +71,12 @@ fn ErrMessage(label: []const u8, err: []const u8) void {
     _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
 }
 
+fn DrawMenuPracticeModeLabel() void {
+    if (global.practice_mode) {
+        swrText_CreateEntry1(640 - 20, 16, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
+    }
+}
+
 // GAME LOOP
 
 fn GameLoop_Before() void {
@@ -100,6 +106,8 @@ fn GameLoop_Before() void {
     {
         global.practice_mode = !global.practice_mode;
     }
+
+    practice.GameLoop_Before();
 
     if (s.gen.get("rainbow_timer_enable", bool)) {
         gen.PatchHudTimerColRotate();
@@ -139,15 +147,13 @@ fn HookGameEnd(memory: usize) usize {
 
 fn MenuTitleScreen_Before() void {
     var buf_name: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf_name, "~F0~s~rAnnodue {d}.{d}.{d}", .{
+    _ = std.fmt.bufPrintZ(&buf_name, "~F0~sAnnodue {d}.{d}.{d}", .{
         ver_major,
         ver_minor,
         ver_patch,
     }) catch return;
-    swrText_CreateEntry1(640 - 16, 16, 255, 255, 255, 255, &buf_name);
-    if (global.practice_mode) {
-        swrText_CreateEntry1(640 - 16, 24, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
-    }
+    swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf_name);
+    DrawMenuPracticeModeLabel();
 }
 
 fn MenuVehicleSelect_Before() void {
@@ -155,7 +161,7 @@ fn MenuVehicleSelect_Before() void {
 }
 
 fn MenuStartRace_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuStartRace_Before");
+    DrawMenuPracticeModeLabel();
 }
 
 fn MenuJunkyard_Before() void {
@@ -163,7 +169,7 @@ fn MenuJunkyard_Before() void {
 }
 
 fn MenuRaceResults_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuRaceResults_Before");
+    DrawMenuPracticeModeLabel();
 }
 
 fn MenuWattosShop_Before() void {
@@ -179,7 +185,7 @@ fn MenuTrackSelect_Before() void {
 }
 
 fn MenuTrack_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuTrack_Before");
+    DrawMenuPracticeModeLabel();
 }
 
 fn MenuCantinaEntry_Before() void {

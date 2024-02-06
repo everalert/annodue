@@ -1,12 +1,20 @@
 pub const Self = @This();
 
+// Window
+
 pub const ADDR_HWND: usize = 0x52EE70;
 pub const ADDR_HINSTANCE: usize = 0x52EE74;
+
+// Magic words
+
+pub const MAGIC_ABRT: u32 = 0x41627274; // Abrt
+pub const MAGIC_RSTR: u32 = 0x52537472; // RStr
+pub const MAGIC_FINI: u32 = 0x46696E69; // Fini
 
 // Entity System
 pub const ADDR_ENTITY_MANAGER_JUMP_TABLE: usize = 0x4BFEC0;
 pub const ENTITY_MANAGER_SIZE: usize = 0x28;
-pub const ENTITY_ID = enum(u32) {
+pub const ENTITY = enum(u32) {
     Test = 0,
     Toss = 1,
     Trig = 2,

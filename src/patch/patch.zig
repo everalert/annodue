@@ -6,8 +6,9 @@ const practice = @import("patch_practice.zig");
 
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
+const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
-const swrText_CreateEntry1 = @import("util/racer_fn.zig").swrText_CreateEntry1;
+const rf = @import("util/racer_fn.zig");
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
 
@@ -73,7 +74,7 @@ fn ErrMessage(label: []const u8, err: []const u8) void {
 
 fn DrawMenuPracticeModeLabel() void {
     if (global.practice_mode) {
-        swrText_CreateEntry1(640 - 20, 16, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
+        rf.swrText_CreateEntry1(640 - 20, 16, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
     }
 }
 
@@ -101,10 +102,17 @@ fn GameLoop_Before() void {
         state.initialized = true;
     }
 
+    const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
+
     if (input.get_kb(@truncate(@intFromEnum(win32kb.VK_P)), true, true) and
-        (!(mem.read(rc.ADDR_IN_RACE, u8) > 0 and global.practice_mode)))
+        (!(in_race and global.practice_mode)))
     {
         global.practice_mode = !global.practice_mode;
+    }
+
+    if (in_race and input.get_kb(@truncate(@intFromEnum(win32kb.VK_N)), true, true)) {
+        const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMP_TABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
+        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 
     practice.GameLoop_Before();
@@ -152,7 +160,7 @@ fn MenuTitleScreen_Before() void {
         ver_minor,
         ver_patch,
     }) catch return;
-    swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf_name);
+    rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf_name);
     DrawMenuPracticeModeLabel();
 }
 

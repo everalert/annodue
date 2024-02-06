@@ -123,6 +123,7 @@ fn GameLoop_Before() void {
 }
 
 fn GameLoop_After() void {
+    //practice.GameLoop_After(global.practice_mode);
     //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0GameLoop_After");
 }
 

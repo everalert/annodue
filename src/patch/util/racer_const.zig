@@ -11,7 +11,15 @@ pub const MAGIC_ABRT: u32 = 0x41627274; // Abrt
 pub const MAGIC_RSTR: u32 = 0x52537472; // RStr
 pub const MAGIC_FINI: u32 = 0x46696E69; // Fini
 
+// Global State
+
+pub const ADDR_SCENE_ID: usize = 0xE9BA62; // u16
+pub const ADDR_IN_RACE: usize = 0xE9BB81; //u8
+pub const ADDR_IN_TOURNAMENT: usize = 0x50C450; // u8
+pub const ADDR_PAUSE_STATE: usize = 0x50C5F0; // u8
+
 // Entity System
+
 pub const ADDR_ENTITY_MANAGER_JUMP_TABLE: usize = 0x4BFEC0;
 pub const ENTITY_MANAGER_SIZE: usize = 0x28;
 pub const ENTITY = enum(u32) {
@@ -25,18 +33,33 @@ pub const ENTITY = enum(u32) {
     Smok = 7,
     cMan = 8,
 };
-
-// Global State
-pub const ADDR_SCENE_ID: usize = 0xE9BA62; // u16
-pub const ADDR_IN_RACE: usize = 0xE9BB81; //u8
-pub const ADDR_IN_TOURNAMENT: usize = 0x50C450; // u8
-pub const ADDR_PAUSE_STATE: usize = 0x50C5F0; // u8
+pub const ENTITY_SIZE = [_]usize{
+    0x1F28,
+    0x7C,
+    0x58,
+    0xD0,
+    0x1E8,
+    0x1B4C,
+    0xC0,
+    0x108,
+    0x3A8,
+};
+pub fn EntitySize(entity: ENTITY) usize {
+    return ENTITY_SIZE[@intFromEnum(entity)];
+}
 
 // Menu / 'Hang'
+
 pub const ADDR_DRAW_MENU_JUMP_TABLE: usize = 0x457A88;
 pub const ADDR_DRAW_MENU_JUMP_TABLE_SCENE_3: usize = 0x457AD4;
 
+// Race Data (participant metadata)
+
+pub const ADDR_RACE_DATA: usize = 0x4D78A4;
+pub const RACE_DATA_SIZE: usize = 0x88;
+
 // Helper Strings
+
 pub const UpgradeCategories = [_][*:0]const u8{
     "Traction",
     "Turning",

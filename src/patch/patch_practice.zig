@@ -1,10 +1,28 @@
 pub const Self = @This();
 const std = @import("std");
-const mem = @import("util/memory.zig");
 
+const mem = @import("util/memory.zig");
 const r = @import("util/racer.zig");
 const rc = r.constants;
 const rf = r.functions;
+
+const VirtualAlloc = std.os.windows.VirtualAlloc;
+const VirtualFree = std.os.windows.VirtualFree;
+const MEM_COMMIT = std.os.windows.MEM_COMMIT;
+const MEM_RESERVE = std.os.windows.MEM_RESERVE;
+const MEM_RELEASE = std.os.windows.MEM_RELEASE;
+const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
+
+const user32 = std.os.windows.user32;
+const MessageBoxA = user32.MessageBoxA;
+const MB_OK = user32.MB_OK;
+const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
+
+fn ErrMessage(label: []const u8, err: []const u8) void {
+    var buf: [2047:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "[ERROR] {s}: {s}", .{ label, err }) catch return;
+    _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
+}
 
 const state = struct {
     var fps: f32 = 0;
@@ -111,41 +129,76 @@ const savestate = struct {
     const off_test: usize = rc.RACE_DATA_SIZE;
     const off_hang: usize = off_test + rc.EntitySize(.Test);
     const off_cman: usize = off_hang + rc.EntitySize(.Hang);
-    var ok: bool = false;
+    const size: usize = off_cman + rc.EntitySize(.cMan);
+    const frames: usize = 128;
+    var frame: usize = 0;
+    var frame_total: usize = 0;
+    var initialized: bool = false;
+    var memory: ?std.os.windows.LPVOID = null;
+    var data: []u8 = undefined;
+    var ok: bool = false; // FIXME: probably unnecessary
     var track: ?u8 = null;
     var character: ?u8 = null;
-    var data: [off_cman + rc.EntitySize(.cMan)]u8 = undefined;
+
+    fn init() void {
+        const mem_alloc = MEM_COMMIT | MEM_RESERVE;
+        const mem_protect = PAGE_EXECUTE_READWRITE;
+        memory = VirtualAlloc(null, size * frames, mem_alloc, mem_protect) catch unreachable;
+        data = @as([*]u8, @ptrCast(memory))[0 .. size * frames];
+        initialized = true;
+    }
 
     fn reset() void {
         ok = false;
         character = null;
         track = null;
+        frame = 0;
+        frame_total = 0;
+    }
+
+    fn save_file() void {
+        const file = std.fs.cwd().createFile("annodue/testdata.bin", .{}) catch |err| return ErrMessage("create file", @errorName(err));
+        defer file.close();
+
+        _ = file.write(data[frame * size .. frames * size]) catch return;
+        _ = file.write(data[0 .. frame * size]) catch return;
+    }
+
+    fn saveable() bool {
+        const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
+        return in_race;
     }
 
     fn save() void {
-        const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-        if (in_race) {
+        if (!initialized) init();
+        if (saveable()) {
             ok = true;
             track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
             character = r.ReadEntityValue(.Hang, 0, 0x73, u8);
-            mem.read_bytes(rc.ADDR_RACE_DATA, &data[off_race], rc.RACE_DATA_SIZE);
-            r.ReadEntityValueBytes(.Test, 0, 0, &data[off_test], rc.EntitySize(.Test));
-            r.ReadEntityValueBytes(.Hang, 0, 0, &data[off_hang], rc.EntitySize(.Hang));
-            r.ReadEntityValueBytes(.cMan, 0, 0, &data[off_cman], rc.EntitySize(.cMan));
+            var o = frame * size;
+            r.ReadRaceDataValueBytes(0, &data[o + off_race], rc.RACE_DATA_SIZE);
+            r.ReadEntityValueBytes(.Test, 0, 0, &data[o + off_test], rc.EntitySize(.Test));
+            r.ReadEntityValueBytes(.Hang, 0, 0, &data[o + off_hang], rc.EntitySize(.Hang));
+            r.ReadEntityValueBytes(.cMan, 0, 0, &data[o + off_cman], rc.EntitySize(.cMan));
+            frame_total += 1;
+            frame = (frame + 1) % frames;
         }
     }
 
-    fn load() void {
+    fn loadable() bool {
         const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-        if (in_race) {
-            const cur_track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
-            const cur_character = r.ReadEntityValue(.Hang, 0, 0x73, u8);
-            if (ok and cur_track == track and cur_character == character) {
-                _ = mem.write_bytes(rc.ADDR_RACE_DATA, &data[off_race], rc.RACE_DATA_SIZE);
-                r.WriteEntityValueBytes(.Test, 0, 0, &data[off_test], rc.EntitySize(.Test));
-                r.WriteEntityValueBytes(.Hang, 0, 0, &data[off_hang], rc.EntitySize(.Hang));
-                r.WriteEntityValueBytes(.cMan, 0, 0, &data[off_cman], rc.EntitySize(.cMan));
-            }
+        const cur_track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
+        const cur_character = r.ReadEntityValue(.Hang, 0, 0x73, u8);
+        return in_race and cur_track == track and cur_character == character;
+    }
+
+    fn load() void {
+        if (loadable()) {
+            var o = ((frame + frames - 1) % frames) * size;
+            r.WriteRaceDataValueBytes(0, &data[o + off_race], rc.RACE_DATA_SIZE);
+            r.WriteEntityValueBytes(.Test, 0, 0, &data[off_test], rc.EntitySize(.Test));
+            r.WriteEntityValueBytes(.Hang, 0, 0, &data[off_hang], rc.EntitySize(.Hang));
+            r.WriteEntityValueBytes(.cMan, 0, 0, &data[off_cman], rc.EntitySize(.cMan));
         }
     }
 };
@@ -194,20 +247,22 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 }
 
 pub fn GameLoop_Before() void {
+    // FIXME: runs before the ingame time calc at the top of the frame
     const dt_f: f32 = mem.deref_read(&.{0xE22A50}, f32);
     const fps_res: f32 = 1 / dt_f * 2;
     state.fps = (state.fps * (fps_res - 1) + (1 / dt_f)) / fps_res;
 }
 
+// FIXME: more appropriate hook point to run this
+// after Test functions run but before rendering, so that nothing changes the loaded data
 pub fn GameLoop_After(practice_mode: bool) void {
     if (practice_mode) {
         const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
         if (in_race) {
-            const time: f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x74 }, f32);
-            if (time >= 5.0 and !savestate.ok) savestate.save();
-            if (time >= 10.0 and savestate.ok) savestate.load();
-        } else {
-            if (savestate.ok) savestate.reset();
+            const time: f32 = r.ReadRaceDataValue(0x74, f32);
+            if (time >= 3 and savestate.frame_total == 0) savestate.save();
+            if (time >= 16 and savestate.frame_total > 0) savestate.load();
+            //if (savestate.frame_total == savestate.frames + 32) savestate.save_file();
         }
     }
 }
@@ -218,7 +273,10 @@ pub fn TextRender_Before(practice_mode: bool) void {
     race.was_in_race = in_race;
 
     if (in_race) {
-        if (in_race_new) race.reset();
+        if (in_race_new) {
+            race.reset();
+            savestate.reset();
+        }
 
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
         const in_race_count: bool = (flags1 & (1 << 0)) > 0;

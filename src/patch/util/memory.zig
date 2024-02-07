@@ -41,7 +41,7 @@ pub fn write(offset: usize, comptime T: type, value: T) usize {
 }
 
 pub fn write_bytes(offset: usize, ptr_in: ?*anyopaque, len: usize) usize {
-    const addr: [*]u8 = @ptrFromInt(offset);
+    const addr: [*]align(1) u8 = @ptrFromInt(offset);
     const data: []u8 = @as([*]u8, @ptrCast(ptr_in))[0..len];
     var protect: DWORD = undefined;
     _ = VirtualProtect(addr, len, PAGE_EXECUTE_READWRITE, &protect) catch unreachable;

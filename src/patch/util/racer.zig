@@ -6,6 +6,33 @@ pub const functions = @import("racer_fn.zig");
 const c = constants;
 const f = functions;
 
+fn deref_racedata(offset: usize) usize {
+    return mem.deref(&.{
+        c.ADDR_RACE_DATA,
+        offset,
+    });
+}
+
+pub fn ReadRaceDataValue(offset: usize, comptime T: type) T {
+    const address = deref_racedata(offset);
+    return mem.read(address, T);
+}
+
+pub fn ReadRaceDataValueBytes(offset: usize, out: ?*anyopaque, len: usize) void {
+    const address = deref_racedata(offset);
+    mem.read_bytes(address, out, len);
+}
+
+pub fn WriteRaceDataValue(offset: usize, comptime T: type, value: T) void {
+    const address = deref_racedata(offset);
+    _ = mem.write(address, T, value);
+}
+
+pub fn WriteRaceDataValueBytes(offset: usize, in: ?*anyopaque, len: usize) void {
+    const address = deref_racedata(offset);
+    _ = mem.write_bytes(address, in, len);
+}
+
 fn deref_entity(entity: c.ENTITY, index: u32, offset: usize) usize {
     return mem.deref(&.{
         c.ADDR_ENTITY_MANAGER_JUMP_TABLE,

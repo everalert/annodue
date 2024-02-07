@@ -2,6 +2,7 @@ pub const Self = @This();
 const std = @import("std");
 
 const mem = @import("util/memory.zig");
+const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = r.constants;
 const rf = r.functions;
@@ -149,11 +150,13 @@ const savestate = struct {
     }
 
     fn reset() void {
-        ok = false;
-        character = null;
-        track = null;
-        frame = 0;
-        frame_total = 0;
+        if (frame_total > 0) {
+            ok = false;
+            character = null;
+            track = null;
+            frame = 0;
+            frame_total = 0;
+        }
     }
 
     fn save_file() void {
@@ -259,12 +262,20 @@ pub fn GameLoop_After(practice_mode: bool) void {
     if (practice_mode) {
         const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
         if (in_race) {
-            const time: f32 = r.ReadRaceDataValue(0x74, f32);
-            if (time >= 3 and savestate.frame_total == 0) savestate.save();
-            if (time >= 16 and savestate.frame_total > 0) savestate.load();
-            //if (savestate.frame_total == savestate.frames + 32) savestate.save_file();
+            const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
+            const cannot_use: bool = (flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0;
+
+            if (!cannot_use and input.get_kb(.@"1", true, true))
+                savestate.save();
+
+            if (!cannot_use and input.get_kb(.@"2", true, true) and savestate.frame_total > 0)
+                savestate.load();
         }
     }
+}
+
+pub fn MenuStartRace_Before() void {
+    savestate.reset();
 }
 
 pub fn TextRender_Before(practice_mode: bool) void {
@@ -273,10 +284,7 @@ pub fn TextRender_Before(practice_mode: bool) void {
     race.was_in_race = in_race;
 
     if (in_race) {
-        if (in_race_new) {
-            race.reset();
-            savestate.reset();
-        }
+        if (in_race_new) race.reset();
 
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
         const in_race_count: bool = (flags1 & (1 << 0)) > 0;

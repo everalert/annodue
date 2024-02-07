@@ -104,13 +104,13 @@ fn GameLoop_Before() void {
 
     const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
 
-    if (input.get_kb(@truncate(@intFromEnum(win32kb.VK_P)), true, true) and
+    if (input.get_kb(.P, true, true) and
         (!(in_race and global.practice_mode)))
     {
         global.practice_mode = !global.practice_mode;
     }
 
-    if (in_race and input.get_kb(@truncate(@intFromEnum(win32kb.VK_N)), true, true)) {
+    if (in_race and input.get_kb(.N, true, true)) {
         const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMP_TABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
@@ -171,6 +171,7 @@ fn MenuVehicleSelect_Before() void {
 
 fn MenuStartRace_Before() void {
     DrawMenuPracticeModeLabel();
+    practice.MenuStartRace_Before();
 }
 
 fn MenuJunkyard_Before() void {

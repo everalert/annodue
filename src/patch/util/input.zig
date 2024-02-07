@@ -21,7 +21,7 @@ pub fn update_kb() void {
     }
 }
 
-pub fn get_kb(keycode: u8, down: bool, new: bool) bool {
-    return ((state.kb[keycode] & INPUT_DOWN) > 0) == down and
-        ((state.kb[keycode] & INPUT_NEW) > 0) == new;
+pub fn get_kb(keycode: win32kb.VIRTUAL_KEY, down: bool, new: bool) bool {
+    const key: u8 = state.kb[@as(u8, @truncate(@intFromEnum(keycode)))];
+    return ((key & INPUT_DOWN) > 0) == down and ((key & INPUT_NEW) > 0) == new;
 }

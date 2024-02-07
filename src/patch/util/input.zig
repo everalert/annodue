@@ -25,3 +25,19 @@ pub fn get_kb(keycode: win32kb.VIRTUAL_KEY, down: bool, new: bool) bool {
     const key: u8 = state.kb[@as(u8, @truncate(@intFromEnum(keycode)))];
     return ((key & INPUT_DOWN) > 0) == down and ((key & INPUT_NEW) > 0) == new;
 }
+
+pub fn get_kb_down(keycode: win32kb.VIRTUAL_KEY) bool {
+    return get_kb(keycode, true, false);
+}
+
+pub fn get_kb_up(keycode: win32kb.VIRTUAL_KEY) bool {
+    return get_kb(keycode, false, false);
+}
+
+pub fn get_kb_pressed(keycode: win32kb.VIRTUAL_KEY) bool {
+    return get_kb(keycode, true, true);
+}
+
+pub fn get_kb_released(keycode: win32kb.VIRTUAL_KEY) bool {
+    return get_kb(keycode, false, true);
+}

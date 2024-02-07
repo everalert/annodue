@@ -265,10 +265,10 @@ pub fn GameLoop_After(practice_mode: bool) void {
             const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
             const cannot_use: bool = (flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0;
 
-            if (!cannot_use and input.get_kb(.@"1", true, true))
+            if (!cannot_use and input.get_kb_pressed(.@"1"))
                 savestate.save();
 
-            if (!cannot_use and input.get_kb(.@"2", true, true) and savestate.frame_total > 0)
+            if (!cannot_use and input.get_kb_pressed(.@"2") and savestate.frame_total > 0)
                 savestate.load();
         }
     }

@@ -18,6 +18,10 @@ pub const ADDR_IN_RACE: usize = 0xE9BB81; //u8
 pub const ADDR_IN_TOURNAMENT: usize = 0x50C450; // u8
 pub const ADDR_PAUSE_STATE: usize = 0x50C5F0; // u8
 
+pub const ADDR_TIME_TIMESTAMP: usize = 0x50CB60; // u32
+pub const ADDR_TIME_FRAMETIME: usize = 0xE22A50; // f32
+pub const ADDR_TIME_FRAMECOUNT: usize = 0xE22A30;
+
 // Entity System
 
 pub const ADDR_ENTITY_MANAGER_JUMP_TABLE: usize = 0x4BFEC0;

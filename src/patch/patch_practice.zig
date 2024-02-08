@@ -131,7 +131,14 @@ const savestate = struct {
     const off_hang: usize = off_test + rc.EntitySize(.Test);
     const off_cman: usize = off_hang + rc.EntitySize(.Hang);
     const size: usize = off_cman + rc.EntitySize(.cMan);
-    const frames: usize = 128;
+    const frames: usize = 60 * 60 * 8; // 8min @ 60fps
+    const offsets_off: usize = 0;
+    const header_size: usize = std.math.divCeil(usize, size, 4);
+    const header_off: usize = frames * 4;
+    const data_off: usize = header_off + header_size * frames;
+    var load_queued: bool = false;
+    var load_time: usize = 0;
+    var load_index: usize = 0;
     var frame: usize = 0;
     var frame_total: usize = 0;
     var initialized: bool = false;
@@ -195,9 +202,9 @@ const savestate = struct {
         return in_race and cur_track == track and cur_character == character;
     }
 
-    fn load() void {
+    fn load(index: usize) void {
         if (loadable()) {
-            var o = ((frame + frames - 1) % frames) * size;
+            var o = index * size;
             r.WriteRaceDataValueBytes(0, &data[o + off_race], rc.RACE_DATA_SIZE);
             r.WriteEntityValueBytes(.Test, 0, 0, &data[o + off_test], rc.EntitySize(.Test));
             r.WriteEntityValueBytes(.Hang, 0, 0, &data[o + off_hang], rc.EntitySize(.Hang));
@@ -268,8 +275,16 @@ pub fn GameLoop_After(practice_mode: bool) void {
             if (!cannot_use and input.get_kb_pressed(.@"1"))
                 savestate.save();
 
-            if (!cannot_use and input.get_kb_pressed(.@"2") and savestate.frame_total > 0)
-                savestate.load();
+            const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
+            if (!cannot_use and input.get_kb_pressed(.@"2") and savestate.frame_total > 0) {
+                savestate.load_time = 1000 + timestamp;
+                savestate.load_index = (savestate.frame + savestate.frames - 1) % savestate.frames;
+                savestate.load_queued = true;
+            }
+            if (savestate.load_queued and timestamp >= savestate.load_time) {
+                savestate.load(savestate.load_index);
+                savestate.load_queued = false;
+            }
         }
     }
 }

@@ -199,9 +199,9 @@ const savestate = struct {
         if (loadable()) {
             var o = ((frame + frames - 1) % frames) * size;
             r.WriteRaceDataValueBytes(0, &data[o + off_race], rc.RACE_DATA_SIZE);
-            r.WriteEntityValueBytes(.Test, 0, 0, &data[off_test], rc.EntitySize(.Test));
-            r.WriteEntityValueBytes(.Hang, 0, 0, &data[off_hang], rc.EntitySize(.Hang));
-            r.WriteEntityValueBytes(.cMan, 0, 0, &data[off_cman], rc.EntitySize(.cMan));
+            r.WriteEntityValueBytes(.Test, 0, 0, &data[o + off_test], rc.EntitySize(.Test));
+            r.WriteEntityValueBytes(.Hang, 0, 0, &data[o + off_hang], rc.EntitySize(.Hang));
+            r.WriteEntityValueBytes(.cMan, 0, 0, &data[o + off_cman], rc.EntitySize(.cMan));
         }
     }
 };

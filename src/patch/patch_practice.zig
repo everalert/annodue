@@ -182,10 +182,13 @@ const savestate = struct {
         initialized = true;
     }
 
+    // FIXME: figure out a way to persist states through a reset without messing
+    // up the frame history
     fn reset() void {
         frame = 0;
         frame_total = 0;
         load_frame = 0;
+        load_queued = false;
     }
 
     // FIXME: assumes array of raw data; rework to adapt it to new compressed data
@@ -427,7 +430,10 @@ pub fn TextRender_Before(practice_mode: bool) void {
     race.was_in_race = in_race;
 
     if (in_race) {
-        if (in_race_new) race.reset();
+        if (in_race_new) {
+            race.reset();
+            savestate.reset();
+        }
 
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
         const in_race_count: bool = (flags1 & (1 << 0)) > 0;

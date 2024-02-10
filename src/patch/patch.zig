@@ -4,6 +4,7 @@ const mp = @import("patch_multiplayer.zig");
 const gen = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 
+const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
@@ -32,11 +33,6 @@ const LRESULT = std.os.windows.LRESULT;
 const HINSTANCE = std.os.windows.HINSTANCE;
 const HWND = std.os.windows.HWND;
 
-const user32 = std.os.windows.user32;
-const MessageBoxA = user32.MessageBoxA;
-const MB_OK = user32.MB_OK;
-const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
-
 // STATE
 
 const patch_size: u32 = 4 * 1024 * 1024; // 4MB
@@ -59,18 +55,6 @@ const global = struct {
 };
 
 // ???
-
-fn PtrMessage(ptr: usize, label: []const u8) void {
-    var buf: [255:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "{s}: 0x{s}", .{ label, ptr }) catch return;
-    _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
-}
-
-fn ErrMessage(label: []const u8, err: []const u8) void {
-    var buf: [2047:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "[ERROR] {s}: {s}", .{ label, err }) catch return;
-    _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
-}
 
 fn DrawMenuPracticeModeLabel() void {
     if (global.practice_mode) {
@@ -365,63 +349,64 @@ export fn Patch() void {
     }
 
     // savestate compression testing
+    // FIXME: maybe reuse this as a testing function? otherwise delete
 
-    //const savestate_size: usize = 0x2428 / 4;
-    //const savestate_count: usize = 128;
-    //const savestate_head: usize = savestate_size / 8;
-    //const layer_size: usize = 4;
-    //const layer_depth: usize = 4;
+    if (false) {
+        const savestate_size: usize = 0x2428 / 4;
+        const savestate_count: usize = 128;
+        const savestate_head: usize = savestate_size / 8;
+        const layer_size: usize = 4;
+        const layer_depth: usize = 4;
 
-    //const testfile = std.fs.cwd().openFile("annodue/testdata.bin", .{}) catch unreachable;
-    //defer testfile.close();
-    //const reportfile = std.fs.cwd().createFile("annodue/testreport.txt", .{}) catch unreachable;
-    //defer reportfile.close();
+        const testfile = std.fs.cwd().openFile("annodue/testdata.bin", .{}) catch unreachable;
+        defer testfile.close();
+        const reportfile = std.fs.cwd().createFile("annodue/testreport.txt", .{}) catch unreachable;
+        defer reportfile.close();
 
-    //var data = std.mem.zeroes([layer_depth + 1][savestate_size]u32);
-    //var total_bytes: usize = 0;
+        var data = std.mem.zeroes([layer_depth + 1][savestate_size]u32);
+        var total_bytes: usize = 0;
 
-    //for (0..savestate_count - 1) |i| {
-    //    var depth: usize = layer_depth;
-    //    var depth_test: usize = i;
-    //    while (depth_test % layer_size == 0 and depth > 0) {
-    //        depth_test /= layer_size;
-    //        depth -= 1;
-    //    }
+        for (0..savestate_count - 1) |i| {
+            var depth: usize = layer_depth;
+            var depth_test: usize = i;
+            while (depth_test % layer_size == 0 and depth > 0) {
+                depth_test /= layer_size;
+                depth -= 1;
+            }
 
-    //    _ = testfile.read(@as(*[savestate_size * 4]u8, @ptrCast(&data[depth]))) catch unreachable;
-    //    if (depth < layer_depth) {
-    //        for (depth + 1..layer_depth) |d| {
-    //            data[d] = data[depth];
-    //        }
-    //    }
+            _ = testfile.read(@as(*[savestate_size * 4]u8, @ptrCast(&data[depth]))) catch unreachable;
+            if (depth < layer_depth) {
+                for (depth + 1..layer_depth) |d| {
+                    data[d] = data[depth];
+                }
+            }
 
-    //    const frame_bytes: usize = if (depth > 0) bytes: {
-    //        var dif_count: usize = 0;
-    //        for (data[depth], data[depth - 1]) |new, src| {
-    //            if (new != src) dif_count += 1;
-    //        }
-    //        break :bytes dif_count * 4;
-    //    } else savestate_size * 4;
+            const frame_bytes: usize = if (depth > 0) bytes: {
+                var dif_count: usize = 0;
+                for (data[depth], data[depth - 1]) |new, src| {
+                    if (new != src) dif_count += 1;
+                }
+                break :bytes dif_count * 4;
+            } else savestate_size * 4;
 
-    //    var buf: [17]u8 = undefined;
-    //    _ = std.fmt.bufPrint(&buf, "Frame {d: >3}:\t{d: >4}\r\n", .{ i + 1, frame_bytes + savestate_head }) catch unreachable;
-    //    _ = reportfile.write(&buf) catch unreachable;
-    //    total_bytes += frame_bytes + savestate_head;
-    //}
+            var buf: [17]u8 = undefined;
+            _ = std.fmt.bufPrint(&buf, "Frame {d: >3}:\t{d: >4}\r\n", .{ i + 1, frame_bytes + savestate_head }) catch unreachable;
+            _ = reportfile.write(&buf) catch unreachable;
+            total_bytes += frame_bytes + savestate_head;
+        }
 
-    //var buf: [26]u8 = undefined;
-    //_ = std.fmt.bufPrint(&buf, "Total: {d: >8}/{d: >8}\r\n", .{ total_bytes, savestate_size * savestate_count * 4 }) catch unreachable;
-    //_ = reportfile.write(&buf) catch unreachable;
+        var buf: [26]u8 = undefined;
+        _ = std.fmt.bufPrint(&buf, "Total: {d: >8}/{d: >8}\r\n", .{ total_bytes, savestate_size * savestate_count * 4 }) catch unreachable;
+        _ = reportfile.write(&buf) catch unreachable;
+    }
 
     // debug
 
     if (false) {
-        var mb_title = std.fmt.allocPrintZ(alloc, "Annodue {d}.{d}.{d}", .{
+        msg.Message("Annodue {d}.{d}.{d}", .{
             ver_major,
             ver_minor,
             ver_patch,
-        }) catch unreachable;
-        var mb_launch = "Patching SWE1R...";
-        _ = MessageBoxA(null, mb_launch, mb_title, MB_OK);
+        }, "Patching SWE1R...", .{});
     }
 }

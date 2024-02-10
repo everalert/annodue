@@ -115,6 +115,7 @@ const race = struct {
     }
 };
 
+// TODO: array of static frames of "pure" savestates
 const savestate = struct {
     const off_race: usize = 0;
     const off_test: usize = rc.RACE_DATA_SIZE;
@@ -144,7 +145,7 @@ const savestate = struct {
     var stage: *[2][frame_size / 4]u32 = undefined;
     var data: [*]u8 = undefined;
 
-    const load_delay: usize = 1000;
+    const load_delay: usize = 750; // ms
     var load_queued: bool = false;
     var load_time: usize = 0;
     var load_frame: usize = 0;
@@ -164,6 +165,8 @@ const savestate = struct {
     var frame_total: usize = 0;
     var initialized: bool = false;
 
+    var debug_loading: bool = false;
+
     fn init() void {
         const mem_alloc = MEM_COMMIT | MEM_RESERVE;
         const mem_protect = PAGE_EXECUTE_READWRITE;
@@ -180,10 +183,9 @@ const savestate = struct {
     }
 
     fn reset() void {
-        if (frame > 0) {
-            frame = 0;
-            frame_total = 0;
-        }
+        frame = 0;
+        frame_total = 0;
+        load_frame = 0;
     }
 
     // FIXME: assumes array of raw data; rework to adapt it to new compressed data
@@ -244,8 +246,8 @@ const savestate = struct {
         if (indexes == 0) return;
 
         for (layer_indexes[0..indexes]) |l| {
-            const header = headers[l];
-            const frame_data = @as([*]usize, @ptrFromInt(memory_addr + offsets[l]));
+            const header = &headers[l];
+            const frame_data = @as([*]usize, @ptrFromInt(@intFromPtr(data) + offsets[l]));
             var j: usize = 0;
             for (0..header_bits) |h| {
                 if (header.get(h) == 1) {
@@ -261,8 +263,9 @@ const savestate = struct {
     // FIXME: some kind of checking so that a new frame isn't added unless it is
     // actually new, e.g. when tabbed out, pausing, physics frozen in some way..
     fn save_compressed() void {
-        if (!saveable()) return;
+        // FIXME: why the fk does this crash if it comes after the guard
         if (!initialized) init();
+        if (!saveable()) return;
 
         var data_size: usize = 0;
         if (frame > 0) {
@@ -279,7 +282,7 @@ const savestate = struct {
             // dif frames, while counting compressed size and constructing header
             var header = &headers[frame];
             header.setAll(0);
-            var new_frame = @as([*]u32, @ptrFromInt(memory_addr + offsets[frame]));
+            var new_frame = @as([*]u32, @ptrFromInt(@intFromPtr(data) + offsets[frame]));
             var j: usize = 0;
             for (0..header_bits) |h| {
                 if (stage[0][h] != stage[1][h]) {
@@ -300,18 +303,17 @@ const savestate = struct {
         offsets[frame] = offsets[frame - 1] + data_size;
     }
 
+    // FIXME: sometimes crashes when rendering race stats, not sure why but seems
+    // correlated to dying during the run. doesn't seem to be an issue if you don't
+    // load any states during the run.
     fn load_compressed(index: usize) void {
         if (!loadable()) return;
 
-        var data_ptr: [*]u8 = data;
-        if (index > 0) {
-            uncompress_frame(index, false);
-            data_ptr = raw_stage;
-        }
-        r.WriteRaceDataValueBytes(0, &data_ptr[off_race], rc.RACE_DATA_SIZE);
-        r.WriteEntityValueBytes(.Test, 0, 0, &data_ptr[off_test], rc.EntitySize(.Test));
-        r.WriteEntityValueBytes(.Hang, 0, 0, &data_ptr[off_hang], rc.EntitySize(.Hang));
-        r.WriteEntityValueBytes(.cMan, 0, 0, &data_ptr[off_cman], rc.EntitySize(.cMan));
+        uncompress_frame(index, false);
+        r.WriteRaceDataValueBytes(0, &raw_stage[off_race], rc.RACE_DATA_SIZE);
+        r.WriteEntityValueBytes(.Test, 0, 0, &raw_stage[off_test], rc.EntitySize(.Test));
+        r.WriteEntityValueBytes(.Hang, 0, 0, &raw_stage[off_hang], rc.EntitySize(.Hang));
+        r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], rc.EntitySize(.cMan));
         frame = index + 1;
     }
 
@@ -320,6 +322,7 @@ const savestate = struct {
         load_queued = true;
     }
 
+    // FIXME: tries to load after a reset if you queue before the reset
     fn queue_check(timestamp: usize) void {
         if (load_queued and timestamp >= load_time) {
             load_compressed(load_frame);
@@ -402,9 +405,13 @@ pub fn GameLoop_After(practice_mode: bool) void {
                 if (input.get_kb_pressed(.@"1"))
                     savestate.load_frame = savestate.frame;
 
-                var buf: [1023:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&buf, "~F0~sF{d}", .{savestate.frame}) catch unreachable;
-                rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buf);
+                var buff: [1023:0]u8 = undefined;
+                _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{savestate.frame}) catch unreachable;
+                rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);
+
+                var bufs: [1023:0]u8 = undefined;
+                _ = std.fmt.bufPrintZ(&bufs, "~F0~sSt {d}", .{savestate.load_frame}) catch unreachable;
+                rf.swrText_CreateEntry1(92, 480 - 16, 255, 255, 255, 190, &bufs);
             }
         }
     }
@@ -443,6 +450,7 @@ pub fn TextRender_Before(practice_mode: bool) void {
                 const flash_cycle: f32 = std.math.clamp((std.math.cos(timer * std.math.pi * 12) * 0.5 + 0.5) * std.math.pow(f32, timer / 3, 3), 0, 3);
                 flash -= @intFromFloat(flash_range * flash_cycle);
             }
+            // FIXME: change to yellow to match the menu text; not sure of ~3 rgb
             rf.swrText_CreateEntry1(640 - 16, 480 - 16, flash, flash, flash, 190, "~F0~s~rPractice Mode");
         }
 

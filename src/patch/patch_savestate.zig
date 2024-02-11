@@ -28,11 +28,13 @@ const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 // up the frame history
 // FIXME: stop assuming entities will be in index 0, particularly Test entity
 // TODO: array of static frames of "pure" savestates
+// TODO: frame advance when scrubbing forward at the final recorded frame
 
 const LoadState = enum(u32) {
     Recording,
     Loading,
     Scrubbing,
+    ScrubExiting,
 };
 
 const state = struct {
@@ -71,7 +73,7 @@ const state = struct {
     var stage: *[2][frame_size / 4]u32 = undefined;
     var data: [*]u8 = undefined;
 
-    const load_delay: usize = 750; // ms
+    const load_delay: usize = 500; // ms
     var load_time: usize = 0;
     var load_frame: usize = 0;
 
@@ -273,8 +275,14 @@ fn DoStateLoading() LoadState {
 }
 
 fn DoStateScrubbing() LoadState {
+    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
+    if (input.get_kb_pressed(.@"1")) {
+        state.load_frame = state.frame - 1;
+    }
     if (input.get_kb_pressed(.@"2")) {
-        return .Recording;
+        state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
+        state.load_time = state.load_delay + timestamp;
+        return .ScrubExiting;
     }
 
     var inc: i32 = 0;
@@ -289,6 +297,18 @@ fn DoStateScrubbing() LoadState {
 
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?);
     return .Scrubbing;
+}
+
+fn DoStateScrubExiting() LoadState {
+    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
+    state.load_compressed(std.math.cast(u32, state.scrub_frame).?);
+
+    if (input.get_kb_pressed(.@"1")) {
+        state.load_frame = state.frame - 1;
+    }
+
+    if (timestamp < state.load_time) return .ScrubExiting;
+    return .Recording;
 }
 
 pub fn MenuStartRace_Before() void {
@@ -311,6 +331,7 @@ pub fn GameLoop_After(practice_mode: bool) void {
                     .Recording => DoStateRecording(),
                     .Loading => DoStateLoading(),
                     .Scrubbing => DoStateScrubbing(),
+                    .ScrubExiting => DoStateScrubExiting(),
                 };
 
                 var buff: [1023:0]u8 = undefined;

@@ -29,7 +29,19 @@ const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 // FIXME: stop assuming entities will be in index 0, particularly Test entity
 // TODO: array of static frames of "pure" savestates
 
-const savestate = struct {
+const LoadState = enum(u32) {
+    Recording,
+    Loading,
+    Scrubbing,
+};
+
+const state = struct {
+    var state: LoadState = .Recording;
+    var initialized: bool = false;
+    var frame: usize = 0;
+    var frame_total: usize = 0;
+    var last_framecount: u32 = 0;
+
     const off_race: usize = 0;
     const off_test: usize = rc.RACE_DATA_SIZE;
     const off_hang: usize = off_test + rc.EntitySize(.Test);
@@ -60,9 +72,13 @@ const savestate = struct {
     var data: [*]u8 = undefined;
 
     const load_delay: usize = 750; // ms
-    var load_queued: bool = false;
     var load_time: usize = 0;
     var load_frame: usize = 0;
+
+    const scrub_frame_sec: f32 = 0.5; // max seconds to scrub per scrub frame
+    const scrub_inc_sec: f32 = 3;
+    var scrub_frame: i32 = 0;
+    var scrub_inc: f32 = 0;
 
     const layer_size: isize = 4;
     const layer_depth: isize = 4;
@@ -75,12 +91,6 @@ const savestate = struct {
     };
     var layer_indexes: [layer_depth + 1]usize = undefined;
     var layer_index_count: usize = undefined;
-    var frame: usize = 0;
-    var frame_total: usize = 0;
-    var initialized: bool = false;
-
-    var last_framecount: u32 = 0;
-    var debug_loading: bool = false;
 
     fn init() void {
         const mem_alloc = MEM_COMMIT | MEM_RESERVE;
@@ -103,7 +113,8 @@ const savestate = struct {
         frame = 0;
         frame_total = 0;
         load_frame = 0;
-        load_queued = false;
+        scrub_frame = 0;
+        @This().state = .Recording;
     }
 
     // FIXME: assumes array of raw data; rework to adapt it to new compressed data
@@ -115,6 +126,8 @@ const savestate = struct {
         _ = file.write(data[0 .. frame * frame_size]) catch return;
     }
 
+    // FIXME: better new frame checking that doesn't only account for tabbing out
+    // i.e. also when pausing, physics frozen with ingame feature, etc.
     fn saveable() bool {
         const frame_new: bool = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32) != last_framecount;
         const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
@@ -228,22 +241,58 @@ const savestate = struct {
         r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], rc.EntitySize(.cMan));
         frame = index + 1;
     }
-
-    fn queue_load(timestamp: usize) void {
-        load_time = load_delay + timestamp;
-        load_queued = true;
-    }
-
-    fn queue_check(timestamp: usize) void {
-        if (load_queued and timestamp >= load_time) {
-            load_compressed(load_frame);
-            load_queued = false;
-        }
-    }
 };
 
+fn DoStateRecording() LoadState {
+    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
+    state.save_compressed();
+
+    if (input.get_kb_pressed(.@"1")) {
+        state.load_frame = state.frame - 1;
+    }
+    if (input.get_kb_pressed(.@"2") and state.frames > 0) {
+        state.load_time = state.load_delay + timestamp;
+        return .Loading;
+    }
+
+    return .Recording;
+}
+
+fn DoStateLoading() LoadState {
+    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
+    if (input.get_kb_pressed(.@"2")) {
+        state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
+        state.frame_total = state.frame;
+        return .Scrubbing;
+    }
+    if (timestamp >= state.load_time) {
+        state.load_compressed(state.load_frame);
+        return .Recording;
+    }
+    return .Loading;
+}
+
+fn DoStateScrubbing() LoadState {
+    if (input.get_kb_pressed(.@"2")) {
+        return .Recording;
+    }
+
+    var inc: i32 = 0;
+    const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
+    if (input.get_kb_pressed(.@"3")) inc -= 1;
+    if (input.get_kb_pressed(.@"4")) inc += 1;
+    if (input.get_kb_released(.@"3") or input.get_kb_released(.@"4")) state.scrub_inc = 0;
+    if (input.get_kb_down(.@"3")) state.scrub_inc -= dt;
+    if (input.get_kb_down(.@"4")) state.scrub_inc += dt;
+    inc += @as(i32, @intFromFloat(std.math.pow(f32, state.scrub_inc / state.scrub_inc_sec, 2) * (1 / dt) * state.scrub_frame_sec)) * std.math.sign(@as(i32, @intFromFloat(state.scrub_inc)));
+    state.scrub_frame = std.math.clamp(state.scrub_frame + inc, 0, std.math.cast(i32, state.frame_total).? - 1);
+
+    state.load_compressed(std.math.cast(u32, state.scrub_frame).?);
+    return .Scrubbing;
+}
+
 pub fn MenuStartRace_Before() void {
-    savestate.reset();
+    state.reset();
 }
 
 pub fn GameLoop_After(practice_mode: bool) void {
@@ -254,29 +303,25 @@ pub fn GameLoop_After(practice_mode: bool) void {
             if (input.get_kb_pressed(.I))
                 _ = mem.write(rc.ADDR_PAUSE_STATE, u8, (pause + 1) % 2);
 
-            const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
             const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
-            const cannot_use: bool = (flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0;
+            const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
 
-            if (cannot_use) {
-                savestate.reset();
-            } else {
-                savestate.save_compressed();
-                savestate.queue_check(timestamp);
-
-                if (input.get_kb_pressed(.@"2") and savestate.frames > 0)
-                    savestate.queue_load(timestamp);
-
-                if (input.get_kb_pressed(.@"1"))
-                    savestate.load_frame = savestate.frame;
+            if (is_racing) {
+                state.state = switch (state.state) {
+                    .Recording => DoStateRecording(),
+                    .Loading => DoStateLoading(),
+                    .Scrubbing => DoStateScrubbing(),
+                };
 
                 var buff: [1023:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{savestate.frame}) catch unreachable;
+                _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
                 rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);
 
                 var bufs: [1023:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&bufs, "~F0~sSt {d}", .{savestate.load_frame}) catch unreachable;
+                _ = std.fmt.bufPrintZ(&bufs, "~F0~sSt {d}", .{state.load_frame}) catch unreachable;
                 rf.swrText_CreateEntry1(92, 480 - 16, 255, 255, 255, 190, &bufs);
+            } else {
+                state.reset();
             }
         }
     }

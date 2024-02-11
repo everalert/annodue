@@ -15,20 +15,20 @@ const MEM_RESERVE = std.os.windows.MEM_RESERVE;
 const MEM_RELEASE = std.os.windows.MEM_RELEASE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 
-// FIXME: game crashes after a bit when tabbing out; probably
-// the allocated memory filling up quickly because there is no
-// frame pacing while tabbed out? not sure why it's able to
-// overflow though, saveable() is supposed to prevent this
+// FIXME: stop assuming entities will be in index 0, particularly Test entity
+// FIXME: game crashes after a bit when tabbing out; probably the allocated memory
+// filling up quickly because there is no frame pacing while tabbed out? not sure
+// why it's able to overflow though, saveable() is supposed to prevent this.
+// update - prevented saving while tabbed out, core issue still remains tho
 // FIXME: sometimes crashes when rendering race stats, not sure why but seems
 // correlated to dying. doesn't seem to be an issue if you don't load any states
 // during the run.
 // FIXME: more appropriate hook point to run main logic than GameLoop_After;
 // after Test functions run but before rendering, so that nothing changes the loaded data
-// FIXME: figure out a way to persist states through a reset without messing
-// up the frame history
-// FIXME: stop assuming entities will be in index 0, particularly Test entity
 // TODO: array of static frames of "pure" savestates
 // TODO: frame advance when scrubbing forward at the final recorded frame
+// TODO: figure out a way to persist states through a reset without messing
+// up the frame history
 
 const LoadState = enum(u32) {
     Recording,
@@ -119,16 +119,7 @@ const state = struct {
         @This().state = .Recording;
     }
 
-    // FIXME: assumes array of raw data; rework to adapt it to new compressed data
-    fn save_file() void {
-        const file = std.fs.cwd().createFile("annodue/testdata.bin", .{}) catch |err| return msg.ErrMessage("create file", @errorName(err));
-        defer file.close();
-
-        _ = file.write(data[frame * frame_size .. frames * frame_size]) catch return;
-        _ = file.write(data[0 .. frame * frame_size]) catch return;
-    }
-
-    // FIXME: better new frame checking that doesn't only account for tabbing out
+    // FIXME: better new-frame checking that doesn't only account for tabbing out
     // i.e. also when pausing, physics frozen with ingame feature, etc.
     fn saveable() bool {
         const frame_new: bool = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32) != last_framecount;
@@ -245,6 +236,8 @@ const state = struct {
     }
 };
 
+// LOADER LOGIC
+
 fn DoStateRecording() LoadState {
     const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
     state.save_compressed();
@@ -311,41 +304,54 @@ fn DoStateScrubExiting() LoadState {
     return .Recording;
 }
 
-pub fn MenuStartRace_Before() void {
-    state.reset();
+fn UpdateState() void {
+    state.state = switch (state.state) {
+        .Recording => DoStateRecording(),
+        .Loading => DoStateLoading(),
+        .Scrubbing => DoStateScrubbing(),
+        .ScrubExiting => DoStateScrubExiting(),
+    };
 }
 
+// HOOKS
+
+//pub fn MenuStartRace_Before() void {
+//    state.reset();
+//}
+
 pub fn GameLoop_After(practice_mode: bool) void {
-    if (practice_mode) {
-        const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-        if (in_race) {
-            const pause: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-            if (input.get_kb_pressed(.I))
-                _ = mem.write(rc.ADDR_PAUSE_STATE, u8, (pause + 1) % 2);
+    const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
+    if (practice_mode and in_race) {
+        const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
+        const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
 
-            const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
-            const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
+        if (is_racing) {
+            UpdateState();
 
-            if (is_racing) {
-                state.state = switch (state.state) {
-                    .Recording => DoStateRecording(),
-                    .Loading => DoStateLoading(),
-                    .Scrubbing => DoStateScrubbing(),
-                    .ScrubExiting => DoStateScrubExiting(),
-                };
+            var buff: [1023:0]u8 = undefined;
+            _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
+            rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);
 
-                var buff: [1023:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
-                rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);
-
-                var bufs: [1023:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&bufs, "~F0~sSt {d}", .{state.load_frame}) catch unreachable;
-                rf.swrText_CreateEntry1(92, 480 - 16, 255, 255, 255, 190, &bufs);
-            } else {
-                state.reset();
-            }
+            var bufs: [1023:0]u8 = undefined;
+            _ = std.fmt.bufPrintZ(&bufs, "~F0~sSt {d}", .{state.load_frame}) catch unreachable;
+            rf.swrText_CreateEntry1(92, 480 - 16, 255, 255, 255, 190, &bufs);
+        } else {
+            state.reset();
         }
     }
+}
+
+// COMPRESSION-RELATED FUNCTIONS
+
+// FIXME: assumes array of raw data; rework to adapt it to new compressed data
+fn save_file() void {
+    const file = std.fs.cwd().createFile("annodue/testdata.bin", .{}) catch |err| return msg.ErrMessage("create file", @errorName(err));
+    defer file.close();
+
+    const middle = state.frame * state.frame_size;
+    const end = state.frames * state.frame_size;
+    _ = file.write(state.data[middle..end]) catch return;
+    _ = file.write(state.data[0..middle]) catch return;
 }
 
 // FIXME: dumped from patch.zig; need to rework into a generalized function

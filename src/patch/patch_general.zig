@@ -8,7 +8,6 @@ pub fn PatchDeathSpeed(min: f32, drop: f32) void {
     _ = mem.write(0x4C7BBC, f32, drop);
 }
 
-// FIXME: adjust widths in hudDrawRaceResults fn
 pub fn PatchHudTimerMs() void {
     const off_fnDrawTime3: usize = 0x450760;
     // hudDrawRaceHud

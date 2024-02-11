@@ -15,7 +15,20 @@ const MEM_RESERVE = std.os.windows.MEM_RESERVE;
 const MEM_RELEASE = std.os.windows.MEM_RELEASE;
 const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 
+// FIXME: game crashes after a bit when tabbing out; probably
+// the allocated memory filling up quickly because there is no
+// frame pacing while tabbed out? not sure why it's able to
+// overflow though, saveable() is supposed to prevent this
+// FIXME: sometimes crashes when rendering race stats, not sure why but seems
+// correlated to dying. doesn't seem to be an issue if you don't load any states
+// during the run.
+// FIXME: more appropriate hook point to run main logic than GameLoop_After;
+// after Test functions run but before rendering, so that nothing changes the loaded data
+// FIXME: figure out a way to persist states through a reset without messing
+// up the frame history
+// FIXME: stop assuming entities will be in index 0, particularly Test entity
 // TODO: array of static frames of "pure" savestates
+
 const savestate = struct {
     const off_race: usize = 0;
     const off_test: usize = rc.RACE_DATA_SIZE;
@@ -37,6 +50,7 @@ const savestate = struct {
     const memory_size: usize = 1024 * 1024 * 64; // 64MB
     var memory: ?std.os.windows.LPVOID = null;
     var memory_addr: usize = undefined;
+    var memory_end_addr: usize = undefined;
     var raw_offsets: [*]u8 = undefined;
     var raw_headers: [*]u8 = undefined;
     var raw_stage: [*]u8 = undefined;
@@ -65,6 +79,7 @@ const savestate = struct {
     var frame_total: usize = 0;
     var initialized: bool = false;
 
+    var last_framecount: u32 = 0;
     var debug_loading: bool = false;
 
     fn init() void {
@@ -72,6 +87,7 @@ const savestate = struct {
         const mem_protect = PAGE_EXECUTE_READWRITE;
         memory = VirtualAlloc(null, memory_size, mem_alloc, mem_protect) catch unreachable;
         memory_addr = @intFromPtr(memory);
+        memory_end_addr = @intFromPtr(memory) + memory_size;
         raw_offsets = @as([*]u8, @ptrCast(memory)) + offsets_off;
         raw_headers = @as([*]u8, @ptrCast(memory)) + headers_off;
         raw_stage = @as([*]u8, @ptrCast(memory)) + stage_off;
@@ -82,8 +98,6 @@ const savestate = struct {
         initialized = true;
     }
 
-    // FIXME: figure out a way to persist states through a reset without messing
-    // up the frame history
     fn reset() void {
         if (frame == 0) return;
         frame = 0;
@@ -102,10 +116,11 @@ const savestate = struct {
     }
 
     fn saveable() bool {
+        const frame_new: bool = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32) != last_framecount;
         const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-        const space_available: bool = memory_size - offsets[frame] >= frame_size;
-        const frames_available: bool = frame < frames;
-        return in_race and space_available and frames_available;
+        const space_ok: bool = memory_end_addr - @intFromPtr(data) - offsets[frame] >= frame_size;
+        const frames_ok: bool = frame < frames;
+        return frame_new and in_race and space_ok and frames_ok;
     }
 
     fn loadable() bool {
@@ -164,26 +179,22 @@ const savestate = struct {
 
     // FIXME: in future, probably can skip the first step each new frame, because
     // the most recent frame would already be in stage1 from last time
-    // FIXME: some kind of checking so that a new frame isn't added unless it is
-    // actually new, e.g. when tabbed out, pausing, physics frozen in some way..
     fn save_compressed() void {
         // FIXME: why the fk does this crash if it comes after the guard
         if (!initialized) init();
         if (!saveable()) return;
+        last_framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 
         var data_size: usize = 0;
         if (frame > 0) {
-            // setup stage0 with comparison frame
             uncompress_frame(frame, true);
 
-            // setup stage1 with new frame
             const s1_base = raw_stage + frame_size;
             r.ReadRaceDataValueBytes(0, s1_base + off_race, rc.RACE_DATA_SIZE);
             r.ReadEntityValueBytes(.Test, 0, 0, s1_base + off_test, rc.EntitySize(.Test));
             r.ReadEntityValueBytes(.Hang, 0, 0, s1_base + off_hang, rc.EntitySize(.Hang));
             r.ReadEntityValueBytes(.cMan, 0, 0, s1_base + off_cman, rc.EntitySize(.cMan));
 
-            // dif frames, while counting compressed size and constructing header
             var header = &headers[frame];
             header.setAll(0);
             var new_frame = @as([*]u32, @ptrFromInt(@intFromPtr(data) + offsets[frame]));
@@ -207,9 +218,6 @@ const savestate = struct {
         offsets[frame] = offsets[frame - 1] + data_size;
     }
 
-    // FIXME: sometimes crashes when rendering race stats, not sure why but seems
-    // correlated to dying during the run. doesn't seem to be an issue if you don't
-    // load any states during the run.
     fn load_compressed(index: usize) void {
         if (!loadable()) return;
 
@@ -226,7 +234,6 @@ const savestate = struct {
         load_queued = true;
     }
 
-    // FIXME: tries to load after a reset if you queue before the reset
     fn queue_check(timestamp: usize) void {
         if (load_queued and timestamp >= load_time) {
             load_compressed(load_frame);
@@ -239,8 +246,6 @@ pub fn MenuStartRace_Before() void {
     savestate.reset();
 }
 
-// FIXME: more appropriate hook point to run this
-// after Test functions run but before rendering, so that nothing changes the loaded data
 pub fn GameLoop_After(practice_mode: bool) void {
     if (practice_mode) {
         const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
@@ -256,10 +261,6 @@ pub fn GameLoop_After(practice_mode: bool) void {
             if (cannot_use) {
                 savestate.reset();
             } else {
-                // FIXME: game crashes after a bit when tabbing out; probably
-                // the allocated memory filling up quickly because there is no
-                // frame pacing while tabbed out? not sure why it's able to
-                // overflow though, saveable() is supposed to prevent this
                 savestate.save_compressed();
                 savestate.queue_check(timestamp);
 

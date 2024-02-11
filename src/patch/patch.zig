@@ -46,6 +46,7 @@ const s = struct { // FIXME: yucky
     var manager: SettingsManager = undefined;
     var gen: SettingsGroup = undefined;
     var prac: SettingsGroup = undefined;
+    var sav: SettingsGroup = undefined;
     var mp: SettingsGroup = undefined;
 };
 
@@ -128,7 +129,9 @@ fn EarlyEngineUpdate_Before() void {
 }
 
 fn EarlyEngineUpdate_After() void {
-    savestate.EarlyEngineUpdate_After(global.practice_mode);
+    if (s.sav.get("savestate_enable", bool)) {
+        savestate.EarlyEngineUpdate_After(global.practice_mode);
+    }
     //rf.swrText_CreateEntry1(16, 24, 255, 255, 255, 255, "~F0EarlyEngineUpdate_After");
 }
 
@@ -260,7 +263,9 @@ fn TextRender_Before() void {
     if (s.prac.get("practice_tool_enable", bool) and s.prac.get("overlay_enable", bool)) {
         practice.TextRender_Before(global.practice_mode);
     }
-    savestate.TextRender_Before(global.practice_mode);
+    if (s.sav.get("savestate_enable", bool)) {
+        savestate.TextRender_Before(global.practice_mode);
+    }
 }
 
 fn HookTextRender(memory: usize) usize {
@@ -304,6 +309,11 @@ export fn Patch() void {
     s.prac.add("practice_tool_enable", bool, false);
     s.prac.add("overlay_enable", bool, false);
     s.manager.add(&s.prac);
+
+    s.sav = SettingsGroup.init(alloc, "savestate");
+    //defer s.sav.deinit();
+    s.sav.add("savestate_enable", bool, false);
+    s.manager.add(&s.sav);
 
     s.mp = SettingsGroup.init(alloc, "multiplayer");
     //defer s.mp.deinit();

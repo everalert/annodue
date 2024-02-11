@@ -319,15 +319,23 @@ fn UpdateState() void {
 //    state.reset();
 //}
 
-pub fn GameLoop_After(practice_mode: bool) void {
+pub fn EarlyEngineUpdate_After(practice_mode: bool) void {
+    const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
+    if (practice_mode and in_race) {
+        const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
+        const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
+
+        if (is_racing) UpdateState() else state.reset();
+    }
+}
+
+pub fn TextRender_Before(practice_mode: bool) void {
     const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
     if (practice_mode and in_race) {
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
         const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
 
         if (is_racing) {
-            UpdateState();
-
             var buff: [1023:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
             rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);
@@ -335,8 +343,6 @@ pub fn GameLoop_After(practice_mode: bool) void {
             var bufs: [1023:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&bufs, "~F0~sSt {d}", .{state.load_frame}) catch unreachable;
             rf.swrText_CreateEntry1(92, 480 - 16, 255, 255, 255, 190, &bufs);
-        } else {
-            state.reset();
         }
     }
 }

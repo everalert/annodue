@@ -114,12 +114,46 @@ fn GameLoop_Before() void {
 }
 
 fn GameLoop_After() void {
-    savestate.GameLoop_After(global.practice_mode);
     //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0GameLoop_After");
 }
 
 fn HookGameLoop(memory: usize) usize {
     return mem.intercept_call(memory, 0x49CE2A, &GameLoop_Before, &GameLoop_After);
+}
+
+// ENGINE UPDATES
+
+fn EarlyEngineUpdate_Before() void {
+    //rf.swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0EarlyEngineUpdate_Before");
+}
+
+fn EarlyEngineUpdate_After() void {
+    savestate.EarlyEngineUpdate_After(global.practice_mode);
+    //rf.swrText_CreateEntry1(16, 24, 255, 255, 255, 255, "~F0EarlyEngineUpdate_After");
+}
+
+fn LateEngineUpdate_Before() void {
+    //rf.swrText_CreateEntry1(16, 32, 255, 255, 255, 255, "~F0LateEngineUpdate_Before");
+}
+
+fn LateEngineUpdate_After() void {
+    //rf.swrText_CreateEntry1(16, 40, 255, 255, 255, 255, "~F0LateEngineUpdate_After");
+}
+
+fn HookEngineUpdate(memory: usize) usize {
+    var off: usize = memory;
+
+    // fn 0x445980 case 1
+    // physics updates, etc.
+    off = mem.intercept_call(off, 0x445991, &EarlyEngineUpdate_Before, null);
+    off = mem.intercept_call(off, 0x445A00, null, &EarlyEngineUpdate_After);
+
+    // fn 0x445980 case 2
+    // text processing, etc. before the actual render
+    off = mem.intercept_call(off, 0x445A10, &LateEngineUpdate_Before, null);
+    off = mem.intercept_call(off, 0x445A40, null, &LateEngineUpdate_After);
+
+    return off;
 }
 
 // GAME END; executable closing
@@ -226,6 +260,7 @@ fn TextRender_Before() void {
     if (s.prac.get("practice_tool_enable", bool) and s.prac.get("overlay_enable", bool)) {
         practice.TextRender_Before(global.practice_mode);
     }
+    savestate.TextRender_Before(global.practice_mode);
 }
 
 fn HookTextRender(memory: usize) usize {
@@ -297,6 +332,7 @@ export fn Patch() void {
     global.hinstance = mem.read(rc.ADDR_HINSTANCE, HINSTANCE);
 
     off = HookGameLoop(off);
+    off = HookEngineUpdate(off);
     off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);

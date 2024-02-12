@@ -1,6 +1,9 @@
 pub const Self = @This();
 const std = @import("std");
 
+const settings = @import("settings.zig");
+const s = settings.state;
+
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
@@ -320,6 +323,8 @@ fn UpdateState() void {
 //}
 
 pub fn EarlyEngineUpdate_After(practice_mode: bool) void {
+    if (!s.sav.get("savestate_enable", bool)) return;
+
     const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
     if (practice_mode and in_race) {
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
@@ -330,6 +335,8 @@ pub fn EarlyEngineUpdate_After(practice_mode: bool) void {
 }
 
 pub fn TextRender_Before(practice_mode: bool) void {
+    if (!s.sav.get("savestate_enable", bool)) return;
+
     const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
     if (practice_mode and in_race) {
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);

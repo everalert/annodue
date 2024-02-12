@@ -1,14 +1,20 @@
 const Self = @This();
 
 const std = @import("std");
+
+const settings = @import("settings.zig");
+const s = settings.state;
+
 const mem = @import("util/memory.zig");
 
-pub fn PatchDeathSpeed(min: f32, drop: f32) void {
+// dumping ground for random features i guess
+
+fn PatchDeathSpeed(min: f32, drop: f32) void {
     _ = mem.write(0x4C7BB8, f32, min);
     _ = mem.write(0x4C7BBC, f32, drop);
 }
 
-pub fn PatchHudTimerMs() void {
+fn PatchHudTimerMs() void {
     const off_fnDrawTime3: usize = 0x450760;
     // hudDrawRaceHud
     _ = mem.call(0x460BD3, off_fnDrawTime3);
@@ -24,7 +30,7 @@ pub fn PatchHudTimerMs() void {
     _ = mem.patch_add(0x46242D, u8, 12);
 }
 
-pub fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
+fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
     const col = struct {
         const min: u8 = 95;
         const max: u8 = 255;
@@ -48,16 +54,49 @@ pub fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
     _ = mem.write(0x460E62, u8, col.rgb[2]); // R, 255
 }
 
-pub fn PatchHudTimerCol(rgba: u32) void { // 0xFFFFFFBE
+fn PatchHudTimerCol(rgba: u32) void { // 0xFFFFFFBE
     _ = mem.write(0x460E5C, u8, @as(u8, @truncate(rgba))); // A, 190
     _ = mem.write(0x460E5E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
     _ = mem.write(0x460E60, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
     _ = mem.write(0x460E62, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
 }
 
-pub fn PatchHudTimerLabelCol(rgba: u32) void { // 0xFFFFFFBE
+fn PatchHudTimerLabelCol(rgba: u32) void { // 0xFFFFFFBE
     _ = mem.write(0x460E8C, u8, @as(u8, @truncate(rgba))); // A, 190
     _ = mem.write(0x460E8E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
     _ = mem.write(0x460E90, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
     _ = mem.write(0x460E92, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
+}
+
+pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
+    _ = alloc;
+    if (s.gen.get("death_speed_mod_enable", bool)) {
+        const dsm = s.gen.get("death_speed_min", f32);
+        const dsd = s.gen.get("death_speed_drop", f32);
+        PatchDeathSpeed(dsm, dsd);
+    }
+    if (s.gen.get("ms_timer_enable", bool)) {
+        PatchHudTimerMs();
+    }
+
+    return memory;
+}
+
+pub fn init_late() void {
+    const def_laps: u32 = s.gen.get("default_laps", u32);
+    if (def_laps >= 1 and def_laps <= 5) {
+        const laps: usize = mem.deref(&.{ 0x4BFDB8, 0x8F });
+        _ = mem.write(laps, u8, @as(u8, @truncate(def_laps)));
+    }
+    const def_racers: u32 = s.gen.get("default_racers", u32);
+    if (def_racers >= 1 and def_racers <= 12) {
+        const addr_racers: usize = 0x50C558;
+        _ = mem.write(addr_racers, u8, @as(u8, @truncate(def_racers)));
+    }
+}
+
+pub fn GameLoop_Before() void {
+    if (s.gen.get("rainbow_timer_enable", bool)) {
+        PatchHudTimerColRotate();
+    }
 }

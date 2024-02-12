@@ -1,9 +1,13 @@
-const PatchMultiplayer = @This();
+const Self = @This();
 
 const std = @import("std");
 const user32 = std.os.windows.user32;
-
 const assert = std.debug.assert;
+
+const settings = @import("settings.zig");
+const s = settings.state;
+
+const mem = @import("util/memory.zig");
 
 const VirtualAlloc = std.os.windows.VirtualAlloc;
 const VirtualFree = std.os.windows.VirtualFree;
@@ -16,14 +20,14 @@ const MessageBoxA = user32.MessageBoxA;
 const MB_OK = user32.MB_OK;
 const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
 
-const mem = @import("util/memory.zig");
+// ported from swe1r-patcher
 
 // FIXME: not crashing for now, but need to address virtualalloc size
 // NOTE: probably need to investigate the actual data in memory
 //   and use a real img format, without manually building the file.
 //   but, what it outputs now looks right, just not sure if it's the whole data for each file
 // FIXME: handle FileAlreadyExists case (not sure best approach yet)
-pub fn DumpTexture(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, filename: []const u8) void {
+fn DumpTexture(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, filename: []const u8) void {
     // Presumably the format information?
     assert(unk0 == 3);
     assert(unk1 == 0);
@@ -54,7 +58,7 @@ pub fn DumpTexture(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, 
 
 // FIXME: probably want to check for annodue/textures folder and create if needed?
 //   not sure if createFile in DumpTexture will handle this already
-pub fn DumpTextureTable(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, filename: []const u8) u32 {
+fn DumpTextureTable(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, filename: []const u8) u32 {
     // Get size of the table
     const count: u32 = mem.read(offset + 0, u32); // NOTE: exe unnecessary, just read ram
 
@@ -71,7 +75,7 @@ pub fn DumpTextureTable(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1:
     return count;
 }
 
-pub fn PatchTextureTable(alloc: std.mem.Allocator, memory_offset: usize, table_offset: usize, code_begin_offset: usize, code_end_offset: usize, width: u32, height: u32, filename: []const u8) usize {
+fn PatchTextureTable(alloc: std.mem.Allocator, memory_offset: usize, table_offset: usize, code_begin_offset: usize, code_end_offset: usize, width: u32, height: u32, filename: []const u8) usize {
     var offset: usize = memory_offset;
     offset = mem.nop_align(offset, 16);
 
@@ -130,7 +134,7 @@ pub fn PatchTextureTable(alloc: std.mem.Allocator, memory_offset: usize, table_o
 
 // NOTE: max data size 256
 // FIXME: new guid not equivalent to swe1r-patcher for some reason, but close
-pub fn ModifyNetworkGuid(data: []u8) void {
+fn ModifyNetworkGuid(data: []u8) void {
     // RC4 hash
     const state = struct {
         var s: [256]u8 = undefined;
@@ -171,7 +175,7 @@ pub fn ModifyNetworkGuid(data: []u8) void {
     _ = mem.write(0x4AF9B0 + 0, u16, 0x00000000);
 }
 
-pub fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_healths: *[7]u8, patch_guid: bool) usize {
+fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_healths: *[7]u8, patch_guid: bool) usize {
     if (patch_guid) {
         ModifyNetworkGuid(@constCast("Upgrades"));
         ModifyNetworkGuid(upgrade_levels);
@@ -214,7 +218,7 @@ pub fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrad
 }
 
 // WARNING: not tested
-pub fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
+fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     // Disable collision between network players
     if (patch_guid) {
         ModifyNetworkGuid(@constCast("Collisions"));
@@ -239,7 +243,7 @@ pub fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
 
 // FIXME: crashes, not sure why because the memory written should be identical
 // to swe1r-patcher, yet that doesn't crash
-pub fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) void {
+fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) void {
     // Calculate a fitting buffer-size
     const buffer_stereo: u32 = if (stereo) 2 else 1;
     const buffer_size: u32 = 2 * sample_rate * (bits_per_sample / 8) * buffer_stereo;
@@ -256,7 +260,7 @@ pub fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bo
 }
 
 // WARNING: not tested
-pub fn PatchSpriteLoaderToLoadTga(memory_offset: usize) usize {
+fn PatchSpriteLoaderToLoadTga(memory_offset: usize) usize {
     // Replace the sprite loader with a version that checks for "data\\images\\sprite-%d.tga"
     var offset: usize = memory_offset;
 
@@ -358,7 +362,7 @@ pub fn PatchSpriteLoaderToLoadTga(memory_offset: usize) usize {
     return offset;
 }
 
-pub fn PatchTriggerDisplay(memory_offset: usize) usize {
+fn PatchTriggerDisplay(memory_offset: usize) usize {
     var offset = memory_offset;
 
     // Display triggers
@@ -415,4 +419,50 @@ pub fn PatchTriggerDisplay(memory_offset: usize) usize {
     _ = mem.call(0x476E80, offset_trigger_code);
 
     return offset;
+}
+
+pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
+    var off: usize = memory;
+
+    if (s.mp.get("multiplayer_mod_enable", bool)) {
+        if (s.mp.get("fonts_dump", bool)) {
+            // This is a debug feature to dump the original font textures
+            _ = DumpTextureTable(alloc, 0x4BF91C, 3, 0, 64, 128, "font0");
+            _ = DumpTextureTable(alloc, 0x4BF7E4, 3, 0, 64, 128, "font1");
+            _ = DumpTextureTable(alloc, 0x4BF84C, 3, 0, 64, 128, "font2");
+            _ = DumpTextureTable(alloc, 0x4BF8B4, 3, 0, 64, 128, "font3");
+            _ = DumpTextureTable(alloc, 0x4BF984, 3, 0, 64, 128, "font4");
+        }
+        if (s.mp.get("patch_fonts", bool)) {
+            off = PatchTextureTable(alloc, off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
+            off = PatchTextureTable(alloc, off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
+            off = PatchTextureTable(alloc, off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
+            off = PatchTextureTable(alloc, off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
+            off = PatchTextureTable(alloc, off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
+        }
+        if (s.mp.get("patch_netplay", bool)) {
+            const r100 = s.mp.get("netplay_r100", bool);
+            const guid = s.mp.get("netplay_guid", bool);
+            const traction: u8 = if (r100) 3 else 5;
+            var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
+            var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+            const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
+            const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
+            off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, guid);
+            off = PatchNetworkCollisions(off, guid);
+        }
+        if (s.mp.get("patch_audio", bool)) {
+            const sample_rate: u32 = 22050 * 2;
+            const bits_per_sample: u8 = 16;
+            const stereo: bool = true;
+            PatchAudioStreamQuality(sample_rate, bits_per_sample, stereo);
+        }
+        if (s.mp.get("patch_tga_loader", bool)) {
+            off = PatchSpriteLoaderToLoadTga(off);
+        }
+        if (s.mp.get("patch_trigger_display", bool)) {
+            off = PatchTriggerDisplay(off);
+        }
+    }
+    return off;
 }

@@ -4,6 +4,9 @@ const std = @import("std");
 const win32 = @import("import/import.zig").win32;
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
+const settings = @import("settings.zig");
+const s = settings.state;
+
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
@@ -467,8 +470,10 @@ const menu = struct {
     };
 };
 
+// FIXME: runs before the ingame time calc at the top of the frame
 pub fn GameLoop_Before() void {
-    // FIXME: runs before the ingame time calc at the top of the frame
+    if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
+
     const dt_f: f32 = mem.deref_read(&.{0xE22A50}, f32);
     const fps_res: f32 = 1 / dt_f * 2;
     state.fps = (state.fps * (fps_res - 1) + (1 / dt_f)) / fps_res;
@@ -485,6 +490,8 @@ pub fn GameLoop_Before() void {
 }
 
 pub fn TextRender_Before(practice_mode: bool) void {
+    if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
+
     const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0; // FIXME: getting to the point where this and some of the other state in here should be patch-global
     const in_race_new: bool = race.was_in_race != in_race;
     race.was_in_race = in_race;

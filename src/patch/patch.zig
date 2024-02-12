@@ -1,7 +1,8 @@
 const std = @import("std");
 
-const mp = @import("patch_multiplayer.zig");
-const gen = @import("patch_general.zig");
+const settings = @import("settings.zig");
+const multiplayer = @import("patch_multiplayer.zig");
+const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 const savestate = @import("patch_savestate.zig");
 
@@ -11,8 +12,6 @@ const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
-const SettingsGroup = @import("util/settings.zig").SettingsGroup;
-const SettingsManager = @import("util/settings.zig").SettingsManager;
 
 const ini = @import("import/import.zig").ini;
 const win32 = @import("import/import.zig").win32;
@@ -42,14 +41,6 @@ const ver_major: u32 = 0;
 const ver_minor: u32 = 0;
 const ver_patch: u32 = 1;
 
-const s = struct { // FIXME: yucky
-    var manager: SettingsManager = undefined;
-    var gen: SettingsGroup = undefined;
-    var prac: SettingsGroup = undefined;
-    var sav: SettingsGroup = undefined;
-    var mp: SettingsGroup = undefined;
-};
-
 const global = struct {
     var practice_mode: bool = false;
     var hwnd: ?HWND = null;
@@ -74,17 +65,7 @@ fn GameLoop_Before() void {
     input.update_kb();
 
     if (!state.initialized) {
-        const def_laps: u32 = s.gen.get("default_laps", u32);
-        if (def_laps >= 1 and def_laps <= 5) {
-            const laps: usize = mem.deref(&.{ 0x4BFDB8, 0x8F });
-            _ = mem.write(laps, u8, @as(u8, @truncate(def_laps)));
-        }
-        const def_racers: u32 = s.gen.get("default_racers", u32);
-        if (def_racers >= 1 and def_racers <= 12) {
-            const addr_racers: usize = 0x50C558;
-            _ = mem.write(addr_racers, u8, @as(u8, @truncate(def_racers)));
-        }
-
+        general.init_late();
         state.initialized = true;
     }
 
@@ -101,11 +82,8 @@ fn GameLoop_Before() void {
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 
+    general.GameLoop_Before();
     practice.GameLoop_Before();
-
-    if (s.gen.get("rainbow_timer_enable", bool)) {
-        gen.PatchHudTimerColRotate();
-    }
 }
 
 fn GameLoop_After() void {
@@ -123,9 +101,7 @@ fn EarlyEngineUpdate_Before() void {
 }
 
 fn EarlyEngineUpdate_After() void {
-    if (s.sav.get("savestate_enable", bool)) {
-        savestate.EarlyEngineUpdate_After(global.practice_mode);
-    }
+    savestate.EarlyEngineUpdate_After(global.practice_mode);
     //rf.swrText_CreateEntry1(16, 24, 255, 255, 255, 255, "~F0EarlyEngineUpdate_After");
 }
 
@@ -156,9 +132,7 @@ fn HookEngineUpdate(memory: usize) usize {
 // GAME END; executable closing
 
 fn GameEnd() void {
-    defer s.manager.deinit();
-    defer s.gen.deinit();
-    defer s.mp.deinit();
+    settings.deinit();
 }
 
 fn HookGameEnd(memory: usize) usize {
@@ -193,7 +167,6 @@ fn MenuVehicleSelect_Before() void {
 
 fn MenuStartRace_Before() void {
     DrawMenuPracticeModeLabel();
-    //savestate.MenuStartRace_Before();
 }
 
 fn MenuJunkyard_Before() void {
@@ -254,12 +227,8 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn TextRender_Before() void {
-    if (s.prac.get("practice_tool_enable", bool) and s.prac.get("overlay_enable", bool)) {
-        practice.TextRender_Before(global.practice_mode);
-    }
-    if (s.sav.get("savestate_enable", bool)) {
-        savestate.TextRender_Before(global.practice_mode);
-    }
+    practice.TextRender_Before(global.practice_mode);
+    savestate.TextRender_Before(global.practice_mode);
 }
 
 fn HookTextRender(memory: usize) usize {
@@ -278,51 +247,7 @@ export fn Patch() void {
 
     // settings
 
-    // FIXME: deinits happen in GameEnd, see HookGameEnd.
-    // probably not necessary to deinit at all tho.
-    // one other strategy might be to set globals for stuff
-    // we need to keep, and go back to deinit-ing. then we also
-    // wouldn't have to do hash lookups constantly too.
-
-    s.manager = SettingsManager.init(alloc);
-    //defer s.deinit();
-
-    s.gen = SettingsGroup.init(alloc, "general");
-    //defer s.gen.deinit();
-    s.gen.add("death_speed_mod_enable", bool, false);
-    s.gen.add("death_speed_min", f32, 325);
-    s.gen.add("death_speed_drop", f32, 140);
-    s.gen.add("rainbow_timer_enable", bool, false);
-    s.gen.add("ms_timer_enable", bool, false);
-    s.gen.add("default_laps", u32, 3);
-    s.gen.add("default_racers", u32, 12);
-    s.manager.add(&s.gen);
-
-    s.prac = SettingsGroup.init(alloc, "practice");
-    //defer s.prac.deinit();
-    s.prac.add("practice_tool_enable", bool, false);
-    s.prac.add("overlay_enable", bool, false);
-    s.manager.add(&s.prac);
-
-    s.sav = SettingsGroup.init(alloc, "savestate");
-    //defer s.sav.deinit();
-    s.sav.add("savestate_enable", bool, false);
-    s.manager.add(&s.sav);
-
-    s.mp = SettingsGroup.init(alloc, "multiplayer");
-    //defer s.mp.deinit();
-    s.mp.add("multiplayer_mod_enable", bool, false); // working?
-    s.mp.add("patch_netplay", bool, false); // working? ups ok, coll ?
-    s.mp.add("netplay_guid", bool, false); // working?
-    s.mp.add("netplay_r100", bool, false); // working
-    s.mp.add("patch_audio", bool, false); // FIXME: crashes
-    s.mp.add("patch_fonts", bool, false); // working
-    s.mp.add("fonts_dump", bool, false); // working?
-    s.mp.add("patch_tga_loader", bool, false); // FIXME: need tga files to verify with
-    s.mp.add("patch_trigger_display", bool, false); // working
-    s.manager.add(&s.mp);
-
-    s.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
+    settings.init(alloc);
 
     // input-based launch toggles
 
@@ -343,57 +268,8 @@ export fn Patch() void {
 
     // init: general stuff
 
-    if (s.gen.get("death_speed_mod_enable", bool)) {
-        const dsm = s.gen.get("death_speed_min", f32);
-        const dsd = s.gen.get("death_speed_drop", f32);
-        gen.PatchDeathSpeed(dsm, dsd);
-    }
-    if (s.gen.get("ms_timer_enable", bool)) {
-        gen.PatchHudTimerMs();
-    }
-
-    // init: swe1r-patcher (multiplayer mod) stuff
-
-    if (s.mp.get("multiplayer_mod_enable", bool)) {
-        if (s.mp.get("fonts_dump", bool)) {
-            // This is a debug feature to dump the original font textures
-            _ = mp.DumpTextureTable(alloc, 0x4BF91C, 3, 0, 64, 128, "font0");
-            _ = mp.DumpTextureTable(alloc, 0x4BF7E4, 3, 0, 64, 128, "font1");
-            _ = mp.DumpTextureTable(alloc, 0x4BF84C, 3, 0, 64, 128, "font2");
-            _ = mp.DumpTextureTable(alloc, 0x4BF8B4, 3, 0, 64, 128, "font3");
-            _ = mp.DumpTextureTable(alloc, 0x4BF984, 3, 0, 64, 128, "font4");
-        }
-        if (s.mp.get("patch_fonts", bool)) {
-            off = mp.PatchTextureTable(alloc, off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
-            off = mp.PatchTextureTable(alloc, off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
-            off = mp.PatchTextureTable(alloc, off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
-            off = mp.PatchTextureTable(alloc, off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
-            off = mp.PatchTextureTable(alloc, off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
-        }
-        if (s.mp.get("patch_netplay", bool)) {
-            const r100 = s.mp.get("netplay_r100", bool);
-            const guid = s.mp.get("netplay_guid", bool);
-            const traction: u8 = if (r100) 3 else 5;
-            var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
-            var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-            const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
-            const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
-            off = mp.PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, guid);
-            off = mp.PatchNetworkCollisions(off, guid);
-        }
-        if (s.mp.get("patch_audio", bool)) {
-            const sample_rate: u32 = 22050 * 2;
-            const bits_per_sample: u8 = 16;
-            const stereo: bool = true;
-            mp.PatchAudioStreamQuality(sample_rate, bits_per_sample, stereo);
-        }
-        if (s.mp.get("patch_tga_loader", bool)) {
-            off = mp.PatchSpriteLoaderToLoadTga(off);
-        }
-        if (s.mp.get("patch_trigger_display", bool)) {
-            off = mp.PatchTriggerDisplay(off);
-        }
-    }
+    off = general.init(alloc, off);
+    off = multiplayer.init(alloc, off);
 
     // debug
 

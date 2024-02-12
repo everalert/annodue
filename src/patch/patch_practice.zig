@@ -1,6 +1,9 @@
 pub const Self = @This();
 const std = @import("std");
 
+const win32 = @import("import/import.zig").win32;
+const win32kb = win32.ui.input.keyboard_and_mouse;
+
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
@@ -151,11 +154,290 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat2(i, rc.UpgradeCategories[cat], &buf);
 }
 
+const ScrollControl = struct {
+    scroll: f32 = 0,
+    scroll_buf: f32 = 0,
+    scroll_time: f32, // time until max scroll speed
+    scroll_units: f32, // units per second at max scroll speed
+    input_up: win32kb.VIRTUAL_KEY,
+    input_dn: win32kb.VIRTUAL_KEY,
+
+    // FIXME: need to account for cases where the math always works out to <1 per frame
+    fn update(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
+        const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
+
+        var inc: f32 = 0;
+        if (input.get_kb_pressed(self.input_up)) inc -= 1;
+        if (input.get_kb_pressed(self.input_dn)) inc += 1;
+        if (input.get_kb_released(self.input_up) or input.get_kb_released(self.input_dn)) {
+            self.scroll = 0;
+            self.scroll_buf = 0;
+        }
+        if (input.get_kb_down(self.input_up)) self.scroll -= dt;
+        if (input.get_kb_down(self.input_dn)) self.scroll += dt;
+
+        const scroll: f32 = std.math.clamp(self.scroll / self.scroll_time, -1, 1);
+        inc += std.math.pow(f32, scroll, 2) * dt * self.scroll_units * std.math.sign(scroll);
+        self.scroll_buf += inc;
+
+        const inc_i: i32 = @intFromFloat(self.scroll_buf);
+        self.scroll_buf -= @floatFromInt(inc_i);
+
+        const new_val = val.* + inc_i;
+        val.* = if (wrap) @mod(new_val, max) else std.math.clamp(new_val, 0, max - 1);
+    }
+};
+
+const MenuItem = struct {
+    idx: *i32,
+    wrap: bool = true,
+    label: [*:0]const u8,
+    options: []const [*:0]const u8,
+    max: i32,
+};
+
+const Menu = struct {
+    idx: i32 = 0,
+    wrap: bool = true,
+    title: [*:0]const u8,
+    items: []const MenuItem,
+    max: i32,
+    cancel_fn: ?*fn () void = null,
+    cancel_text: ?[*:0]const u8 = null, // default: Cancel
+    confirm_fn: ?*fn () void = null,
+    confirm_text: ?[*:0]const u8 = null, // default: Confirm
+    x: u16 = 16,
+    x_step: u16 = 80,
+    x_scroll: ScrollControl,
+    y: u16 = 16,
+    y_step: u16 = 8,
+    y_margin: u16 = 6,
+    y_scroll: ScrollControl,
+    hl_col: u8 = 3, // ingame predefined colors with ~{n}, default yellow
+};
+
+const menu = struct {
+    var menu_on: bool = false;
+
+    // TODO: add mirror, racers, etc.
+    const values = struct {
+        var vehicle: i32 = 0;
+        var track: i32 = 0;
+        var up_0: i32 = 0;
+        var up_1: i32 = 0;
+        var up_2: i32 = 0;
+        var up_3: i32 = 0;
+        var up_4: i32 = 0;
+        var up_5: i32 = 0;
+        var up_6: i32 = 0;
+    };
+
+    fn confirm_fn() void {}
+
+    fn update_state() void {
+        const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
+        if (RaceFreeze.frozen and input.get_kb_pressed(.ESCAPE)) {
+            RaceFreeze.unfreeze();
+            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
+        } else if (pausestate == 2 and input.get_kb_pressed(.ESCAPE)) {
+            RaceFreeze.freeze();
+        }
+    }
+
+    // TODO: play menu sounds, e.g. when scrolling
+    fn update_menu() void {
+        if (RaceFreeze.frozen) {
+            data.y_scroll.update(&data.idx, data.max, data.wrap);
+
+            if (data.idx < data.items.len) {
+                const item: *const MenuItem = &data.items[@intCast(data.idx)];
+                data.x_scroll.update(item.idx, item.max, item.wrap);
+            }
+
+            const x = data.x;
+            var y = data.y;
+            var buf: [127:0]u8 = undefined;
+
+            _ = std.fmt.bufPrintZ(&buf, "~f0~s{s}", .{data.title}) catch unreachable;
+            rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
+            y += data.y_margin;
+
+            var hl_i: i32 = 0;
+            var hl_c: u8 = undefined;
+            for (data.items) |item| {
+                y += data.y_step;
+                hl_c = if (data.idx == hl_i) data.hl_col else 1;
+                _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, item.label }) catch unreachable;
+                rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
+                _ = std.fmt.bufPrintZ(&buf, "~f4~s{s}", .{item.options[@intCast(item.idx.*)]}) catch unreachable;
+                rf.swrText_CreateEntry1(x + data.x_step, y, 255, 255, 255, 190, &buf);
+                hl_i += 1;
+            }
+
+            y += data.y_margin;
+            if (data.confirm_fn != null) {
+                y += data.y_step;
+                hl_c = if (data.idx == hl_i) data.hl_col else 1;
+                const label = if (data.confirm_text) |t| t else "Confirm";
+                _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, label }) catch unreachable;
+                rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
+                hl_i += 1;
+            }
+            if (data.cancel_fn != null) {
+                y += data.y_step;
+                hl_c = if (data.idx == hl_i) data.hl_col else 1;
+                const label = if (data.cancel_text) |t| t else "Cancel";
+                _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, label }) catch unreachable;
+                rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
+                hl_i += 1;
+            }
+        }
+    }
+
+    var data: Menu = .{
+        .title = "Create Race",
+        .confirm_text = "RACE!",
+        .confirm_fn = @constCast(&@This().confirm_fn),
+        .x = 64,
+        .y = 64,
+        .max = 10,
+        .x_scroll = .{
+            .scroll_time = 0.75,
+            .scroll_units = 18,
+            .input_up = .LEFT,
+            .input_dn = .RIGHT,
+        },
+        .y_scroll = .{
+            .scroll_time = 0.75,
+            .scroll_units = 18,
+            .input_up = .UP,
+            .input_dn = .DOWN,
+        },
+        .items = &[_]MenuItem{
+            .{
+                .idx = &@This().values.vehicle,
+                .label = "Vehicle",
+                .options = &rc.Vehicles,
+                .max = rc.Vehicles.len,
+            },
+            .{
+                .idx = &@This().values.track,
+                .label = "Track",
+                .options = &rc.TracksByMenu,
+                .max = rc.TracksByMenu.len,
+            },
+            .{
+                .idx = &@This().values.up_0,
+                .label = rc.UpgradeCategories[0],
+                .options = &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*,
+                .max = 6,
+                .wrap = false,
+            },
+            .{
+                .idx = &@This().values.up_1,
+                .label = rc.UpgradeCategories[1],
+                .options = &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*,
+                .max = 6,
+                .wrap = false,
+            },
+            .{
+                .idx = &@This().values.up_2,
+                .label = rc.UpgradeCategories[2],
+                .options = &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*,
+                .max = 6,
+                .wrap = false,
+            },
+            .{
+                .idx = &@This().values.up_3,
+                .label = rc.UpgradeCategories[3],
+                .options = &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*,
+                .max = 6,
+                .wrap = false,
+            },
+            .{
+                .idx = &@This().values.up_4,
+                .label = rc.UpgradeCategories[4],
+                .options = &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*,
+                .max = 6,
+                .wrap = false,
+            },
+            .{
+                .idx = &@This().values.up_5,
+                .label = rc.UpgradeCategories[5],
+                .options = &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*,
+                .max = 6,
+                .wrap = false,
+            },
+            .{
+                .idx = &@This().values.up_6,
+                .label = rc.UpgradeCategories[6],
+                .options = &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*,
+                .max = 6,
+                .wrap = false,
+            },
+        },
+    };
+
+    // FIXME: at some point, probably want to make this a global interface that plugins
+    // can request a freeze from, to prevent plugins from clashing with eachother
+    const RaceFreeze = struct {
+        const pausebit: u32 = 1 << 28;
+        var frozen: bool = false;
+        var saved_pausebit: usize = undefined;
+        var saved_pausepage: u8 = undefined;
+        var saved_pausestate: u8 = undefined;
+        var saved_pausescroll: f32 = undefined;
+        // TODO: turn off HUD when freezing
+
+        fn freeze() void {
+            if (frozen) return;
+            const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
+
+            saved_pausebit = pauseflags & pausebit;
+            saved_pausepage = mem.read(rc.ADDR_PAUSE_PAGE, u8);
+            saved_pausestate = mem.read(rc.ADDR_PAUSE_STATE, u8);
+            saved_pausescroll = mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
+
+            _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, 2);
+            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 1);
+            _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, 0);
+            _ = r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags & ~pausebit);
+
+            frozen = true;
+        }
+
+        fn unfreeze() void {
+            if (!frozen) return;
+            const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
+
+            r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags | saved_pausebit);
+            _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, saved_pausescroll);
+            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, saved_pausestate);
+            _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, saved_pausepage);
+
+            frozen = false;
+        }
+    };
+};
+
 pub fn GameLoop_Before() void {
     // FIXME: runs before the ingame time calc at the top of the frame
     const dt_f: f32 = mem.deref_read(&.{0xE22A50}, f32);
     const fps_res: f32 = 1 / dt_f * 2;
     state.fps = (state.fps * (fps_res - 1) + (1 / dt_f)) / fps_res;
+
+    const in_race: bool = inrace: {
+        var race_scene: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
+        if (race_scene) {
+            break :inrace r.ReadEntityValue(.Test, 0, 0x60, u32) & (1 << 5) > 0;
+        } else break :inrace false;
+    };
+    const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
+    _ = pausestate;
+    if (in_race) {
+        menu.update_state();
+        menu.update_menu();
+    }
 }
 
 pub fn TextRender_Before(practice_mode: bool) void {

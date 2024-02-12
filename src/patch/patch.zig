@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const settings = @import("settings.zig");
+const global = @import("global.zig");
+const g = global.state;
 const multiplayer = @import("patch_multiplayer.zig");
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
@@ -41,54 +43,22 @@ const ver_major: u32 = 0;
 const ver_minor: u32 = 0;
 const ver_patch: u32 = 1;
 
-const global = struct {
-    var practice_mode: bool = false;
-    var hwnd: ?HWND = null;
-    var hinstance: ?HINSTANCE = null;
-};
-
-// ???
-
-fn DrawMenuPracticeModeLabel() void {
-    if (global.practice_mode) {
-        rf.swrText_CreateEntry1(640 - 20, 16, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
-    }
-}
-
 // GAME LOOP
 
 fn GameLoop_Before() void {
-    const state = struct {
-        var initialized: bool = false;
-    };
-
     input.update_kb();
 
-    if (!state.initialized) {
+    if (!g.initialized_late) {
         general.init_late();
-        state.initialized = true;
+        g.initialized_late = true;
     }
 
-    const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-
-    if (input.get_kb_pressed(.P) and
-        (!(in_race and global.practice_mode)))
-    {
-        global.practice_mode = !global.practice_mode;
-    }
-
-    if (in_race and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
-        const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMP_TABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
-        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
-    }
-
+    global.GameLoop_Before();
     general.GameLoop_Before();
     practice.GameLoop_Before();
 }
 
-fn GameLoop_After() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0GameLoop_After");
-}
+fn GameLoop_After() void {}
 
 fn HookGameLoop(memory: usize) usize {
     return mem.intercept_call(memory, 0x49CE2A, &GameLoop_Before, &GameLoop_After);
@@ -96,22 +66,15 @@ fn HookGameLoop(memory: usize) usize {
 
 // ENGINE UPDATES
 
-fn EarlyEngineUpdate_Before() void {
-    //rf.swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0EarlyEngineUpdate_Before");
-}
+fn EarlyEngineUpdate_Before() void {}
 
 fn EarlyEngineUpdate_After() void {
-    savestate.EarlyEngineUpdate_After(global.practice_mode);
-    //rf.swrText_CreateEntry1(16, 24, 255, 255, 255, 255, "~F0EarlyEngineUpdate_After");
+    savestate.EarlyEngineUpdate_After();
 }
 
-fn LateEngineUpdate_Before() void {
-    //rf.swrText_CreateEntry1(16, 32, 255, 255, 255, 255, "~F0LateEngineUpdate_Before");
-}
+fn LateEngineUpdate_Before() void {}
 
-fn LateEngineUpdate_After() void {
-    //rf.swrText_CreateEntry1(16, 40, 255, 255, 255, 255, "~F0LateEngineUpdate_After");
-}
+fn LateEngineUpdate_After() void {}
 
 fn HookEngineUpdate(memory: usize) usize {
     var off: usize = memory;
@@ -158,44 +121,33 @@ fn MenuTitleScreen_Before() void {
         ver_patch,
     }) catch return;
     rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf_name);
-    DrawMenuPracticeModeLabel();
+
+    global.MenuTitleScreen_Before();
 }
 
-fn MenuVehicleSelect_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuVehicleSelect_Before");
-}
+fn MenuVehicleSelect_Before() void {}
 
 fn MenuStartRace_Before() void {
-    DrawMenuPracticeModeLabel();
+    global.MenuStartRace_Before();
 }
 
-fn MenuJunkyard_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuJunkyard_Before");
-}
+fn MenuJunkyard_Before() void {}
 
 fn MenuRaceResults_Before() void {
-    DrawMenuPracticeModeLabel();
+    global.MenuRaceResults_Before();
 }
 
-fn MenuWattosShop_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuWattosShop_Before");
-}
+fn MenuWattosShop_Before() void {}
 
-fn MenuHangar_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuHangar_Before");
-}
+fn MenuHangar_Before() void {}
 
-fn MenuTrackSelect_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuTrackSelect_Before");
-}
+fn MenuTrackSelect_Before() void {}
 
 fn MenuTrack_Before() void {
-    DrawMenuPracticeModeLabel();
+    global.MenuTrack_Before();
 }
 
-fn MenuCantinaEntry_Before() void {
-    //swrText_CreateEntry1(16, 16, 255, 255, 255, 255, "~F0MenuCantinaEntry_Before");
-}
+fn MenuCantinaEntry_Before() void {}
 
 fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
@@ -227,8 +179,8 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn TextRender_Before() void {
-    practice.TextRender_Before(global.practice_mode);
-    savestate.TextRender_Before(global.practice_mode);
+    practice.TextRender_Before();
+    savestate.TextRender_Before();
 }
 
 fn HookTextRender(memory: usize) usize {
@@ -249,16 +201,7 @@ export fn Patch() void {
 
     settings.init(alloc);
 
-    // input-based launch toggles
-
-    const kb_shift: i16 = win32kb.GetAsyncKeyState(@intFromEnum(win32kb.VK_SHIFT));
-    const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
-    global.practice_mode = kb_shift_dn;
-
     // hooking
-
-    global.hwnd = mem.read(rc.ADDR_HWND, HWND);
-    global.hinstance = mem.read(rc.ADDR_HINSTANCE, HINSTANCE);
 
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
@@ -266,8 +209,9 @@ export fn Patch() void {
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
 
-    // init: general stuff
+    // init
 
+    off = global.init(alloc, off);
     off = general.init(alloc, off);
     off = multiplayer.init(alloc, off);
 

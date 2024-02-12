@@ -6,6 +6,7 @@ const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const settings = @import("settings.zig");
 const s = settings.state;
+const g = @import("global.zig").state;
 
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
@@ -489,7 +490,7 @@ pub fn GameLoop_Before() void {
     }
 }
 
-pub fn TextRender_Before(practice_mode: bool) void {
+pub fn TextRender_Before() void {
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
     const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0; // FIXME: getting to the point where this and some of the other state in here should be patch-global
@@ -512,7 +513,7 @@ pub fn TextRender_Before(practice_mode: bool) void {
         const lap_times: []const f32 = race_times[0..5];
         const total_time: f32 = race_times[5];
 
-        if (practice_mode) {
+        if (g.practice_mode) {
             var flash: u8 = 255;
             if (total_time <= 0) {
                 const timer: f32 = r.ReadEntityValue(.Jdge, 0, 0x0C, f32);
@@ -591,7 +592,7 @@ pub fn TextRender_Before(practice_mode: bool) void {
             if (overheating) race.set_total_overheat(total_time);
             if (!overheating and overheating_new) race.set_total_overheat(total_time);
 
-            if (practice_mode) {
+            if (g.practice_mode) {
                 const heat_s: f32 = heat / race.heat_rate;
                 const cool_s: f32 = (100 - heat) / race.cool_rate;
                 const heat_timer: f32 = if (boosting) heat_s else cool_s;

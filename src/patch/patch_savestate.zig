@@ -3,6 +3,7 @@ const std = @import("std");
 
 const settings = @import("settings.zig");
 const s = settings.state;
+const g = @import("global.zig").state;
 
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
@@ -322,11 +323,11 @@ fn UpdateState() void {
 //    state.reset();
 //}
 
-pub fn EarlyEngineUpdate_After(practice_mode: bool) void {
+pub fn EarlyEngineUpdate_After() void {
     if (!s.sav.get("savestate_enable", bool)) return;
 
     const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-    if (practice_mode and in_race) {
+    if (g.practice_mode and in_race) {
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
         const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
 
@@ -334,11 +335,11 @@ pub fn EarlyEngineUpdate_After(practice_mode: bool) void {
     }
 }
 
-pub fn TextRender_Before(practice_mode: bool) void {
+pub fn TextRender_Before() void {
     if (!s.sav.get("savestate_enable", bool)) return;
 
     const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-    if (practice_mode and in_race) {
+    if (g.practice_mode and in_race) {
         const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
         const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
 

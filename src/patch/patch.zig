@@ -101,12 +101,6 @@ fn GameLoop_Before() void {
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 
-    if (in_race) {
-        const pause: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (input.get_kb_pressed(.I))
-            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, (pause + 1) % 2);
-    }
-
     practice.GameLoop_Before();
 
     if (s.gen.get("rainbow_timer_enable", bool)) {

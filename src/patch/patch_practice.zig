@@ -154,6 +154,7 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat2(i, rc.UpgradeCategories[cat], &buf);
 }
 
+// TODO: move all of these structs to a module, after they're more final
 const ScrollControl = struct {
     scroll: f32 = 0,
     scroll_buf: f32 = 0,
@@ -204,8 +205,10 @@ const Menu = struct {
     max: i32,
     cancel_fn: ?*fn () void = null,
     cancel_text: ?[*:0]const u8 = null, // default: Cancel
+    cancel_key: ?win32kb.VIRTUAL_KEY = null,
     confirm_fn: ?*fn () void = null,
     confirm_text: ?[*:0]const u8 = null, // default: Confirm
+    confirm_key: ?win32kb.VIRTUAL_KEY = null,
     x: u16 = 16,
     x_step: u16 = 80,
     x_scroll: ScrollControl,
@@ -216,36 +219,77 @@ const Menu = struct {
     hl_col: u8 = 3, // ingame predefined colors with ~{n}, default yellow
 };
 
+// TODO: add standard race settings (mirror, etc.)
+// TODO: add convenience buttons for MU/NU
+// TODO: maybe a key for quick confirm, so you don't have to scroll
+// TODO: also tracking related values for coherency, e.g. adjusting selected circuit
+// TODO: play menu sounds, e.g. when scrolling
 const menu = struct {
     var menu_on: bool = false;
+    var initialized: bool = false;
 
-    // TODO: add mirror, racers, etc.
     const values = struct {
         var vehicle: i32 = 0;
         var track: i32 = 0;
-        var up_0: i32 = 0;
-        var up_1: i32 = 0;
-        var up_2: i32 = 0;
-        var up_3: i32 = 0;
-        var up_4: i32 = 0;
-        var up_5: i32 = 0;
-        var up_6: i32 = 0;
+        var up_lv: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
+        var up_hp: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
     };
 
-    fn confirm_fn() void {}
-
-    fn update_state() void {
-        const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (RaceFreeze.frozen and input.get_kb_pressed(.ESCAPE)) {
-            RaceFreeze.unfreeze();
-            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
-        } else if (pausestate == 2 and input.get_kb_pressed(.ESCAPE)) {
-            RaceFreeze.freeze();
+    fn load_race() void {
+        r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
+        r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
+        const u = mem.deref(&.{ 0x4D78A4, 0x0C, 0x41 });
+        for (values.up_lv, values.up_hp, 0..) |lv, hp, i| {
+            _ = mem.write(u + 0 + i, u8, @as(u8, @intCast(lv)));
+            _ = mem.write(u + 7 + i, u8, @as(u8, @intCast(hp)));
         }
+
+        const jdge: usize = mem.deref_read(&.{
+            rc.ADDR_ENTITY_MANAGER_JUMP_TABLE,
+            @intFromEnum(rc.ENTITY.Jdge) * 4,
+            0x10,
+        }, usize);
+        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
+        close();
     }
 
-    // TODO: play menu sounds, e.g. when scrolling
-    fn update_menu() void {
+    fn init() void {
+        if (initialized) return;
+
+        values.vehicle = r.ReadEntityValue(.Hang, 0, 0x73, u8);
+        values.track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
+        const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
+        for (u[0..7], u[7..14], 0..) |lv, hp, i| {
+            values.up_lv[i] = lv;
+            values.up_hp[i] = hp;
+        }
+
+        initialized = true;
+    }
+
+    fn open() void {
+        RaceFreeze.freeze();
+        data.idx = 0;
+    }
+
+    fn close() void {
+        RaceFreeze.unfreeze();
+        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
+    }
+
+    fn update() void {
+        init();
+
+        // state
+        const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
+        if (RaceFreeze.frozen and input.get_kb_pressed(.ESCAPE)) {
+            close();
+        } else if (pausestate == 2 and input.get_kb_pressed(.ESCAPE)) {
+            open();
+        }
+
+        // rendering
+        // FIXME: move this part to the actual Menu struct
         if (RaceFreeze.frozen) {
             data.y_scroll.update(&data.idx, data.max, data.wrap);
 
@@ -275,7 +319,8 @@ const menu = struct {
             }
 
             y += data.y_margin;
-            if (data.confirm_fn != null) {
+            if (data.confirm_fn) |f| {
+                if (input.get_kb_pressed(data.confirm_key.?)) f();
                 y += data.y_step;
                 hl_c = if (data.idx == hl_i) data.hl_col else 1;
                 const label = if (data.confirm_text) |t| t else "Confirm";
@@ -283,7 +328,8 @@ const menu = struct {
                 rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
                 hl_i += 1;
             }
-            if (data.cancel_fn != null) {
+            if (data.cancel_fn) |f| {
+                if (input.get_kb_pressed(data.cancel_key.?)) f();
                 y += data.y_step;
                 hl_c = if (data.idx == hl_i) data.hl_col else 1;
                 const label = if (data.cancel_text) |t| t else "Cancel";
@@ -295,9 +341,10 @@ const menu = struct {
     }
 
     var data: Menu = .{
-        .title = "Create Race",
+        .title = "Quick Race",
         .confirm_text = "RACE!",
-        .confirm_fn = @constCast(&@This().confirm_fn),
+        .confirm_fn = @constCast(&@This().load_race),
+        .confirm_key = .SPACE,
         .x = 64,
         .y = 64,
         .max = 10,
@@ -323,53 +370,53 @@ const menu = struct {
             .{
                 .idx = &@This().values.track,
                 .label = "Track",
-                .options = &rc.TracksByMenu,
+                .options = &rc.TracksById, // FIXME: maybe change to menu order?
                 .max = rc.TracksByMenu.len,
             },
             .{
-                .idx = &@This().values.up_0,
+                .idx = &@This().values.up_lv[0],
                 .label = rc.UpgradeCategories[0],
                 .options = &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*,
                 .max = 6,
                 .wrap = false,
             },
             .{
-                .idx = &@This().values.up_1,
+                .idx = &@This().values.up_lv[1],
                 .label = rc.UpgradeCategories[1],
                 .options = &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*,
                 .max = 6,
                 .wrap = false,
             },
             .{
-                .idx = &@This().values.up_2,
+                .idx = &@This().values.up_lv[2],
                 .label = rc.UpgradeCategories[2],
                 .options = &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*,
                 .max = 6,
                 .wrap = false,
             },
             .{
-                .idx = &@This().values.up_3,
+                .idx = &@This().values.up_lv[3],
                 .label = rc.UpgradeCategories[3],
                 .options = &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*,
                 .max = 6,
                 .wrap = false,
             },
             .{
-                .idx = &@This().values.up_4,
+                .idx = &@This().values.up_lv[4],
                 .label = rc.UpgradeCategories[4],
                 .options = &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*,
                 .max = 6,
                 .wrap = false,
             },
             .{
-                .idx = &@This().values.up_5,
+                .idx = &@This().values.up_lv[5],
                 .label = rc.UpgradeCategories[5],
                 .options = &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*,
                 .max = 6,
                 .wrap = false,
             },
             .{
-                .idx = &@This().values.up_6,
+                .idx = &@This().values.up_lv[6],
                 .label = rc.UpgradeCategories[6],
                 .options = &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*,
                 .max = 6,
@@ -380,6 +427,7 @@ const menu = struct {
 
     // FIXME: at some point, probably want to make this a global interface that plugins
     // can request a freeze from, to prevent plugins from clashing with eachother
+    // TODO: turn off race HUD when freezing
     const RaceFreeze = struct {
         const pausebit: u32 = 1 << 28;
         var frozen: bool = false;
@@ -387,7 +435,6 @@ const menu = struct {
         var saved_pausepage: u8 = undefined;
         var saved_pausestate: u8 = undefined;
         var saved_pausescroll: f32 = undefined;
-        // TODO: turn off HUD when freezing
 
         fn freeze() void {
             if (frozen) return;
@@ -432,11 +479,8 @@ pub fn GameLoop_Before() void {
             break :inrace r.ReadEntityValue(.Test, 0, 0x60, u32) & (1 << 5) > 0;
         } else break :inrace false;
     };
-    const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-    _ = pausestate;
     if (in_race) {
-        menu.update_state();
-        menu.update_menu();
+        menu.update();
     }
 }
 

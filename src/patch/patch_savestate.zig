@@ -1,5 +1,7 @@
 pub const Self = @This();
+
 const std = @import("std");
+const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const s = settings.state;
@@ -11,13 +13,6 @@ const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = r.constants;
 const rf = r.functions;
-
-const VirtualAlloc = std.os.windows.VirtualAlloc;
-const VirtualFree = std.os.windows.VirtualFree;
-const MEM_COMMIT = std.os.windows.MEM_COMMIT;
-const MEM_RESERVE = std.os.windows.MEM_RESERVE;
-const MEM_RELEASE = std.os.windows.MEM_RELEASE;
-const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
 
 // FIXME: stop assuming entities will be in index 0, particularly Test entity
 // FIXME: game crashes after a bit when tabbing out; probably the allocated memory
@@ -77,7 +72,7 @@ const state = struct {
     var stage: *[2][frame_size / 4]u32 = undefined;
     var data: [*]u8 = undefined;
 
-    const load_delay: usize = 500; // ms
+    var load_delay: usize = 500; // ms
     var load_time: usize = 0;
     var load_frame: usize = 0;
 
@@ -99,9 +94,9 @@ const state = struct {
     var layer_index_count: usize = undefined;
 
     fn init() void {
-        const mem_alloc = MEM_COMMIT | MEM_RESERVE;
-        const mem_protect = PAGE_EXECUTE_READWRITE;
-        memory = VirtualAlloc(null, memory_size, mem_alloc, mem_protect) catch unreachable;
+        const mem_alloc = win.MEM_COMMIT | win.MEM_RESERVE;
+        const mem_protect = win.PAGE_EXECUTE_READWRITE;
+        memory = win.VirtualAlloc(null, memory_size, mem_alloc, mem_protect) catch unreachable;
         memory_addr = @intFromPtr(memory);
         memory_end_addr = @intFromPtr(memory) + memory_size;
         raw_offsets = @as([*]u8, @ptrCast(memory)) + offsets_off;
@@ -111,6 +106,9 @@ const state = struct {
         offsets = @as(@TypeOf(offsets), @ptrFromInt(memory_addr + offsets_off));
         headers = @as(@TypeOf(headers), @ptrFromInt(memory_addr + headers_off));
         stage = @as(@TypeOf(stage), @ptrFromInt(memory_addr + stage_off));
+
+        load_delay = s.sav.get("load_delay", u32);
+
         initialized = true;
     }
 

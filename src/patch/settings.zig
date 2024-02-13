@@ -42,6 +42,7 @@ pub fn init(alloc: std.mem.Allocator) void {
 
     state.sav = SettingsGroup.init(alloc, "savestate");
     state.sav.add("savestate_enable", bool, false);
+    state.sav.add("load_delay", u32, 500);
     state.manager.add(&state.sav);
 
     state.mp = SettingsGroup.init(alloc, "multiplayer");

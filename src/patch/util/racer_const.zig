@@ -27,7 +27,7 @@ pub const ADDR_TIME_FRAMECOUNT: usize = 0xE22A30;
 
 // Entity System
 
-pub const ADDR_ENTITY_MANAGER_JUMP_TABLE: usize = 0x4BFEC0;
+pub const ADDR_ENTITY_MANAGER_JUMPTABLE: usize = 0x4BFEC0;
 pub const ENTITY_MANAGER_SIZE: usize = 0x28;
 pub const ENTITY = enum(u32) {
     Test = 0,
@@ -57,8 +57,8 @@ pub fn EntitySize(entity: ENTITY) usize {
 
 // Menu / 'Hang'
 
-pub const ADDR_DRAW_MENU_JUMP_TABLE: usize = 0x457A88;
-pub const ADDR_DRAW_MENU_JUMP_TABLE_SCENE_3: usize = 0x457AD4;
+pub const ADDR_DRAW_MENU_JUMPTABLE: usize = 0x457A88;
+pub const ADDR_DRAW_MENU_JUMPTABLE_SCENE_3: usize = 0x457AD4;
 
 // Race Data (participant metadata)
 

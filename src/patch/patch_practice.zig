@@ -249,7 +249,7 @@ const menu = struct {
         }
 
         const jdge: usize = mem.deref_read(&.{
-            rc.ADDR_ENTITY_MANAGER_JUMP_TABLE,
+            rc.ADDR_ENTITY_MANAGER_JUMPTABLE,
             @intFromEnum(rc.ENTITY.Jdge) * 4,
             0x10,
         }, usize);

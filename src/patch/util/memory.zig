@@ -310,7 +310,7 @@ pub fn intercept_call(memory: usize, off_call: usize, dest_before: ?*const fn ()
     return off;
 }
 
-pub fn intercept_jump_table(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
+pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
     const item_addr: usize = jt_addr + 4 * jt_idx;
     const item_target: usize = read(item_addr, u32);
     var off: usize = memory;

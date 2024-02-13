@@ -1,4 +1,5 @@
 const std = @import("std");
+const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const global = @import("global.zig");
@@ -14,26 +15,6 @@ const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
-
-const ini = @import("import/import.zig").ini;
-const win32 = @import("import/import.zig").win32;
-const win32kb = win32.ui.input.keyboard_and_mouse;
-const win32wm = win32.ui.windows_and_messaging;
-const KS_DOWN: i16 = -1;
-const KS_PRESSED: i16 = 1; // since last call
-
-const VirtualAlloc = std.os.windows.VirtualAlloc;
-const VirtualFree = std.os.windows.VirtualFree;
-const MEM_COMMIT = std.os.windows.MEM_COMMIT;
-const MEM_RESERVE = std.os.windows.MEM_RESERVE;
-const MEM_RELEASE = std.os.windows.MEM_RELEASE;
-const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
-const WINAPI = std.os.windows.WINAPI;
-const WPARAM = std.os.windows.WPARAM;
-const LPARAM = std.os.windows.LPARAM;
-const LRESULT = std.os.windows.LRESULT;
-const HINSTANCE = std.os.windows.HINSTANCE;
-const HWND = std.os.windows.HWND;
 
 // STATE
 
@@ -152,26 +133,17 @@ fn MenuCantinaEntry_Before() void {}
 fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
 
-    // before 0x435240
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 1, &MenuTitleScreen_Before);
-    // before 0x______
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 3, &MenuStartRace_Before);
-    // before 0x______
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 4, &MenuJunkyard_Before);
-    // before 0x______
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 5, &MenuRaceResults_Before);
-    // before 0x______
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 7, &MenuWattosShop_Before);
-    // before 0x______; inspect vehicle, view upgrades, etc.
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 8, &MenuHangar_Before);
-    // before 0x435700
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 9, &MenuVehicleSelect_Before);
-    // before 0x______
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 12, &MenuTrackSelect_Before);
-    // before 0x______
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 13, &MenuTrack_Before);
-    // before 0x______
-    off = mem.intercept_jump_table(off, rc.ADDR_DRAW_MENU_JUMP_TABLE, 18, &MenuCantinaEntry_Before);
+    // see fn_457620 @ 0x45777F
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, &MenuTitleScreen_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, &MenuStartRace_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, &MenuJunkyard_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, &MenuRaceResults_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, &MenuWattosShop_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, &MenuHangar_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, &MenuVehicleSelect_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, &MenuTrackSelect_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, &MenuTrack_Before);
+    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, &MenuCantinaEntry_Before);
 
     return off;
 }
@@ -190,9 +162,9 @@ fn HookTextRender(memory: usize) usize {
 // DO THE THING!!!
 
 export fn Patch() void {
-    const mem_alloc = MEM_COMMIT | MEM_RESERVE;
-    const mem_protect = PAGE_EXECUTE_READWRITE;
-    const memory = VirtualAlloc(null, patch_size, mem_alloc, mem_protect) catch unreachable;
+    const mem_alloc = win.MEM_COMMIT | win.MEM_RESERVE;
+    const mem_protect = win.PAGE_EXECUTE_READWRITE;
+    const memory = win.VirtualAlloc(null, patch_size, mem_alloc, mem_protect) catch unreachable;
     var off: usize = @intFromPtr(memory);
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();

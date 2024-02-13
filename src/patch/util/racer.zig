@@ -35,7 +35,7 @@ pub fn WriteRaceDataValueBytes(offset: usize, in: ?*anyopaque, len: usize) void 
 
 fn deref_entity(entity: c.ENTITY, index: u32, offset: usize) usize {
     return mem.deref(&.{
-        c.ADDR_ENTITY_MANAGER_JUMP_TABLE,
+        c.ADDR_ENTITY_MANAGER_JUMPTABLE,
         @intFromEnum(entity) * 4,
         0x10,
         c.EntitySize(entity) * index + offset,

@@ -103,7 +103,7 @@ pub fn init_late() void {
 pub fn GameLoop_Before() void {
     const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
     if (in_race and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
-        const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMP_TABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
+        const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMPTABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 

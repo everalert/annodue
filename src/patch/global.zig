@@ -28,6 +28,49 @@ pub const state = struct {
     pub var hinstance: ?HINSTANCE = null;
 
     pub var in_race: bool = false;
+
+    // FIXME: probably want to make this request-based, to prevent plugins from
+    // clashing with eachother
+    // FIXME: also probably need to start thinking about making a distinction
+    // between global state and game manipulation functions
+    // TODO: turn off race HUD when freezing
+    pub const Freeze = struct {
+        const pausebit: u32 = 1 << 28;
+        var frozen: bool = false;
+        var saved_pausebit: usize = undefined;
+        var saved_pausepage: u8 = undefined;
+        var saved_pausestate: u8 = undefined;
+        var saved_pausescroll: f32 = undefined;
+
+        pub fn freeze() void {
+            if (frozen) return;
+            const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
+
+            saved_pausebit = pauseflags & pausebit;
+            saved_pausepage = mem.read(rc.ADDR_PAUSE_PAGE, u8);
+            saved_pausestate = mem.read(rc.ADDR_PAUSE_STATE, u8);
+            saved_pausescroll = mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
+
+            _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, 2);
+            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 1);
+            _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, 0);
+            _ = r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags & ~pausebit);
+
+            frozen = true;
+        }
+
+        pub fn unfreeze() void {
+            if (!frozen) return;
+            const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
+
+            r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags | saved_pausebit);
+            _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, saved_pausescroll);
+            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, saved_pausestate);
+            _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, saved_pausepage);
+
+            frozen = false;
+        }
+    };
 };
 
 // UTIL

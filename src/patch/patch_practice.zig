@@ -164,7 +164,7 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // TODO: add convenience buttons for MU/NU
 // TODO: also tracking related values for coherency, e.g. adjusting selected circuit
 const menu_newrace = struct {
-    var menu_on: bool = false;
+    var menu_active: bool = false;
     var initialized: bool = false;
 
     const values = struct {
@@ -207,26 +207,28 @@ const menu_newrace = struct {
     }
 
     fn open() void {
-        RaceFreeze.freeze();
+        g.Freeze.freeze();
         data.idx = 0;
+        menu_active = true;
     }
 
     fn close() void {
-        RaceFreeze.unfreeze();
+        g.Freeze.unfreeze();
         _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
+        menu_active = false;
     }
 
     fn update() void {
         init();
 
         const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (RaceFreeze.frozen and input.get_kb_pressed(.ESCAPE)) {
+        if (menu_active and input.get_kb_pressed(.ESCAPE)) {
             close();
         } else if (pausestate == 2 and input.get_kb_pressed(.ESCAPE)) {
             open();
         }
 
-        if (RaceFreeze.frozen) data.update_and_draw();
+        if (menu_active) data.update_and_draw();
     }
 
     var data: menu.Menu = .{
@@ -312,47 +314,6 @@ const menu_newrace = struct {
                 .wrap = false,
             },
         },
-    };
-
-    // FIXME: at some point, probably want to make this a global interface that plugins
-    // can request a freeze from, to prevent plugins from clashing with eachother
-    // TODO: turn off race HUD when freezing
-    const RaceFreeze = struct {
-        const pausebit: u32 = 1 << 28;
-        var frozen: bool = false;
-        var saved_pausebit: usize = undefined;
-        var saved_pausepage: u8 = undefined;
-        var saved_pausestate: u8 = undefined;
-        var saved_pausescroll: f32 = undefined;
-
-        fn freeze() void {
-            if (frozen) return;
-            const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
-
-            saved_pausebit = pauseflags & pausebit;
-            saved_pausepage = mem.read(rc.ADDR_PAUSE_PAGE, u8);
-            saved_pausestate = mem.read(rc.ADDR_PAUSE_STATE, u8);
-            saved_pausescroll = mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
-
-            _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, 2);
-            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 1);
-            _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, 0);
-            _ = r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags & ~pausebit);
-
-            frozen = true;
-        }
-
-        fn unfreeze() void {
-            if (!frozen) return;
-            const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
-
-            r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags | saved_pausebit);
-            _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, saved_pausescroll);
-            _ = mem.write(rc.ADDR_PAUSE_STATE, u8, saved_pausestate);
-            _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, saved_pausepage);
-
-            frozen = false;
-        }
     };
 };
 

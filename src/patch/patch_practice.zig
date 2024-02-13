@@ -1,4 +1,5 @@
 pub const Self = @This();
+
 const std = @import("std");
 
 const win32 = @import("import/import.zig").win32;
@@ -8,6 +9,7 @@ const settings = @import("settings.zig");
 const s = settings.state;
 const g = @import("global.zig").state;
 
+const menu = @import("util/menu.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
@@ -158,77 +160,10 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat2(i, rc.UpgradeCategories[cat], &buf);
 }
 
-// TODO: move all of these structs to a module, after they're more final
-const ScrollControl = struct {
-    scroll: f32 = 0,
-    scroll_buf: f32 = 0,
-    scroll_time: f32, // time until max scroll speed
-    scroll_units: f32, // units per second at max scroll speed
-    input_up: win32kb.VIRTUAL_KEY,
-    input_dn: win32kb.VIRTUAL_KEY,
-
-    // FIXME: need to account for cases where the math always works out to <1 per frame
-    fn update(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
-        const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
-
-        var inc: f32 = 0;
-        if (input.get_kb_pressed(self.input_up)) inc -= 1;
-        if (input.get_kb_pressed(self.input_dn)) inc += 1;
-        if (input.get_kb_released(self.input_up) or input.get_kb_released(self.input_dn)) {
-            self.scroll = 0;
-            self.scroll_buf = 0;
-        }
-        if (input.get_kb_down(self.input_up)) self.scroll -= dt;
-        if (input.get_kb_down(self.input_dn)) self.scroll += dt;
-
-        const scroll: f32 = std.math.clamp(self.scroll / self.scroll_time, -1, 1);
-        inc += std.math.pow(f32, scroll, 2) * dt * self.scroll_units * std.math.sign(scroll);
-        self.scroll_buf += inc;
-
-        const inc_i: i32 = @intFromFloat(self.scroll_buf);
-        self.scroll_buf -= @floatFromInt(inc_i);
-
-        const new_val = val.* + inc_i;
-        val.* = if (wrap) @mod(new_val, max) else std.math.clamp(new_val, 0, max - 1);
-    }
-};
-
-const MenuItem = struct {
-    idx: *i32,
-    wrap: bool = true,
-    label: [*:0]const u8,
-    options: []const [*:0]const u8,
-    max: i32,
-};
-
-const Menu = struct {
-    idx: i32 = 0,
-    wrap: bool = true,
-    title: [*:0]const u8,
-    items: []const MenuItem,
-    max: i32,
-    cancel_fn: ?*fn () void = null,
-    cancel_text: ?[*:0]const u8 = null, // default: Cancel
-    cancel_key: ?win32kb.VIRTUAL_KEY = null,
-    confirm_fn: ?*fn () void = null,
-    confirm_text: ?[*:0]const u8 = null, // default: Confirm
-    confirm_key: ?win32kb.VIRTUAL_KEY = null,
-    x: u16 = 16,
-    x_step: u16 = 80,
-    x_scroll: ScrollControl,
-    y: u16 = 16,
-    y_step: u16 = 8,
-    y_margin: u16 = 6,
-    y_scroll: ScrollControl,
-    hl_col: u8 = 3, // ingame predefined colors with ~{n}, default yellow
-};
-
 // TODO: add standard race settings (mirror, etc.)
 // TODO: add convenience buttons for MU/NU
-// TODO: maybe a key for quick confirm, so you don't have to scroll
 // TODO: also tracking related values for coherency, e.g. adjusting selected circuit
-// TODO: play menu sounds, e.g. when scrolling
-const menu = struct {
+const menu_newrace = struct {
     var menu_on: bool = false;
     var initialized: bool = false;
 
@@ -284,7 +219,6 @@ const menu = struct {
     fn update() void {
         init();
 
-        // state
         const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
         if (RaceFreeze.frozen and input.get_kb_pressed(.ESCAPE)) {
             close();
@@ -292,59 +226,10 @@ const menu = struct {
             open();
         }
 
-        // rendering
-        // FIXME: move this part to the actual Menu struct
-        if (RaceFreeze.frozen) {
-            data.y_scroll.update(&data.idx, data.max, data.wrap);
-
-            if (data.idx < data.items.len) {
-                const item: *const MenuItem = &data.items[@intCast(data.idx)];
-                data.x_scroll.update(item.idx, item.max, item.wrap);
-            }
-
-            const x = data.x;
-            var y = data.y;
-            var buf: [127:0]u8 = undefined;
-
-            _ = std.fmt.bufPrintZ(&buf, "~f0~s{s}", .{data.title}) catch unreachable;
-            rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
-            y += data.y_margin;
-
-            var hl_i: i32 = 0;
-            var hl_c: u8 = undefined;
-            for (data.items) |item| {
-                y += data.y_step;
-                hl_c = if (data.idx == hl_i) data.hl_col else 1;
-                _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, item.label }) catch unreachable;
-                rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
-                _ = std.fmt.bufPrintZ(&buf, "~f4~s{s}", .{item.options[@intCast(item.idx.*)]}) catch unreachable;
-                rf.swrText_CreateEntry1(x + data.x_step, y, 255, 255, 255, 190, &buf);
-                hl_i += 1;
-            }
-
-            y += data.y_margin;
-            if (data.confirm_fn) |f| {
-                if (input.get_kb_pressed(data.confirm_key.?)) f();
-                y += data.y_step;
-                hl_c = if (data.idx == hl_i) data.hl_col else 1;
-                const label = if (data.confirm_text) |t| t else "Confirm";
-                _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, label }) catch unreachable;
-                rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
-                hl_i += 1;
-            }
-            if (data.cancel_fn) |f| {
-                if (input.get_kb_pressed(data.cancel_key.?)) f();
-                y += data.y_step;
-                hl_c = if (data.idx == hl_i) data.hl_col else 1;
-                const label = if (data.cancel_text) |t| t else "Cancel";
-                _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, label }) catch unreachable;
-                rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
-                hl_i += 1;
-            }
-        }
+        if (RaceFreeze.frozen) data.update_and_draw();
     }
 
-    var data: Menu = .{
+    var data: menu.Menu = .{
         .title = "Quick Race",
         .confirm_text = "RACE!",
         .confirm_fn = @constCast(&@This().load_race),
@@ -364,7 +249,7 @@ const menu = struct {
             .input_up = .UP,
             .input_dn = .DOWN,
         },
-        .items = &[_]MenuItem{
+        .items = &[_]menu.MenuItem{
             .{
                 .idx = &@This().values.vehicle,
                 .label = "Vehicle",
@@ -486,7 +371,7 @@ pub fn GameLoop_Before() void {
         } else break :inrace false;
     };
     if (in_race) {
-        menu.update();
+        menu_newrace.update();
     }
 }
 

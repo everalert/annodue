@@ -19,6 +19,7 @@ const win32wm = win32.ui.windows_and_messaging;
 const KS_DOWN: i16 = -1;
 const KS_PRESSED: i16 = 1; // since last call
 
+// TODO: move all the common game check stuff from plugins/modules to here; cleanup
 pub const state = struct {
     pub var initialized_late: bool = false;
     pub var practice_mode: bool = false;

@@ -44,7 +44,7 @@ The source code can be found on github: [annodue](https://github.com/everalert/a
 The main component of Annodue is written in Zig, and requires `Zig 0.11.0` to build.
 
 1. Open a terminal in the project directory and run the following:
-    ```
+```
 zig build
 ```
 
@@ -55,17 +55,17 @@ zig build
 Run code in this section in a MinGW32 shell.
 
 1. Install build dependencies:
-	```
+```
 pacman -S git mingw32/mingw-w64-i686-cmake mingw32/mingw-w64-i686-gcc
 ```
 
 1. Move the project files to your MinGW32 filesystem, found at `C:/msys64/home/<user>/`. To do this in the shell, run:
-	```
-git clone https://github.com/JayFoxRox/swe1r-patcher.git
+```
+git clone https://github.com/everalert/annodue.git
 ```
 
 1. Compile `dinput.dll`:
-	```
+```
 cd annodue
 mkdir build
 cd build

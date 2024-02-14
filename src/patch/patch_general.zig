@@ -4,6 +4,8 @@ const std = @import("std");
 
 const settings = @import("settings.zig");
 const s = settings.state;
+const global = @import("global.zig");
+const g = global.state;
 
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
@@ -100,13 +102,15 @@ pub fn init_late() void {
     }
 }
 
-pub fn GameLoop_Before() void {
-    const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-    if (in_race and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
+// FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
+pub fn EarlyEngineUpdate_Before() void {
+    if (g.in_race and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
         const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMPTABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
+}
 
+pub fn TextRender_Before() void {
     if (s.gen.get("rainbow_timer_enable", bool)) {
         PatchHudTimerColRotate();
     }

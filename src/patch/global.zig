@@ -27,7 +27,12 @@ pub const state = struct {
     pub var hwnd: ?HWND = null;
     pub var hinstance: ?HINSTANCE = null;
 
+    pub var dt_f: f32 = 0;
+    pub var fps: f32 = 0;
+    pub var fps_avg: f32 = 0;
+
     pub var in_race: bool = false;
+    pub var was_in_race: bool = false;
 
     // FIXME: probably want to make this request-based, to prevent plugins from
     // clashing with eachother
@@ -99,11 +104,19 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
 // HOOK CALLS
 
-pub fn GameLoop_Before() void {
+pub fn EarlyEngineUpdate_After() void {
+    state.was_in_race = state.in_race;
     state.in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
 
     if (input.get_kb_pressed(.P) and (!(state.in_race and state.practice_mode)))
         state.practice_mode = !state.practice_mode;
+}
+
+pub fn TimerUpdate_After() void {
+    state.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
+    state.fps = mem.read(rc.ADDR_TIME_FPS, f32);
+    const fps_res: f32 = 1 / state.dt_f * 2;
+    state.fps_avg = (state.fps_avg * (fps_res - 1) + (1 / state.dt_f)) / fps_res;
 }
 
 pub fn MenuTitleScreen_Before() void {

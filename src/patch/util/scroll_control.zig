@@ -11,7 +11,6 @@ const r = @import("racer.zig");
 const rc = r.constants;
 const rf = r.functions;
 
-// TODO: move all of these structs to a module, after they're more final
 pub const ScrollControl = struct {
     scroll: f32 = 0,
     scroll_buf: f32 = 0,
@@ -20,7 +19,6 @@ pub const ScrollControl = struct {
     input_up: win32kb.VIRTUAL_KEY,
     input_dn: win32kb.VIRTUAL_KEY,
 
-    // FIXME: need to account for cases where the math always works out to <1 per frame
     pub fn update(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
         const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
 

@@ -29,14 +29,11 @@ const ver_patch: u32 = 1;
 fn GameLoop_Before() void {
     input.update_kb();
 
+    // FIXME: probably move this to before the game loop starts
     if (!g.initialized_late) {
         general.init_late();
         g.initialized_late = true;
     }
-
-    global.GameLoop_Before();
-    general.GameLoop_Before();
-    practice.GameLoop_Before();
 }
 
 fn GameLoop_After() void {}
@@ -47,9 +44,13 @@ fn HookGameLoop(memory: usize) usize {
 
 // ENGINE UPDATES
 
-fn EarlyEngineUpdate_Before() void {}
+fn EarlyEngineUpdate_Before() void {
+    general.EarlyEngineUpdate_Before();
+    practice.EarlyEngineUpdate_Before();
+}
 
 fn EarlyEngineUpdate_After() void {
+    global.EarlyEngineUpdate_After();
     savestate.EarlyEngineUpdate_After();
 }
 
@@ -60,17 +61,30 @@ fn LateEngineUpdate_After() void {}
 fn HookEngineUpdate(memory: usize) usize {
     var off: usize = memory;
 
-    // fn 0x445980 case 1
+    // fn_445980 case 1
     // physics updates, etc.
     off = mem.intercept_call(off, 0x445991, &EarlyEngineUpdate_Before, null);
     off = mem.intercept_call(off, 0x445A00, null, &EarlyEngineUpdate_After);
 
-    // fn 0x445980 case 2
+    // fn_445980 case 2
     // text processing, etc. before the actual render
     off = mem.intercept_call(off, 0x445A10, &LateEngineUpdate_Before, null);
     off = mem.intercept_call(off, 0x445A40, null, &LateEngineUpdate_After);
 
     return off;
+}
+
+// GAME LOOP TIMER
+
+fn TimerUpdate_Before() void {}
+
+fn TimerUpdate_After() void {
+    global.TimerUpdate_After();
+}
+
+fn HookTimerUpdate(memory: usize) usize {
+    // fn_480540, in early engine update
+    return mem.intercept_call(memory, 0x4459AF, &TimerUpdate_Before, &TimerUpdate_After);
 }
 
 // GAME END; executable closing
@@ -151,6 +165,7 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn TextRender_Before() void {
+    general.TextRender_Before();
     practice.TextRender_Before();
     savestate.TextRender_Before();
 }
@@ -177,6 +192,7 @@ export fn Patch() void {
 
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
+    off = HookTimerUpdate(off);
     off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);

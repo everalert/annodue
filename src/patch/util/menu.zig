@@ -72,7 +72,7 @@ pub const Menu = struct {
 
         y += self.y_margin;
         if (self.confirm_fn) |f| {
-            if (input.get_kb_pressed(self.confirm_key.?)) f();
+            if (self.idx == hl_i and input.get_kb_pressed(self.confirm_key.?)) f();
             y += self.y_step;
             hl_c = if (self.idx == hl_i) self.hl_col else 1;
             const label = if (self.confirm_text) |t| t else "Confirm";
@@ -81,7 +81,7 @@ pub const Menu = struct {
             hl_i += 1;
         }
         if (self.cancel_fn) |f| {
-            if (input.get_kb_pressed(self.cancel_key.?)) f();
+            if (self.idx == hl_i and input.get_kb_pressed(self.cancel_key.?)) f();
             y += self.y_step;
             hl_c = if (self.idx == hl_i) self.hl_col else 1;
             const label = if (self.cancel_text) |t| t else "Cancel";

@@ -137,14 +137,14 @@ const menu_quickrace = struct {
         .x_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
-            .input_up = .LEFT,
-            .input_dn = .RIGHT,
+            .input_dec = .LEFT,
+            .input_inc = .RIGHT,
         },
         .y_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
-            .input_up = .UP,
-            .input_dn = .DOWN,
+            .input_dec = .UP,
+            .input_inc = .DOWN,
         },
         .items = &[_]menu.MenuItem{
             .{

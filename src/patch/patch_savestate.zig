@@ -7,6 +7,7 @@ const settings = @import("settings.zig");
 const s = settings.state;
 const g = @import("global.zig").state;
 
+const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
@@ -76,10 +77,13 @@ const state = struct {
     var load_time: usize = 0;
     var load_frame: usize = 0;
 
-    const scrub_frame_sec: f32 = 0.5; // max seconds to scrub per scrub frame
-    const scrub_inc_sec: f32 = 3;
+    var scrub: scroll.ScrollControl = .{
+        .scroll_time = 3,
+        .scroll_units = 24 * 8, // FIXME: doesn't scale with fps
+        .input_dec = .@"3",
+        .input_inc = .@"4",
+    };
     var scrub_frame: i32 = 0;
-    var scrub_inc: f32 = 0;
 
     const layer_size: isize = 4;
     const layer_depth: isize = 4;
@@ -280,15 +284,7 @@ fn DoStateScrubbing() LoadState {
         return .ScrubExiting;
     }
 
-    var inc: i32 = 0;
-    const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
-    if (input.get_kb_pressed(.@"3")) inc -= 1;
-    if (input.get_kb_pressed(.@"4")) inc += 1;
-    if (input.get_kb_released(.@"3") or input.get_kb_released(.@"4")) state.scrub_inc = 0;
-    if (input.get_kb_down(.@"3")) state.scrub_inc -= dt;
-    if (input.get_kb_down(.@"4")) state.scrub_inc += dt;
-    inc += @as(i32, @intFromFloat(std.math.pow(f32, state.scrub_inc / state.scrub_inc_sec, 2) * (1 / dt) * state.scrub_frame_sec)) * std.math.sign(@as(i32, @intFromFloat(state.scrub_inc)));
-    state.scrub_frame = std.math.clamp(state.scrub_frame + inc, 0, std.math.cast(i32, state.frame_total).? - 1);
+    state.scrub.update(&state.scrub_frame, std.math.cast(i32, state.frame_total).?, false);
 
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?);
     return .Scrubbing;
@@ -354,6 +350,7 @@ pub fn TextRender_Before() void {
 }
 
 // COMPRESSION-RELATED FUNCTIONS
+// not really in use/needs work
 
 // FIXME: assumes array of raw data; rework to adapt it to new compressed data
 fn save_file() void {
@@ -367,7 +364,7 @@ fn save_file() void {
 }
 
 // FIXME: dumped from patch.zig; need to rework into a generalized function
-pub fn check_compression_potential() void {
+fn check_compression_potential() void {
     const savestate_size: usize = 0x2428 / 4;
     const savestate_count: usize = 128;
     const savestate_head: usize = savestate_size / 8;

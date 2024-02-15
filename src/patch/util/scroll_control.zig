@@ -16,21 +16,21 @@ pub const ScrollControl = struct {
     scroll_buf: f32 = 0,
     scroll_time: f32, // time until max scroll speed
     scroll_units: f32, // units per second at max scroll speed
-    input_up: win32kb.VIRTUAL_KEY,
-    input_dn: win32kb.VIRTUAL_KEY,
+    input_dec: win32kb.VIRTUAL_KEY,
+    input_inc: win32kb.VIRTUAL_KEY,
 
     pub fn update(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
         const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
 
         var inc: f32 = 0;
-        if (input.get_kb_pressed(self.input_up)) inc -= 1;
-        if (input.get_kb_pressed(self.input_dn)) inc += 1;
-        if (input.get_kb_released(self.input_up) or input.get_kb_released(self.input_dn)) {
+        if (input.get_kb_pressed(self.input_dec)) inc -= 1;
+        if (input.get_kb_pressed(self.input_inc)) inc += 1;
+        if (input.get_kb_released(self.input_dec) or input.get_kb_released(self.input_inc)) {
             self.scroll = 0;
             self.scroll_buf = 0;
         }
-        if (input.get_kb_down(self.input_up)) self.scroll -= dt;
-        if (input.get_kb_down(self.input_dn)) self.scroll += dt;
+        if (input.get_kb_down(self.input_dec)) self.scroll -= dt;
+        if (input.get_kb_down(self.input_inc)) self.scroll += dt;
 
         const scroll: f32 = std.math.clamp(self.scroll / self.scroll_time, -1, 1);
         inc += std.math.pow(f32, scroll, 2) * dt * self.scroll_units * std.math.sign(scroll);

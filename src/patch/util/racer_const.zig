@@ -30,28 +30,8 @@ pub const ADDR_TIME_FPS: usize = 0x4C8174; // sithControl_secFPS
 
 pub const ADDR_ENTITY_MANAGER_JUMPTABLE: usize = 0x4BFEC0;
 pub const ENTITY_MANAGER_SIZE: usize = 0x28;
-pub const ENTITY = enum(u32) {
-    Test = 0,
-    Toss = 1,
-    Trig = 2,
-    Hang = 3,
-    Jdge = 4,
-    Scen = 5,
-    Elmo = 6,
-    Smok = 7,
-    cMan = 8,
-};
-pub const ENTITY_SIZE = [_]usize{
-    0x1F28,
-    0x7C,
-    0x58,
-    0xD0,
-    0x1E8,
-    0x1B4C,
-    0xC0,
-    0x108,
-    0x3A8,
-};
+pub const ENTITY = enum(u32) { Test = 0, Toss = 1, Trig = 2, Hang = 3, Jdge = 4, Scen = 5, Elmo = 6, Smok = 7, cMan = 8 };
+pub const ENTITY_SIZE = [_]usize{ 0x1F28, 0x7C, 0x58, 0xD0, 0x1E8, 0x1B4C, 0xC0, 0x108, 0x3A8 };
 pub fn EntitySize(entity: ENTITY) usize {
     return ENTITY_SIZE[@intFromEnum(entity)];
 }
@@ -65,6 +45,11 @@ pub const ADDR_DRAW_MENU_JUMPTABLE_SCENE_3: usize = 0x457AD4;
 
 pub const ADDR_RACE_DATA: usize = 0x4D78A4;
 pub const RACE_DATA_SIZE: usize = 0x88;
+
+// Quad (screenspace drawing)
+
+pub const ADDR_QUAD_INITIALIZED_INDEX: usize = 0x4B91B8;
+pub const ADDR_QUAD_STAT_BAR_INDEX: usize = 0x50C928;
 
 // Helper String Arrays
 

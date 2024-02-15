@@ -6,6 +6,8 @@ pub const functions = @import("racer_fn.zig");
 const c = constants;
 const f = functions;
 
+// RACE DATA STRUCT
+
 fn deref_racedata(offset: usize) usize {
     return mem.deref(&.{
         c.ADDR_RACE_DATA,
@@ -32,6 +34,8 @@ pub fn WriteRaceDataValueBytes(offset: usize, in: ?*anyopaque, len: usize) void 
     const address = deref_racedata(offset);
     _ = mem.write_bytes(address, in, len);
 }
+
+// ENTITY SYSTEM
 
 fn deref_entity(entity: c.ENTITY, index: u32, offset: usize) usize {
     return mem.deref(&.{
@@ -60,4 +64,13 @@ pub fn WriteEntityValue(entity: c.ENTITY, index: u32, offset: usize, comptime T:
 pub fn WriteEntityValueBytes(entity: c.ENTITY, index: u32, offset: usize, in: ?*anyopaque, len: usize) void {
     const address = deref_entity(entity, index, offset);
     _ = mem.write_bytes(address, in, len);
+}
+
+// SCREEN SPACE QUAD DRAWING
+
+pub fn InitNewQuad(spr: u32) u16 {
+    const i: u16 = mem.read(c.ADDR_QUAD_INITIALIZED_INDEX, u16);
+    f.swrQuad_InitQuad(i, spr);
+    _ = mem.write(c.ADDR_QUAD_INITIALIZED_INDEX, u16, i + 1);
+    return i;
 }

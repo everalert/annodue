@@ -87,6 +87,32 @@ fn HookTimerUpdate(memory: usize) usize {
     return mem.intercept_call(memory, 0x4459AF, &TimerUpdate_Before, &TimerUpdate_After);
 }
 
+// 'HANG' SETUP
+
+fn InitHangQuads_Before() void {}
+
+fn InitHangQuads_After() void {}
+
+fn HookInitHangQuads(memory: usize) usize {
+    // FIXME: implement after figuring out intercept_call_args
+    // call is at 0x454DD0
+    return memory;
+}
+
+// RACE SETUP
+
+fn InitRaceQuads_Before() void {}
+
+fn InitRaceQuads_After() void {}
+
+fn HookInitRaceQuads(memory: usize) usize {
+    // FIXME: the actual address, but having trouble hooking functions with args
+    //mem.intercept_call_args(memory, 0x466D79, &InitRaceQuads_Before, &InitRaceQuads_After);
+
+    // hooking this instead, a little further down
+    return mem.intercept_call(memory, 0x466DAF, &InitRaceQuads_Before, &InitRaceQuads_After);
+}
+
 // GAME END; executable closing
 
 fn GameEnd() void {
@@ -193,6 +219,8 @@ export fn Patch() void {
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
     off = HookTimerUpdate(off);
+    off = HookInitRaceQuads(off);
+    off = HookInitHangQuads(off);
     off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);

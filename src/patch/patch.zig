@@ -2,6 +2,7 @@ const std = @import("std");
 const win = std.os.windows;
 
 const settings = @import("settings.zig");
+const hook = @import("hook.zig");
 const global = @import("global.zig");
 const g = global.state;
 const multiplayer = @import("patch_multiplayer.zig");
@@ -39,7 +40,7 @@ fn GameLoop_Before() void {
 fn GameLoop_After() void {}
 
 fn HookGameLoop(memory: usize) usize {
-    return mem.intercept_call(memory, 0x49CE2A, &GameLoop_Before, &GameLoop_After);
+    return hook.intercept_call(memory, 0x49CE2A, &GameLoop_Before, &GameLoop_After);
 }
 
 // ENGINE UPDATES
@@ -63,13 +64,13 @@ fn HookEngineUpdate(memory: usize) usize {
 
     // fn_445980 case 1
     // physics updates, etc.
-    off = mem.intercept_call(off, 0x445991, &EarlyEngineUpdate_Before, null);
-    off = mem.intercept_call(off, 0x445A00, null, &EarlyEngineUpdate_After);
+    off = hook.intercept_call(off, 0x445991, &EarlyEngineUpdate_Before, null);
+    off = hook.intercept_call(off, 0x445A00, null, &EarlyEngineUpdate_After);
 
     // fn_445980 case 2
     // text processing, etc. before the actual render
-    off = mem.intercept_call(off, 0x445A10, &LateEngineUpdate_Before, null);
-    off = mem.intercept_call(off, 0x445A40, null, &LateEngineUpdate_After);
+    off = hook.intercept_call(off, 0x445A10, &LateEngineUpdate_Before, null);
+    off = hook.intercept_call(off, 0x445A40, null, &LateEngineUpdate_After);
 
     return off;
 }
@@ -84,7 +85,7 @@ fn TimerUpdate_After() void {
 
 fn HookTimerUpdate(memory: usize) usize {
     // fn_480540, in early engine update
-    return mem.intercept_call(memory, 0x4459AF, &TimerUpdate_Before, &TimerUpdate_After);
+    return hook.intercept_call(memory, 0x4459AF, &TimerUpdate_Before, &TimerUpdate_After);
 }
 
 // 'HANG' SETUP
@@ -110,7 +111,7 @@ fn HookInitRaceQuads(memory: usize) usize {
     //mem.intercept_call_args(memory, 0x466D79, &InitRaceQuads_Before, &InitRaceQuads_After);
 
     // hooking this instead, a little further down
-    return mem.intercept_call(memory, 0x466DAF, &InitRaceQuads_Before, &InitRaceQuads_After);
+    return hook.intercept_call(memory, 0x466DAF, &InitRaceQuads_Before, &InitRaceQuads_After);
 }
 
 // GAME END; executable closing
@@ -126,8 +127,8 @@ fn HookGameEnd(memory: usize) usize {
     const exit2_len: usize = 0x49CE48 - exit2_off - 1; // excluding retn
     var offset: usize = memory;
 
-    offset = mem.detour(offset, exit1_off, exit1_len, null, &GameEnd);
-    offset = mem.detour(offset, exit2_off, exit2_len, null, &GameEnd);
+    offset = hook.detour(offset, exit1_off, exit1_len, null, &GameEnd);
+    offset = hook.detour(offset, exit2_off, exit2_len, null, &GameEnd);
 
     return offset;
 }
@@ -174,16 +175,16 @@ fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
 
     // see fn_457620 @ 0x45777F
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, &MenuTitleScreen_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, &MenuStartRace_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, &MenuJunkyard_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, &MenuRaceResults_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, &MenuWattosShop_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, &MenuHangar_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, &MenuVehicleSelect_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, &MenuTrackSelect_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, &MenuTrack_Before);
-    off = mem.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, &MenuCantinaEntry_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, &MenuTitleScreen_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, &MenuStartRace_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, &MenuJunkyard_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, &MenuRaceResults_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, &MenuWattosShop_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, &MenuHangar_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, &MenuVehicleSelect_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, &MenuTrackSelect_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, &MenuTrack_Before);
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, &MenuCantinaEntry_Before);
 
     return off;
 }
@@ -197,7 +198,7 @@ fn TextRender_Before() void {
 }
 
 fn HookTextRender(memory: usize) usize {
-    return mem.intercept_call(memory, 0x483F8B, null, &TextRender_Before);
+    return hook.intercept_call(memory, 0x483F8B, null, &TextRender_Before);
 }
 
 // DO THE THING!!!

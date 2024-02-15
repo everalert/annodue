@@ -1,17 +1,7 @@
 pub const Self = @This();
 
 const std = @import("std");
-
-const VirtualProtect = std.os.windows.VirtualProtect;
-const VirtualAlloc = std.os.windows.VirtualAlloc;
-const VirtualFree = std.os.windows.VirtualFree;
-const MEM_COMMIT = std.os.windows.MEM_COMMIT;
-const MEM_RESERVE = std.os.windows.MEM_RESERVE;
-const MEM_RELEASE = std.os.windows.MEM_RELEASE;
-const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
-const DWORD = std.os.windows.DWORD;
-
-const ALIGN_SIZE: usize = 16;
+const win = std.os.windows;
 
 // TODO: experiment with unprotected/raw memory access without the bullshit
 // - switching to PAGE_EXECUTE_READWRITE is required
@@ -33,20 +23,20 @@ const ALIGN_SIZE: usize = 16;
 pub fn write(offset: usize, comptime T: type, value: T) usize {
     const addr: [*]align(1) T = @ptrFromInt(offset);
     const data: [1]T = [1]T{value};
-    var protect: DWORD = undefined;
-    _ = VirtualProtect(addr, @sizeOf(T), PAGE_EXECUTE_READWRITE, &protect) catch unreachable;
+    var protect: win.DWORD = undefined;
+    _ = win.VirtualProtect(addr, @sizeOf(T), win.PAGE_EXECUTE_READWRITE, &protect) catch unreachable;
     @memcpy(addr, &data);
-    _ = VirtualProtect(addr, @sizeOf(T), protect, &protect) catch unreachable;
+    _ = win.VirtualProtect(addr, @sizeOf(T), protect, &protect) catch unreachable;
     return offset + @sizeOf(T);
 }
 
 pub fn write_bytes(offset: usize, ptr_in: ?*anyopaque, len: usize) usize {
     const addr: [*]align(1) u8 = @ptrFromInt(offset);
     const data: []u8 = @as([*]u8, @ptrCast(ptr_in))[0..len];
-    var protect: DWORD = undefined;
-    _ = VirtualProtect(addr, len, PAGE_EXECUTE_READWRITE, &protect) catch unreachable;
+    var protect: win.DWORD = undefined;
+    _ = win.VirtualProtect(addr, len, win.PAGE_EXECUTE_READWRITE, &protect) catch unreachable;
     @memcpy(addr, data);
-    _ = VirtualProtect(addr, len, protect, &protect) catch unreachable;
+    _ = win.VirtualProtect(addr, len, protect, &protect) catch unreachable;
     return offset + len;
 }
 
@@ -263,65 +253,6 @@ pub fn jz(memory_offset: usize, address: usize) usize {
 
 pub fn retn(memory_offset: usize) usize {
     return write(memory_offset, u8, 0xC3);
-}
-
-pub fn addr_from_call(src_call: usize) usize {
-    const orig_dest_rel: i32 = read(src_call + 1, i32);
-    const orig_dest_abs: usize = @bitCast(@as(i32, @bitCast(src_call + 5)) + orig_dest_rel);
-    return orig_dest_abs;
-}
-
-pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
-    std.debug.assert(len >= 5);
-
-    const scr_alloc = MEM_COMMIT | MEM_RESERVE;
-    const scr_protect = PAGE_EXECUTE_READWRITE;
-    const scratch = VirtualAlloc(null, len, scr_alloc, scr_protect) catch unreachable;
-    defer VirtualFree(scratch, 0, MEM_RELEASE);
-    read_bytes(addr, scratch, len);
-
-    var off: usize = memory;
-
-    const off_hook: usize = call(addr, off);
-    _ = nop_until(off_hook, addr + len);
-
-    if (dest_before) |dest| off = call(off, @intFromPtr(dest));
-    off = write_bytes(off, scratch, len);
-    if (dest_after) |dest| off = call(off, @intFromPtr(dest));
-    off = retn(off);
-    off = nop_align(off, ALIGN_SIZE);
-
-    return off;
-}
-
-pub fn intercept_call(memory: usize, off_call: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
-    const call_target: usize = addr_from_call(off_call);
-
-    var off: usize = memory;
-
-    _ = call(off_call, off);
-
-    if (dest_before) |dest| off = call(off, @intFromPtr(dest));
-    off = call(off, call_target);
-    if (dest_after) |dest| off = call(off, @intFromPtr(dest));
-    off = retn(off);
-    off = nop_align(off, ALIGN_SIZE);
-
-    return off;
-}
-
-pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
-    const item_addr: usize = jt_addr + 4 * jt_idx;
-    const item_target: usize = read(item_addr, u32);
-    var off: usize = memory;
-
-    _ = write(item_addr, u32, off);
-
-    off = call(off, @intFromPtr(dest));
-    off = jmp(off, item_target);
-    off = nop_align(off, ALIGN_SIZE);
-
-    return off;
 }
 
 // FIXME: error handling/path validation

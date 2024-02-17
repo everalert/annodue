@@ -13,6 +13,7 @@ const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
 const mem = @import("util/memory.zig");
+const x86 = @import("util/x86.zig");
 
 // dumping ground for random features i guess
 
@@ -24,12 +25,12 @@ fn PatchDeathSpeed(min: f32, drop: f32) void {
 fn PatchHudTimerMs() void {
     const off_fnDrawTime3: usize = 0x450760;
     // hudDrawRaceHud
-    _ = mem.call(0x460BD3, off_fnDrawTime3);
-    _ = mem.call(0x460E6B, off_fnDrawTime3);
-    _ = mem.call(0x460ED9, off_fnDrawTime3);
+    _ = x86.call(0x460BD3, off_fnDrawTime3);
+    _ = x86.call(0x460E6B, off_fnDrawTime3);
+    _ = x86.call(0x460ED9, off_fnDrawTime3);
     // hudDrawRaceResults
-    _ = mem.call(0x46252F, off_fnDrawTime3);
-    _ = mem.call(0x462660, off_fnDrawTime3);
+    _ = x86.call(0x46252F, off_fnDrawTime3);
+    _ = x86.call(0x462660, off_fnDrawTime3);
     _ = mem.patch_add(0x4623D7, u8, 12);
     _ = mem.patch_add(0x4623F1, u8, 12);
     _ = mem.patch_add(0x46240B, u8, 12);

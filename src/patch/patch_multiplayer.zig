@@ -8,6 +8,7 @@ const settings = @import("settings.zig");
 const s = settings.state;
 
 const mem = @import("util/memory.zig");
+const x86 = @import("util/x86.zig");
 
 const VirtualAlloc = std.os.windows.VirtualAlloc;
 const VirtualFree = std.os.windows.VirtualFree;
@@ -77,21 +78,21 @@ fn DumpTextureTable(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8,
 
 fn PatchTextureTable(alloc: std.mem.Allocator, memory_offset: usize, table_offset: usize, code_begin_offset: usize, code_end_offset: usize, width: u32, height: u32, filename: []const u8) usize {
     var offset: usize = memory_offset;
-    offset = mem.nop_align(offset, 16);
+    offset = x86.nop_align(offset, 16);
 
     // Original code takes u8 dimension args, so we use our own code that takes u32
     const cave_memory_offset: usize = offset;
 
     // Patches the arguments for the texture loader
-    offset = mem.push_u32(offset, height);
-    offset = mem.push_u32(offset, width);
-    offset = mem.push_u32(offset, height);
-    offset = mem.push_u32(offset, width);
-    offset = mem.jmp(offset, code_end_offset);
+    offset = x86.push_u32(offset, height);
+    offset = x86.push_u32(offset, width);
+    offset = x86.push_u32(offset, height);
+    offset = x86.push_u32(offset, width);
+    offset = x86.jmp(offset, code_end_offset);
 
     // Detour original code to ours
-    var hack_offset: usize = mem.jmp(code_begin_offset, cave_memory_offset);
-    _ = mem.nop_until(hack_offset, code_end_offset);
+    var hack_offset: usize = x86.jmp(code_begin_offset, cave_memory_offset);
+    _ = x86.nop_until(hack_offset, code_end_offset);
 
     // Get number of textures in the table
     const count: u32 = mem.read(table_offset + 0, u32);
@@ -196,23 +197,23 @@ fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_he
 
     // Construct our code
     const off_upgrade_code: usize = offset;
-    offset = mem.push_edx(offset);
-    offset = mem.push_eax(offset);
-    offset = mem.push_u32(offset, off_up_hp);
-    offset = mem.push_u32(offset, off_up_lv);
-    offset = mem.push_esi(offset);
-    offset = mem.push_edi(offset);
-    offset = mem.call(offset, 0x449D00); // ???
-    offset = mem.add_esp8(offset, 0x10);
-    offset = mem.pop_eax(offset);
-    offset = mem.pop_edx(offset);
-    offset = mem.retn(offset);
+    offset = x86.push_edx(offset);
+    offset = x86.push_eax(offset);
+    offset = x86.push_u32(offset, off_up_hp);
+    offset = x86.push_u32(offset, off_up_lv);
+    offset = x86.push_esi(offset);
+    offset = x86.push_edi(offset);
+    offset = x86.call(offset, 0x449D00); // ???
+    offset = x86.add_esp8(offset, 0x10);
+    offset = x86.pop_eax(offset);
+    offset = x86.pop_edx(offset);
+    offset = x86.retn(offset);
 
     // Install it by jumping from 0x45B765 and returning to 0x45B76C
     var off_install: usize = 0x45B765;
-    off_install = mem.call(off_install, off_upgrade_code);
-    off_install = mem.nop(off_install);
-    off_install = mem.nop(off_install);
+    off_install = x86.call(off_install, off_upgrade_code);
+    off_install = x86.nop(off_install);
+    off_install = x86.nop(off_install);
 
     return offset;
 }
@@ -228,12 +229,12 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     const memory_offset_collision_code: usize = memory_offset;
 
     // Inject new code
-    offset = mem.push_edx(offset);
-    offset = mem.mov_edx(offset, 0x4D5E00); // _dword_4D5E00_is_multiplayer
-    offset = mem.test_edx_edx(offset);
-    offset = mem.pop_edx(offset);
-    offset = mem.jz(offset, 0x47B0C0);
-    offset = mem.retn(offset);
+    offset = x86.push_edx(offset);
+    offset = x86.mov_edx(offset, 0x4D5E00); // _dword_4D5E00_is_multiplayer
+    offset = x86.test_edx_edx(offset);
+    offset = x86.pop_edx(offset);
+    offset = x86.jz(offset, 0x47B0C0);
+    offset = x86.retn(offset);
 
     // Install it by patching call at 0x47B5AF
     _ = mem.write(0x47B5AF + 1, u32, memory_offset_collision_code - (0x47B5AF + 5));
@@ -317,8 +318,8 @@ fn PatchSpriteLoaderToLoadTga(memory_offset: usize) usize {
 
     // finish: Clear stack and return
     const offset_finish: usize = offset;
-    offset = mem.add_esp32(offset, 0x4 + 0x400);
-    offset = mem.retn(offset);
+    offset = x86.add_esp32(offset, 0x4 + 0x400);
+    offset = x86.retn(offset);
 
     // Start of actual code
     const offset_tga_loader_code: usize = offset;
@@ -331,33 +332,33 @@ fn PatchSpriteLoaderToLoadTga(memory_offset: usize) usize {
     offset = mem.write(offset, u8, 0x04);
 
     // Make room for sprintf buffer and keep the pointer in edx
-    offset = mem.add_esp32(offset, @bitCast(@as(i32, -0x400)));
-    offset = mem.mov_edx_esp(offset);
+    offset = x86.add_esp32(offset, @bitCast(@as(i32, -0x400)));
+    offset = x86.mov_edx_esp(offset);
 
     // Generate the path, keep sprite_index on stack as we'll keep using it
-    offset = mem.push_eax(offset); // (sprite_index)
-    offset = mem.push_u32(offset, offset_tga_path); // (fmt)
-    offset = mem.push_edx(offset); // (buffer)
-    offset = mem.call(offset, 0x49EB80); // sprintf
-    offset = mem.pop_edx(offset); // (buffer)
-    offset = mem.add_esp32(offset, 0x4);
+    offset = x86.push_eax(offset); // (sprite_index)
+    offset = x86.push_u32(offset, offset_tga_path); // (fmt)
+    offset = x86.push_edx(offset); // (buffer)
+    offset = x86.call(offset, 0x49EB80); // sprintf
+    offset = x86.pop_edx(offset); // (buffer)
+    offset = x86.add_esp32(offset, 0x4);
 
     // Attempt to load the TGA, then remove path from stack
-    offset = mem.push_edx(offset); // (buffer)
-    offset = mem.call(offset, 0x4114D0); // load_sprite_from_tga_and_add_loaded_sprite
-    offset = mem.add_esp32(offset, 0x4);
+    offset = x86.push_edx(offset); // (buffer)
+    offset = x86.call(offset, 0x4114D0); // load_sprite_from_tga_and_add_loaded_sprite
+    offset = x86.add_esp32(offset, 0x4);
 
     // Check if the load failed
-    offset = mem.test_eax_eax(offset);
-    offset = mem.jnz(offset, offset_load_success);
+    offset = x86.test_eax_eax(offset);
+    offset = x86.jnz(offset, offset_load_success);
 
     // Load failed, so load the original sprite (sprite-index still on stack)
-    offset = mem.call(offset, 0x446CA0); // load_sprite_internal
+    offset = x86.call(offset, 0x446CA0); // load_sprite_internal
 
-    offset = mem.jmp(offset, offset_finish);
+    offset = x86.jmp(offset, offset_finish);
 
     // Install it by jumping from 0x446FB0 (and we'll return directly)
-    _ = mem.jmp(0x446FB0, offset_tga_loader_code);
+    _ = x86.jmp(0x446FB0, offset_tga_loader_code);
 
     return offset;
 }
@@ -392,31 +393,31 @@ fn PatchTriggerDisplay(memory_offset: usize) usize {
     offset = mem.write(offset, u8, 0x24);
 
     // Make room for sprintf buffer and keep the pointer in edx
-    offset = mem.add_esp32(offset, @bitCast(@as(i32, -0x400))); // add    esp, -400h
-    offset = mem.mov_edx_esp(offset);
+    offset = x86.add_esp32(offset, @bitCast(@as(i32, -0x400))); // add    esp, -400h
+    offset = x86.mov_edx_esp(offset);
 
     // Generate the string we'll display
-    offset = mem.push_eax(offset); // (trigger index)
-    offset = mem.push_u32(offset, offset_trigger_string); // (fmt)
-    offset = mem.push_edx(offset); // (buffer)
-    offset = mem.call(offset, 0x49EB80); // sprintf
-    offset = mem.pop_edx(offset); // (buffer)
-    offset = mem.add_esp32(offset, 0x8);
+    offset = x86.push_eax(offset); // (trigger index)
+    offset = x86.push_u32(offset, offset_trigger_string); // (fmt)
+    offset = x86.push_edx(offset); // (buffer)
+    offset = x86.call(offset, 0x49EB80); // sprintf
+    offset = x86.pop_edx(offset); // (buffer)
+    offset = x86.add_esp32(offset, 0x8);
 
     // Display a message
-    offset = mem.push_u32(offset, @bitCast(trigger_string_display_duration));
-    offset = mem.push_edx(offset); // (buffer)
-    offset = mem.call(offset, 0x44FCE0);
-    offset = mem.add_esp32(offset, 0x8);
+    offset = x86.push_u32(offset, @bitCast(trigger_string_display_duration));
+    offset = x86.push_edx(offset); // (buffer)
+    offset = x86.call(offset, 0x44FCE0);
+    offset = x86.add_esp32(offset, 0x8);
 
     // Pop the string buffer off of the stack
-    offset = mem.add_esp32(offset, 0x400);
+    offset = x86.add_esp32(offset, 0x400);
 
     // Jump to the real function to run the trigger
-    offset = mem.jmp(offset, 0x47CE60);
+    offset = x86.jmp(offset, 0x47CE60);
 
     // Install it by replacing the call destination (we'll jump to the real one)
-    _ = mem.call(0x476E80, offset_trigger_code);
+    _ = x86.call(0x476E80, offset_trigger_code);
 
     return offset;
 }

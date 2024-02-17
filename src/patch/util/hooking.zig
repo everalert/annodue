@@ -3,6 +3,7 @@ pub const Self = @This();
 const std = @import("std");
 
 const mem = @import("memory.zig");
+const x86 = @import("x86.zig");
 
 pub const ALIGN_SIZE: usize = 16;
 pub const DETOUR_LIMIT: usize = 32;
@@ -26,16 +27,16 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
     var scratch: [DETOUR_LIMIT]u8 = undefined;
     mem.read_bytes(addr_detour, &scratch, len);
 
-    const off_hook: usize = mem.jmp(addr_detour, off);
-    _ = mem.nop_until(off_hook, addr_detour + len);
+    const off_hook: usize = x86.jmp(addr_detour, off);
+    _ = x86.nop_until(off_hook, addr_detour + len);
 
-    if (dest_before) |dest| off = mem.call(off, @intFromPtr(dest));
+    if (dest_before) |dest| off = x86.call(off, @intFromPtr(dest));
     off = mem.write_bytes(off, &scratch[0], off_call);
-    off = mem.call(off, call_target);
+    off = x86.call(off, call_target);
     off = mem.write_bytes(off, &scratch[off_call + 5], len - off_call - 5);
-    if (dest_after) |dest| off = mem.call(off, @intFromPtr(dest));
-    off = mem.jmp(off, addr_detour + len);
-    off = mem.nop_align(off, ALIGN_SIZE);
+    if (dest_after) |dest| off = x86.call(off, @intFromPtr(dest));
+    off = x86.jmp(off, addr_detour + len);
+    off = x86.nop_align(off, ALIGN_SIZE);
 
     return off;
 }
@@ -50,14 +51,14 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
 
     var off: usize = memory;
 
-    const off_hook: usize = mem.call(addr, off);
-    _ = mem.nop_until(off_hook, addr + len);
+    const off_hook: usize = x86.call(addr, off);
+    _ = x86.nop_until(off_hook, addr + len);
 
-    if (dest_before) |dest| off = mem.jmp(off, @intFromPtr(dest));
+    if (dest_before) |dest| off = x86.jmp(off, @intFromPtr(dest));
     off = mem.write_bytes(off, &scratch, len);
-    if (dest_after) |dest| off = mem.jmp(off, @intFromPtr(dest));
-    off = mem.retn(off);
-    off = mem.nop_align(off, ALIGN_SIZE);
+    if (dest_after) |dest| off = x86.jmp(off, @intFromPtr(dest));
+    off = x86.retn(off);
+    off = x86.nop_align(off, ALIGN_SIZE);
 
     return off;
 }
@@ -67,13 +68,13 @@ pub fn intercept_call(memory: usize, off_call: usize, dest_before: ?*const fn ()
 
     var off: usize = memory;
 
-    _ = mem.call(off_call, off);
+    _ = x86.call(off_call, off);
 
-    if (dest_before) |dest| off = mem.call(off, @intFromPtr(dest));
-    off = mem.call(off, call_target);
-    if (dest_after) |dest| off = mem.call(off, @intFromPtr(dest));
-    off = mem.retn(off);
-    off = mem.nop_align(off, ALIGN_SIZE);
+    if (dest_before) |dest| off = x86.call(off, @intFromPtr(dest));
+    off = x86.call(off, call_target);
+    if (dest_after) |dest| off = x86.call(off, @intFromPtr(dest));
+    off = x86.retn(off);
+    off = x86.nop_align(off, ALIGN_SIZE);
 
     return off;
 }
@@ -85,9 +86,9 @@ pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *co
 
     _ = mem.write(item_addr, u32, off);
 
-    off = mem.call(off, @intFromPtr(dest));
-    off = mem.jmp(off, item_target);
-    off = mem.nop_align(off, ALIGN_SIZE);
+    off = x86.call(off, @intFromPtr(dest));
+    off = x86.jmp(off, item_target);
+    off = x86.nop_align(off, ALIGN_SIZE);
 
     return off;
 }

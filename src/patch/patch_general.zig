@@ -13,6 +13,7 @@ const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
 const mem = @import("util/memory.zig");
+const msg = @import("util/message.zig");
 
 // dumping ground for random features i guess
 
@@ -113,5 +114,14 @@ pub fn EarlyEngineUpdate_Before() void {
 pub fn TextRender_Before() void {
     if (s.gen.get("rainbow_timer_enable", bool)) {
         PatchHudTimerColRotate();
+    }
+}
+
+pub fn SpriteLoading_Before(sprite: u32) void {
+    var buf: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "~f0~sLoading Sprite{d}", .{sprite}) catch unreachable;
+    rf.swrText_CreateEntry1(100, 200, 255, 255, 255, 190, &buf);
+    if (false) {
+        msg.Message("Sprite {d}", .{sprite}, "Sprites SWE1R...", .{});
     }
 }

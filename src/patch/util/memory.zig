@@ -76,6 +76,15 @@ pub fn add_rm32_imm8(memory_offset: usize, rm32: u8, imm8: u8) usize {
     return offset;
 }
 
+pub fn sub_rm32_imm8(memory_offset: usize, rm32: u8, imm8: i8) usize {
+    const imm8_u8: u8 = @bitCast(imm8);
+    var offset = memory_offset;
+    offset = write(offset, u8, 0x83);
+    offset = write(offset, u8, rm32);
+    offset = write(offset, u8, imm8_u8);
+    return offset;
+}
+
 pub fn add_esp8(memory_offset: usize, value: u8) usize {
     return add_rm32_imm8(memory_offset, 0xC4, value);
 }
@@ -131,8 +140,40 @@ pub fn mov_rm32_r32(memory_offset: usize, r32: u8) usize {
     return offset;
 }
 
+pub fn mov_eax_esp(memory_offset: usize) usize {
+    return mov_rm32_r32(memory_offset, 0xC4);
+}
+
 pub fn mov_edx_esp(memory_offset: usize) usize {
     return mov_rm32_r32(memory_offset, 0xE2);
+}
+
+// mov r32, [esp+<delta>]
+pub fn mov_r32_esp_add(memory_offset: usize, r32: u8, delta: i8) usize {
+    // values less than zero have the upper bit set
+    var delta_u8: u8 = @bitCast(delta);
+    var offset = memory_offset;
+    offset = write(offset, u8, 0x8B);
+    offset = write(offset, u8, r32);
+    offset = write(offset, u8, 0x24);
+    offset = write(offset, u8, delta_u8);
+    return offset;
+}
+
+pub fn mov_eax_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x44, delta);
+}
+
+pub fn mov_ebx_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x5C, delta);
+}
+
+pub fn mov_ecx_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x4C, delta);
+}
+
+pub fn mov_edx_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x54, delta);
 }
 
 pub fn nop(memory_offset: usize) usize {
@@ -152,6 +193,24 @@ pub fn nop_until(memory_offset: usize, end: usize) usize {
     while (offset < end) {
         offset = nop(offset);
     }
+    return offset;
+}
+
+pub fn save_esp(memory_offset: usize) usize {
+    var offset: usize = memory_offset;
+    // ; push ebp
+    // ; mov ebp, esp
+    offset = push_ebp(offset);
+    offset = mov_rm32_r32(offset, 0xE5);
+    return offset;
+}
+
+pub fn restore_esp(memory_offset: usize) usize {
+    var offset: usize = memory_offset;
+    // ; mov esp, ebp
+    // ; pop ebp
+    offset = mov_rm32_r32(offset, 0xEC);
+    offset = pop_ebp(offset);
     return offset;
 }
 
@@ -321,6 +380,32 @@ pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *co
     off = jmp(off, item_target);
     off = nop_align(off, ALIGN_SIZE);
 
+    return off;
+}
+
+fn call_one_u32_param(memory_offset: usize, address: usize) usize {
+    var offset = memory_offset;
+    offset = save_esp(offset);
+    offset = mov_eax_esp_add(offset, 0x08);
+    offset = push_eax(offset);
+    offset = call(offset, address);
+    offset = restore_esp(offset);
+    return offset;
+}
+
+pub fn intercept_call_one_u32_param(memory: usize, off_call: usize, dest_before: ?*const fn (u32) void) usize {
+    const call_target: usize = addr_from_call(off_call);
+    var off: usize = memory;
+
+    // redirect to this function entry
+    _ = call(off_call, off);
+
+    if (dest_before) |dest| off = call_one_u32_param(off, @intFromPtr(dest));
+    off = call_one_u32_param(off, call_target);
+
+    // exit this embedded function
+    off = retn(off);
+    off = nop_align(off, ALIGN_SIZE);
     return off;
 }
 

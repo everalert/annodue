@@ -10,13 +10,6 @@ const s = settings.state;
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-const VirtualAlloc = std.os.windows.VirtualAlloc;
-const VirtualFree = std.os.windows.VirtualFree;
-const MEM_COMMIT = std.os.windows.MEM_COMMIT;
-const MEM_RESERVE = std.os.windows.MEM_RESERVE;
-const MEM_RELEASE = std.os.windows.MEM_RELEASE;
-const PAGE_EXECUTE_READWRITE = std.os.windows.PAGE_EXECUTE_READWRITE;
-
 const MessageBoxA = user32.MessageBoxA;
 const MB_OK = user32.MB_OK;
 const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
@@ -42,10 +35,10 @@ fn DumpTexture(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, widt
 
     // Copy the pixel data
     const texture_size = width * height; // WARNING: w*h*4/8 in original patcher, but crashes here
-    var texture = VirtualAlloc(null, texture_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) catch unreachable; // FIXME: error handling
-    defer VirtualFree(texture, 0, MEM_RELEASE);
+    var texture = alloc.alloc(u8, texture_size) catch unreachable;
+    defer alloc.free(texture);
     const texture_slice = @as([*]u8, @ptrCast(texture))[0..texture_size];
-    mem.read_bytes(offset + 4, texture, texture_size);
+    mem.read_bytes(offset + 4, &texture[0], texture_size);
 
     // write rest of file
     const len: usize = width * height * 2;
@@ -64,10 +57,10 @@ fn DumpTextureTable(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8,
     const count: u32 = mem.read(offset + 0, u32); // NOTE: exe unnecessary, just read ram
 
     // Loop over elements and dump each
-    var offsets = VirtualAlloc(null, count * 4, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) catch unreachable; // FIXME: error handling
-    defer VirtualFree(offsets, 0, MEM_RELEASE);
+    var offsets = alloc.alloc(u8, count * 4) catch unreachable;
+    defer alloc.free(offsets);
     const offsets_slice = @as([*]align(1) u32, @ptrCast(offsets))[0..count];
-    mem.read_bytes(offset + 4, offsets, count * 4);
+    mem.read_bytes(offset + 4, &offsets[0], count * 4);
     var i: usize = 0;
     while (i < count) : (i += 1) {
         const filename_i = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}.ppm", .{ filename, i }) catch unreachable; // FIXME: error handling
@@ -99,8 +92,8 @@ fn PatchTextureTable(alloc: std.mem.Allocator, memory_offset: usize, table_offse
 
     // Have a buffer for pixeldata
     const texture_size: u32 = width * height * 4 / 8;
-    var buffer = VirtualAlloc(null, texture_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) catch unreachable; // FIXME: error handling
-    defer VirtualFree(buffer, 0, MEM_RELEASE);
+    var buffer = alloc.alloc(u8, texture_size) catch unreachable;
+    defer alloc.free(buffer);
     const buffer_slice = @as([*]u8, @ptrCast(buffer))[0..texture_size];
 
     // Loop over all textures
@@ -122,7 +115,7 @@ fn PatchTextureTable(alloc: std.mem.Allocator, memory_offset: usize, table_offse
 
         // Write pixel data to game
         const texture_new: usize = offset;
-        offset = mem.write_bytes(offset, buffer, texture_size);
+        offset = mem.write_bytes(offset, &buffer[0], texture_size);
 
         // Patch the table entry
         //const texture_old: usize = mem.read(table_offset + 4 + i * 4, u32);

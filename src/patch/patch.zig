@@ -1,18 +1,12 @@
 const std = @import("std");
-const win = std.os.windows;
 
 const hooking = @import("hook.zig");
 const settings = @import("settings.zig");
 const global = @import("global.zig");
-const g = global.state;
-const multiplayer = @import("patch_multiplayer.zig");
 const general = @import("patch_general.zig");
-const practice = @import("patch_practice.zig");
-const savestate = @import("patch_savestate.zig");
+const multiplayer = @import("patch_multiplayer.zig");
 
 const msg = @import("util/message.zig");
-const mem = @import("util/memory.zig");
-const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
@@ -29,12 +23,10 @@ const build: u32 = 0; // ??
 // DO THE THING!!!
 
 export fn Patch() void {
-    const mem_alloc = win.MEM_COMMIT | win.MEM_RESERVE;
-    const mem_protect = win.PAGE_EXECUTE_READWRITE;
-    const memory = win.VirtualAlloc(null, patch_size, mem_alloc, mem_protect) catch unreachable;
-    var off: usize = @intFromPtr(memory);
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
+    const memory = alloc.alloc(u8, patch_size) catch unreachable;
+    var off: usize = @intFromPtr(&memory[0]);
 
     // settings
 

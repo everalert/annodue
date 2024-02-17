@@ -1,7 +1,6 @@
 pub const Self = @This();
 
 const std = @import("std");
-const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const s = settings.state;
@@ -29,6 +28,8 @@ const rf = r.functions;
 // TODO: frame advance when scrubbing forward at the final recorded frame
 // TODO: figure out a way to persist states through a reset without messing
 // up the frame history
+// TODO: self-expanding frame memory for infinite recording time; likely need to split
+// the memory allocation for this
 
 const LoadState = enum(u32) {
     Recording,
@@ -38,7 +39,7 @@ const LoadState = enum(u32) {
 };
 
 const state = struct {
-    var state: LoadState = .Recording;
+    var rec_state: LoadState = .Recording;
     var initialized: bool = false;
     var frame: usize = 0;
     var frame_total: usize = 0;
@@ -62,7 +63,7 @@ const state = struct {
     const data_off: usize = stage_off + frame_size * 2;
 
     const memory_size: usize = 1024 * 1024 * 64; // 64MB
-    var memory: ?std.os.windows.LPVOID = null;
+    var memory: []u8 = undefined;
     var memory_addr: usize = undefined;
     var memory_end_addr: usize = undefined;
     var raw_offsets: [*]u8 = undefined;
@@ -98,15 +99,17 @@ const state = struct {
     var layer_index_count: usize = undefined;
 
     fn init() void {
-        const mem_alloc = win.MEM_COMMIT | win.MEM_RESERVE;
-        const mem_protect = win.PAGE_EXECUTE_READWRITE;
-        memory = win.VirtualAlloc(null, memory_size, mem_alloc, mem_protect) catch unreachable;
-        memory_addr = @intFromPtr(memory);
-        memory_end_addr = @intFromPtr(memory) + memory_size;
-        raw_offsets = @as([*]u8, @ptrCast(memory)) + offsets_off;
-        raw_headers = @as([*]u8, @ptrCast(memory)) + headers_off;
-        raw_stage = @as([*]u8, @ptrCast(memory)) + stage_off;
-        data = @as([*]u8, @ptrCast(memory)) + data_off;
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        const alloc = gpa.allocator();
+        memory = alloc.alloc(u8, memory_size) catch unreachable;
+        @memset(memory[0..memory_size], 0x00);
+
+        memory_addr = @intFromPtr(memory.ptr);
+        memory_end_addr = @intFromPtr(memory.ptr) + memory_size;
+        raw_offsets = memory.ptr + offsets_off;
+        raw_headers = memory.ptr + headers_off;
+        raw_stage = memory.ptr + stage_off;
+        data = memory.ptr + data_off;
         offsets = @as(@TypeOf(offsets), @ptrFromInt(memory_addr + offsets_off));
         headers = @as(@TypeOf(headers), @ptrFromInt(memory_addr + headers_off));
         stage = @as(@TypeOf(stage), @ptrFromInt(memory_addr + stage_off));
@@ -122,7 +125,7 @@ const state = struct {
         frame_total = 0;
         load_frame = 0;
         scrub_frame = 0;
-        @This().state = .Recording;
+        rec_state = .Recording;
     }
 
     // FIXME: better new-frame checking that doesn't only account for tabbing out
@@ -303,7 +306,7 @@ fn DoStateScrubExiting() LoadState {
 }
 
 fn UpdateState() void {
-    state.state = switch (state.state) {
+    state.rec_state = switch (state.rec_state) {
         .Recording => DoStateRecording(),
         .Loading => DoStateLoading(),
         .Scrubbing => DoStateScrubbing(),

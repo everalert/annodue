@@ -67,8 +67,8 @@ const race = struct {
         last_underheat_started_total = 0;
         last_overheat_started = 0;
         last_overheat_started_total = 0;
-        heat_rate = r.ReadEntityValue(.Test, 0, 0x8C, f32);
-        cool_rate = r.ReadEntityValue(.Test, 0, 0x90, f32);
+        heat_rate = r.ReadPlayerValue(0x8C, f32);
+        cool_rate = r.ReadPlayerValue(0x90, f32);
         const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
         upgrades_lv = u[0..7].*;
         upgrades_hp = u[7..14].*;
@@ -344,7 +344,7 @@ pub fn EarlyEngineUpdate_Before() void {
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
     if (g.in_race) {
-        const before_endrace: bool = r.ReadEntityValue(.Test, 0, 0x60, u32) & (1 << 5) > 0;
+        const before_endrace: bool = r.ReadPlayerValue(0x60, u32) & (1 << 5) > 0;
         if (before_endrace) menu_quickrace.update();
     }
 }
@@ -356,7 +356,7 @@ pub fn TextRender_Before() void {
         if (!g.was_in_race) race.reset();
         var buf: [127:0]u8 = undefined;
 
-        const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
+        const flags1: u32 = r.ReadPlayerValue(0x60, u32);
         const in_race_count: bool = (flags1 & (1 << 0)) > 0;
         const in_race_count_new: bool = race.was_in_race_count != in_race_count;
         race.was_in_race_count = in_race_count;
@@ -426,8 +426,8 @@ pub fn TextRender_Before() void {
             race.was_dead = dead;
             if (dead and dead_new) race.total_deaths += 1;
 
-            const heat: f32 = r.ReadEntityValue(.Test, 0, 0x218, f32);
-            const engine: [6]u32 = r.ReadEntityValue(.Test, 0, 0x2A0, [6]u32);
+            const heat: f32 = r.ReadPlayerValue(0x218, f32);
+            const engine: [6]u32 = r.ReadPlayerValue(0x2A0, [6]u32);
 
             const boosting: bool = (flags1 & (1 << 23)) > 0;
             const boosting_new: bool = race.was_boosting != boosting;

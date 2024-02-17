@@ -35,6 +35,36 @@ pub fn WriteRaceDataValueBytes(offset: usize, in: ?*anyopaque, len: usize) void 
     _ = mem.write_bytes(address, in, len);
 }
 
+// PLAYER TEST ENTITY
+
+fn deref_player(offset: usize) usize {
+    return mem.deref(&.{
+        c.ADDR_RACE_DATA,
+        0x84,
+        offset,
+    });
+}
+
+pub fn ReadPlayerValue(offset: usize, comptime T: type) T {
+    const address = deref_player(offset);
+    return mem.read(address, T);
+}
+
+pub fn ReadPlayerValueBytes(offset: usize, out: ?*anyopaque, len: usize) void {
+    const address = deref_player(offset);
+    mem.read_bytes(address, out, len);
+}
+
+pub fn WritePlayerValue(offset: usize, comptime T: type, value: T) void {
+    const address = deref_player(offset);
+    _ = mem.write(address, T, value);
+}
+
+pub fn WritePlayerValueBytes(offset: usize, in: ?*anyopaque, len: usize) void {
+    const address = deref_player(offset);
+    _ = mem.write_bytes(address, in, len);
+}
+
 // ENTITY SYSTEM
 
 fn deref_entity(entity: c.ENTITY, index: u32, offset: usize) usize {

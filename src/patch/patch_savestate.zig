@@ -203,7 +203,7 @@ const state = struct {
 
             const s1_base = raw_stage + frame_size;
             r.ReadRaceDataValueBytes(0, s1_base + off_race, rc.RACE_DATA_SIZE);
-            r.ReadEntityValueBytes(.Test, 0, 0, s1_base + off_test, rc.EntitySize(.Test));
+            r.ReadPlayerValueBytes(0, s1_base + off_test, rc.EntitySize(.Test));
             r.ReadEntityValueBytes(.Hang, 0, 0, s1_base + off_hang, rc.EntitySize(.Hang));
             r.ReadEntityValueBytes(.cMan, 0, 0, s1_base + off_cman, rc.EntitySize(.cMan));
 
@@ -222,7 +222,7 @@ const state = struct {
         } else {
             data_size = frame_size;
             r.ReadRaceDataValueBytes(0, data + off_race, rc.RACE_DATA_SIZE);
-            r.ReadEntityValueBytes(.Test, 0, 0, data + off_test, rc.EntitySize(.Test));
+            r.ReadPlayerValueBytes(0, data + off_test, rc.EntitySize(.Test));
             r.ReadEntityValueBytes(.Hang, 0, 0, data + off_hang, rc.EntitySize(.Hang));
             r.ReadEntityValueBytes(.cMan, 0, 0, data + off_cman, rc.EntitySize(.cMan));
         }
@@ -235,7 +235,7 @@ const state = struct {
 
         uncompress_frame(index, false);
         r.WriteRaceDataValueBytes(0, &raw_stage[off_race], rc.RACE_DATA_SIZE);
-        r.WriteEntityValueBytes(.Test, 0, 0, &raw_stage[off_test], rc.EntitySize(.Test));
+        r.WritePlayerValueBytes(0, &raw_stage[off_test], rc.EntitySize(.Test));
         r.WriteEntityValueBytes(.Hang, 0, 0, &raw_stage[off_hang], rc.EntitySize(.Hang));
         r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], rc.EntitySize(.cMan));
         frame = index + 1;
@@ -322,7 +322,7 @@ pub fn EarlyEngineUpdate_After() void {
 
     const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
     if (g.practice_mode and in_race) {
-        const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
+        const flags1: u32 = r.ReadPlayerValue(0x60, u32);
         const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
 
         if (is_racing) UpdateState() else state.reset();
@@ -334,7 +334,7 @@ pub fn TextRender_Before() void {
 
     const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
     if (g.practice_mode and in_race) {
-        const flags1: u32 = r.ReadEntityValue(.Test, 0, 0x60, u32);
+        const flags1: u32 = r.ReadPlayerValue(0x60, u32);
         const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
 
         if (is_racing) {

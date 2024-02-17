@@ -10,6 +10,7 @@ const win = std.os.windows;
 const settings = @import("settings.zig");
 const global = @import("global.zig");
 const g = global.state;
+const v = global.Version;
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 const savestate = @import("patch_savestate.zig");
@@ -21,10 +22,6 @@ const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
-
-const ver_major: u32 = 0;
-const ver_minor: u32 = 0;
-const ver_patch: u32 = 1;
 
 // FIXME: figure out exactly where the patch gets executed on load, for
 // documentation purposes
@@ -171,10 +168,11 @@ fn HookGameEnd(memory: usize) usize {
 
 fn MenuTitleScreen_Before() void {
     var buf_name: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf_name, "~F0~sAnnodue {d}.{d}.{d}", .{
-        ver_major,
-        ver_minor,
-        ver_patch,
+    _ = std.fmt.bufPrintZ(&buf_name, "~F0~sAnnodue {d}.{d}.{d}    {d}", .{
+        v.major,
+        v.minor,
+        v.patch,
+        v.build,
     }) catch return;
     rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf_name);
 

@@ -19,6 +19,26 @@ const win32wm = win32.ui.windows_and_messaging;
 const KS_DOWN: i16 = -1;
 const KS_PRESSED: i16 = 1; // since last call
 
+// VERSION
+
+const VersionTag = enum(u32) {
+    None,
+    Alpha,
+    Beta,
+    ReleaseCandidate,
+};
+
+pub const Version = struct {
+    pub const major: u32 = 0;
+    pub const minor: u32 = 0;
+    pub const patch: u32 = 1;
+    pub const tag_type: VersionTag = .None;
+    pub const tag_no: u32 = 0;
+    pub const build: u32 = 76; // based on git commits
+};
+
+// STATE
+
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
 pub const state = struct {
     pub var initialized_late: bool = false;

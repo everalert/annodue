@@ -3,6 +3,7 @@ const std = @import("std");
 const hooking = @import("hook.zig");
 const settings = @import("settings.zig");
 const global = @import("global.zig");
+const v = global.Version;
 const general = @import("patch_general.zig");
 const multiplayer = @import("patch_multiplayer.zig");
 
@@ -14,11 +15,6 @@ const rf = @import("util/racer_fn.zig");
 // STATE
 
 const patch_size: u32 = 4 * 1024 * 1024; // 4MB
-
-const ver_major: u32 = 0;
-const ver_minor: u32 = 0;
-const ver_patch: u32 = 1;
-const build: u32 = 0; // ??
 
 // DO THE THING!!!
 
@@ -42,10 +38,11 @@ export fn Patch() void {
     // debug
 
     if (false) {
-        msg.Message("Annodue {d}.{d}.{d}", .{
-            ver_major,
-            ver_minor,
-            ver_patch,
+        msg.Message("Annodue {d}.{d}.{d} ({d})", .{
+            v.major,
+            v.minor,
+            v.patch,
+            v.build,
         }, "Patching SWE1R...", .{});
     }
 }

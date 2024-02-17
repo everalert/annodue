@@ -174,6 +174,15 @@ fn HookTextRender(memory: usize) usize {
     return mem.intercept_call(memory, 0x483F8B, null, &TextRender_Before);
 }
 
+// Texture intercepts
+fn SpriteLoading_Before(sprite: u32) void {
+    general.SpriteLoading_Before(sprite);
+}
+
+fn HookSpriteLoading(memory: usize) usize {
+    return mem.intercept_call_one_u32_param(memory, 0x446FB5, &SpriteLoading_Before);
+}
+
 // DO THE THING!!!
 
 export fn Patch() void {
@@ -196,6 +205,7 @@ export fn Patch() void {
     off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+    off = HookSpriteLoading(off);
 
     // init
 

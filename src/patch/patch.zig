@@ -95,9 +95,10 @@ fn InitHangQuads_Before() void {}
 fn InitHangQuads_After() void {}
 
 fn HookInitHangQuads(memory: usize) usize {
-    // FIXME: implement after figuring out intercept_call_args
-    // call is at 0x454DD0
-    return memory;
+    const addr: usize = 0x454DCF;
+    const len: usize = 0x454DD8 - addr;
+    const off_call: usize = 0x454DD0 - addr;
+    return hook.detour_call(memory, addr, off_call, len, &InitHangQuads_Before, &InitHangQuads_After);
 }
 
 // RACE SETUP
@@ -107,11 +108,10 @@ fn InitRaceQuads_Before() void {}
 fn InitRaceQuads_After() void {}
 
 fn HookInitRaceQuads(memory: usize) usize {
-    // FIXME: the actual address, but having trouble hooking functions with args
-    //mem.intercept_call_args(memory, 0x466D79, &InitRaceQuads_Before, &InitRaceQuads_After);
-
-    // hooking this instead, a little further down
-    return hook.intercept_call(memory, 0x466DAF, &InitRaceQuads_Before, &InitRaceQuads_After);
+    const addr: usize = 0x466D76;
+    const len: usize = 0x466D81 - addr;
+    const off_call: usize = 0x466D79 - addr;
+    return hook.detour_call(memory, addr, off_call, len, &InitRaceQuads_Before, &InitRaceQuads_After);
 }
 
 // GAME END; executable closing

@@ -26,12 +26,16 @@ const ver_major: u32 = 0;
 const ver_minor: u32 = 0;
 const ver_patch: u32 = 1;
 
+// FIXME: figure out exactly where the patch gets executed on load, for
+// documentation purposes
+
 // SETUP
 
 pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     _ = alloc;
     var off: usize = memory;
 
+    off = HookGameSetup(off);
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
     off = HookTimerUpdate(off);
@@ -44,16 +48,27 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     return off;
 }
 
-// GAME LOOP
+// GAME SETUP
 
-fn GameLoop_Before() void {
-    input.update_kb();
-
-    // FIXME: probably move this to before the game loop starts
+fn GameSetup() void {
     if (!g.initialized_late) {
         general.init_late();
         g.initialized_late = true;
     }
+}
+
+// last function call in successful setup path
+fn HookGameSetup(memory: usize) usize {
+    const addr: usize = 0x4240AD;
+    const len: usize = 0x4240B7 - addr;
+    const off_call: usize = 0x4240AF - addr;
+    return hook.detour_call(memory, addr, off_call, len, null, &GameSetup);
+}
+
+// GAME LOOP
+
+fn GameLoop_Before() void {
+    input.update_kb();
 }
 
 fn GameLoop_After() void {}

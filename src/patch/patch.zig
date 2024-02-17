@@ -26,7 +26,7 @@ export fn Patch() void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
     const memory = alloc.alloc(u8, patch_size) catch unreachable;
-    var off: usize = @intFromPtr(&memory[0]);
+    var off: usize = @intFromPtr(memory.ptr);
 
     // settings
 

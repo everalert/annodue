@@ -7,7 +7,8 @@ const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const settings = @import("settings.zig");
 const s = settings.state;
-const g = @import("global.zig").state;
+const global = @import("global.zig");
+const g = global.state;
 
 const menu = @import("util/menu.zig");
 const msg = @import("util/message.zig");
@@ -244,13 +245,13 @@ const menu_quickrace = struct {
     }
 
     fn open() void {
-        g.Freeze.freeze();
+        global.Freeze.freeze();
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
-        g.Freeze.unfreeze();
+        global.Freeze.unfreeze();
         _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
         menu_active = false;
     }

@@ -37,6 +37,17 @@ pub const Version = struct {
     pub const build: u32 = 76; // based on git commits
 };
 
+// TODO: include tag when appropriate
+pub const VersionStr: [:0]u8 = s: {
+    var buf: [127:0]u8 = undefined;
+    break :s std.fmt.bufPrintZ(&buf, "Annodue {d}.{d}.{d}.{d}", .{
+        Version.major,
+        Version.minor,
+        Version.patch,
+        Version.build,
+    }) catch unreachable;
+};
+
 // STATE
 
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup

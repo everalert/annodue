@@ -10,7 +10,6 @@ const win = std.os.windows;
 const settings = @import("settings.zig");
 const global = @import("global.zig");
 const g = global.state;
-const v = global.Version;
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 const savestate = @import("patch_savestate.zig");
@@ -167,14 +166,9 @@ fn HookGameEnd(memory: usize) usize {
 // MENU DRAW CALLS in 'Hang' callback0x14
 
 fn MenuTitleScreen_Before() void {
-    var buf_name: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf_name, "~F0~sAnnodue {d}.{d}.{d}    {d}", .{
-        v.major,
-        v.minor,
-        v.patch,
-        v.build,
-    }) catch return;
-    rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf_name);
+    var buf: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{global.VersionStr}) catch return;
+    rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf);
 
     global.MenuTitleScreen_Before();
 }

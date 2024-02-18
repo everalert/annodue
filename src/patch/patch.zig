@@ -3,7 +3,6 @@ const std = @import("std");
 const hooking = @import("hook.zig");
 const settings = @import("settings.zig");
 const global = @import("global.zig");
-const v = global.Version;
 const general = @import("patch_general.zig");
 const multiplayer = @import("patch_multiplayer.zig");
 
@@ -38,11 +37,6 @@ export fn Patch() void {
     // debug
 
     if (false) {
-        msg.Message("Annodue {d}.{d}.{d} ({d})", .{
-            v.major,
-            v.minor,
-            v.patch,
-            v.build,
-        }, "Patching SWE1R...", .{});
+        msg.Message("{s}", .{global.VersionStr}, "Patching SWE1R...", .{});
     }
 }

@@ -119,6 +119,12 @@ fn DrawMenuPracticeModeLabel() void {
     }
 }
 
+fn DrawVersionString() void {
+    var buf: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{VersionStr}) catch return;
+    rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf);
+}
+
 // INIT
 
 pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
@@ -153,6 +159,7 @@ pub fn TimerUpdate_After() void {
 }
 
 pub fn MenuTitleScreen_Before() void {
+    DrawVersionString();
     DrawMenuPracticeModeLabel();
 }
 

@@ -22,13 +22,47 @@ const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
-// FIXME: figure out exactly where the patch gets executed on load, for
-// documentation purposes
+// FIXME: figure out exactly where the patch gets executed on load (i.e. where
+// the 'early init' happens), for documentation purposes
+
+// OKOKOKOKOK
+
+const FnMapType = std.StringHashMap(*const fn () void);
+
+const HookFn = struct {
+    var Init: FnMapType = undefined;
+    var InitLate: FnMapType = undefined;
+    var Deinit: FnMapType = undefined;
+    var GameSetup: FnMapType = undefined;
+    var GameLoopBefore: FnMapType = undefined;
+    var GameLoopAfter: FnMapType = undefined;
+    var EarlyEngineUpdateBefore: FnMapType = undefined;
+    var EarlyEngineUpdateAfter: FnMapType = undefined;
+    var LateEngineUpdateBefore: FnMapType = undefined;
+    var LateEngineUpdateAfter: FnMapType = undefined;
+    var TimerUpdateBefore: FnMapType = undefined;
+    var TimerUpdateAfter: FnMapType = undefined;
+    //var InitHangQuadsBefore: FnMapType = undefined;
+    var InitHangQuadsAfter: FnMapType = undefined;
+    //var InitRaceQuadsBefore: FnMapType = undefined;
+    var InitRaceQuadsAfter: FnMapType = undefined;
+    var GameEnd: FnMapType = undefined;
+    var MenuTitleScreenBefore: FnMapType = undefined;
+    var MenuStartRaceBefore: FnMapType = undefined;
+    var MenuJunkyardBefore: FnMapType = undefined;
+    var MenuRaceResultsBefore: FnMapType = undefined;
+    var MenuWattosShopBefore: FnMapType = undefined;
+    var MenuHangarBefore: FnMapType = undefined;
+    var MenuVehicleSelectBefore: FnMapType = undefined;
+    var MenuTrackSelectBefore: FnMapType = undefined;
+    var MenuTrackBefore: FnMapType = undefined;
+    var MenuCantinaEntryBefore: FnMapType = undefined;
+    var TextRenderBefore: FnMapType = undefined;
+};
 
 // SETUP
 
 pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
-    _ = alloc;
     var off: usize = memory;
 
     off = HookGameSetup(off);
@@ -41,6 +75,42 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
 
+    HookFn.Init = FnMapType.init(alloc);
+    HookFn.InitLate = FnMapType.init(alloc);
+    HookFn.InitLate.put("general", &general.init_late) catch unreachable;
+    HookFn.Deinit = FnMapType.init(alloc);
+    HookFn.GameSetup = FnMapType.init(alloc);
+    HookFn.GameLoopBefore = FnMapType.init(alloc);
+    HookFn.GameLoopAfter = FnMapType.init(alloc);
+    HookFn.EarlyEngineUpdateBefore = FnMapType.init(alloc);
+    HookFn.EarlyEngineUpdateBefore.put("general", &general.EarlyEngineUpdate_Before) catch unreachable;
+    HookFn.EarlyEngineUpdateBefore.put("practice", &practice.EarlyEngineUpdate_Before) catch unreachable;
+    HookFn.EarlyEngineUpdateAfter = FnMapType.init(alloc);
+    HookFn.EarlyEngineUpdateAfter.put("savestate", &savestate.EarlyEngineUpdate_After) catch unreachable;
+    HookFn.LateEngineUpdateBefore = FnMapType.init(alloc);
+    HookFn.LateEngineUpdateAfter = FnMapType.init(alloc);
+    HookFn.TimerUpdateBefore = FnMapType.init(alloc);
+    HookFn.TimerUpdateAfter = FnMapType.init(alloc);
+    //HookFn.InitHangQuadsBefore = FnMapType.init(alloc);
+    HookFn.InitHangQuadsAfter = FnMapType.init(alloc);
+    //HookFn.InitRaceQuadsBefore = FnMapType.init(alloc);
+    HookFn.InitRaceQuadsAfter = FnMapType.init(alloc);
+    HookFn.GameEnd = FnMapType.init(alloc);
+    HookFn.MenuTitleScreenBefore = FnMapType.init(alloc);
+    HookFn.MenuStartRaceBefore = FnMapType.init(alloc);
+    HookFn.MenuJunkyardBefore = FnMapType.init(alloc);
+    HookFn.MenuRaceResultsBefore = FnMapType.init(alloc);
+    HookFn.MenuWattosShopBefore = FnMapType.init(alloc);
+    HookFn.MenuHangarBefore = FnMapType.init(alloc);
+    HookFn.MenuVehicleSelectBefore = FnMapType.init(alloc);
+    HookFn.MenuTrackSelectBefore = FnMapType.init(alloc);
+    HookFn.MenuTrackBefore = FnMapType.init(alloc);
+    HookFn.MenuCantinaEntryBefore = FnMapType.init(alloc);
+    HookFn.TextRenderBefore = FnMapType.init(alloc);
+    HookFn.TextRenderBefore.put("general", &general.TextRender_Before) catch unreachable;
+    HookFn.TextRenderBefore.put("practice", &practice.TextRender_Before) catch unreachable;
+    HookFn.TextRenderBefore.put("savestate", &savestate.TextRender_Before) catch unreachable;
+
     return off;
 }
 
@@ -48,9 +118,12 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
 fn GameSetup() void {
     if (!g.initialized_late) {
-        general.init_late();
+        var it = HookFn.InitLate.valueIterator();
+        while (it.next()) |f| f.*();
         g.initialized_late = true;
     }
+    var it = HookFn.GameSetup.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
 // last function call in successful setup path
@@ -65,9 +138,14 @@ fn HookGameSetup(memory: usize) usize {
 
 fn GameLoop_Before() void {
     input.update_kb();
+    var it = HookFn.GameLoopBefore.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
-fn GameLoop_After() void {}
+fn GameLoop_After() void {
+    var it = HookFn.GameLoopAfter.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn HookGameLoop(memory: usize) usize {
     return hook.intercept_call(memory, 0x49CE2A, &GameLoop_Before, &GameLoop_After);
@@ -76,18 +154,25 @@ fn HookGameLoop(memory: usize) usize {
 // ENGINE UPDATES
 
 fn EarlyEngineUpdate_Before() void {
-    general.EarlyEngineUpdate_Before();
-    practice.EarlyEngineUpdate_Before();
+    var it = HookFn.EarlyEngineUpdateBefore.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
 fn EarlyEngineUpdate_After() void {
     global.EarlyEngineUpdate_After();
-    savestate.EarlyEngineUpdate_After();
+    var it = HookFn.EarlyEngineUpdateAfter.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
-fn LateEngineUpdate_Before() void {}
+fn LateEngineUpdate_Before() void {
+    var it = HookFn.LateEngineUpdateBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
-fn LateEngineUpdate_After() void {}
+fn LateEngineUpdate_After() void {
+    var it = HookFn.LateEngineUpdateAfter.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn HookEngineUpdate(memory: usize) usize {
     var off: usize = memory;
@@ -107,10 +192,15 @@ fn HookEngineUpdate(memory: usize) usize {
 
 // GAME LOOP TIMER
 
-fn TimerUpdate_Before() void {}
+fn TimerUpdate_Before() void {
+    var it = HookFn.TimerUpdateBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn TimerUpdate_After() void {
     global.TimerUpdate_After();
+    var it = HookFn.TimerUpdateAfter.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
 fn HookTimerUpdate(memory: usize) usize {
@@ -120,33 +210,52 @@ fn HookTimerUpdate(memory: usize) usize {
 
 // 'HANG' SETUP
 
-fn InitHangQuads_Before() void {}
+// NOTE: disabling to match RaceQuads
+fn InitHangQuads_Before() void {
+    var it = HookFn.InitHangQuadsBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
-fn InitHangQuads_After() void {}
+fn InitHangQuads_After() void {
+    var it = HookFn.InitHangQuadsAfter.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn HookInitHangQuads(memory: usize) usize {
     const addr: usize = 0x454DCF;
     const len: usize = 0x454DD8 - addr;
     const off_call: usize = 0x454DD0 - addr;
-    return hook.detour_call(memory, addr, off_call, len, &InitHangQuads_Before, &InitHangQuads_After);
+    return hook.detour_call(memory, addr, off_call, len, null, &InitHangQuads_After);
 }
 
 // RACE SETUP
 
-fn InitRaceQuads_Before() void {}
+// FIXME: crashes when hooked with any function contents; disabling for now
+fn InitRaceQuads_Before() void {
+    var it = HookFn.InitRaceQuadsBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
-fn InitRaceQuads_After() void {}
+fn InitRaceQuads_After() void {
+    var it = HookFn.InitRaceQuadsAfter.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn HookInitRaceQuads(memory: usize) usize {
     const addr: usize = 0x466D76;
     const len: usize = 0x466D81 - addr;
     const off_call: usize = 0x466D79 - addr;
-    return hook.detour_call(memory, addr, off_call, len, &InitRaceQuads_Before, &InitRaceQuads_After);
+    return hook.detour_call(memory, addr, off_call, len, null, &InitRaceQuads_After);
 }
 
 // GAME END; executable closing
 
 fn GameEnd() void {
+    var it_e = HookFn.GameEnd.valueIterator();
+    while (it_e.next()) |f| f.*();
+
+    var it_d = HookFn.InitLate.valueIterator();
+    while (it_d.next()) |f| f.*();
     settings.deinit();
 }
 
@@ -166,36 +275,58 @@ fn HookGameEnd(memory: usize) usize {
 // MENU DRAW CALLS in 'Hang' callback0x14
 
 fn MenuTitleScreen_Before() void {
-    var buf: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{global.VersionStr}) catch return;
-    rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf);
-
     global.MenuTitleScreen_Before();
+    var it = HookFn.MenuTitleScreenBefore.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
-fn MenuVehicleSelect_Before() void {}
+fn MenuVehicleSelect_Before() void {
+    var it = HookFn.MenuVehicleSelectBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn MenuStartRace_Before() void {
     global.MenuStartRace_Before();
+    var it = HookFn.MenuStartRaceBefore.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
-fn MenuJunkyard_Before() void {}
+fn MenuJunkyard_Before() void {
+    var it = HookFn.MenuJunkyardBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn MenuRaceResults_Before() void {
     global.MenuRaceResults_Before();
+    var it = HookFn.MenuRaceResultsBefore.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
-fn MenuWattosShop_Before() void {}
+fn MenuWattosShop_Before() void {
+    var it = HookFn.MenuWattosShopBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
-fn MenuHangar_Before() void {}
+fn MenuHangar_Before() void {
+    var it = HookFn.MenuHangarBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
-fn MenuTrackSelect_Before() void {}
+fn MenuTrackSelect_Before() void {
+    var it = HookFn.MenuTrackSelectBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn MenuTrack_Before() void {
     global.MenuTrack_Before();
+    var it = HookFn.MenuTrackBefore.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
-fn MenuCantinaEntry_Before() void {}
+fn MenuCantinaEntry_Before() void {
+    var it = HookFn.MenuCantinaEntryBefore.valueIterator();
+    while (it.next()) |f| f.*();
+}
 
 fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
@@ -218,9 +349,8 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn TextRender_Before() void {
-    general.TextRender_Before();
-    practice.TextRender_Before();
-    savestate.TextRender_Before();
+    var it = HookFn.TextRenderBefore.valueIterator();
+    while (it.next()) |f| f.*();
 }
 
 fn HookTextRender(memory: usize) usize {

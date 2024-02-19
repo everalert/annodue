@@ -31,7 +31,7 @@ const Hook = enum(u32) {
     Init,
     InitLate,
     Deinit,
-    GameSetup,
+    //GameSetup,
     GameLoopBefore,
     GameLoopAfter,
     EarlyEngineUpdateBefore,
@@ -58,9 +58,11 @@ const Hook = enum(u32) {
     TextRenderBefore,
 };
 
+// TODO: pass in 'initialized' as argument
 const HookFnType = std.StringHashMap(*const fn () void);
 
 const HookFnSet = struct {
+    initialized: bool,
     core: HookFnType,
     plugin: HookFnType,
 };
@@ -78,6 +80,7 @@ inline fn HookFnCallback(hk: Hook) *const fn () void {
             while (it_core.next()) |f| f.*();
             var it_plugin = map.plugin.valueIterator();
             while (it_plugin.next()) |f| f.*();
+            map.initialized = true;
         }
     };
     return &c.callback;
@@ -87,13 +90,12 @@ inline fn HookFnCallbackN(hk: []Hook) *const fn () void {
     const c = struct {
         fn callback() void {
             inline for (hk) |h| {
-                const map = struct {
-                    const map: *HookFnSet = HookFn.data.getPtr(h);
-                };
+                const map: *HookFnSet = comptime HookFn.data.getPtr(h);
                 var it_core = map.map.core.valueIterator();
                 while (it_core.next()) |f| f.*();
                 var it_plugin = map.map.plugin.valueIterator();
                 while (it_plugin.next()) |f| f.*();
+                map.map.initialized = true;
             }
         }
     };
@@ -111,13 +113,14 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookTimerUpdate(off);
     off = HookInitRaceQuads(off);
     off = HookInitHangQuads(off);
-    //off = HookGameEnd(off);
+    off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
 
     var it_set = HookFn.data.iterator();
     while (it_set.next()) |set| {
         HookFn.data.set(set.key, .{
+            .initialized = false,
             .core = HookFnType.init(alloc),
             .plugin = HookFnType.init(alloc),
         });
@@ -128,6 +131,9 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     map = &HookFn.data.getPtr(.InitLate).plugin;
     map.put("general", &general.init_late) catch unreachable;
+
+    map = &HookFn.data.getPtr(.Deinit).core;
+    map.put("settings", &settings.deinit) catch unreachable;
 
     map = &HookFn.data.getPtr(.GameLoopBefore).core;
     map.put("input", &input.update_kb) catch unreachable;
@@ -169,22 +175,12 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
 // GAME SETUP
 
-fn GameSetup() void {
-    if (!g.initialized_late) {
-        var it = HookFn.data.getPtr(.InitLate).plugin.valueIterator();
-        while (it.next()) |f| f.*();
-        g.initialized_late = true;
-    }
-    var it = HookFn.data.getPtr(.GameSetup).plugin.valueIterator();
-    while (it.next()) |f| f.*();
-}
-
 // last function call in successful setup path
 fn HookGameSetup(memory: usize) usize {
     const addr: usize = 0x4240AD;
     const len: usize = 0x4240B7 - addr;
     const off_call: usize = 0x4240AF - addr;
-    return hook.detour_call(memory, addr, off_call, len, null, &GameSetup);
+    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitLate));
 }
 
 // GAME LOOP
@@ -250,18 +246,11 @@ fn HookInitRaceQuads(memory: usize) usize {
 
 // GAME END; executable closing
 
-// FIXME: with this hooked, process hangs on exit since adding array-indexed
-// callback hashmaps, but maybe just bad hook to begin with (had the sense that
-// it was actually crashing even before this)
-fn GameEnd() void {
-    var it_e = HookFn.data.getPtr(.GameEnd).plugin.valueIterator();
-    while (it_e.next()) |f| f.*();
-
-    var it_d = HookFn.data.getPtr(.InitLate).plugin.valueIterator();
-    while (it_d.next()) |f| f.*();
-    settings.deinit();
-}
-
+// FIXME: probably just switch to fn_4240D0 (GameShutdown), not sure if hook should
+// be before or after the function contents (or both); might want to make available
+// opportunity to intercept e.g. the final savedata write
+// WARNING: in the current scheme, core deinit happens before plugin deinit, keep this
+// hook location as a stage2 or core-only deinit and use above for arbitrary deinit?
 fn HookGameEnd(memory: usize) usize {
     const exit1_off: usize = 0x49CE31;
     const exit2_off: usize = 0x49CE3D;
@@ -269,8 +258,8 @@ fn HookGameEnd(memory: usize) usize {
     const exit2_len: usize = 0x49CE48 - exit2_off - 1; // excluding retn
     var offset: usize = memory;
 
-    offset = hook.detour(offset, exit1_off, exit1_len, null, &GameEnd);
-    offset = hook.detour(offset, exit2_off, exit2_len, null, &GameEnd);
+    offset = hook.detour(offset, exit1_off, exit1_len, null, HookFnCallback(.Deinit));
+    offset = hook.detour(offset, exit2_off, exit2_len, null, HookFnCallback(.Deinit));
 
     return offset;
 }

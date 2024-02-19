@@ -46,6 +46,21 @@ pub const ADDR_DRAW_MENU_JUMPTABLE_SCENE_3: usize = 0x457AD4;
 pub const ADDR_RACE_DATA: usize = 0x4D78A4;
 pub const RACE_DATA_SIZE: usize = 0x88;
 
+// Text
+
+pub const TEXT_COLOR_PRESET = [10]u32{
+    0x000000, // (black)
+    0xFFFFFF, // (white)
+    0x6EB4FF, // (blue)
+    0xFFFF9C, // (yellow)
+    0x96FF96, // (green)
+    0xFF6450, // (red)
+    0xBC865E, // (brown)
+    0x6E6E80, // (indigo-ish)
+    0xFFA7D1, // (pink)
+    0x985EFF, // (purple)
+};
+
 // Quad (screenspace drawing)
 
 pub const ADDR_QUAD_INITIALIZED_INDEX: usize = 0x4B91B8;

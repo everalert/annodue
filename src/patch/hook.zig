@@ -107,6 +107,9 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map = HookFn.data.getPtr(.EarlyEngineUpdateAfter);
     map.put("savestate", &savestate.EarlyEngineUpdate_After) catch unreachable;
 
+    map = HookFn.data.getPtr(.InitRaceQuadsAfter);
+    map.put("practice", &practice.InitRaceQuads_After) catch unreachable;
+
     map = HookFn.data.getPtr(.TextRenderBefore);
     map.put("general", &general.TextRender_Before) catch unreachable;
     map.put("practice", &practice.TextRender_Before) catch unreachable;

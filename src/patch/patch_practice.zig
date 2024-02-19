@@ -270,6 +270,49 @@ const menu_quickrace = struct {
     }
 };
 
+const mode_vis = struct {
+    const scale: f32 = 0.35;
+    const x_rt: u16 = 640 - @round(32 * scale);
+    const y_bt: u16 = 480 - @round(32 * scale);
+    var spr: u32 = undefined;
+    var tl: u16 = undefined;
+    var tr: u16 = undefined;
+    var bl: u16 = undefined;
+    var br: u16 = undefined;
+
+    fn init() void {
+        spr = rf.swrQuad_LoadTga("annodue/images/corner_round_32.tga", 8000);
+        init_single(&tl, false, false);
+        init_single(&tr, false, true);
+        init_single(&bl, true, false);
+        init_single(&br, true, true);
+    }
+
+    fn init_single(id: *u16, bt: bool, rt: bool) void {
+        id.* = r.InitNewQuad(spr);
+        //rf.swrQuad_SetActive(id.*, 1);
+        rf.swrQuad_SetFlags(id.*, 1 << 15 | 1 << 16);
+        if (rt) rf.swrQuad_SetFlags(id.*, 1 << 2);
+        if (!bt) rf.swrQuad_SetFlags(id.*, 1 << 3);
+        rf.swrQuad_SetColor(id.*, 0xFF, 0xFF, 0x9C, 0xFF);
+        rf.swrQuad_SetPosition(id.*, if (rt) x_rt else 0, if (bt) y_bt else 0);
+        rf.swrQuad_SetScale(id.*, scale, scale);
+    }
+
+    fn update(active: bool, cr: u8, cg: u8, cb: u8) void {
+        rf.swrQuad_SetActive(tl, @intFromBool(active));
+        rf.swrQuad_SetActive(tr, @intFromBool(active));
+        rf.swrQuad_SetActive(bl, @intFromBool(active));
+        rf.swrQuad_SetActive(br, @intFromBool(active));
+        if (active) {
+            rf.swrQuad_SetColor(tl, cr, cg, cb, 0xFF);
+            rf.swrQuad_SetColor(tr, cr, cg, cb, 0xFF);
+            rf.swrQuad_SetColor(bl, cr, cg, cb, 0xFF);
+            rf.swrQuad_SetColor(br, cr, cg, cb, 0xFF);
+        }
+    }
+};
+
 fn RenderRaceResultStat1(i: u8, label: [*:0]const u8) void {
     var buf: [127:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{s}", .{label}) catch unreachable;
@@ -350,6 +393,10 @@ pub fn EarlyEngineUpdate_Before() void {
     }
 }
 
+pub fn InitRaceQuads_After() void {
+    mode_vis.init();
+}
+
 pub fn TextRender_Before() void {
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
@@ -370,16 +417,23 @@ pub fn TextRender_Before() void {
         const lap_times: []const f32 = race_times[0..5];
         const total_time: f32 = race_times[5];
 
+        // FIXME: move flashing logic out of here
         if (g.practice_mode) {
-            var f: u8 = 255;
+            var f_rg: u8 = 0xFF;
+            var f_b: u8 = 0x9C;
+            const rg_range: u8 = 0xFF / 2;
+            const b_range: u8 = 0x9C / 2;
             if (total_time <= 0) {
                 const timer: f32 = r.ReadEntityValue(.Jdge, 0, 0x0C, f32);
-                const flash_range: u8 = 128;
                 const flash_cycle: f32 = std.math.clamp((std.math.cos(timer * std.math.pi * 12) * 0.5 + 0.5) * std.math.pow(f32, timer / 3, 3), 0, 3);
-                f -= @intFromFloat(flash_range * flash_cycle);
+                f_rg -= @intFromFloat(rg_range * flash_cycle);
+                f_b -= @intFromFloat(b_range * flash_cycle);
             }
-            // FIXME: change to yellow to match the menu text; not sure of ~3 rgb
-            rf.swrText_CreateEntry1(640 - 16, 480 - 16, f, f, f, 190, "~F0~s~rPractice Mode");
+            // TODO: move text to eventual toast system
+            //rf.swrText_CreateEntry1(640 - 16, 480 - 16, f_rg, f_rg, f_b, 190, "~F0~s~rPractice Mode");
+            mode_vis.update(true, f_rg, f_rg, f_b);
+        } else {
+            mode_vis.update(false, 0, 0, 0);
         }
 
         if (in_race_count) {

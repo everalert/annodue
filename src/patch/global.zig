@@ -67,8 +67,10 @@ const ActiveState = enum(u8) {
     }
 };
 
+const GLOBAL_STATE_VERSION = 0;
+
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
-pub const state = extern struct {
+pub const GlobalState = extern struct {
     pub var practice_mode: bool = false;
 
     pub var hwnd: ?win.HWND = null;
@@ -77,6 +79,8 @@ pub const state = extern struct {
     pub var dt_f: f32 = 0;
     pub var fps: f32 = 0;
     pub var fps_avg: f32 = 0;
+    pub var timestamp: u32 = 0;
+    pub var framecount: u32 = 0;
 
     pub var in_race: ActiveState = .Off;
     pub const player = extern struct {
@@ -87,6 +91,7 @@ pub const state = extern struct {
         pub var flags1: u32 = 0;
         pub var in_race_count: ActiveState = .Off;
         pub var in_race_results: ActiveState = .Off;
+        pub var in_race_racing: ActiveState = .Off;
         pub var boosting: ActiveState = .Off;
         pub var underheating: ActiveState = .On;
         pub var overheating: ActiveState = .Off;
@@ -107,6 +112,7 @@ pub const state = extern struct {
             flags1 = 0;
             in_race_count = .Off;
             in_race_results = .Off;
+            in_race_racing = .Off;
             boosting = .Off;
             underheating = .On; // you start the race underheating
             overheating = .Off;
@@ -130,6 +136,7 @@ pub const state = extern struct {
             dead.update((flags1 & (1 << 14)) > 0);
             in_race_count.update((flags1 & (1 << 0)) > 0);
             in_race_results.update((flags1 & (1 << 5)) == 0);
+            in_race_racing.update(!(in_race_count.isOn() or in_race_results.isOn()));
         }
     };
 };
@@ -182,7 +189,7 @@ pub const Freeze = struct {
 // UTIL
 
 fn DrawMenuPracticeModeLabel() void {
-    if (state.practice_mode) {
+    if (GlobalState.practice_mode) {
         rf.swrText_CreateEntry1(640 - 20, 16, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
     }
 }
@@ -201,10 +208,10 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     // input-based launch toggles
     const kb_shift: i16 = win32kb.GetAsyncKeyState(@intFromEnum(win32kb.VK_SHIFT));
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
-    state.practice_mode = kb_shift_dn;
+    GlobalState.practice_mode = kb_shift_dn;
 
-    state.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
-    state.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
+    GlobalState.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
+    GlobalState.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
 
     return memory;
 }
@@ -212,19 +219,21 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 // HOOK CALLS
 
 pub fn EarlyEngineUpdate_After() void {
-    state.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
-    if (state.in_race == .JustOn) state.player.reset();
-    if (state.in_race.isOn()) state.player.update();
+    GlobalState.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
+    if (GlobalState.in_race == .JustOn) GlobalState.player.reset();
+    if (GlobalState.in_race.isOn()) GlobalState.player.update();
 
-    if (input.get_kb_pressed(.P) and (!(state.in_race.isOn() and state.practice_mode)))
-        state.practice_mode = !state.practice_mode;
+    if (input.get_kb_pressed(.P) and (!(GlobalState.in_race.isOn() and GlobalState.practice_mode)))
+        GlobalState.practice_mode = !GlobalState.practice_mode;
 }
 
 pub fn TimerUpdate_After() void {
-    state.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
-    state.fps = mem.read(rc.ADDR_TIME_FPS, f32);
-    const fps_res: f32 = 1 / state.dt_f * 2;
-    state.fps_avg = (state.fps_avg * (fps_res - 1) + (1 / state.dt_f)) / fps_res;
+    GlobalState.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
+    GlobalState.fps = mem.read(rc.ADDR_TIME_FPS, f32);
+    const fps_res: f32 = 1 / GlobalState.dt_f * 2;
+    GlobalState.fps_avg = (GlobalState.fps_avg * (fps_res - 1) + (1 / GlobalState.dt_f)) / fps_res;
+    GlobalState.timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
+    GlobalState.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
 pub fn MenuTitleScreen_Before() void {

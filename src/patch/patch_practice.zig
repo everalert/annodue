@@ -5,7 +5,7 @@ const std = @import("std");
 const settings = @import("settings.zig");
 const s = settings.state;
 const global = @import("global.zig");
-const g = global.state;
+const g = global.GlobalState;
 
 const menu = @import("util/menu.zig");
 const msg = @import("util/message.zig");

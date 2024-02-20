@@ -4,7 +4,7 @@ const std = @import("std");
 
 const settings = @import("settings.zig");
 const s = settings.state;
-const g = @import("global.zig").state;
+const g = @import("global.zig").GlobalState;
 
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
@@ -131,16 +131,16 @@ const state = struct {
     // FIXME: better new-frame checking that doesn't only account for tabbing out
     // i.e. also when pausing, physics frozen with ingame feature, etc.
     fn saveable() bool {
-        const frame_new: bool = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32) != last_framecount;
-        const in_race: bool = mem.read(rc.ADDR_IN_RACE, u8) > 0;
+        const frame_new: bool = g.framecount != last_framecount;
         const space_ok: bool = memory_end_addr - @intFromPtr(data) - offsets[frame] >= frame_size;
         const frames_ok: bool = frame < frames;
-        return frame_new and in_race and space_ok and frames_ok;
+        return frame_new and g.in_race.isOn() and space_ok and frames_ok;
     }
 
+    // FIXME: check if you're actually in the racing part, also integrate with global
+    // apis like Freeze (same for saveable())
     fn loadable() bool {
-        const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-        return in_race;
+        return g.in_race.isOn();
     }
 
     fn get_depth(index: usize) usize {
@@ -198,7 +198,7 @@ const state = struct {
         // FIXME: why the fk does this crash if it comes after the guard
         if (!initialized) init();
         if (!saveable()) return;
-        last_framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
+        last_framecount = g.framecount;
 
         var data_size: usize = 0;
         if (frame > 0) {
@@ -248,14 +248,13 @@ const state = struct {
 // LOADER LOGIC
 
 fn DoStateRecording() LoadState {
-    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
     state.save_compressed();
 
     if (input.get_kb_pressed(.@"1")) {
         state.load_frame = state.frame - 1;
     }
     if (input.get_kb_pressed(.@"2") and state.frames > 0) {
-        state.load_time = state.load_delay + timestamp;
+        state.load_time = state.load_delay + g.timestamp;
         return .Loading;
     }
 
@@ -263,13 +262,12 @@ fn DoStateRecording() LoadState {
 }
 
 fn DoStateLoading() LoadState {
-    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
     if (input.get_kb_pressed(.@"2")) {
         state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
         state.frame_total = state.frame;
         return .Scrubbing;
     }
-    if (timestamp >= state.load_time) {
+    if (g.timestamp >= state.load_time) {
         state.load_compressed(state.load_frame);
         return .Recording;
     }
@@ -277,13 +275,12 @@ fn DoStateLoading() LoadState {
 }
 
 fn DoStateScrubbing() LoadState {
-    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
     if (input.get_kb_pressed(.@"1")) {
         state.load_frame = state.frame - 1;
     }
     if (input.get_kb_pressed(.@"2")) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
-        state.load_time = state.load_delay + timestamp;
+        state.load_time = state.load_delay + g.timestamp;
         return .ScrubExiting;
     }
 
@@ -294,14 +291,13 @@ fn DoStateScrubbing() LoadState {
 }
 
 fn DoStateScrubExiting() LoadState {
-    const timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?);
 
     if (input.get_kb_pressed(.@"1")) {
         state.load_frame = state.frame - 1;
     }
 
-    if (timestamp < state.load_time) return .ScrubExiting;
+    if (g.timestamp < state.load_time) return .ScrubExiting;
     return .Recording;
 }
 
@@ -323,24 +319,16 @@ fn UpdateState() void {
 pub fn EarlyEngineUpdate_After() void {
     if (!s.sav.get("savestate_enable", bool)) return;
 
-    const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-    if (g.practice_mode and in_race) {
-        const flags1: u32 = r.ReadPlayerValue(0x60, u32);
-        const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
-
-        if (is_racing) UpdateState() else state.reset();
+    if (g.practice_mode and g.in_race.isOn()) {
+        if (g.player.in_race_racing.isOn()) UpdateState() else state.reset();
     }
 }
 
 pub fn TextRender_Before() void {
     if (!s.sav.get("savestate_enable", bool)) return;
 
-    const in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
-    if (g.practice_mode and in_race) {
-        const flags1: u32 = r.ReadPlayerValue(0x60, u32);
-        const is_racing: bool = !((flags1 & (1 << 0)) > 0 or (flags1 & (1 << 5)) == 0);
-
-        if (is_racing) {
+    if (g.practice_mode and g.in_race.isOn()) {
+        if (g.player.in_race_racing.isOn()) {
             var buff: [1023:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
             rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);

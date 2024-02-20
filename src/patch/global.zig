@@ -1,12 +1,12 @@
 const Self = @This();
 
 const std = @import("std");
-const HINSTANCE = std.os.windows.HINSTANCE;
-const HWND = std.os.windows.HWND;
+const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const s = settings.state;
 
+const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
@@ -50,20 +50,88 @@ pub const VersionStr: [:0]u8 = s: {
 
 // STATE
 
+const ActiveState = enum(u8) {
+    Off = 0,
+    On = 1,
+    JustOff = 2,
+    JustOn = 3,
+
+    pub fn isOn(self: *ActiveState) bool {
+        return (@intFromEnum(self.*) & 1) > 0;
+    }
+
+    pub fn update(self: *ActiveState, on: bool) void {
+        const new: u8 = @intFromBool(on);
+        const changed: u8 = (new ^ @intFromBool(self.isOn())) << 1;
+        self.* = @enumFromInt(new | changed);
+    }
+};
+
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
-pub const state = struct {
-    pub var initialized_late: bool = false;
+pub const state = extern struct {
     pub var practice_mode: bool = false;
 
-    pub var hwnd: ?HWND = null;
-    pub var hinstance: ?HINSTANCE = null;
+    pub var hwnd: ?win.HWND = null;
+    pub var hinstance: ?win.HINSTANCE = null;
 
     pub var dt_f: f32 = 0;
     pub var fps: f32 = 0;
     pub var fps_avg: f32 = 0;
 
-    pub var in_race: bool = false;
-    pub var was_in_race: bool = false;
+    pub var in_race: ActiveState = .Off;
+    pub const player = extern struct {
+        pub var upgrades: bool = false;
+        pub var upgrades_lv: [7]u8 = undefined;
+        pub var upgrades_hp: [7]u8 = undefined;
+
+        pub var flags1: u32 = 0;
+        pub var in_race_count: ActiveState = .Off;
+        pub var in_race_results: ActiveState = .Off;
+        pub var boosting: ActiveState = .Off;
+        pub var underheating: ActiveState = .On;
+        pub var overheating: ActiveState = .Off;
+        pub var dead: ActiveState = .Off;
+
+        pub var heat_rate: f32 = 0;
+        pub var cool_rate: f32 = 0;
+        pub var heat: f32 = 0;
+
+        fn reset() void {
+            const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
+            upgrades_lv = u[0..7].*;
+            upgrades_hp = u[7..14].*;
+            upgrades = for (0..7) |i| {
+                if (u[i] > 0 and u[7 + i] > 0) break true;
+            } else false;
+
+            flags1 = 0;
+            in_race_count = .Off;
+            in_race_results = .Off;
+            boosting = .Off;
+            underheating = .On; // you start the race underheating
+            overheating = .Off;
+            dead = .Off;
+
+            heat_rate = r.ReadPlayerValue(0x8C, f32);
+            cool_rate = r.ReadPlayerValue(0x90, f32);
+            heat = 0;
+        }
+
+        fn update() void {
+            flags1 = r.ReadPlayerValue(0x60, u32);
+            heat = r.ReadPlayerValue(0x218, f32);
+            const engine: [6]u32 = r.ReadPlayerValue(0x2A0, [6]u32);
+
+            boosting.update((flags1 & (1 << 23)) > 0);
+            underheating.update(heat >= 100);
+            overheating.update(for (0..6) |i| {
+                if (engine[i] & (1 << 3) > 0) break true;
+            } else false);
+            dead.update((flags1 & (1 << 14)) > 0);
+            in_race_count.update((flags1 & (1 << 0)) > 0);
+            in_race_results.update((flags1 & (1 << 5)) == 0);
+        }
+    };
 };
 
 // FREEZE API
@@ -135,8 +203,8 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
     state.practice_mode = kb_shift_dn;
 
-    state.hwnd = mem.read(rc.ADDR_HWND, HWND);
-    state.hinstance = mem.read(rc.ADDR_HINSTANCE, HINSTANCE);
+    state.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
+    state.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
 
     return memory;
 }
@@ -144,10 +212,11 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 // HOOK CALLS
 
 pub fn EarlyEngineUpdate_After() void {
-    state.was_in_race = state.in_race;
-    state.in_race = mem.read(rc.ADDR_IN_RACE, u8) > 0;
+    state.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
+    if (state.in_race == .JustOn) state.player.reset();
+    if (state.in_race.isOn()) state.player.update();
 
-    if (input.get_kb_pressed(.P) and (!(state.in_race and state.practice_mode)))
+    if (input.get_kb_pressed(.P) and (!(state.in_race.isOn() and state.practice_mode)))
         state.practice_mode = !state.practice_mode;
 }
 

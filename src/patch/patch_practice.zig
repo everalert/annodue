@@ -2,9 +2,6 @@ pub const Self = @This();
 
 const std = @import("std");
 
-const win32 = @import("import/import.zig").win32;
-const win32kb = win32.ui.input.keyboard_and_mouse;
-
 const settings = @import("settings.zig");
 const s = settings.state;
 const global = @import("global.zig");
@@ -18,17 +15,13 @@ const r = @import("util/racer.zig");
 const rc = r.constants;
 const rf = r.functions;
 
+// PRACTICE/STATISTICAL DATA
+
 const race = struct {
     const stat_x: u16 = 192;
     const stat_y: u16 = 48;
     const stat_h: u8 = 12;
     const stat_col: u8 = 255;
-    var was_in_race_count: bool = false;
-    var was_in_race_results: bool = false;
-    var was_boosting: bool = false;
-    var was_underheating: bool = true;
-    var was_overheating: bool = false;
-    var was_dead: bool = false;
     var total_deaths: u32 = 0;
     var total_boost_duration: f32 = 0;
     var total_boost_ratio: f32 = 0;
@@ -42,19 +35,8 @@ const race = struct {
     var last_underheat_started_total: f32 = 0;
     var last_overheat_started: f32 = 0;
     var last_overheat_started_total: f32 = 0;
-    var heat_rate: f32 = 0;
-    var cool_rate: f32 = 0;
-    var upgrades: bool = false;
-    var upgrades_lv: [7]u8 = undefined;
-    var upgrades_hp: [7]u8 = undefined;
 
     fn reset() void {
-        was_in_race_count = false;
-        was_in_race_results = false;
-        was_boosting = false;
-        was_underheating = true; // you start the race underheating
-        was_overheating = false;
-        was_dead = false;
         total_deaths = 0;
         total_boost_duration = 0;
         total_boost_ratio = 0;
@@ -68,15 +50,6 @@ const race = struct {
         last_underheat_started_total = 0;
         last_overheat_started = 0;
         last_overheat_started_total = 0;
-        heat_rate = r.ReadPlayerValue(0x8C, f32);
-        cool_rate = r.ReadPlayerValue(0x90, f32);
-        const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
-        upgrades_lv = u[0..7].*;
-        upgrades_hp = u[7..14].*;
-        var i: u8 = 0;
-        upgrades = while (i < 7) : (i += 1) {
-            if (u[i] > 0 and u[7 + i] > 0) break true;
-        } else false;
     }
 
     fn set_last_boost_start(time: f32) void {
@@ -113,6 +86,9 @@ const race = struct {
     }
 };
 
+// QUICK RACE MENU
+
+// TODO: generalize menuing and add hooks to let plugins add pages to the menu
 // TODO: add standard race settings (mirror, etc.)
 // TODO: add convenience buttons for MU/NU
 // TODO: also tracking related values for coherency, e.g. adjusting selected circuit
@@ -270,6 +246,8 @@ const menu_quickrace = struct {
     }
 };
 
+// PRACTICE MODE VISUALIZATION
+
 const mode_vis = struct {
     const scale: f32 = 0.35;
     const x_rt: u16 = 640 - @round(32 * scale);
@@ -290,7 +268,6 @@ const mode_vis = struct {
 
     fn init_single(id: *u16, bt: bool, rt: bool) void {
         id.* = r.InitNewQuad(spr);
-        //rf.swrQuad_SetActive(id.*, 1);
         rf.swrQuad_SetFlags(id.*, 1 << 15 | 1 << 16);
         if (rt) rf.swrQuad_SetFlags(id.*, 1 << 2);
         if (!bt) rf.swrQuad_SetFlags(id.*, 1 << 3);
@@ -312,6 +289,8 @@ const mode_vis = struct {
         }
     }
 };
+
+// END RACE STAT HELPERS
 
 fn RenderRaceResultStat1(i: u8, label: [*:0]const u8) void {
     var buf: [127:0]u8 = undefined;
@@ -384,10 +363,12 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat2(i, rc.UpgradeCategories[cat], &buf);
 }
 
+// HOOK FUNCTIONS
+
 pub fn EarlyEngineUpdate_Before() void {
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
-    if (g.in_race) {
+    if (g.in_race.isOn()) {
         const before_endrace: bool = r.ReadPlayerValue(0x60, u32) & (1 << 5) > 0;
         if (before_endrace) menu_quickrace.update();
     }
@@ -400,17 +381,9 @@ pub fn InitRaceQuads_After() void {
 pub fn TextRender_Before() void {
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
-    if (g.in_race) {
-        if (!g.was_in_race) race.reset();
+    if (g.in_race.isOn()) {
+        if (g.in_race == .JustOn) race.reset();
         var buf: [127:0]u8 = undefined;
-
-        const flags1: u32 = r.ReadPlayerValue(0x60, u32);
-        const in_race_count: bool = (flags1 & (1 << 0)) > 0;
-        const in_race_count_new: bool = race.was_in_race_count != in_race_count;
-        race.was_in_race_count = in_race_count;
-        const in_race_results: bool = (flags1 & (1 << 5)) == 0;
-        const in_race_results_new: bool = race.was_in_race_results != in_race_results;
-        race.was_in_race_results = in_race_results;
 
         const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);
         const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
@@ -418,33 +391,37 @@ pub fn TextRender_Before() void {
         const total_time: f32 = race_times[5];
 
         // FIXME: move flashing logic out of here
+        // FIXME: make the flashing start when you activate practice mode
+        var f_r: u8 = 0xFF;
+        var f_g: u8 = 0xFF;
+        var f_b: u8 = 0x9C;
+        var f_on: bool = false;
         if (g.practice_mode) {
-            var f_rg: u8 = 0xFF;
-            var f_b: u8 = 0x9C;
-            const rg_range: u8 = 0xFF / 2;
+            const r_range: u8 = 0xFF / 2;
+            const g_range: u8 = 0xFF / 2;
             const b_range: u8 = 0x9C / 2;
             if (total_time <= 0) {
                 const timer: f32 = r.ReadEntityValue(.Jdge, 0, 0x0C, f32);
                 const flash_cycle: f32 = std.math.clamp((std.math.cos(timer * std.math.pi * 12) * 0.5 + 0.5) * std.math.pow(f32, timer / 3, 3), 0, 3);
-                f_rg -= @intFromFloat(rg_range * flash_cycle);
+                f_r -= @intFromFloat(r_range * flash_cycle);
+                f_g -= @intFromFloat(g_range * flash_cycle);
                 f_b -= @intFromFloat(b_range * flash_cycle);
             }
             // TODO: move text to eventual toast system
             //rf.swrText_CreateEntry1(640 - 16, 480 - 16, f_rg, f_rg, f_b, 190, "~F0~s~rPractice Mode");
-            mode_vis.update(true, f_rg, f_rg, f_b);
-        } else {
-            mode_vis.update(false, 0, 0, 0);
+            f_on = true;
         }
+        mode_vis.update(f_on, f_r, f_g, f_b);
 
-        if (in_race_count) {
-            if (in_race_count_new) {
+        if (g.player.in_race_count.isOn()) {
+            if (g.player.in_race_count == .JustOn) {
                 // ...
             }
-        } else if (in_race_results) {
-            if (in_race_results_new) {
-                if (race.was_boosting) race.set_total_boost(total_time);
-                if (race.was_underheating) race.set_total_underheat(total_time);
-                if (race.was_overheating) {
+        } else if (g.player.in_race_results.isOn()) {
+            if (g.player.in_race_results == .JustOn) {
+                if (g.player.boosting == .JustOff) race.set_total_boost(total_time);
+                if (g.player.underheating == .JustOff) race.set_total_underheat(total_time);
+                if (g.player.overheating == .JustOff) {
                     race.set_fire_finish_duration(total_time);
                     race.set_total_overheat(total_time);
                 }
@@ -453,19 +430,19 @@ pub fn TextRender_Before() void {
             _ = std.fmt.bufPrintZ(
                 &buf,
                 "{d:>2.0}/{s}",
-                .{ g.fps_avg, rc.UpgradeNames[race.upgrades_lv[0]] },
+                .{ g.fps_avg, rc.UpgradeNames[g.player.upgrades_lv[0]] },
             ) catch unreachable;
             RenderRaceResultStat1(0, &buf);
 
-            const upg_prefix = if (race.upgrades) "" else "NO ";
+            const upg_prefix = if (g.player.upgrades) "" else "NO ";
             _ = std.fmt.bufPrintZ(&buf, "{s}Upgrades", .{upg_prefix}) catch unreachable;
             RenderRaceResultStat1(1, &buf);
 
             for (0..7) |i| RenderRaceResultStatUpgrade(
                 3 + @as(u8, @truncate(i)),
                 @as(u8, @truncate(i)),
-                race.upgrades_lv[i],
-                race.upgrades_hp[i],
+                g.player.upgrades_lv[i],
+                g.player.upgrades_hp[i],
             );
 
             RenderRaceResultStatU(11, "Deaths", race.total_deaths);
@@ -476,43 +453,26 @@ pub fn TextRender_Before() void {
             RenderRaceResultStatTime(16, "Fire Finish", race.fire_finish_duration);
             RenderRaceResultStatTime(17, "Overheat Time", race.total_overheat);
         } else {
-            const dead: bool = (flags1 & (1 << 14)) > 0;
-            const dead_new: bool = race.was_dead != dead;
-            race.was_dead = dead;
-            if (dead and dead_new) race.total_deaths += 1;
+            if (g.player.dead == .JustOn) race.total_deaths += 1;
 
-            const heat: f32 = r.ReadPlayerValue(0x218, f32);
-            const engine: [6]u32 = r.ReadPlayerValue(0x2A0, [6]u32);
+            if (g.player.boosting == .JustOn) race.set_last_boost_start(total_time);
+            if (g.player.boosting.isOn()) race.set_total_boost(total_time);
+            if (g.player.boosting == .JustOff) race.set_total_boost(total_time);
 
-            const boosting: bool = (flags1 & (1 << 23)) > 0;
-            const boosting_new: bool = race.was_boosting != boosting;
-            race.was_boosting = boosting;
-            if (boosting and boosting_new) race.set_last_boost_start(total_time);
-            if (boosting) race.set_total_boost(total_time);
-            if (!boosting and boosting_new) race.set_total_boost(total_time);
+            if (g.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
+            if (g.player.underheating.isOn()) race.set_total_underheat(total_time);
+            if (g.player.underheating == .JustOff) race.set_total_underheat(total_time);
 
-            const underheating: bool = heat >= 100;
-            const underheating_new: bool = race.was_underheating != underheating;
-            race.was_underheating = underheating;
-            if (underheating and underheating_new) race.set_last_underheat_start(total_time);
-            if (underheating) race.set_total_underheat(total_time);
-            if (!underheating and underheating_new) race.set_total_underheat(total_time);
-
-            const overheating: bool = for (0..6) |i| {
-                if (engine[i] & (1 << 3) > 0) break true;
-            } else false;
-            const overheating_new: bool = race.was_overheating != overheating;
-            race.was_overheating = overheating;
-            if (overheating and overheating_new) race.set_last_overheat_start(total_time);
-            if (overheating) race.set_total_overheat(total_time);
-            if (!overheating and overheating_new) race.set_total_overheat(total_time);
+            if (g.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
+            if (g.player.overheating.isOn()) race.set_total_overheat(total_time);
+            if (g.player.overheating == .JustOff) race.set_total_overheat(total_time);
 
             if (g.practice_mode) {
                 // draw heat timer
-                const heat_s: f32 = heat / race.heat_rate;
-                const cool_s: f32 = (100 - heat) / race.cool_rate;
-                const heat_timer: f32 = if (boosting) heat_s else cool_s;
-                const heat_color: u32 = if (boosting) 5 else if (heat < 100) 2 else 7;
+                const heat_s: f32 = g.player.heat / g.player.heat_rate;
+                const cool_s: f32 = (100 - g.player.heat) / g.player.cool_rate;
+                const heat_timer: f32 = if (g.player.boosting.isOn()) heat_s else cool_s;
+                const heat_color: u32 = if (g.player.boosting.isOn()) 5 else if (g.player.heat < 100) 2 else 7;
                 _ = std.fmt.bufPrintZ(
                     &buf,
                     "~F0~{d}~s~r{d:0>5.3}",

@@ -4,7 +4,9 @@ const std = @import("std");
 
 const settings = @import("settings.zig");
 const s = settings.state;
-const g = @import("global.zig").GlobalState;
+const global = @import("global.zig");
+const g = &global.GLOBAL_STATE;
+const GlobalState = global.GlobalState;
 
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
@@ -312,23 +314,25 @@ fn UpdateState() void {
 
 // HOOKS
 
-//pub fn MenuStartRace_Before() void {
+//pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) void {
 //    state.reset();
 //}
 
-pub fn EarlyEngineUpdate_After() void {
+pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
     if (!s.sav.get("savestate_enable", bool)) return;
 
-    if (g.practice_mode and g.in_race.isOn()) {
-        if (g.player.in_race_racing.isOn()) UpdateState() else state.reset();
+    if (gs.practice_mode and gs.in_race.isOn()) {
+        if (gs.player.in_race_racing.isOn()) UpdateState() else state.reset();
     }
 }
 
-pub fn TextRender_Before() void {
+pub fn TextRender_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
     if (!s.sav.get("savestate_enable", bool)) return;
 
-    if (g.practice_mode and g.in_race.isOn()) {
-        if (g.player.in_race_racing.isOn()) {
+    if (gs.practice_mode and gs.in_race.isOn()) {
+        if (gs.player.in_race_racing.isOn()) {
             var buff: [1023:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
             rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);

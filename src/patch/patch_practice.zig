@@ -5,7 +5,7 @@ const std = @import("std");
 const settings = @import("settings.zig");
 const s = settings.state;
 const global = @import("global.zig");
-const g = global.GlobalState;
+const GlobalState = global.GlobalState;
 
 const menu = @import("util/menu.zig");
 const msg = @import("util/message.zig");
@@ -365,24 +365,28 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 
 // HOOK FUNCTIONS
 
-pub fn EarlyEngineUpdate_Before() void {
+pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
-    if (g.in_race.isOn()) {
+    if (gs.in_race.isOn()) {
         const before_endrace: bool = r.ReadPlayerValue(0x60, u32) & (1 << 5) > 0;
         if (before_endrace) menu_quickrace.update();
     }
 }
 
-pub fn InitRaceQuads_After() void {
+pub fn InitRaceQuads_After(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     mode_vis.init();
 }
 
-pub fn TextRender_Before() void {
+pub fn TextRender_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
-    if (g.in_race.isOn()) {
-        if (g.in_race == .JustOn) race.reset();
+    if (gs.in_race.isOn()) {
+        if (gs.in_race == .JustOn) race.reset();
         var buf: [127:0]u8 = undefined;
 
         const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);
@@ -396,7 +400,7 @@ pub fn TextRender_Before() void {
         var f_g: u8 = 0xFF;
         var f_b: u8 = 0x9C;
         var f_on: bool = false;
-        if (g.practice_mode) {
+        if (gs.practice_mode) {
             const r_range: u8 = 0xFF / 2;
             const g_range: u8 = 0xFF / 2;
             const b_range: u8 = 0x9C / 2;
@@ -413,15 +417,15 @@ pub fn TextRender_Before() void {
         }
         mode_vis.update(f_on, f_r, f_g, f_b);
 
-        if (g.player.in_race_count.isOn()) {
-            if (g.player.in_race_count == .JustOn) {
+        if (gs.player.in_race_count.isOn()) {
+            if (gs.player.in_race_count == .JustOn) {
                 // ...
             }
-        } else if (g.player.in_race_results.isOn()) {
-            if (g.player.in_race_results == .JustOn) {
-                if (g.player.boosting == .JustOff) race.set_total_boost(total_time);
-                if (g.player.underheating == .JustOff) race.set_total_underheat(total_time);
-                if (g.player.overheating == .JustOff) {
+        } else if (gs.player.in_race_results.isOn()) {
+            if (gs.player.in_race_results == .JustOn) {
+                if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
+                if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);
+                if (gs.player.overheating == .JustOff) {
                     race.set_fire_finish_duration(total_time);
                     race.set_total_overheat(total_time);
                 }
@@ -430,19 +434,19 @@ pub fn TextRender_Before() void {
             _ = std.fmt.bufPrintZ(
                 &buf,
                 "{d:>2.0}/{s}",
-                .{ g.fps_avg, rc.UpgradeNames[g.player.upgrades_lv[0]] },
+                .{ gs.fps_avg, rc.UpgradeNames[gs.player.upgrades_lv[0]] },
             ) catch unreachable;
             RenderRaceResultStat1(0, &buf);
 
-            const upg_prefix = if (g.player.upgrades) "" else "NO ";
+            const upg_prefix = if (gs.player.upgrades) "" else "NO ";
             _ = std.fmt.bufPrintZ(&buf, "{s}Upgrades", .{upg_prefix}) catch unreachable;
             RenderRaceResultStat1(1, &buf);
 
             for (0..7) |i| RenderRaceResultStatUpgrade(
                 3 + @as(u8, @truncate(i)),
                 @as(u8, @truncate(i)),
-                g.player.upgrades_lv[i],
-                g.player.upgrades_hp[i],
+                gs.player.upgrades_lv[i],
+                gs.player.upgrades_hp[i],
             );
 
             RenderRaceResultStatU(11, "Deaths", race.total_deaths);
@@ -453,26 +457,26 @@ pub fn TextRender_Before() void {
             RenderRaceResultStatTime(16, "Fire Finish", race.fire_finish_duration);
             RenderRaceResultStatTime(17, "Overheat Time", race.total_overheat);
         } else {
-            if (g.player.dead == .JustOn) race.total_deaths += 1;
+            if (gs.player.dead == .JustOn) race.total_deaths += 1;
 
-            if (g.player.boosting == .JustOn) race.set_last_boost_start(total_time);
-            if (g.player.boosting.isOn()) race.set_total_boost(total_time);
-            if (g.player.boosting == .JustOff) race.set_total_boost(total_time);
+            if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
+            if (gs.player.boosting.isOn()) race.set_total_boost(total_time);
+            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
 
-            if (g.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
-            if (g.player.underheating.isOn()) race.set_total_underheat(total_time);
-            if (g.player.underheating == .JustOff) race.set_total_underheat(total_time);
+            if (gs.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
+            if (gs.player.underheating.isOn()) race.set_total_underheat(total_time);
+            if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);
 
-            if (g.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
-            if (g.player.overheating.isOn()) race.set_total_overheat(total_time);
-            if (g.player.overheating == .JustOff) race.set_total_overheat(total_time);
+            if (gs.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
+            if (gs.player.overheating.isOn()) race.set_total_overheat(total_time);
+            if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
 
-            if (g.practice_mode) {
+            if (gs.practice_mode) {
                 // draw heat timer
-                const heat_s: f32 = g.player.heat / g.player.heat_rate;
-                const cool_s: f32 = (100 - g.player.heat) / g.player.cool_rate;
-                const heat_timer: f32 = if (g.player.boosting.isOn()) heat_s else cool_s;
-                const heat_color: u32 = if (g.player.boosting.isOn()) 5 else if (g.player.heat < 100) 2 else 7;
+                const heat_s: f32 = gs.player.heat / gs.player.heat_rate;
+                const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;
+                const heat_timer: f32 = if (gs.player.boosting.isOn()) heat_s else cool_s;
+                const heat_color: u32 = if (gs.player.boosting.isOn()) 5 else if (gs.player.heat < 100) 2 else 7;
                 _ = std.fmt.bufPrintZ(
                     &buf,
                     "~F0~{d}~s~r{d:0>5.3}",

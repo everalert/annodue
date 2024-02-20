@@ -71,75 +71,79 @@ const GLOBAL_STATE_VERSION = 0;
 
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
 pub const GlobalState = extern struct {
-    pub var practice_mode: bool = false;
+    practice_mode: bool = false,
 
-    pub var hwnd: ?win.HWND = null;
-    pub var hinstance: ?win.HINSTANCE = null;
+    hwnd: ?win.HWND = null,
+    hinstance: ?win.HINSTANCE = null,
 
-    pub var dt_f: f32 = 0;
-    pub var fps: f32 = 0;
-    pub var fps_avg: f32 = 0;
-    pub var timestamp: u32 = 0;
-    pub var framecount: u32 = 0;
+    dt_f: f32 = 0,
+    fps: f32 = 0,
+    fps_avg: f32 = 0,
+    timestamp: u32 = 0,
+    framecount: u32 = 0,
 
-    pub var in_race: ActiveState = .Off;
-    pub const player = extern struct {
-        pub var upgrades: bool = false;
-        pub var upgrades_lv: [7]u8 = undefined;
-        pub var upgrades_hp: [7]u8 = undefined;
+    in_race: ActiveState = .Off,
+    player: extern struct {
+        upgrades: bool = false,
+        upgrades_lv: [7]u8 = undefined,
+        upgrades_hp: [7]u8 = undefined,
 
-        pub var flags1: u32 = 0;
-        pub var in_race_count: ActiveState = .Off;
-        pub var in_race_results: ActiveState = .Off;
-        pub var in_race_racing: ActiveState = .Off;
-        pub var boosting: ActiveState = .Off;
-        pub var underheating: ActiveState = .On;
-        pub var overheating: ActiveState = .Off;
-        pub var dead: ActiveState = .Off;
+        flags1: u32 = 0,
+        in_race_count: ActiveState = .Off,
+        in_race_results: ActiveState = .Off,
+        in_race_racing: ActiveState = .Off,
+        boosting: ActiveState = .Off,
+        underheating: ActiveState = .On,
+        overheating: ActiveState = .Off,
+        dead: ActiveState = .Off,
 
-        pub var heat_rate: f32 = 0;
-        pub var cool_rate: f32 = 0;
-        pub var heat: f32 = 0;
+        heat_rate: f32 = 0,
+        cool_rate: f32 = 0,
+        heat: f32 = 0,
+    } = .{},
 
-        fn reset() void {
-            const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
-            upgrades_lv = u[0..7].*;
-            upgrades_hp = u[7..14].*;
-            upgrades = for (0..7) |i| {
-                if (u[i] > 0 and u[7 + i] > 0) break true;
-            } else false;
+    fn player_reset(self: *GlobalState) void {
+        const p = &self.player;
+        const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
+        p.upgrades_lv = u[0..7].*;
+        p.upgrades_hp = u[7..14].*;
+        p.upgrades = for (0..7) |i| {
+            if (u[i] > 0 and u[7 + i] > 0) break true;
+        } else false;
 
-            flags1 = 0;
-            in_race_count = .Off;
-            in_race_results = .Off;
-            in_race_racing = .Off;
-            boosting = .Off;
-            underheating = .On; // you start the race underheating
-            overheating = .Off;
-            dead = .Off;
+        p.flags1 = 0;
+        p.in_race_count = .Off;
+        p.in_race_results = .Off;
+        p.in_race_racing = .Off;
+        p.boosting = .Off;
+        p.underheating = .On; // you start the race underheating
+        p.overheating = .Off;
+        p.dead = .Off;
 
-            heat_rate = r.ReadPlayerValue(0x8C, f32);
-            cool_rate = r.ReadPlayerValue(0x90, f32);
-            heat = 0;
-        }
+        p.heat_rate = r.ReadPlayerValue(0x8C, f32);
+        p.cool_rate = r.ReadPlayerValue(0x90, f32);
+        p.heat = 0;
+    }
 
-        fn update() void {
-            flags1 = r.ReadPlayerValue(0x60, u32);
-            heat = r.ReadPlayerValue(0x218, f32);
-            const engine: [6]u32 = r.ReadPlayerValue(0x2A0, [6]u32);
+    fn player_update(self: *GlobalState) void {
+        const p = &self.player;
+        p.flags1 = r.ReadPlayerValue(0x60, u32);
+        p.heat = r.ReadPlayerValue(0x218, f32);
+        const engine: [6]u32 = r.ReadPlayerValue(0x2A0, [6]u32);
 
-            boosting.update((flags1 & (1 << 23)) > 0);
-            underheating.update(heat >= 100);
-            overheating.update(for (0..6) |i| {
-                if (engine[i] & (1 << 3) > 0) break true;
-            } else false);
-            dead.update((flags1 & (1 << 14)) > 0);
-            in_race_count.update((flags1 & (1 << 0)) > 0);
-            in_race_results.update((flags1 & (1 << 5)) == 0);
-            in_race_racing.update(!(in_race_count.isOn() or in_race_results.isOn()));
-        }
-    };
+        p.boosting.update((p.flags1 & (1 << 23)) > 0);
+        p.underheating.update(p.heat >= 100);
+        p.overheating.update(for (0..6) |i| {
+            if (engine[i] & (1 << 3) > 0) break true;
+        } else false);
+        p.dead.update((p.flags1 & (1 << 14)) > 0);
+        p.in_race_count.update((p.flags1 & (1 << 0)) > 0);
+        p.in_race_results.update((p.flags1 & (1 << 5)) == 0);
+        p.in_race_racing.update(!(p.in_race_count.isOn() or p.in_race_results.isOn()));
+    }
 };
+
+pub var GLOBAL_STATE: GlobalState = .{};
 
 // FREEZE API
 
@@ -189,7 +193,7 @@ pub const Freeze = struct {
 // UTIL
 
 fn DrawMenuPracticeModeLabel() void {
-    if (GlobalState.practice_mode) {
+    if (GLOBAL_STATE.practice_mode) {
         rf.swrText_CreateEntry1(640 - 20, 16, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
     }
 }
@@ -208,47 +212,57 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     // input-based launch toggles
     const kb_shift: i16 = win32kb.GetAsyncKeyState(@intFromEnum(win32kb.VK_SHIFT));
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
-    GlobalState.practice_mode = kb_shift_dn;
+    GLOBAL_STATE.practice_mode = kb_shift_dn;
 
-    GlobalState.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
-    GlobalState.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
+    GLOBAL_STATE.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
+    GLOBAL_STATE.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
 
     return memory;
 }
 
 // HOOK CALLS
 
-pub fn EarlyEngineUpdate_After() void {
-    GlobalState.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
-    if (GlobalState.in_race == .JustOn) GlobalState.player.reset();
-    if (GlobalState.in_race.isOn()) GlobalState.player.update();
+pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
+    if (gs.in_race == .JustOn) gs.player_reset();
+    if (gs.in_race.isOn()) gs.player_update();
 
-    if (input.get_kb_pressed(.P) and (!(GlobalState.in_race.isOn() and GlobalState.practice_mode)))
-        GlobalState.practice_mode = !GlobalState.practice_mode;
+    if (input.get_kb_pressed(.P) and (!(gs.in_race.isOn() and gs.practice_mode)))
+        gs.practice_mode = !gs.practice_mode;
 }
 
-pub fn TimerUpdate_After() void {
-    GlobalState.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
-    GlobalState.fps = mem.read(rc.ADDR_TIME_FPS, f32);
-    const fps_res: f32 = 1 / GlobalState.dt_f * 2;
-    GlobalState.fps_avg = (GlobalState.fps_avg * (fps_res - 1) + (1 / GlobalState.dt_f)) / fps_res;
-    GlobalState.timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
-    GlobalState.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
+pub fn TimerUpdate_After(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
+    gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
+    const fps_res: f32 = 1 / gs.dt_f * 2;
+    gs.fps_avg = (gs.fps_avg * (fps_res - 1) + (1 / gs.dt_f)) / fps_res;
+    gs.timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
+    gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreen_Before() void {
+pub fn MenuTitleScreen_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     DrawVersionString();
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuStartRace_Before() void {
+pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResults_Before() void {
+pub fn MenuRaceResults_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrack_Before() void {
+pub fn MenuTrack_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     DrawMenuPracticeModeLabel();
 }

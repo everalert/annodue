@@ -5,7 +5,7 @@ const std = @import("std");
 const settings = @import("settings.zig");
 const s = settings.state;
 const global = @import("global.zig");
-const g = global.GlobalState;
+const GlobalState = global.GlobalState;
 
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
@@ -90,7 +90,9 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     return memory;
 }
 
-pub fn init_late() void {
+pub fn init_late(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     const def_laps: u32 = s.gen.get("default_laps", u32);
     if (def_laps >= 1 and def_laps <= 5) {
         const laps: usize = mem.deref(&.{ 0x4BFDB8, 0x8F });
@@ -104,14 +106,17 @@ pub fn init_late() void {
 }
 
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
-pub fn EarlyEngineUpdate_Before() void {
-    if (g.in_race.isOn() and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
+pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    if (gs.in_race.isOn() and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
         const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMPTABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 }
 
-pub fn TextRender_Before() void {
+pub fn TextRender_Before(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     if (s.gen.get("rainbow_timer_enable", bool)) {
         PatchHudTimerColRotate();
     }

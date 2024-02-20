@@ -9,7 +9,8 @@ const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const global = @import("global.zig");
-const g = global.state;
+const g = &global.GLOBAL_STATE;
+const GlobalState = global.GlobalState;
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 const savestate = @import("patch_savestate.zig");
@@ -25,13 +26,16 @@ const rf = @import("util/racer_fn.zig");
 // FIXME: figure out exactly where the patch gets executed on load (i.e. where
 // the 'early init' happens), for documentation purposes
 
+// FIXME: hooking (settings?) deinit causes racer process to never end, but only
+// when you quit with the X button, not with the ingame quit option
+// that said, again probably pointless to bother manually deallocating at the end anyway
+
 // OKOKOKOKOK
 
 const Hook = enum(u32) {
     Init,
     InitLate,
     Deinit,
-    //GameSetup,
     GameLoopBefore,
     GameLoopAfter,
     EarlyEngineUpdateBefore,
@@ -44,7 +48,6 @@ const Hook = enum(u32) {
     InitHangQuadsAfter,
     //InitRaceQuadsBefore,
     InitRaceQuadsAfter,
-    //GameEnd,
     MenuTitleScreenBefore,
     MenuStartRaceBefore,
     MenuJunkyardBefore,
@@ -59,7 +62,9 @@ const Hook = enum(u32) {
 };
 
 // TODO: pass in 'initialized' as argument
-const HookFnType = std.StringHashMap(*const fn () void);
+const HookFnType = std.StringHashMap(
+    *const fn (state: *GlobalState, initialized: bool) void,
+);
 
 const HookFnSet = struct {
     initialized: bool,
@@ -77,9 +82,9 @@ inline fn HookFnCallback(hk: Hook) *const fn () void {
         const map: *HookFnSet = HookFn.data.getPtr(hk);
         fn callback() void {
             var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*();
+            while (it_core.next()) |f| f.*(g, map.initialized);
             var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*();
+            while (it_plugin.next()) |f| f.*(g, map.initialized);
             map.initialized = true;
         }
     };
@@ -92,9 +97,9 @@ inline fn HookFnCallbackN(hk: []Hook) *const fn () void {
             inline for (hk) |h| {
                 const map: *HookFnSet = comptime HookFn.data.getPtr(h);
                 var it_core = map.map.core.valueIterator();
-                while (it_core.next()) |f| f.*();
+                while (it_core.next()) |f| f.*(g, map.initialized);
                 var it_plugin = map.map.plugin.valueIterator();
-                while (it_plugin.next()) |f| f.*();
+                while (it_plugin.next()) |f| f.*(g, map.initialized);
                 map.map.initialized = true;
             }
         }
@@ -113,7 +118,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookTimerUpdate(off);
     off = HookInitRaceQuads(off);
     off = HookInitHangQuads(off);
-    off = HookGameEnd(off);
+    //off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
 

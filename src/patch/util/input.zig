@@ -4,6 +4,9 @@ const std = @import("std");
 const win32 = @import("../import/import.zig").win32;
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
+const global = @import("../global.zig");
+const GlobalState = global.GlobalState;
+
 pub const INPUT_DOWN: u8 = 0b01;
 pub const INPUT_NEW: u8 = 0b10;
 
@@ -12,7 +15,9 @@ const state = struct {
     var kb: [256]u8 = std.mem.zeroes([256]u8);
 };
 
-pub fn update_kb() void {
+pub fn update_kb(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     _ = win32kb.GetKeyboardState(&state.kb_new);
     for (state.kb_new, 0..) |k, i| {
         const down: u8 = k >> 7; // KB_DOWN

@@ -4,6 +4,9 @@ const std = @import("std");
 const win32 = @import("../import/import.zig").win32;
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
+const global = @import("global.zig");
+const GlobalState = global.GlobalState;
+
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
 
@@ -60,7 +63,9 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 }
 
-pub fn deinit() void {
+pub fn deinit(gs: *GlobalState, initialized: bool) void {
+    _ = initialized;
+    _ = gs;
     defer state.manager.deinit();
     defer state.prac.deinit();
     defer state.gen.deinit();

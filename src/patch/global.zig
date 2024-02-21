@@ -28,6 +28,7 @@ const VersionTag = enum(u32) {
     ReleaseCandidate,
 };
 
+// TODO: see: std.SemanticVersion
 pub const Version = struct {
     pub const major: u32 = 0;
     pub const minor: u32 = 0;

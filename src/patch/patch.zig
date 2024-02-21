@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const hooking = @import("hook.zig");
+const debug = @import("debug.zig");
 const settings = @import("settings.zig");
 const global = @import("global.zig");
 const general = @import("patch_general.zig");
@@ -10,8 +11,6 @@ const msg = @import("util/message.zig");
 const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
-
-// STATE
 
 const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 

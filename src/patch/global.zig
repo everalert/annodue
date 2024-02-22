@@ -49,6 +49,8 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
+pub const PLUGIN_VERSION = 1;
+
 // STATE
 
 const ActiveState = enum(u8) {

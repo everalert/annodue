@@ -11,6 +11,7 @@ const settings = @import("settings.zig");
 const global = @import("global.zig");
 const GLOBAL_STATE = &global.GLOBAL_STATE;
 const GlobalState = global.GlobalState;
+const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 const savestate = @import("patch_savestate.zig");
@@ -36,10 +37,34 @@ const rf = @import("util/racer_fn.zig");
 
 // OKOKOKOKOK
 
+const Required = enum(u32) {
+    PluginName,
+    PluginVersion,
+    PluginCompatibilityVersion,
+    // TODO: flags for cosmetic, QOL, etc. (some ignored for non-whitelisted plugins)
+    //PluginCategoryFlags,
+    OnInit,
+    OnInitLate,
+    OnDeinit,
+    //OnEnable,
+    //OnDisable,
+};
+
+inline fn RequiredFnType(comptime f: Required) type {
+    return switch (f) {
+        .PluginName => *const fn () callconv(.C) [*:0]const u8,
+        .PluginVersion => *const fn () callconv(.C) [*:0]const u8,
+        .PluginCompatibilityVersion => *const fn () callconv(.C) u32,
+        //.PluginCategoryFlags => *const fn () callconv(.C) u32,
+        else => HookFnType,
+    };
+}
+
+inline fn RequiredFnMapType(comptime f: Required) type {
+    return std.StringHashMap(RequiredFnType(f));
+}
+
 const Hook = enum(u32) {
-    Init,
-    InitLate,
-    Deinit,
     GameLoopBefore,
     GameLoopAfter,
     EarlyEngineUpdateBefore,
@@ -69,20 +94,31 @@ const HookFnType = *const fn (state: *GlobalState, initialized: bool) callconv(.
 
 const HookFnMapType = std.StringHashMap(HookFnType);
 
-const HookFnSet = struct {
-    initialized: bool,
-    core: HookFnMapType,
-    plugin: HookFnMapType,
-};
+inline fn PluginFnSet(comptime T: type) type {
+    return struct {
+        initialized: bool,
+        core: T,
+        plugin: T,
+    };
+}
 
-const HookFn = struct {
+const HookFnSet = PluginFnSet(HookFnMapType);
+
+const PluginFn = struct {
     var initialized: bool = false;
-    var data = std.enums.EnumArray(Hook, HookFnSet).initUndefined();
+    var hooks = std.enums.EnumArray(Hook, HookFnSet).initUndefined();
+    // FIXME: comptime generation
+    var PluginName: PluginFnSet(RequiredFnMapType(.PluginName)) = undefined;
+    var PluginVersion: PluginFnSet(RequiredFnMapType(.PluginVersion)) = undefined;
+    var PluginCompatibilityVersion: PluginFnSet(RequiredFnMapType(.PluginCompatibilityVersion)) = undefined;
+    var OnInit: PluginFnSet(RequiredFnMapType(.OnInit)) = undefined;
+    var OnInitLate: PluginFnSet(RequiredFnMapType(.OnInitLate)) = undefined;
+    var OnDeinit: PluginFnSet(RequiredFnMapType(.OnDeinit)) = undefined;
 };
 
-inline fn HookFnCallback(comptime hk: Hook) *const fn () void {
+inline fn RequiredFnCallback(comptime req: Required) *const fn () void {
     const c = struct {
-        const map: *HookFnSet = HookFn.data.getPtr(hk);
+        const map: *HookFnSet = &@field(PluginFn, @tagName(req));
         fn callback() void {
             var it_core = map.core.valueIterator();
             while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
@@ -94,21 +130,35 @@ inline fn HookFnCallback(comptime hk: Hook) *const fn () void {
     return &c.callback;
 }
 
-inline fn HookFnCallbackN(hk: []Hook) *const fn () void {
+inline fn HookFnCallback(comptime hk: Hook) *const fn () void {
     const c = struct {
+        const map: *HookFnSet = PluginFn.hooks.getPtr(hk);
         fn callback() void {
-            inline for (hk) |h| {
-                const map: *HookFnSet = comptime HookFn.data.getPtr(h);
-                var it_core = map.map.core.valueIterator();
-                while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
-                var it_plugin = map.map.plugin.valueIterator();
-                while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
-                map.map.initialized = true;
-            }
+            var it_core = map.core.valueIterator();
+            while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+            var it_plugin = map.plugin.valueIterator();
+            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+            map.initialized = true;
         }
     };
     return &c.callback;
 }
+
+//inline fn HookFnCallbackN(hk: []Hook) *const fn () void {
+//    const c = struct {
+//        fn callback() void {
+//            inline for (hk) |h| {
+//                const map: *HookFnSet = comptime PluginFn.hooks.getPtr(h);
+//                var it_core = map.map.core.valueIterator();
+//                while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+//                var it_plugin = map.map.plugin.valueIterator();
+//                while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+//                map.map.initialized = true;
+//            }
+//        }
+//    };
+//    return &c.callback;
+//}
 
 // SETUP
 
@@ -125,55 +175,63 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
 
-    var it_set = HookFn.data.iterator();
-    while (it_set.next()) |set| {
-        HookFn.data.set(set.key, .{
+    var it_hset = PluginFn.hooks.iterator();
+    while (it_hset.next()) |set| {
+        PluginFn.hooks.set(set.key, .{
             .initialized = false,
             .core = HookFnMapType.init(alloc),
             .plugin = HookFnMapType.init(alloc),
         });
     }
-    HookFn.initialized = true;
+    inline for (@typeInfo(Required).Enum.fields) |f| {
+        const v: Required = @enumFromInt(f.value);
+        @field(PluginFn, f.name) = .{
+            .initialized = false,
+            .core = RequiredFnMapType(v).init(alloc),
+            .plugin = RequiredFnMapType(v).init(alloc),
+        };
+    }
+    PluginFn.initialized = true;
 
     var map: *HookFnMapType = undefined;
 
-    map = &HookFn.data.getPtr(.InitLate).plugin;
+    map = &PluginFn.OnInitLate.plugin;
     map.put("general", &general.init_late) catch unreachable;
 
-    map = &HookFn.data.getPtr(.Deinit).core;
+    map = &PluginFn.OnDeinit.core;
     map.put("settings", &settings.deinit) catch unreachable;
 
-    map = &HookFn.data.getPtr(.GameLoopBefore).core;
+    map = &PluginFn.hooks.getPtr(.GameLoopBefore).core;
     map.put("input", &input.update_kb) catch unreachable;
 
-    map = &HookFn.data.getPtr(.EarlyEngineUpdateBefore).plugin;
+    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateBefore).plugin;
     map.put("general", &general.EarlyEngineUpdate_Before) catch unreachable;
     map.put("practice", &practice.EarlyEngineUpdate_Before) catch unreachable;
 
-    map = &HookFn.data.getPtr(.EarlyEngineUpdateAfter).core;
+    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateAfter).core;
     map.put("global", &global.EarlyEngineUpdate_After) catch unreachable;
-    map = &HookFn.data.getPtr(.EarlyEngineUpdateAfter).plugin;
+    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateAfter).plugin;
     map.put("savestate", &savestate.EarlyEngineUpdate_After) catch unreachable;
 
-    map = &HookFn.data.getPtr(.TimerUpdateAfter).core;
+    map = &PluginFn.hooks.getPtr(.TimerUpdateAfter).core;
     map.put("global", &global.TimerUpdate_After) catch unreachable;
 
-    map = &HookFn.data.getPtr(.InitRaceQuadsAfter).plugin;
+    map = &PluginFn.hooks.getPtr(.InitRaceQuadsAfter).plugin;
     map.put("practice", &practice.InitRaceQuads_After) catch unreachable;
 
-    map = &HookFn.data.getPtr(.MenuTitleScreenBefore).core;
+    map = &PluginFn.hooks.getPtr(.MenuTitleScreenBefore).core;
     map.put("global", &global.MenuTitleScreen_Before) catch unreachable;
 
-    map = &HookFn.data.getPtr(.MenuStartRaceBefore).core;
+    map = &PluginFn.hooks.getPtr(.MenuStartRaceBefore).core;
     map.put("global", &global.MenuStartRace_Before) catch unreachable;
 
-    map = &HookFn.data.getPtr(.MenuRaceResultsBefore).core;
+    map = &PluginFn.hooks.getPtr(.MenuRaceResultsBefore).core;
     map.put("global", &global.MenuRaceResults_Before) catch unreachable;
 
-    map = &HookFn.data.getPtr(.MenuTrackBefore).core;
+    map = &PluginFn.hooks.getPtr(.MenuTrackBefore).core;
     map.put("global", &global.MenuTrack_Before) catch unreachable;
 
-    map = &HookFn.data.getPtr(.TextRenderBefore).plugin;
+    map = &PluginFn.hooks.getPtr(.TextRenderBefore).plugin;
     map.put("general", &general.TextRender_Before) catch unreachable;
     map.put("practice", &practice.TextRender_Before) catch unreachable;
     map.put("savestate", &savestate.TextRender_Before) catch unreachable;
@@ -198,13 +256,13 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
             var lib = win32ll.LoadLibraryA(&buf);
             //defer _ = win32ll.FreeLibrary(lib);
 
-            var it_hook = HookFn.data.iterator();
+            var it_hook = PluginFn.hooks.iterator();
             while (it_hook.next()) |h| {
                 const name = @tagName(h.key);
                 var proc = win32ll.GetProcAddress(lib, name);
                 if (proc == null) continue;
 
-                map = &HookFn.data.getPtr(h.key).plugin;
+                map = &PluginFn.hooks.getPtr(h.key).plugin;
                 map.put(f.name, @as(HookFnType, @ptrCast(proc))) catch unreachable;
                 dbg.ConsoleOut("    hooked {s} ({any})\n", .{ name, proc }) catch unreachable;
             }
@@ -223,7 +281,7 @@ fn HookGameSetup(memory: usize) usize {
     const addr: usize = 0x4240AD;
     const len: usize = 0x4240B7 - addr;
     const off_call: usize = 0x4240AF - addr;
-    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitLate));
+    return hook.detour_call(memory, addr, off_call, len, null, RequiredFnCallback(.OnInitLate));
 }
 
 // GAME LOOP
@@ -301,8 +359,8 @@ fn HookGameEnd(memory: usize) usize {
     const exit2_len: usize = 0x49CE48 - exit2_off - 1; // excluding retn
     var offset: usize = memory;
 
-    offset = hook.detour(offset, exit1_off, exit1_len, null, HookFnCallback(.Deinit));
-    offset = hook.detour(offset, exit2_off, exit2_len, null, HookFnCallback(.Deinit));
+    offset = hook.detour(offset, exit1_off, exit1_len, null, RequiredFnCallback(.OnDeinit));
+    offset = hook.detour(offset, exit2_off, exit2_len, null, RequiredFnCallback(.OnDeinit));
 
     return offset;
 }

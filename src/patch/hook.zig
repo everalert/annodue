@@ -195,6 +195,81 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     var map: *HookFnMapType = undefined;
 
+    // testing plugin loading here
+    {
+        dbg.ConsoleOut("hook.zig init()\n", .{}) catch unreachable;
+
+        var buf: [1023:0]u8 = undefined;
+
+        const cwd = std.fs.cwd();
+        var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
+            cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
+        defer dir.close();
+
+        var it_dir = dir.iterate();
+        while (it_dir.next() catch unreachable) |file| {
+            if (file.kind != .file) continue;
+            dbg.ConsoleOut("  {s}\n", .{file.name}) catch unreachable;
+
+            _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{file.name}) catch unreachable;
+            var lib = win32ll.LoadLibraryA(&buf);
+            //defer _ = win32ll.FreeLibrary(lib);
+
+            // required callbacks
+            var valid: bool = true;
+            const fields = comptime std.enums.values(Required);
+            inline for (fields) |field| {
+                var proc = win32ll.GetProcAddress(lib, @tagName(field));
+                if (proc == null) {
+                    dbg.ConsoleOut("    {s} not found, DLL skipped.\n", .{
+                        @tagName(field),
+                    }) catch unreachable;
+                    valid = false;
+                    break;
+                }
+                @field(PluginFn, @tagName(field)).plugin.put(
+                    file.name,
+                    @as(RequiredFnType(field), @ptrCast(proc)),
+                ) catch unreachable;
+                dbg.ConsoleOut("    hooked {s} ({any})\n", .{
+                    @tagName(field),
+                    proc,
+                }) catch unreachable;
+            }
+            const pcv = @field(
+                PluginFn,
+                @tagName(.PluginCompatibilityVersion),
+            ).plugin.get(file.name);
+            if (pcv.?() != PLUGIN_VERSION) {
+                dbg.ConsoleOut(
+                    "    Plugin version not compatible, DLL skipped.\n",
+                    .{},
+                ) catch unreachable;
+                valid = false;
+            }
+            if (!valid) {
+                inline for (fields) |used_field|
+                    _ = @field(PluginFn, @tagName(used_field)).plugin.remove(file.name);
+                _ = win32ll.FreeLibrary(lib);
+                continue;
+            }
+
+            // optional/hook callbacks
+            var it_hook = PluginFn.hooks.iterator();
+            while (it_hook.next()) |h| {
+                const name = @tagName(h.key);
+                var proc = win32ll.GetProcAddress(lib, name);
+                if (proc == null) continue;
+
+                map = &PluginFn.hooks.getPtr(h.key).plugin;
+                map.put(file.name, @as(HookFnType, @ptrCast(proc))) catch unreachable;
+                dbg.ConsoleOut("    hooked {s} ({any})\n", .{ name, proc }) catch unreachable;
+            }
+        }
+
+        dbg.ConsoleOut("\n", .{}) catch unreachable;
+    }
+
     map = &PluginFn.OnInitLate.plugin;
     map.put("general", &general.init_late) catch unreachable;
 
@@ -235,41 +310,6 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map.put("general", &general.TextRender_Before) catch unreachable;
     map.put("practice", &practice.TextRender_Before) catch unreachable;
     map.put("savestate", &savestate.TextRender_Before) catch unreachable;
-
-    // testing plugin loading here
-    {
-        dbg.ConsoleOut("hook.zig init()\n", .{}) catch unreachable;
-
-        var buf: [1023:0]u8 = undefined;
-
-        const cwd = std.fs.cwd();
-        var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
-            cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
-        defer dir.close();
-
-        var it_dir = dir.iterate();
-        while (it_dir.next() catch unreachable) |f| {
-            if (f.kind != .file) continue;
-            dbg.ConsoleOut("  {s}\n", .{f.name}) catch unreachable;
-
-            _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{f.name}) catch unreachable;
-            var lib = win32ll.LoadLibraryA(&buf);
-            //defer _ = win32ll.FreeLibrary(lib);
-
-            var it_hook = PluginFn.hooks.iterator();
-            while (it_hook.next()) |h| {
-                const name = @tagName(h.key);
-                var proc = win32ll.GetProcAddress(lib, name);
-                if (proc == null) continue;
-
-                map = &PluginFn.hooks.getPtr(h.key).plugin;
-                map.put(f.name, @as(HookFnType, @ptrCast(proc))) catch unreachable;
-                dbg.ConsoleOut("    hooked {s} ({any})\n", .{ name, proc }) catch unreachable;
-            }
-        }
-
-        dbg.ConsoleOut("\n", .{}) catch unreachable;
-    }
 
     return off;
 }

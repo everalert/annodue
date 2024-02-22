@@ -9,12 +9,16 @@ const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const global = @import("global.zig");
-const g = &global.GLOBAL_STATE;
+const GLOBAL_STATE = &global.GLOBAL_STATE;
 const GlobalState = global.GlobalState;
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 const savestate = @import("patch_savestate.zig");
 
+const win32 = @import("import/import.zig").win32;
+const win32ll = win32.system.library_loader;
+
+const dbg = @import("util/debug.zig");
 const hook = @import("util/hooking.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
@@ -61,15 +65,14 @@ const Hook = enum(u32) {
     TextRenderBefore,
 };
 
-// TODO: pass in 'initialized' as argument
-const HookFnType = std.StringHashMap(
-    *const fn (state: *GlobalState, initialized: bool) void,
-);
+const HookFnType = *const fn (state: *GlobalState, initialized: bool) callconv(.C) void;
+
+const HookFnMapType = std.StringHashMap(HookFnType);
 
 const HookFnSet = struct {
     initialized: bool,
-    core: HookFnType,
-    plugin: HookFnType,
+    core: HookFnMapType,
+    plugin: HookFnMapType,
 };
 
 const HookFn = struct {
@@ -77,14 +80,14 @@ const HookFn = struct {
     var data = std.enums.EnumArray(Hook, HookFnSet).initUndefined();
 };
 
-inline fn HookFnCallback(hk: Hook) *const fn () void {
+inline fn HookFnCallback(comptime hk: Hook) *const fn () void {
     const c = struct {
         const map: *HookFnSet = HookFn.data.getPtr(hk);
         fn callback() void {
             var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*(g, map.initialized);
+            while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
             var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*(g, map.initialized);
+            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
             map.initialized = true;
         }
     };
@@ -97,9 +100,9 @@ inline fn HookFnCallbackN(hk: []Hook) *const fn () void {
             inline for (hk) |h| {
                 const map: *HookFnSet = comptime HookFn.data.getPtr(h);
                 var it_core = map.map.core.valueIterator();
-                while (it_core.next()) |f| f.*(g, map.initialized);
+                while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
                 var it_plugin = map.map.plugin.valueIterator();
-                while (it_plugin.next()) |f| f.*(g, map.initialized);
+                while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
                 map.map.initialized = true;
             }
         }
@@ -126,13 +129,13 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     while (it_set.next()) |set| {
         HookFn.data.set(set.key, .{
             .initialized = false,
-            .core = HookFnType.init(alloc),
-            .plugin = HookFnType.init(alloc),
+            .core = HookFnMapType.init(alloc),
+            .plugin = HookFnMapType.init(alloc),
         });
     }
     HookFn.initialized = true;
 
-    var map: *HookFnType = undefined;
+    var map: *HookFnMapType = undefined;
 
     map = &HookFn.data.getPtr(.InitLate).plugin;
     map.put("general", &general.init_late) catch unreachable;
@@ -174,6 +177,41 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map.put("general", &general.TextRender_Before) catch unreachable;
     map.put("practice", &practice.TextRender_Before) catch unreachable;
     map.put("savestate", &savestate.TextRender_Before) catch unreachable;
+
+    // testing plugin loading here
+    {
+        dbg.ConsoleOut("hook.zig init()\n", .{}) catch unreachable;
+
+        var buf: [1023:0]u8 = undefined;
+
+        const cwd = std.fs.cwd();
+        var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
+            cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
+        defer dir.close();
+
+        var it_dir = dir.iterate();
+        while (it_dir.next() catch unreachable) |f| {
+            if (f.kind != .file) continue;
+            dbg.ConsoleOut("  {s}\n", .{f.name}) catch unreachable;
+
+            _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{f.name}) catch unreachable;
+            var lib = win32ll.LoadLibraryA(&buf);
+            //defer _ = win32ll.FreeLibrary(lib);
+
+            var it_hook = HookFn.data.iterator();
+            while (it_hook.next()) |h| {
+                const name = @tagName(h.key);
+                var proc = win32ll.GetProcAddress(lib, name);
+                if (proc == null) continue;
+
+                map = &HookFn.data.getPtr(h.key).plugin;
+                map.put(f.name, @as(HookFnType, @ptrCast(proc))) catch unreachable;
+                dbg.ConsoleOut("    hooked {s} ({any})\n", .{ name, proc }) catch unreachable;
+            }
+        }
+
+        dbg.ConsoleOut("\n", .{}) catch unreachable;
+    }
 
     return off;
 }

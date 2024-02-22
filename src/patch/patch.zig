@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const hooking = @import("hook.zig");
-const debug = @import("debug.zig");
 const settings = @import("settings.zig");
 const global = @import("global.zig");
 const general = @import("patch_general.zig");

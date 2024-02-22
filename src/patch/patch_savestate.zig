@@ -314,11 +314,11 @@ fn UpdateState() void {
 
 // HOOKS
 
-//pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) void {
+//pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
 //    state.reset();
 //}
 
-pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) void {
+pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!s.sav.get("savestate_enable", bool)) return;
 
@@ -327,7 +327,7 @@ pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) void {
     }
 }
 
-pub fn TextRender_Before(gs: *GlobalState, initialized: bool) void {
+pub fn TextRender_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!s.sav.get("savestate_enable", bool)) return;
 

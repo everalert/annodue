@@ -365,7 +365,7 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 
 // HOOK FUNCTIONS
 
-pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) void {
+pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
@@ -375,13 +375,13 @@ pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) void {
     }
 }
 
-pub fn InitRaceQuads_After(gs: *GlobalState, initialized: bool) void {
+pub fn InitRaceQuads_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     mode_vis.init();
 }
 
-pub fn TextRender_Before(gs: *GlobalState, initialized: bool) void {
+pub fn TextRender_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 

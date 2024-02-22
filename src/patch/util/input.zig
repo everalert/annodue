@@ -15,7 +15,7 @@ const state = struct {
     var kb: [256]u8 = std.mem.zeroes([256]u8);
 };
 
-pub fn update_kb(gs: *GlobalState, initialized: bool) void {
+pub fn update_kb(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     _ = win32kb.GetKeyboardState(&state.kb_new);

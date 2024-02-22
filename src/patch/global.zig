@@ -146,6 +146,10 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
+pub const GLOBAL_VTABLE_VERSION = 0;
+
+const GlobalVTable = extern struct {};
+
 // FREEZE API
 
 // FIXME: probably want to make this request-based, to prevent plugins from
@@ -223,7 +227,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
 // HOOK CALLS
 
-pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) void {
+pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
     if (gs.in_race == .JustOn) gs.player_reset();
@@ -233,7 +237,7 @@ pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) void {
         gs.practice_mode = !gs.practice_mode;
 }
 
-pub fn TimerUpdate_After(gs: *GlobalState, initialized: bool) void {
+pub fn TimerUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
     gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
@@ -243,26 +247,26 @@ pub fn TimerUpdate_After(gs: *GlobalState, initialized: bool) void {
     gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreen_Before(gs: *GlobalState, initialized: bool) void {
+pub fn MenuTitleScreen_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     DrawVersionString();
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) void {
+pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResults_Before(gs: *GlobalState, initialized: bool) void {
+pub fn MenuRaceResults_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrack_Before(gs: *GlobalState, initialized: bool) void {
+pub fn MenuTrack_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();

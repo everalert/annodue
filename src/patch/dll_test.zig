@@ -17,14 +17,23 @@ const msg = @import("util/message.zig");
 //    return memory;
 //}
 
-export fn MenuTrackSelect_Before(gs: *GlobalState, initialized: bool) void {
-    _ = gs;
-    _ = initialized;
-    rf.swrText_CreateEntry1(160, 120, 0, 0, 0, 190, "~F0~1~cTEST DLL TEXT MENUTRACKSELECT_BEFORE");
+export fn MenuTrackSelectBefore(gs: *GlobalState, initialized: bool) callconv(.C) void {
+    var buf: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "~F0~1~sTest DLL MenuTrackSelect: state {x}, init {any}", .{
+        @intFromPtr(gs),
+        initialized,
+    }) catch unreachable;
+    rf.swrText_CreateEntry1(16, 16, 0, 0, 0, 190, &buf);
 }
 
-export fn TextRender_Before(gs: *GlobalState, initialized: bool) void {
-    _ = initialized;
+export fn TextRenderBefore(gs: *GlobalState, initialized: bool) callconv(.C) void {
+    var buf: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "~F0~1~sTest DLL TextRender: state {x}, init {any}", .{
+        @intFromPtr(gs),
+        initialized,
+    }) catch unreachable;
+    rf.swrText_CreateEntry1(16, 24, 0, 0, 0, 190, &buf);
+
     if (gs.in_race.isOn()) {
         rf.swrText_CreateEntry1(160, 120, 0, 0, 0, 190, "~F0~1~cTEST DLL TEXT TEXTRENDER_BEFORE");
     }

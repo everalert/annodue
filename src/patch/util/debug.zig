@@ -1,9 +1,9 @@
 const std = @import("std");
 const win = std.os.windows;
-const win32 = @import("import/import.zig").win32;
+const win32 = @import("../import/import.zig").win32;
 const win32c = win32.system.console;
 
-const global = @import("global.zig");
+const global = @import("../global.zig");
 
 const DebugConsole = struct {
     var initialized: bool = false;
@@ -24,8 +24,8 @@ fn Init() void {
 }
 
 fn WriteConsole(handle: win.HANDLE, comptime fmt: []const u8, args: anytype) !void {
-    const len = comptime @as(usize, @truncate(std.fmt.count(fmt, args)));
-    var buf: [len]u8 = undefined;
+    const len = @as(usize, @truncate(std.fmt.count(fmt, args)));
+    var buf: [1024]u8 = undefined;
     const out = try std.fmt.bufPrint(&buf, fmt, args);
     _ = win32c.WriteConsoleA(handle, @ptrCast(&out[0]), len, null, null);
 }
@@ -33,7 +33,7 @@ fn WriteConsole(handle: win.HANDLE, comptime fmt: []const u8, args: anytype) !vo
 pub fn ConsoleOut(comptime fmt: []const u8, args: anytype) !void {
     if (!DebugConsole.initialized) {
         Init();
-        try WriteConsole(DebugConsole.handle_out, "{s}\n\r", .{global.VersionStr});
+        try WriteConsole(DebugConsole.handle_out, "{s}\n\n", .{global.VersionStr});
     }
     try WriteConsole(DebugConsole.handle_out, fmt, args);
 }

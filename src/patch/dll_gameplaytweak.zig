@@ -34,12 +34,6 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
-    _ = gs;
-}
-
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     if (gv.SettingGetB("general", "death_speed_mod_enable").?) {
@@ -47,6 +41,12 @@ export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) cal
         const dsd: f32 = gv.SettingGetF("general", "death_speed_drop") orelse 140;
         PatchDeathSpeed(dsm, dsd);
     }
+}
+
+export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
+    _ = initialized;
+    _ = gs;
 }
 
 export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {

@@ -356,17 +356,18 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
-    _ = gs;
-}
-
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     if (gv.SettingGetB("general", "ms_timer_enable").?) {
         PatchHudTimerMs();
     }
+
+    QuickRaceMenu.gv = gv;
+}
+
+export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = initialized;
+    _ = gs;
     const def_laps: u32 = gv.SettingGetU("general", "default_laps") orelse 3;
     if (def_laps >= 1 and def_laps <= 5) {
         const laps: usize = mem.deref(&.{ 0x4BFDB8, 0x8F });
@@ -377,8 +378,6 @@ export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) cal
         const addr_racers: usize = 0x50C558;
         _ = mem.write(addr_racers, u8, @as(u8, @truncate(def_racers)));
     }
-
-    QuickRaceMenu.gv = gv;
 }
 
 export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {

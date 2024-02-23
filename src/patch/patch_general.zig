@@ -23,22 +23,6 @@ fn PatchDeathSpeed(min: f32, drop: f32) void {
     _ = mem.write(0x4C7BBC, f32, drop);
 }
 
-fn PatchHudTimerMs() void {
-    const off_fnDrawTime3: usize = 0x450760;
-    // hudDrawRaceHud
-    _ = x86.call(0x460BD3, off_fnDrawTime3);
-    _ = x86.call(0x460E6B, off_fnDrawTime3);
-    _ = x86.call(0x460ED9, off_fnDrawTime3);
-    // hudDrawRaceResults
-    _ = x86.call(0x46252F, off_fnDrawTime3);
-    _ = x86.call(0x462660, off_fnDrawTime3);
-    _ = mem.patch_add(0x4623D7, u8, 12);
-    _ = mem.patch_add(0x4623F1, u8, 12);
-    _ = mem.patch_add(0x46240B, u8, 12);
-    _ = mem.patch_add(0x46241E, u8, 12);
-    _ = mem.patch_add(0x46242D, u8, 12);
-}
-
 fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
     const col = struct {
         const min: u8 = 95;
@@ -84,37 +68,8 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
         const dsd = s.gen.get("death_speed_drop", f32);
         PatchDeathSpeed(dsm, dsd);
     }
-    if (s.gen.get("ms_timer_enable", bool)) {
-        PatchHudTimerMs();
-    }
 
     return memory;
-}
-
-pub fn init_late(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
-    _ = gs;
-    const def_laps: u32 = s.gen.get("default_laps", u32);
-    if (def_laps >= 1 and def_laps <= 5) {
-        const laps: usize = mem.deref(&.{ 0x4BFDB8, 0x8F });
-        _ = mem.write(laps, u8, @as(u8, @truncate(def_laps)));
-    }
-    const def_racers: u32 = s.gen.get("default_racers", u32);
-    if (def_racers >= 1 and def_racers <= 12) {
-        const addr_racers: usize = 0x50C558;
-        _ = mem.write(addr_racers, u8, @as(u8, @truncate(def_racers)));
-    }
-}
-
-// FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
-pub fn EarlyEngineUpdate_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
-    if (gs.in_race.isOn() and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
-        const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMPTABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
-        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
-    }
 }
 
 pub fn TextRender_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {

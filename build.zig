@@ -40,6 +40,15 @@ pub fn build(b: *std.Build) void {
     dll_savestate.linkLibC();
     b.installArtifact(dll_savestate);
 
+    const dll_qol = b.addSharedLibrary(.{
+        .name = "plugin_qol",
+        .root_source_file = .{ .path = "src/patch/dll_qol.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    dll_qol.linkLibC();
+    b.installArtifact(dll_qol);
+
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.
     //    const main_tests = b.addTest(.{

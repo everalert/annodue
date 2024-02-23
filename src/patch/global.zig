@@ -49,7 +49,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 3;
+pub const PLUGIN_VERSION = 4;
 
 // STATE
 
@@ -148,7 +148,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_VTABLE_VERSION = 2;
+pub const GLOBAL_VTABLE_VERSION = 5;
 
 pub const GlobalVTable = extern struct {
     // Settings
@@ -161,6 +161,9 @@ pub const GlobalVTable = extern struct {
     InputGetKbUp: *const @TypeOf(input.get_kb_up) = &input.get_kb_up,
     InputGetKbPressed: *const @TypeOf(input.get_kb_pressed) = &input.get_kb_pressed,
     InputGetKbReleased: *const @TypeOf(input.get_kb_released) = &input.get_kb_released,
+    // Game
+    GameFreezeEnable: *const @TypeOf(Freeze.freeze) = &Freeze.freeze,
+    GameFreezeDisable: *const @TypeOf(Freeze.unfreeze) = &Freeze.unfreeze,
 };
 
 pub var GLOBAL_VTABLE: GlobalVTable = .{};

@@ -11,6 +11,8 @@ const r = @import("racer.zig");
 const rc = r.constants;
 const rf = r.functions;
 
+const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
+
 pub const MenuItem = struct {
     idx: *i32,
     wrap: bool = true,
@@ -42,12 +44,35 @@ pub const Menu = struct {
     y_scroll: ScrollControl,
     hl_col: u8 = 3, // ingame predefined colors with ~{n}, default yellow
 
-    pub fn update_and_draw(self: *Menu) void {
-        self.y_scroll.Update(&self.idx, self.max, self.wrap);
+    pub inline fn UpdateAndDraw(self: *Menu) void {
+        self.UpdateAndDrawEx(&input.get_kb_pressed, &input.get_kb_released, &input.get_kb_down);
+    }
+
+    pub fn UpdateAndDrawEx(
+        self: *Menu,
+        get_kb_pressed: InputGetFnType,
+        get_kb_released: InputGetFnType,
+        get_kb_down: InputGetFnType,
+    ) void {
+        self.y_scroll.UpdateEx(
+            &self.idx,
+            self.max,
+            self.wrap,
+            get_kb_pressed,
+            get_kb_released,
+            get_kb_down,
+        );
 
         if (self.idx < self.items.len) {
             const item: *const MenuItem = &self.items[@intCast(self.idx)];
-            self.x_scroll.Update(item.idx, item.max, item.wrap);
+            self.x_scroll.UpdateEx(
+                item.idx,
+                item.max,
+                item.wrap,
+                get_kb_pressed,
+                get_kb_released,
+                get_kb_down,
+            );
         }
 
         const x = self.x;
@@ -72,7 +97,7 @@ pub const Menu = struct {
 
         y += self.y_margin;
         if (self.confirm_fn) |f| {
-            if (self.idx == hl_i and input.get_kb_pressed(self.confirm_key.?)) f();
+            if (self.idx == hl_i and get_kb_pressed(self.confirm_key.?)) f();
             y += self.y_step;
             hl_c = if (self.idx == hl_i) self.hl_col else 1;
             const label = if (self.confirm_text) |t| t else "Confirm";
@@ -81,7 +106,7 @@ pub const Menu = struct {
             hl_i += 1;
         }
         if (self.cancel_fn) |f| {
-            if (self.idx == hl_i and input.get_kb_pressed(self.cancel_key.?)) f();
+            if (self.idx == hl_i and get_kb_pressed(self.cancel_key.?)) f();
             y += self.y_step;
             hl_c = if (self.idx == hl_i) self.hl_col else 1;
             const label = if (self.cancel_text) |t| t else "Cancel";

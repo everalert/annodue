@@ -16,7 +16,6 @@ const GLOBAL_VTABLE = &global.GLOBAL_VTABLE;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
-//const savestate = @import("patch_savestate.zig");
 
 const win32 = @import("import/import.zig").win32;
 const win32ll = win32.system.library_loader;
@@ -263,23 +262,14 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
         dbg.ConsoleOut("\n", .{}) catch unreachable;
     }
 
-    map = &PluginFn.OnInitLate.plugin;
-    map.put("general", &general.init_late) catch unreachable;
-
     map = &PluginFn.OnDeinit.core;
     map.put("settings", &settings.deinit) catch unreachable;
 
     map = &PluginFn.hooks.getPtr(.GameLoopBefore).core;
     map.put("input", &input.update_kb) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateBefore).plugin;
-    map.put("general", &general.EarlyEngineUpdate_Before) catch unreachable;
-    map.put("practice", &practice.EarlyEngineUpdate_Before) catch unreachable;
-
     map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateAfter).core;
     map.put("global", &global.EarlyEngineUpdate_After) catch unreachable;
-    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateAfter).plugin;
-    //map.put("savestate", &savestate.EarlyEngineUpdate_After) catch unreachable;
 
     map = &PluginFn.hooks.getPtr(.TimerUpdateAfter).core;
     map.put("global", &global.TimerUpdate_After) catch unreachable;
@@ -302,7 +292,6 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map = &PluginFn.hooks.getPtr(.TextRenderBefore).plugin;
     map.put("general", &general.TextRender_Before) catch unreachable;
     map.put("practice", &practice.TextRender_Before) catch unreachable;
-    //map.put("savestate", &savestate.TextRender_Before) catch unreachable;
 
     return off;
 }

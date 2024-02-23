@@ -6,6 +6,7 @@ const win = std.os.windows;
 const settings = @import("settings.zig");
 const s = settings.state;
 
+const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
@@ -49,10 +50,11 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 4;
+pub const PLUGIN_VERSION = 9;
 
 // STATE
 
+// FIXME: move to util module
 const ActiveState = enum(u8) {
     Off = 0,
     On = 1,
@@ -70,10 +72,14 @@ const ActiveState = enum(u8) {
     }
 };
 
-const GLOBAL_STATE_VERSION = 0;
+const GLOBAL_STATE_VERSION = 3;
 
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
 pub const GlobalState = extern struct {
+    patch_memory: [*]u8 = undefined,
+    patch_size: usize = undefined,
+    patch_offset: usize = undefined,
+
     practice_mode: bool = false,
 
     hwnd: ?win.HWND = null,
@@ -148,7 +154,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_VTABLE_VERSION = 5;
+pub const GLOBAL_VTABLE_VERSION = 8;
 
 pub const GlobalVTable = extern struct {
     // Settings
@@ -229,9 +235,7 @@ fn DrawVersionString() void {
 
 // INIT
 
-pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
-    _ = alloc;
-
+pub fn init() void {
     // input-based launch toggles
     const kb_shift: i16 = win32kb.GetAsyncKeyState(@intFromEnum(win32kb.VK_SHIFT));
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
@@ -239,8 +243,6 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     GLOBAL_STATE.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
     GLOBAL_STATE.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
-
-    return memory;
 }
 
 // HOOK CALLS

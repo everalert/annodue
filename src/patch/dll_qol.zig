@@ -424,6 +424,8 @@ export fn TextRenderBefore(gs: *GlobalState, gv: *GlobalVTable, initialized: boo
                 // ...
             }
         } else if (gs.player.in_race_results.isOn()) {
+            // FIXME: final stat calculation is slightly off, seems to be up to
+            // a frame early now (since porting to plugin dlls).
             if (gs.player.in_race_results == .JustOn) {
                 if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
                 if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);

@@ -14,7 +14,6 @@ const GLOBAL_STATE = &global.GLOBAL_STATE;
 const GlobalVTable = global.GlobalVTable;
 const GLOBAL_VTABLE = &global.GLOBAL_VTABLE;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
-const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
 
 const win32 = @import("import/import.zig").win32;
@@ -175,6 +174,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     //off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+    global.GLOBAL_STATE.patch_offset = off;
 
     var it_hset = PluginFn.hooks.iterator();
     while (it_hset.next()) |set| {
@@ -215,6 +215,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
             _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{file.name}) catch unreachable;
             var lib = win32ll.LoadLibraryA(&buf);
             //defer _ = win32ll.FreeLibrary(lib);
+            dbg.ConsoleOut("    DLL loaded\n", .{}) catch unreachable;
 
             // required callbacks
             var valid: bool = true;
@@ -223,14 +224,14 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
                 const n = @tagName(field);
                 var proc = win32ll.GetProcAddress(lib, n);
                 if (proc == null) {
-                    dbg.ConsoleOut("    {s} not found, DLL skipped.\n", .{n}) catch unreachable;
+                    dbg.ConsoleOut("    {s} not found, DLL unloaded\n", .{n}) catch unreachable;
                     valid = false;
                     break;
                 }
                 const func = @as(RequiredFnType(field), @ptrCast(proc));
                 if (field == .PluginCompatibilityVersion and func() != PLUGIN_VERSION) {
                     dbg.ConsoleOut(
-                        "    Plugin version not compatible, DLL skipped.\n",
+                        "    Plugin version not compatible, DLL unloaded\n",
                         .{},
                     ) catch unreachable;
                     valid = false;
@@ -245,6 +246,8 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
                 _ = win32ll.FreeLibrary(lib);
                 continue;
             }
+            if (@field(PluginFn, @tagName(.OnInit)).plugin.get(file.name)) |func_init|
+                func_init(GLOBAL_STATE, GLOBAL_VTABLE, false);
 
             // optional/hook callbacks
             var it_hook = PluginFn.hooks.iterator();
@@ -290,9 +293,9 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map.put("global", &global.MenuTrack_Before) catch unreachable;
 
     map = &PluginFn.hooks.getPtr(.TextRenderBefore).plugin;
-    map.put("general", &general.TextRender_Before) catch unreachable;
     map.put("practice", &practice.TextRender_Before) catch unreachable;
 
+    off = global.GLOBAL_STATE.patch_offset;
     return off;
 }
 

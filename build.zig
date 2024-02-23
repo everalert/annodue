@@ -67,6 +67,15 @@ pub fn build(b: *std.Build) void {
     dll_gameplaytweak.linkLibC();
     b.installArtifact(dll_gameplaytweak);
 
+    const dll_cosmetic = b.addSharedLibrary(.{
+        .name = "plugin_cosmetic",
+        .root_source_file = .{ .path = "src/patch/dll_cosmetic.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    dll_cosmetic.linkLibC();
+    b.installArtifact(dll_cosmetic);
+
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.
     //    const main_tests = b.addTest(.{

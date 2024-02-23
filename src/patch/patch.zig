@@ -1,8 +1,8 @@
 const std = @import("std");
 
+const global = @import("global.zig");
 const hooking = @import("hook.zig");
 const settings = @import("settings.zig");
-const global = @import("global.zig");
 const multiplayer = @import("patch_multiplayer.zig");
 
 const msg = @import("util/message.zig");
@@ -20,15 +20,17 @@ export fn Patch() void {
     const memory = alloc.alloc(u8, patch_size) catch unreachable;
     var off: usize = @intFromPtr(memory.ptr);
 
-    // settings
-
-    settings.init(alloc);
-
     // init
 
+    global.GLOBAL_STATE.patch_memory = @ptrCast(memory.ptr);
+    global.GLOBAL_STATE.patch_size = patch_size;
+
+    global.init();
+    settings.init(alloc);
     off = hooking.init(alloc, off);
-    off = global.init(alloc, off);
     off = multiplayer.init(alloc, off);
+
+    global.GLOBAL_STATE.patch_offset = off;
 
     // debug
 

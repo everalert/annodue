@@ -351,11 +351,11 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // HOOKS
 
-//pub fn MenuStartRace_Before(gs: *GlobalState,gv:*GlobalVTable, initialized: bool) callconv(.C) void {
+//pub fn MenuStartRaceB(gs: *GlobalState,gv:*GlobalVTable, initialized: bool) callconv(.C) void {
 //    state.reset();
 //}
 
-export fn EarlyEngineUpdateAfter(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!gv.SettingGetB("savestate", "savestate_enable").?) return;
 
@@ -364,7 +364,7 @@ export fn EarlyEngineUpdateAfter(gs: *GlobalState, gv: *GlobalVTable, initialize
     }
 }
 
-export fn TextRenderBefore(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!gv.SettingGetB("savestate", "savestate_enable").?) return;
 

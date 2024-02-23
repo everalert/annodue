@@ -391,7 +391,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // FIXME: settings toggles for both of these
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
-export fn EarlyEngineUpdateBefore(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn EarlyEngineUpdateB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     // Quick Reload
     if (gs.in_race.isOn() and gv.InputGetKbDown(.@"2") and gv.InputGetKbPressed(.ESCAPE)) {
@@ -408,7 +408,7 @@ export fn EarlyEngineUpdateBefore(gs: *GlobalState, gv: *GlobalVTable, initializ
         QuickRaceMenu.update();
 }
 
-export fn TextRenderBefore(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!gv.SettingGetB("practice", "practice_tool_enable").?) return;
 

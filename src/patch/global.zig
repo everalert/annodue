@@ -247,7 +247,7 @@ pub fn init() void {
 
 // HOOK CALLS
 
-pub fn EarlyEngineUpdate_After(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
@@ -258,7 +258,7 @@ pub fn EarlyEngineUpdate_After(gs: *GlobalState, gv: *GlobalVTable, initialized:
         gs.practice_mode = !gs.practice_mode;
 }
 
-pub fn TimerUpdate_After(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn TimerUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
@@ -269,7 +269,7 @@ pub fn TimerUpdate_After(gs: *GlobalState, gv: *GlobalVTable, initialized: bool)
     gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreen_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
@@ -277,21 +277,21 @@ pub fn MenuTitleScreen_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: 
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuStartRace_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuStartRaceB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResults_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuRaceResultsB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrack_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuTrackB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;

@@ -57,14 +57,14 @@ const mode_vis = struct {
 
 // HOOK FUNCTIONS
 
-pub fn InitRaceQuads_After(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn InitRaceQuadsA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
     mode_vis.init();
 }
 
-pub fn TextRender_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;

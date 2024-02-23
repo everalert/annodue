@@ -46,7 +46,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // HOOKS
 
-export fn TextRenderBefore(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!gv.SettingGetB("practice", "practice_tool_enable").? or
         !gv.SettingGetB("practice", "overlay_enable").?) return;

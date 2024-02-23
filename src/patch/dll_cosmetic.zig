@@ -352,7 +352,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // HOOKS
 
-export fn TextRenderBefore(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     if (gv.SettingGetB("general", "rainbow_timer_enable").?) {

@@ -67,29 +67,29 @@ inline fn RequiredFnMapType(comptime f: Required) type {
 }
 
 const Hook = enum(u32) {
-    GameLoopBefore,
-    GameLoopAfter,
-    EarlyEngineUpdateBefore,
-    EarlyEngineUpdateAfter,
-    LateEngineUpdateBefore,
-    LateEngineUpdateAfter,
-    TimerUpdateBefore,
-    TimerUpdateAfter,
-    //InitHangQuadsBefore,
-    InitHangQuadsAfter,
-    //InitRaceQuadsBefore,
-    InitRaceQuadsAfter,
-    MenuTitleScreenBefore,
-    MenuStartRaceBefore,
-    MenuJunkyardBefore,
-    MenuRaceResultsBefore,
-    MenuWattosShopBefore,
-    MenuHangarBefore,
-    MenuVehicleSelectBefore,
-    MenuTrackSelectBefore,
-    MenuTrackBefore,
-    MenuCantinaEntryBefore,
-    TextRenderBefore,
+    GameLoopB,
+    GameLoopA,
+    EarlyEngineUpdateB,
+    EarlyEngineUpdateA,
+    LateEngineUpdateB,
+    LateEngineUpdateA,
+    TimerUpdateB,
+    TimerUpdateA,
+    //InitHangQuadsB,
+    InitHangQuadsA,
+    //InitRaceQuadsB,
+    InitRaceQuadsA,
+    MenuTitleScreenB,
+    MenuStartRaceB,
+    MenuJunkyardB,
+    MenuRaceResultsB,
+    MenuWattosShopB,
+    MenuHangarB,
+    MenuVehicleSelectB,
+    MenuTrackSelectB,
+    MenuTrackB,
+    MenuCantinaEntryB,
+    TextRenderB,
 };
 
 const HookFnMapType = std.StringHashMap(HookFnType);
@@ -268,32 +268,32 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map = &PluginFn.OnDeinit.core;
     map.put("settings", &settings.deinit) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.GameLoopBefore).core;
+    map = &PluginFn.hooks.getPtr(.GameLoopB).core;
     map.put("input", &input.update_kb) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateAfter).core;
-    map.put("global", &global.EarlyEngineUpdate_After) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateA).core;
+    map.put("global", &global.EarlyEngineUpdateA) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.TimerUpdateAfter).core;
-    map.put("global", &global.TimerUpdate_After) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.TimerUpdateA).core;
+    map.put("global", &global.TimerUpdateA) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.InitRaceQuadsAfter).plugin;
-    map.put("practice", &practice.InitRaceQuads_After) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.InitRaceQuadsA).plugin;
+    map.put("practice", &practice.InitRaceQuadsA) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.MenuTitleScreenBefore).core;
-    map.put("global", &global.MenuTitleScreen_Before) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.MenuTitleScreenB).core;
+    map.put("global", &global.MenuTitleScreenB) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.MenuStartRaceBefore).core;
-    map.put("global", &global.MenuStartRace_Before) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.MenuStartRaceB).core;
+    map.put("global", &global.MenuStartRaceB) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.MenuRaceResultsBefore).core;
-    map.put("global", &global.MenuRaceResults_Before) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.MenuRaceResultsB).core;
+    map.put("global", &global.MenuRaceResultsB) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.MenuTrackBefore).core;
-    map.put("global", &global.MenuTrack_Before) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.MenuTrackB).core;
+    map.put("global", &global.MenuTrackB) catch unreachable;
 
-    map = &PluginFn.hooks.getPtr(.TextRenderBefore).plugin;
-    map.put("practice", &practice.TextRender_Before) catch unreachable;
+    map = &PluginFn.hooks.getPtr(.TextRenderB).plugin;
+    map.put("practice", &practice.TextRenderB) catch unreachable;
 
     off = global.GLOBAL_STATE.patch_offset;
     return off;
@@ -315,8 +315,8 @@ fn HookGameLoop(memory: usize) usize {
     return hook.intercept_call(
         memory,
         0x49CE2A,
-        HookFnCallback(.GameLoopBefore),
-        HookFnCallback(.GameLoopAfter),
+        HookFnCallback(.GameLoopB),
+        HookFnCallback(.GameLoopA),
     );
 }
 
@@ -327,13 +327,13 @@ fn HookEngineUpdate(memory: usize) usize {
 
     // fn_445980 case 1
     // physics updates, etc.
-    off = hook.intercept_call(off, 0x445991, HookFnCallback(.EarlyEngineUpdateBefore), null);
-    off = hook.intercept_call(off, 0x445A00, null, HookFnCallback(.EarlyEngineUpdateAfter));
+    off = hook.intercept_call(off, 0x445991, HookFnCallback(.EarlyEngineUpdateB), null);
+    off = hook.intercept_call(off, 0x445A00, null, HookFnCallback(.EarlyEngineUpdateA));
 
     // fn_445980 case 2
     // text processing, etc. before the actual render
-    off = hook.intercept_call(off, 0x445A10, HookFnCallback(.LateEngineUpdateBefore), null);
-    off = hook.intercept_call(off, 0x445A40, null, HookFnCallback(.LateEngineUpdateAfter));
+    off = hook.intercept_call(off, 0x445A10, HookFnCallback(.LateEngineUpdateB), null);
+    off = hook.intercept_call(off, 0x445A40, null, HookFnCallback(.LateEngineUpdateA));
 
     return off;
 }
@@ -345,8 +345,8 @@ fn HookTimerUpdate(memory: usize) usize {
     return hook.intercept_call(
         memory,
         0x4459AF,
-        HookFnCallback(.TimerUpdateBefore),
-        HookFnCallback(.TimerUpdateAfter),
+        HookFnCallback(.TimerUpdateB),
+        HookFnCallback(.TimerUpdateA),
     );
 }
 
@@ -357,7 +357,7 @@ fn HookInitHangQuads(memory: usize) usize {
     const addr: usize = 0x454DCF;
     const len: usize = 0x454DD8 - addr;
     const off_call: usize = 0x454DD0 - addr;
-    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitHangQuadsAfter));
+    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitHangQuadsA));
 }
 
 // RACE SETUP
@@ -367,7 +367,7 @@ fn HookInitRaceQuads(memory: usize) usize {
     const addr: usize = 0x466D76;
     const len: usize = 0x466D81 - addr;
     const off_call: usize = 0x466D79 - addr;
-    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitRaceQuadsAfter));
+    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitRaceQuadsA));
 }
 
 // GAME END; executable closing
@@ -396,16 +396,16 @@ fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
 
     // see fn_457620 @ 0x45777F
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, HookFnCallback(.MenuTitleScreenBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, HookFnCallback(.MenuStartRaceBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, HookFnCallback(.MenuJunkyardBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, HookFnCallback(.MenuRaceResultsBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, HookFnCallback(.MenuWattosShopBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, HookFnCallback(.MenuHangarBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, HookFnCallback(.MenuVehicleSelectBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, HookFnCallback(.MenuTrackSelectBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, HookFnCallback(.MenuTrackBefore));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, HookFnCallback(.MenuCantinaEntryBefore));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, HookFnCallback(.MenuTitleScreenB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, HookFnCallback(.MenuStartRaceB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, HookFnCallback(.MenuJunkyardB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, HookFnCallback(.MenuRaceResultsB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, HookFnCallback(.MenuWattosShopB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, HookFnCallback(.MenuHangarB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, HookFnCallback(.MenuVehicleSelectB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, HookFnCallback(.MenuTrackSelectB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, HookFnCallback(.MenuTrackB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, HookFnCallback(.MenuCantinaEntryB));
 
     return off;
 }
@@ -413,5 +413,5 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn HookTextRender(memory: usize) usize {
-    return hook.intercept_call(memory, 0x483F8B, null, HookFnCallback(.TextRenderBefore));
+    return hook.intercept_call(memory, 0x483F8B, null, HookFnCallback(.TextRenderB));
 }

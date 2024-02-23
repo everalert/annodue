@@ -3,7 +3,6 @@ const std = @import("std");
 const global = @import("global.zig");
 const hooking = @import("hook.zig");
 const settings = @import("settings.zig");
-const multiplayer = @import("patch_multiplayer.zig");
 
 const msg = @import("util/message.zig");
 const r = @import("util/racer.zig");
@@ -28,7 +27,6 @@ export fn Patch() void {
     global.init();
     settings.init(alloc);
     off = hooking.init(alloc, off);
-    off = multiplayer.init(alloc, off);
 
     global.GLOBAL_STATE.patch_offset = off;
 

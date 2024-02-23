@@ -174,8 +174,8 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // HOOKS
 
-export fn EarlyEngineUpdateAfter(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
-    _ = gs;
-}
+//export fn EarlyEngineUpdateAfter(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+//    _ = gv;
+//    _ = initialized;
+//    _ = gs;
+//}

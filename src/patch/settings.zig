@@ -6,6 +6,7 @@ const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const global = @import("global.zig");
 const GlobalState = global.GlobalState;
+const GlobalVTable = global.GlobalVTable;
 
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
@@ -24,6 +25,27 @@ pub const state = struct {
     pub var sav: SettingsGroup = undefined;
     pub var mp: SettingsGroup = undefined;
 };
+
+fn get(group: [*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
+    const sg = state.manager.groups.get(std.mem.span(group));
+    return if (sg) |g| g.get(std.mem.span(setting), T) else null;
+}
+
+pub fn get_bool(group: [*:0]const u8, setting: [*:0]const u8) ?bool {
+    return get(group, setting, bool);
+}
+
+pub fn get_i32(group: [*:0]const u8, setting: [*:0]const u8) ?i32 {
+    return get(group, setting, i32);
+}
+
+pub fn get_u32(group: [*:0]const u8, setting: [*:0]const u8) ?u32 {
+    return get(group, setting, u32);
+}
+
+pub fn get_f32(group: [*:0]const u8, setting: [*:0]const u8) ?f32 {
+    return get(group, setting, f32);
+}
 
 pub fn init(alloc: std.mem.Allocator) void {
     state.manager = SettingsManager.init(alloc);
@@ -63,7 +85,8 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 }
 
-pub fn deinit(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn deinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     defer state.manager.deinit();

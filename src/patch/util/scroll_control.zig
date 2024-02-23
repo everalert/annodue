@@ -11,6 +11,8 @@ const r = @import("racer.zig");
 const rc = r.constants;
 const rf = r.functions;
 
+const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
+
 pub const ScrollControl = struct {
     scroll: f32 = 0,
     scroll_buf: f32 = 0,
@@ -19,18 +21,37 @@ pub const ScrollControl = struct {
     input_dec: win32kb.VIRTUAL_KEY,
     input_inc: win32kb.VIRTUAL_KEY,
 
-    pub fn update(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
+    pub inline fn Update(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
+        self.UpdateEx(
+            val,
+            max,
+            wrap,
+            &input.get_kb_pressed,
+            &input.get_kb_released,
+            &input.get_kb_down,
+        );
+    }
+
+    pub fn UpdateEx(
+        self: *ScrollControl,
+        val: *i32,
+        max: i32,
+        wrap: bool,
+        get_kb_pressed: InputGetFnType,
+        get_kb_released: InputGetFnType,
+        get_kb_down: InputGetFnType,
+    ) void {
         const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
 
         var inc: f32 = 0;
-        if (input.get_kb_pressed(self.input_dec)) inc -= 1;
-        if (input.get_kb_pressed(self.input_inc)) inc += 1;
-        if (input.get_kb_released(self.input_dec) or input.get_kb_released(self.input_inc)) {
+        if (get_kb_pressed(self.input_dec)) inc -= 1;
+        if (get_kb_pressed(self.input_inc)) inc += 1;
+        if (get_kb_released(self.input_dec) or get_kb_released(self.input_inc)) {
             self.scroll = 0;
             self.scroll_buf = 0;
         }
-        if (input.get_kb_down(self.input_dec)) self.scroll -= dt;
-        if (input.get_kb_down(self.input_inc)) self.scroll += dt;
+        if (get_kb_down(self.input_dec)) self.scroll -= dt;
+        if (get_kb_down(self.input_inc)) self.scroll += dt;
 
         const scroll: f32 = std.math.clamp(self.scroll / self.scroll_time, -1, 1);
         inc += std.math.pow(f32, scroll, 2) * dt * self.scroll_units * std.math.sign(scroll);

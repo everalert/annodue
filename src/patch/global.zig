@@ -49,7 +49,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 1;
+pub const PLUGIN_VERSION = 3;
 
 // STATE
 
@@ -148,9 +148,22 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_VTABLE_VERSION = 0;
+pub const GLOBAL_VTABLE_VERSION = 2;
 
-const GlobalVTable = extern struct {};
+pub const GlobalVTable = extern struct {
+    // Settings
+    SettingGetB: *const @TypeOf(settings.get_bool) = &settings.get_bool,
+    SettingGetI: *const @TypeOf(settings.get_i32) = &settings.get_i32,
+    SettingGetU: *const @TypeOf(settings.get_u32) = &settings.get_u32,
+    SettingGetF: *const @TypeOf(settings.get_f32) = &settings.get_f32,
+    // Input
+    InputGetKbDown: *const @TypeOf(input.get_kb_down) = &input.get_kb_down,
+    InputGetKbUp: *const @TypeOf(input.get_kb_up) = &input.get_kb_up,
+    InputGetKbPressed: *const @TypeOf(input.get_kb_pressed) = &input.get_kb_pressed,
+    InputGetKbReleased: *const @TypeOf(input.get_kb_released) = &input.get_kb_released,
+};
+
+pub var GLOBAL_VTABLE: GlobalVTable = .{};
 
 // FREEZE API
 
@@ -229,7 +242,8 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
 // HOOK CALLS
 
-pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn EarlyEngineUpdate_After(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
     if (gs.in_race == .JustOn) gs.player_reset();
@@ -239,7 +253,8 @@ pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C)
         gs.practice_mode = !gs.practice_mode;
 }
 
-pub fn TimerUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn TimerUpdate_After(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
     gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
@@ -249,26 +264,30 @@ pub fn TimerUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C) void 
     gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreen_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn MenuTitleScreen_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     DrawVersionString();
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn MenuStartRace_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResults_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn MenuRaceResults_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrack_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn MenuTrack_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();

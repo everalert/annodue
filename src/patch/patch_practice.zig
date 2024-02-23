@@ -6,6 +6,7 @@ const settings = @import("settings.zig");
 const s = settings.state;
 const global = @import("global.zig");
 const GlobalState = global.GlobalState;
+const GlobalVTable = global.GlobalVTable;
 
 const menu = @import("util/menu.zig");
 const msg = @import("util/message.zig");
@@ -365,7 +366,8 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 
 // HOOK FUNCTIONS
 
-pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn EarlyEngineUpdate_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
@@ -375,13 +377,15 @@ pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) callconv(.C
     }
 }
 
-pub fn InitRaceQuads_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn InitRaceQuads_After(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     mode_vis.init();
 }
 
-pub fn TextRender_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn TextRender_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 

@@ -2,20 +2,18 @@ pub const Self = @This();
 
 const std = @import("std");
 
-const settings = @import("settings.zig");
-const s = settings.state;
-const global = @import("global.zig");
-const g = &global.GLOBAL_STATE;
-const GlobalState = global.GlobalState;
+const GlobalState = @import("global.zig").GlobalState;
+const GlobalVTable = @import("global.zig").GlobalVTable;
+const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
-const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = r.constants;
 const rf = r.functions;
 
+// NOTE: some of these might be outdated, review at next refactor
 // FIXME: stop assuming entities will be in index 0, particularly Test entity
 // FIXME: game crashes after a bit when tabbing out; probably the allocated memory
 // filling up quickly because there is no frame pacing while tabbed out? not sure
@@ -100,7 +98,7 @@ const state = struct {
     var layer_indexes: [layer_depth + 1]usize = undefined;
     var layer_index_count: usize = undefined;
 
-    fn init() void {
+    fn init(gv: *GlobalVTable) void {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         const alloc = gpa.allocator();
         memory = alloc.alloc(u8, memory_size) catch unreachable;
@@ -116,7 +114,7 @@ const state = struct {
         headers = @as(@TypeOf(headers), @ptrFromInt(memory_addr + headers_off));
         stage = @as(@TypeOf(stage), @ptrFromInt(memory_addr + stage_off));
 
-        load_delay = s.sav.get("load_delay", u32);
+        load_delay = gv.SettingGetU("savestate", "load_delay") orelse 500;
 
         initialized = true;
     }
@@ -132,17 +130,17 @@ const state = struct {
 
     // FIXME: better new-frame checking that doesn't only account for tabbing out
     // i.e. also when pausing, physics frozen with ingame feature, etc.
-    fn saveable() bool {
-        const frame_new: bool = g.framecount != last_framecount;
+    fn saveable(gs: *GlobalState) bool {
+        const frame_new: bool = gs.framecount != last_framecount;
         const space_ok: bool = memory_end_addr - @intFromPtr(data) - offsets[frame] >= frame_size;
         const frames_ok: bool = frame < frames;
-        return frame_new and g.in_race.isOn() and space_ok and frames_ok;
+        return frame_new and gs.in_race.isOn() and space_ok and frames_ok;
     }
 
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
-    fn loadable() bool {
-        return g.in_race.isOn();
+    fn loadable(gs: *GlobalState) bool {
+        return gs.in_race.isOn();
     }
 
     fn get_depth(index: usize) usize {
@@ -196,11 +194,11 @@ const state = struct {
 
     // FIXME: in future, probably can skip the first step each new frame, because
     // the most recent frame would already be in stage1 from last time
-    fn save_compressed() void {
+    fn save_compressed(gs: *GlobalState, gv: *GlobalVTable) void {
         // FIXME: why the fk does this crash if it comes after the guard
-        if (!initialized) init();
-        if (!saveable()) return;
-        last_framecount = g.framecount;
+        if (!initialized) init(gv);
+        if (!saveable(gs)) return;
+        last_framecount = gs.framecount;
 
         var data_size: usize = 0;
         if (frame > 0) {
@@ -235,8 +233,8 @@ const state = struct {
         offsets[frame] = offsets[frame - 1] + data_size;
     }
 
-    fn load_compressed(index: usize) void {
-        if (!loadable()) return;
+    fn load_compressed(index: usize, gs: *GlobalState) void {
+        if (!loadable(gs)) return;
 
         uncompress_frame(index, false);
         r.WriteRaceDataValueBytes(0, &raw_stage[off_race], rc.RACE_DATA_SIZE);
@@ -249,87 +247,126 @@ const state = struct {
 
 // LOADER LOGIC
 
-fn DoStateRecording() LoadState {
-    state.save_compressed();
+fn DoStateRecording(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+    state.save_compressed(gs, gv);
 
-    if (input.get_kb_pressed(.@"1")) {
+    if (gv.InputGetKbPressed(.@"1")) {
         state.load_frame = state.frame - 1;
     }
-    if (input.get_kb_pressed(.@"2") and state.frames > 0) {
-        state.load_time = state.load_delay + g.timestamp;
+    if (gv.InputGetKbPressed(.@"2") and state.frames > 0) {
+        state.load_time = state.load_delay + gs.timestamp;
         return .Loading;
     }
 
     return .Recording;
 }
 
-fn DoStateLoading() LoadState {
-    if (input.get_kb_pressed(.@"2")) {
+fn DoStateLoading(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+    if (gv.InputGetKbPressed(.@"2")) {
         state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
         state.frame_total = state.frame;
         return .Scrubbing;
     }
-    if (g.timestamp >= state.load_time) {
-        state.load_compressed(state.load_frame);
+    if (gs.timestamp >= state.load_time) {
+        state.load_compressed(state.load_frame, gs);
         return .Recording;
     }
     return .Loading;
 }
 
-fn DoStateScrubbing() LoadState {
-    if (input.get_kb_pressed(.@"1")) {
+fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+    if (gv.InputGetKbPressed(.@"1")) {
         state.load_frame = state.frame - 1;
     }
-    if (input.get_kb_pressed(.@"2")) {
+    if (gv.InputGetKbPressed(.@"2")) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
-        state.load_time = state.load_delay + g.timestamp;
+        state.load_time = state.load_delay + gs.timestamp;
         return .ScrubExiting;
     }
 
-    state.scrub.update(&state.scrub_frame, std.math.cast(i32, state.frame_total).?, false);
+    state.scrub.UpdateEx(
+        &state.scrub_frame,
+        std.math.cast(i32, state.frame_total).?,
+        false,
+        gv.InputGetKbPressed,
+        gv.InputGetKbReleased,
+        gv.InputGetKbDown,
+    );
 
-    state.load_compressed(std.math.cast(u32, state.scrub_frame).?);
+    state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
     return .Scrubbing;
 }
 
-fn DoStateScrubExiting() LoadState {
-    state.load_compressed(std.math.cast(u32, state.scrub_frame).?);
+fn DoStateScrubExiting(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+    state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
 
-    if (input.get_kb_pressed(.@"1")) {
+    if (gv.InputGetKbPressed(.@"1")) {
         state.load_frame = state.frame - 1;
     }
 
-    if (g.timestamp < state.load_time) return .ScrubExiting;
+    if (gs.timestamp < state.load_time) return .ScrubExiting;
     return .Recording;
 }
 
-fn UpdateState() void {
+fn UpdateState(gs: *GlobalState, gv: *GlobalVTable) void {
     state.rec_state = switch (state.rec_state) {
-        .Recording => DoStateRecording(),
-        .Loading => DoStateLoading(),
-        .Scrubbing => DoStateScrubbing(),
-        .ScrubExiting => DoStateScrubExiting(),
+        .Recording => DoStateRecording(gs, gv),
+        .Loading => DoStateLoading(gs, gv),
+        .Scrubbing => DoStateScrubbing(gs, gv),
+        .ScrubExiting => DoStateScrubExiting(gs, gv),
     };
+}
+
+// HOUSEKEEPING
+
+export fn PluginName() callconv(.C) [*:0]const u8 {
+    return "Savestate";
+}
+
+export fn PluginVersion() callconv(.C) [*:0]const u8 {
+    return "0.0.0";
+}
+
+export fn PluginCompatibilityVersion() callconv(.C) u32 {
+    return COMPATIBILITY_VERSION;
+}
+
+export fn OnInit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
+    _ = initialized;
+    _ = gs;
+}
+
+export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
+    _ = initialized;
+    _ = gs;
+}
+
+export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
+    _ = initialized;
+    _ = gs;
 }
 
 // HOOKS
 
-//pub fn MenuStartRace_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+//pub fn MenuStartRace_Before(gs: *GlobalState,gv:*GlobalVTable, initialized: bool) callconv(.C) void {
 //    state.reset();
 //}
 
-pub fn EarlyEngineUpdate_After(gs: *GlobalState, initialized: bool) callconv(.C) void {
+export fn EarlyEngineUpdateAfter(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
-    if (!s.sav.get("savestate_enable", bool)) return;
+    if (!gv.SettingGetB("savestate", "savestate_enable").?) return;
 
     if (gs.practice_mode and gs.in_race.isOn()) {
-        if (gs.player.in_race_racing.isOn()) UpdateState() else state.reset();
+        if (gs.player.in_race_racing.isOn()) UpdateState(gs, gv) else state.reset();
     }
 }
 
-pub fn TextRender_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+export fn TextRenderBefore(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
-    if (!s.sav.get("savestate_enable", bool)) return;
+    if (!gv.SettingGetB("savestate", "savestate_enable").?) return;
 
     if (gs.practice_mode and gs.in_race.isOn()) {
         if (gs.player.in_race_racing.isOn()) {

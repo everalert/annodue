@@ -43,11 +43,11 @@ pub const Menu = struct {
     hl_col: u8 = 3, // ingame predefined colors with ~{n}, default yellow
 
     pub fn update_and_draw(self: *Menu) void {
-        self.y_scroll.update(&self.idx, self.max, self.wrap);
+        self.y_scroll.Update(&self.idx, self.max, self.wrap);
 
         if (self.idx < self.items.len) {
             const item: *const MenuItem = &self.items[@intCast(self.idx)];
-            self.x_scroll.update(item.idx, item.max, item.wrap);
+            self.x_scroll.Update(item.idx, item.max, item.wrap);
         }
 
         const x = self.x;

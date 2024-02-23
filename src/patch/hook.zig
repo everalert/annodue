@@ -9,12 +9,14 @@ const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const global = @import("global.zig");
-const GLOBAL_STATE = &global.GLOBAL_STATE;
 const GlobalState = global.GlobalState;
+const GLOBAL_STATE = &global.GLOBAL_STATE;
+const GlobalVTable = global.GlobalVTable;
+const GLOBAL_VTABLE = &global.GLOBAL_VTABLE;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const general = @import("patch_general.zig");
 const practice = @import("patch_practice.zig");
-const savestate = @import("patch_savestate.zig");
+//const savestate = @import("patch_savestate.zig");
 
 const win32 = @import("import/import.zig").win32;
 const win32ll = win32.system.library_loader;
@@ -49,6 +51,8 @@ const Required = enum(u32) {
     //OnEnable,
     //OnDisable,
 };
+
+const HookFnType = *const fn (state: *GlobalState, vtable: *GlobalVTable, initialized: bool) callconv(.C) void;
 
 inline fn RequiredFnType(comptime f: Required) type {
     return switch (f) {
@@ -90,8 +94,6 @@ const Hook = enum(u32) {
     TextRenderBefore,
 };
 
-const HookFnType = *const fn (state: *GlobalState, initialized: bool) callconv(.C) void;
-
 const HookFnMapType = std.StringHashMap(HookFnType);
 
 inline fn PluginFnSet(comptime T: type) type {
@@ -121,9 +123,9 @@ inline fn RequiredFnCallback(comptime req: Required) *const fn () void {
         const map: *HookFnSet = &@field(PluginFn, @tagName(req));
         fn callback() void {
             var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
             var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
             map.initialized = true;
         }
     };
@@ -135,9 +137,9 @@ inline fn HookFnCallback(comptime hk: Hook) *const fn () void {
         const map: *HookFnSet = PluginFn.hooks.getPtr(hk);
         fn callback() void {
             var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
             var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
+            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
             map.initialized = true;
         }
     };
@@ -219,33 +221,24 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
             var valid: bool = true;
             const fields = comptime std.enums.values(Required);
             inline for (fields) |field| {
-                var proc = win32ll.GetProcAddress(lib, @tagName(field));
+                const n = @tagName(field);
+                var proc = win32ll.GetProcAddress(lib, n);
                 if (proc == null) {
-                    dbg.ConsoleOut("    {s} not found, DLL skipped.\n", .{
-                        @tagName(field),
-                    }) catch unreachable;
+                    dbg.ConsoleOut("    {s} not found, DLL skipped.\n", .{n}) catch unreachable;
                     valid = false;
                     break;
                 }
-                @field(PluginFn, @tagName(field)).plugin.put(
-                    file.name,
-                    @as(RequiredFnType(field), @ptrCast(proc)),
-                ) catch unreachable;
-                dbg.ConsoleOut("    hooked {s} ({any})\n", .{
-                    @tagName(field),
-                    proc,
-                }) catch unreachable;
-            }
-            const pcv = @field(
-                PluginFn,
-                @tagName(.PluginCompatibilityVersion),
-            ).plugin.get(file.name);
-            if (pcv.?() != PLUGIN_VERSION) {
-                dbg.ConsoleOut(
-                    "    Plugin version not compatible, DLL skipped.\n",
-                    .{},
-                ) catch unreachable;
-                valid = false;
+                const func = @as(RequiredFnType(field), @ptrCast(proc));
+                if (field == .PluginCompatibilityVersion and func() != PLUGIN_VERSION) {
+                    dbg.ConsoleOut(
+                        "    Plugin version not compatible, DLL skipped.\n",
+                        .{},
+                    ) catch unreachable;
+                    valid = false;
+                    break;
+                }
+                @field(PluginFn, @tagName(field)).plugin.put(file.name, func) catch unreachable;
+                dbg.ConsoleOut("    hooked {s} ({any})\n", .{ n, proc }) catch unreachable;
             }
             if (!valid) {
                 inline for (fields) |used_field|
@@ -286,7 +279,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateAfter).core;
     map.put("global", &global.EarlyEngineUpdate_After) catch unreachable;
     map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateAfter).plugin;
-    map.put("savestate", &savestate.EarlyEngineUpdate_After) catch unreachable;
+    //map.put("savestate", &savestate.EarlyEngineUpdate_After) catch unreachable;
 
     map = &PluginFn.hooks.getPtr(.TimerUpdateAfter).core;
     map.put("global", &global.TimerUpdate_After) catch unreachable;
@@ -309,7 +302,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     map = &PluginFn.hooks.getPtr(.TextRenderBefore).plugin;
     map.put("general", &general.TextRender_Before) catch unreachable;
     map.put("practice", &practice.TextRender_Before) catch unreachable;
-    map.put("savestate", &savestate.TextRender_Before) catch unreachable;
+    //map.put("savestate", &savestate.TextRender_Before) catch unreachable;
 
     return off;
 }

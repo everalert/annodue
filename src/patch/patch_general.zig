@@ -6,6 +6,7 @@ const settings = @import("settings.zig");
 const s = settings.state;
 const global = @import("global.zig");
 const GlobalState = global.GlobalState;
+const GlobalVTable = global.GlobalVTable;
 
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
@@ -90,7 +91,8 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     return memory;
 }
 
-pub fn init_late(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn init_late(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     const def_laps: u32 = s.gen.get("default_laps", u32);
@@ -106,7 +108,8 @@ pub fn init_late(gs: *GlobalState, initialized: bool) callconv(.C) void {
 }
 
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
-pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn EarlyEngineUpdate_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     if (gs.in_race.isOn() and input.get_kb_down(.@"2") and input.get_kb_pressed(.ESCAPE)) {
         const jdge: usize = mem.deref_read(&.{ rc.ADDR_ENTITY_MANAGER_JUMPTABLE, @intFromEnum(rc.ENTITY.Jdge) * 4, 0x10 }, usize);
@@ -114,7 +117,8 @@ pub fn EarlyEngineUpdate_Before(gs: *GlobalState, initialized: bool) callconv(.C
     }
 }
 
-pub fn TextRender_Before(gs: *GlobalState, initialized: bool) callconv(.C) void {
+pub fn TextRender_Before(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
     if (s.gen.get("rainbow_timer_enable", bool)) {

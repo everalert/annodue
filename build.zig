@@ -31,6 +31,15 @@ pub fn build(b: *std.Build) void {
     dll_test.linkLibC();
     b.installArtifact(dll_test);
 
+    const dll_savestate = b.addSharedLibrary(.{
+        .name = "plugin_savestate",
+        .root_source_file = .{ .path = "src/patch/dll_savestate.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    dll_savestate.linkLibC();
+    b.installArtifact(dll_savestate);
+
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.
     //    const main_tests = b.addTest(.{

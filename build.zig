@@ -49,6 +49,15 @@ pub fn build(b: *std.Build) void {
     dll_qol.linkLibC();
     b.installArtifact(dll_qol);
 
+    const dll_overlay = b.addSharedLibrary(.{
+        .name = "plugin_overlay",
+        .root_source_file = .{ .path = "src/patch/dll_overlay.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    dll_overlay.linkLibC();
+    b.installArtifact(dll_overlay);
+
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.
     //    const main_tests = b.addTest(.{

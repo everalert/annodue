@@ -76,6 +76,15 @@ pub fn build(b: *std.Build) void {
     dll_cosmetic.linkLibC();
     b.installArtifact(dll_cosmetic);
 
+    const dll_multiplayer = b.addSharedLibrary(.{
+        .name = "plugin_multiplayer",
+        .root_source_file = .{ .path = "src/patch/dll_multiplayer.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    dll_multiplayer.linkLibC();
+    b.installArtifact(dll_multiplayer);
+
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.
     //    const main_tests = b.addTest(.{

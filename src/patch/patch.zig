@@ -3,7 +3,6 @@ const std = @import("std");
 const hooking = @import("hook.zig");
 const settings = @import("settings.zig");
 const global = @import("global.zig");
-const general = @import("patch_general.zig");
 const multiplayer = @import("patch_multiplayer.zig");
 
 const msg = @import("util/message.zig");
@@ -29,7 +28,6 @@ export fn Patch() void {
 
     off = hooking.init(alloc, off);
     off = global.init(alloc, off);
-    off = general.init(alloc, off);
     off = multiplayer.init(alloc, off);
 
     // debug

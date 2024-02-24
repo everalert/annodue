@@ -13,49 +13,91 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
 // TODO:
-//- general: ?? rainbow ui (timer, pos, laps, but not labels)
-//- general: ?? rainbow labels
-//- general: ?? custom static color for all of the above
+//- general: ?? custom static color as an option for the rainbow stuff?
 
 // COLOR CHANGES
 
-fn PatchHudTimerColRotate() void { // 0xFFFFFFBE
-    const col = struct {
-        const min: u8 = 95;
-        const max: u8 = 255;
-        var rgb: [3]u8 = .{ 255, 95, 95 };
-        var i: u8 = 0;
-        var n: u8 = 1;
-        fn update() void {
-            n = (i + 1) % 3;
-            if (rgb[i] == min and rgb[n] == max) i = n;
-            n = (i + 1) % 3;
-            if (rgb[i] == max and rgb[n] < max) {
-                rgb[n] += 1;
-            } else {
-                rgb[i] -= 1;
-            }
+const RotatingRGB = struct {
+    min: u8 = 95,
+    max: u8 = 255,
+    rgb: [3]u8 = .{ 255, 95, 95 },
+    i: u8 = 0,
+    n: u8 = 1,
+    fn update(self: *RotatingRGB) void {
+        self.n = (self.i + 1) % 3;
+        if (self.rgb[self.i] == self.min and self.rgb[self.n] == self.max) self.i = self.n;
+        self.n = (self.i + 1) % 3;
+        if (self.rgb[self.i] == self.max and self.rgb[self.n] < self.max) {
+            self.rgb[self.n] += 1;
+        } else {
+            self.rgb[self.i] -= 1;
         }
+    }
+    fn new(min: u8, max: u8, i: u8) RotatingRGB {
+        return .{
+            .min = min,
+            .max = max,
+            .rgb = .{
+                if (i % 3 == 0) min else max,
+                if (i % 3 == 1) min else max,
+                if (i % 3 == 2) min else max,
+            },
+            .i = i % 3,
+        };
+    }
+};
+
+fn PatchHudColRotate(v: bool, l: bool, s: bool) void {
+    const col = struct {
+        var value = RotatingRGB.new(95, 255, 0); // 0xFFFFFFBE
+        var label = RotatingRGB.new(95, 255, 1); // 0xFFFFFFBE
+        var speed = RotatingRGB.new(95, 255, 2); // 0x00C3FEFE
     };
-    col.update();
-    _ = mem.write(0x460E5E, u8, col.rgb[0]); // B, 255
-    _ = mem.write(0x460E60, u8, col.rgb[1]); // G, 255
-    _ = mem.write(0x460E62, u8, col.rgb[2]); // R, 255
+    col.value.update();
+    col.label.update();
+    col.speed.update();
+    if (v) {
+        _ = mem.write(0x460E5D + 1, u8, col.value.rgb[0]); // B timer
+        _ = mem.write(0x460E5D + 3, u8, col.value.rgb[1]); // G
+        _ = mem.write(0x460E5D + 5, u8, col.value.rgb[2]); // R
+        _ = mem.write(0x460FB1 + 1, u8, col.value.rgb[0]); // B lap
+        _ = mem.write(0x460FB1 + 3, u8, col.value.rgb[1]); // G
+        _ = mem.write(0x460FB1 + 5, u8, col.value.rgb[2]); // R
+        _ = mem.write(0x461045 + 1, u8, col.value.rgb[0]); // B pos
+        _ = mem.write(0x461045 + 3, u8, col.value.rgb[1]); // G
+        _ = mem.write(0x461045 + 5, u8, col.value.rgb[2]); // R
+    }
+    if (l) {
+        _ = mem.write(0x00460E8D + 1, u8, col.label.rgb[0]); // B timer
+        _ = mem.write(0x00460E8D + 3, u8, col.label.rgb[1]); // G
+        _ = mem.write(0x00460E8D + 5, u8, col.label.rgb[2]); // R
+        _ = mem.write(0x00460FE3 + 1, u8, col.label.rgb[0]); // B lap
+        _ = mem.write(0x00460FE3 + 3, u8, col.label.rgb[1]); // G
+        _ = mem.write(0x00460FE3 + 5, u8, col.label.rgb[2]); // R
+        _ = mem.write(0x00461069 + 1, u8, col.label.rgb[0]); // B pos
+        _ = mem.write(0x00461069 + 3, u8, col.label.rgb[1]); // G
+        _ = mem.write(0x00461069 + 5, u8, col.label.rgb[2]); // R
+    }
+    if (s) {
+        _ = mem.write(0x460A6E + 1, u8, col.speed.rgb[0]); // B
+        _ = mem.write(0x460A6E + 3, u8, col.speed.rgb[1]); // G
+        _ = mem.write(0x460A6E + 5, u8, col.speed.rgb[2]); // R
+    }
 }
 
-fn PatchHudTimerCol(rgba: u32) void { // 0xFFFFFFBE
-    _ = mem.write(0x460E5C, u8, @as(u8, @truncate(rgba))); // A, 190
-    _ = mem.write(0x460E5E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
-    _ = mem.write(0x460E60, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
-    _ = mem.write(0x460E62, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
-}
-
-fn PatchHudTimerLabelCol(rgba: u32) void { // 0xFFFFFFBE
-    _ = mem.write(0x460E8C, u8, @as(u8, @truncate(rgba))); // A, 190
-    _ = mem.write(0x460E8E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
-    _ = mem.write(0x460E90, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
-    _ = mem.write(0x460E92, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
-}
+//fn PatchHudTimerCol(rgba: u32) void { // 0xFFFFFFBE
+//    _ = mem.write(0x460E5C, u8, @as(u8, @truncate(rgba))); // A, 190
+//    _ = mem.write(0x460E5E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
+//    _ = mem.write(0x460E60, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
+//    _ = mem.write(0x460E62, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
+//}
+//
+//fn PatchHudTimerLabelCol(rgba: u32) void { // 0xFFFFFFBE
+//    _ = mem.write(0x460E8C, u8, @as(u8, @truncate(rgba))); // A, 190
+//    _ = mem.write(0x460E8E, u8, @as(u8, @truncate(rgba >> 8))); // B, 255
+//    _ = mem.write(0x460E90, u8, @as(u8, @truncate(rgba >> 16))); // G, 255
+//    _ = mem.write(0x460E92, u8, @as(u8, @truncate(rgba >> 24))); // R, 255
+//}
 
 // SWE1R-PATCHER STUFF
 
@@ -355,7 +397,10 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 export fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
-    if (gv.SettingGetB("general", "rainbow_timer_enable").?) {
-        PatchHudTimerColRotate();
+    if (gv.SettingGetB("general", "rainbow_enable").?) {
+        const rb_value: bool = gv.SettingGetB("general", "rainbow_value_enable").?;
+        const rb_label: bool = gv.SettingGetB("general", "rainbow_label_enable").?;
+        const rb_speed: bool = gv.SettingGetB("general", "rainbow_speed_enable").?;
+        PatchHudColRotate(rb_value, rb_label, rb_speed);
     }
 }

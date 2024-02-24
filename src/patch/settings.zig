@@ -54,7 +54,10 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.gen.add("death_speed_mod_enable", bool, false);
     state.gen.add("death_speed_min", f32, 325);
     state.gen.add("death_speed_drop", f32, 140);
-    state.gen.add("rainbow_timer_enable", bool, false);
+    state.gen.add("rainbow_enable", bool, false);
+    state.gen.add("rainbow_value_enable", bool, false);
+    state.gen.add("rainbow_label_enable", bool, false);
+    state.gen.add("rainbow_speed_enable", bool, false);
     state.gen.add("ms_timer_enable", bool, false);
     state.gen.add("default_laps", u32, 3);
     state.gen.add("default_racers", u32, 12);

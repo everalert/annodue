@@ -195,74 +195,52 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     PluginFn.initialized = true;
 
     var map: *HookFnMapType = undefined;
+    var buf: [1023:0]u8 = undefined;
 
-    // testing plugin loading here
-    {
-        dbg.ConsoleOut("hook.zig init()\n", .{}) catch unreachable;
+    const cwd = std.fs.cwd();
+    var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
+        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
+    defer dir.close();
 
-        var buf: [1023:0]u8 = undefined;
+    var it_dir = dir.iterate();
+    while (it_dir.next() catch unreachable) |file| {
+        if (file.kind != .file) continue;
 
-        const cwd = std.fs.cwd();
-        var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
-            cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
-        defer dir.close();
+        _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{file.name}) catch unreachable;
+        var lib = win32ll.LoadLibraryA(&buf);
 
-        var it_dir = dir.iterate();
-        while (it_dir.next() catch unreachable) |file| {
-            if (file.kind != .file) continue;
-            dbg.ConsoleOut("  {s}\n", .{file.name}) catch unreachable;
+        // required callbacks
+        const fields = comptime std.enums.values(Required);
+        const valid: bool = inline for (fields) |field| {
+            const n = @tagName(field);
+            var proc = win32ll.GetProcAddress(lib, n);
+            if (proc == null) break false;
 
-            _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{file.name}) catch unreachable;
-            var lib = win32ll.LoadLibraryA(&buf);
-            //defer _ = win32ll.FreeLibrary(lib);
-            dbg.ConsoleOut("    DLL loaded\n", .{}) catch unreachable;
+            const func = @as(RequiredFnType(field), @ptrCast(proc));
+            if (field == .PluginCompatibilityVersion and func() != PLUGIN_VERSION) break false;
+            @field(PluginFn, @tagName(field)).plugin.put(file.name, func) catch unreachable;
+        } else true;
 
-            // required callbacks
-            var valid: bool = true;
-            const fields = comptime std.enums.values(Required);
-            inline for (fields) |field| {
-                const n = @tagName(field);
-                var proc = win32ll.GetProcAddress(lib, n);
-                if (proc == null) {
-                    dbg.ConsoleOut("    {s} not found, DLL unloaded\n", .{n}) catch unreachable;
-                    valid = false;
-                    break;
-                }
-                const func = @as(RequiredFnType(field), @ptrCast(proc));
-                if (field == .PluginCompatibilityVersion and func() != PLUGIN_VERSION) {
-                    dbg.ConsoleOut(
-                        "    Plugin version not compatible, DLL unloaded\n",
-                        .{},
-                    ) catch unreachable;
-                    valid = false;
-                    break;
-                }
-                @field(PluginFn, @tagName(field)).plugin.put(file.name, func) catch unreachable;
-                dbg.ConsoleOut("    hooked {s} ({any})\n", .{ n, proc }) catch unreachable;
-            }
-            if (!valid) {
-                inline for (fields) |used_field|
-                    _ = @field(PluginFn, @tagName(used_field)).plugin.remove(file.name);
-                _ = win32ll.FreeLibrary(lib);
-                continue;
-            }
-            if (@field(PluginFn, @tagName(.OnInit)).plugin.get(file.name)) |func_init|
-                func_init(GLOBAL_STATE, GLOBAL_VTABLE, false);
-
-            // optional/hook callbacks
-            var it_hook = PluginFn.hooks.iterator();
-            while (it_hook.next()) |h| {
-                const name = @tagName(h.key);
-                var proc = win32ll.GetProcAddress(lib, name);
-                if (proc == null) continue;
-
-                map = &PluginFn.hooks.getPtr(h.key).plugin;
-                map.put(file.name, @as(HookFnType, @ptrCast(proc))) catch unreachable;
-                dbg.ConsoleOut("    hooked {s} ({any})\n", .{ name, proc }) catch unreachable;
-            }
+        if (!valid) {
+            _ = win32ll.FreeLibrary(lib);
+            inline for (fields) |used_field|
+                _ = @field(PluginFn, @tagName(used_field)).plugin.remove(file.name);
+            continue;
         }
 
-        dbg.ConsoleOut("\n", .{}) catch unreachable;
+        if (@field(PluginFn, @tagName(.OnInit)).plugin.get(file.name)) |func_init|
+            func_init(GLOBAL_STATE, GLOBAL_VTABLE, false);
+
+        // optional callbacks
+        var it_hook = PluginFn.hooks.iterator();
+        while (it_hook.next()) |h| {
+            const name = @tagName(h.key);
+            var proc = win32ll.GetProcAddress(lib, name);
+            if (proc == null) continue;
+
+            map = &PluginFn.hooks.getPtr(h.key).plugin;
+            map.put(file.name, @as(HookFnType, @ptrCast(proc))) catch unreachable;
+        }
     }
 
     map = &PluginFn.OnDeinit.core;

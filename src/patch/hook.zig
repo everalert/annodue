@@ -16,7 +16,7 @@ const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
 
-const win32 = @import("import/import.zig").win32;
+const win32 = @import("zigwin32");
 const win32ll = win32.system.library_loader;
 
 const dbg = @import("util/debug.zig");

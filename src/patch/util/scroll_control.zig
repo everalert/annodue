@@ -2,7 +2,7 @@ const Self = @This();
 
 const std = @import("std");
 
-const win32 = @import("../import/import.zig").win32;
+const win32 = @import("zigwin32");
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const mem = @import("memory.zig");

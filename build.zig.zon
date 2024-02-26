@@ -1,0 +1,14 @@
+.{
+    .name = "Annodue",
+    .version = "0.0.1",
+    .dependencies = .{
+        //.zigini = .{
+        //    .url = "https://github.com/ziglibs/ini/archive/19e1210063882ab7db73a8aaa60e733d4aaafe9f.tar.gz",
+        //    .hash = "12207523d070abaf0b3a078c58c8afbc5445f21e5779b7e2745514e34e0f90f10652",
+        //},
+        .zigwin32 = .{
+            .url = "https://github.com/marlersoft/zigwin32/archive/aec51b5b77764bd474a3a8e074d011492eb7e5ed.tar.gz",
+            .hash = "12207523d070abaf0b3a078c58c8afbc5445f21e5779b7e2745514e34e0f90f10652",
+        },
+    },
+}

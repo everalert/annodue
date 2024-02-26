@@ -1,6 +1,6 @@
 const std = @import("std");
 const win = std.os.windows;
-const win32 = @import("../import/import.zig").win32;
+const win32 = @import("zigwin32");
 const win32c = win32.system.console;
 
 const global = @import("../global.zig");

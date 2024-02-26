@@ -14,7 +14,7 @@ const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
-const win32 = @import("import/import.zig").win32;
+const win32 = @import("zigwin32");
 const win32kb = win32.ui.input.keyboard_and_mouse;
 const win32wm = win32.ui.windows_and_messaging;
 const KS_DOWN: i16 = -1;

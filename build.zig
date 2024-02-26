@@ -13,6 +13,16 @@ pub fn build(b: *std.Build) void {
         .preferred_optimize_mode = .Debug,
     });
 
+    // MODULES
+
+    //const zigini = b.dependency("zigini", .{});
+    //const zigini_m = zigini.module("zigini");
+
+    const zigwin32 = b.dependency("zigwin32", .{});
+    const zigwin32_m = zigwin32.module("zigwin32");
+
+    // MAIN OUTPUT
+
     const patch = b.addSharedLibrary(.{
         .name = "annodue",
         .root_source_file = .{ .path = "src/patch/patch.zig" },
@@ -20,79 +30,39 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     patch.linkLibC();
+    //patch.addModule("zigini", zigini_m);
+    patch.addModule("zigwin32", zigwin32_m);
     b.installArtifact(patch);
 
-    const dll_test = b.addSharedLibrary(.{
-        .name = "plugin_test",
-        .root_source_file = .{ .path = "src/patch/dll_test.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_test.linkLibC();
-    b.installArtifact(dll_test);
+    // PLUGINS OUTPUT
 
-    const dll_savestate = b.addSharedLibrary(.{
-        .name = "plugin_savestate",
-        .root_source_file = .{ .path = "src/patch/dll_savestate.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_savestate.linkLibC();
-    b.installArtifact(dll_savestate);
+    const plugin_names = &[_][]const u8{
+        "test",
+        "savestate",
+        "qol",
+        "overlay",
+        "gameplaytweak",
+        "cosmetic",
+        "multiplayer",
+        "developer",
+    };
 
-    const dll_qol = b.addSharedLibrary(.{
-        .name = "plugin_qol",
-        .root_source_file = .{ .path = "src/patch/dll_qol.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_qol.linkLibC();
-    b.installArtifact(dll_qol);
-
-    const dll_overlay = b.addSharedLibrary(.{
-        .name = "plugin_overlay",
-        .root_source_file = .{ .path = "src/patch/dll_overlay.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_overlay.linkLibC();
-    b.installArtifact(dll_overlay);
-
-    const dll_gameplaytweak = b.addSharedLibrary(.{
-        .name = "plugin_gameplaytweak",
-        .root_source_file = .{ .path = "src/patch/dll_gameplaytweak.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_gameplaytweak.linkLibC();
-    b.installArtifact(dll_gameplaytweak);
-
-    const dll_cosmetic = b.addSharedLibrary(.{
-        .name = "plugin_cosmetic",
-        .root_source_file = .{ .path = "src/patch/dll_cosmetic.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_cosmetic.linkLibC();
-    b.installArtifact(dll_cosmetic);
-
-    const dll_multiplayer = b.addSharedLibrary(.{
-        .name = "plugin_multiplayer",
-        .root_source_file = .{ .path = "src/patch/dll_multiplayer.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_multiplayer.linkLibC();
-    b.installArtifact(dll_multiplayer);
-
-    const dll_developer = b.addSharedLibrary(.{
-        .name = "plugin_developer",
-        .root_source_file = .{ .path = "src/patch/dll_developer.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    dll_developer.linkLibC();
-    b.installArtifact(dll_developer);
+    var bufn: [1024]u8 = undefined;
+    var bufp: [1024]u8 = undefined;
+    for (plugin_names) |name| {
+        const n = std.fmt.bufPrint(&bufn, "plugin_{s}", .{name}) catch continue;
+        const p = std.fmt.bufPrint(&bufp, "src/patch/dll_{s}.zig", .{name}) catch continue;
+        const dll = b.addSharedLibrary(.{
+            .name = n,
+            .root_source_file = .{ .path = p },
+            .target = target,
+            .optimize = optimize,
+        });
+        dll.linkLibC();
+        //dll.addModule("zigini", zigini_m);
+        dll.addModule("zigwin32", zigwin32_m);
+        b.installArtifact(dll);
+    }
 
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.

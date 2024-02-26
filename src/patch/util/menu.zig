@@ -36,14 +36,15 @@ pub const Menu = struct {
     confirm_fn: ?*fn () void = null,
     confirm_text: ?[*:0]const u8 = null, // default: Confirm
     confirm_key: ?win32kb.VIRTUAL_KEY = null,
-    x: u16 = 16,
-    x_step: u16 = 80,
+    w: u16 = 320,
+    x: u16 = 320,
+    y: u16 = 128,
+    col_w: u16 = 128,
+    row_h: u16 = 10,
+    row_margin: u16 = 8,
     x_scroll: ScrollControl,
-    y: u16 = 16,
-    y_step: u16 = 8,
-    y_margin: u16 = 6,
     y_scroll: ScrollControl,
-    hl_col: u8 = 3, // ingame predefined colors with ~{n}, default yellow
+    hl_color: u8 = 3, // ingame predefined colors with ~{n}, default yellow
 
     pub inline fn UpdateAndDraw(self: *Menu) void {
         self.UpdateAndDrawEx(&input.get_kb_pressed, &input.get_kb_released, &input.get_kb_down);
@@ -76,47 +77,49 @@ pub const Menu = struct {
             );
         }
 
-        const x = self.x;
+        const x1 = self.x - self.w / 2;
+        const x2 = x1 + self.col_w;
         var y = self.y;
         var buf: [127:0]u8 = undefined;
 
-        _ = std.fmt.bufPrintZ(&buf, "~f0~s{s}", .{self.title}) catch unreachable;
-        rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
-        y += self.y_margin;
+        _ = std.fmt.bufPrintZ(&buf, "~f4~s~c{s}", .{self.title}) catch unreachable;
+        rf.swrText_CreateEntry1(self.x / 2, y / 2, 255, 255, 255, 190, &buf);
+        y += self.row_margin * 2;
 
         var hl_i: i32 = 0;
         var hl_c: u8 = undefined;
         for (self.items) |item| {
-            y += self.y_step;
-            hl_c = if (self.idx == hl_i) self.hl_col else 1;
-            _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, item.label }) catch unreachable;
-            rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
+            y += self.row_h;
+            hl_c = if (self.idx == hl_i) self.hl_color else 1;
+            _ = std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, item.label }) catch unreachable;
+            rf.swrText_CreateEntry1(x1, y, 255, 255, 255, 190, &buf);
             _ = if (item.options) |options|
-                std.fmt.bufPrintZ(&buf, "~f4~s{s}", .{options[@intCast(item.idx.*)]}) catch unreachable
+                std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, options[@intCast(item.idx.*)] }) catch unreachable
             else
-                std.fmt.bufPrintZ(&buf, "~f4~s{d}", .{item.idx.*}) catch unreachable;
+                // FIXME: number limits off by one when rawdogging
+                std.fmt.bufPrintZ(&buf, "~F0~{d}~s{d}", .{ hl_c, item.idx.* }) catch unreachable;
 
-            rf.swrText_CreateEntry1(x + self.x_step, y, 255, 255, 255, 190, &buf);
+            rf.swrText_CreateEntry1(x2, y, 255, 255, 255, 190, &buf);
             hl_i += 1;
         }
 
-        y += self.y_margin;
+        y += self.row_margin;
         if (self.confirm_fn) |f| {
             if (self.idx == hl_i and get_kb_pressed(self.confirm_key.?)) f();
-            y += self.y_step;
-            hl_c = if (self.idx == hl_i) self.hl_col else 1;
+            y += self.row_h;
+            hl_c = if (self.idx == hl_i) self.hl_color else 1;
             const label = if (self.confirm_text) |t| t else "Confirm";
-            _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, label }) catch unreachable;
-            rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
+            _ = std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, label }) catch unreachable;
+            rf.swrText_CreateEntry1(x1, y, 255, 255, 255, 190, &buf);
             hl_i += 1;
         }
         if (self.cancel_fn) |f| {
             if (self.idx == hl_i and get_kb_pressed(self.cancel_key.?)) f();
-            y += self.y_step;
-            hl_c = if (self.idx == hl_i) self.hl_col else 1;
+            y += self.row_h;
+            hl_c = if (self.idx == hl_i) self.hl_color else 1;
             const label = if (self.cancel_text) |t| t else "Cancel";
-            _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, label }) catch unreachable;
-            rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
+            _ = std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, label }) catch unreachable;
+            rf.swrText_CreateEntry1(x1, y, 255, 255, 255, 190, &buf);
             hl_i += 1;
         }
     }

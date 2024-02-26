@@ -206,7 +206,10 @@ const TimeSpinlock = struct {
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
 // TODO: add standard race settings (mirror, etc.)
 // TODO: add convenience buttons for MU/NU
-// TODO: also tracking related values for coherency, e.g. adjusting selected circuit
+// TODO: also track related values for coherency
+//  - adjusting selected circuit in menus after switching
+//  - changing the selected stuff in quick race menu to match loaded stuff,
+//    i.e. so that it always opens with the current settings even if you dont load via quickrace
 // TODO: make it wait till the end of the pause scroll-in, so that the scroll-out
 // is always the same as a normal pause
 const QuickRaceMenu = struct {
@@ -227,8 +230,6 @@ const QuickRaceMenu = struct {
         .confirm_text = "RACE!",
         .confirm_fn = @constCast(&@This().load_race),
         .confirm_key = .SPACE,
-        .x = 64,
-        .y = 64,
         .max = 11,
         .x_scroll = .{
             .scroll_time = 0.75,

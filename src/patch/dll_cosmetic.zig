@@ -3,7 +3,7 @@ const Self = @This();
 const std = @import("std");
 
 const GlobalState = @import("global.zig").GlobalState;
-const GlobalVTable = @import("global.zig").GlobalVTable;
+const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
@@ -355,7 +355,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     var off = gs.patch_offset;
     if (gv.SettingGetB("multiplayer", "patch_fonts").?) {
@@ -380,13 +380,13 @@ export fn OnInit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callcon
     gs.patch_offset = off;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = gs;
     _ = initialized;
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
@@ -394,7 +394,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // HOOKS
 
-export fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
     if (gv.SettingGetB("general", "rainbow_enable").?) {

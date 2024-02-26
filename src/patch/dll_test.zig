@@ -3,7 +3,7 @@ const Self = @This();
 const std = @import("std");
 
 const GlobalState = @import("global.zig").GlobalState;
-const GlobalVTable = @import("global.zig").GlobalVTable;
+const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
@@ -25,19 +25,19 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
@@ -45,7 +45,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // HOOKS
 
-export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;

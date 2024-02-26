@@ -4,7 +4,7 @@ const std = @import("std");
 
 const s = @import("settings.zig").state;
 const GlobalState = @import("global.zig").GlobalState;
-const GlobalVTable = @import("global.zig").GlobalVTable;
+const GlobalFn = @import("global.zig").GlobalFn;
 
 const mem = @import("util/memory.zig");
 const r = @import("util/racer.zig");
@@ -57,14 +57,14 @@ const mode_vis = struct {
 
 // HOOK FUNCTIONS
 
-pub fn InitRaceQuadsA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn InitRaceQuadsA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
     mode_vis.init();
 }
 
-pub fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;

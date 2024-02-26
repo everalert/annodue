@@ -3,7 +3,7 @@ pub const Self = @This();
 const std = @import("std");
 
 const GlobalState = @import("global.zig").GlobalState;
-const GlobalVTable = @import("global.zig").GlobalVTable;
+const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const scroll = @import("util/scroll_control.zig");
@@ -98,7 +98,7 @@ const state = struct {
     var layer_indexes: [layer_depth + 1]usize = undefined;
     var layer_index_count: usize = undefined;
 
-    fn init(gv: *GlobalVTable) void {
+    fn init(gv: *GlobalFn) void {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         const alloc = gpa.allocator();
         memory = alloc.alloc(u8, memory_size) catch unreachable;
@@ -194,7 +194,7 @@ const state = struct {
 
     // FIXME: in future, probably can skip the first step each new frame, because
     // the most recent frame would already be in stage1 from last time
-    fn save_compressed(gs: *GlobalState, gv: *GlobalVTable) void {
+    fn save_compressed(gs: *GlobalState, gv: *GlobalFn) void {
         // FIXME: why the fk does this crash if it comes after the guard
         if (!initialized) init(gv);
         if (!saveable(gs)) return;
@@ -247,7 +247,7 @@ const state = struct {
 
 // LOADER LOGIC
 
-fn DoStateRecording(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+fn DoStateRecording(gs: *GlobalState, gv: *GlobalFn) LoadState {
     state.save_compressed(gs, gv);
 
     if (gv.InputGetKbPressed(.@"1")) {
@@ -261,7 +261,7 @@ fn DoStateRecording(gs: *GlobalState, gv: *GlobalVTable) LoadState {
     return .Recording;
 }
 
-fn DoStateLoading(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+fn DoStateLoading(gs: *GlobalState, gv: *GlobalFn) LoadState {
     if (gv.InputGetKbPressed(.@"2")) {
         state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
         state.frame_total = state.frame;
@@ -274,7 +274,7 @@ fn DoStateLoading(gs: *GlobalState, gv: *GlobalVTable) LoadState {
     return .Loading;
 }
 
-fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalFn) LoadState {
     if (gv.InputGetKbPressed(.@"1")) {
         state.load_frame = state.frame - 1;
     }
@@ -297,7 +297,7 @@ fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalVTable) LoadState {
     return .Scrubbing;
 }
 
-fn DoStateScrubExiting(gs: *GlobalState, gv: *GlobalVTable) LoadState {
+fn DoStateScrubExiting(gs: *GlobalState, gv: *GlobalFn) LoadState {
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
 
     if (gv.InputGetKbPressed(.@"1")) {
@@ -308,7 +308,7 @@ fn DoStateScrubExiting(gs: *GlobalState, gv: *GlobalVTable) LoadState {
     return .Recording;
 }
 
-fn UpdateState(gs: *GlobalState, gv: *GlobalVTable) void {
+fn UpdateState(gs: *GlobalState, gv: *GlobalFn) void {
     state.rec_state = switch (state.rec_state) {
         .Recording => DoStateRecording(gs, gv),
         .Loading => DoStateLoading(gs, gv),
@@ -331,19 +331,19 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
@@ -351,11 +351,11 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 
 // HOOKS
 
-//pub fn MenuStartRaceB(gs: *GlobalState,gv:*GlobalVTable, initialized: bool) callconv(.C) void {
+//pub fn MenuStartRaceB(gs: *GlobalState,gv:*GlobalFn, initialized: bool) callconv(.C) void {
 //    state.reset();
 //}
 
-export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!gv.SettingGetB("savestate", "savestate_enable").?) return;
 
@@ -364,7 +364,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: b
     }
 }
 
-export fn TextRenderB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!gv.SettingGetB("savestate", "savestate_enable").?) return;
 

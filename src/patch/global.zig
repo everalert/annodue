@@ -154,9 +154,9 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_VTABLE_VERSION = 8;
+pub const GLOBAL_FUNCTION_VERSION = 8;
 
-pub const GlobalVTable = extern struct {
+pub const GlobalFn = extern struct {
     // Settings
     SettingGetB: *const @TypeOf(settings.get_bool) = &settings.get_bool,
     SettingGetI: *const @TypeOf(settings.get_i32) = &settings.get_i32,
@@ -172,7 +172,7 @@ pub const GlobalVTable = extern struct {
     GameFreezeDisable: *const @TypeOf(Freeze.unfreeze) = &Freeze.unfreeze,
 };
 
-pub var GLOBAL_VTABLE: GlobalVTable = .{};
+pub var GLOBAL_FUNCTION: GlobalFn = .{};
 
 // FREEZE API
 
@@ -247,7 +247,7 @@ pub fn init() void {
 
 // HOOK CALLS
 
-pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
@@ -258,7 +258,7 @@ pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool
         gs.practice_mode = !gs.practice_mode;
 }
 
-pub fn TimerUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn TimerUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
@@ -269,7 +269,7 @@ pub fn TimerUpdateA(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) call
     gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
@@ -277,21 +277,21 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) 
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuStartRaceB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuStartRaceB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResultsB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuRaceResultsB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrackB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn MenuTrackB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;

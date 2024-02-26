@@ -11,8 +11,8 @@ const settings = @import("settings.zig");
 const global = @import("global.zig");
 const GlobalState = global.GlobalState;
 const GLOBAL_STATE = &global.GLOBAL_STATE;
-const GlobalVTable = global.GlobalVTable;
-const GLOBAL_VTABLE = &global.GLOBAL_VTABLE;
+const GlobalFn = global.GlobalFn;
+const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
 
@@ -50,7 +50,7 @@ const Required = enum(u32) {
     //OnDisable,
 };
 
-const HookFnType = *const fn (state: *GlobalState, vtable: *GlobalVTable, initialized: bool) callconv(.C) void;
+const HookFnType = *const fn (state: *GlobalState, vtable: *GlobalFn, initialized: bool) callconv(.C) void;
 
 inline fn RequiredFnType(comptime f: Required) type {
     return switch (f) {
@@ -121,9 +121,9 @@ inline fn RequiredFnCallback(comptime req: Required) *const fn () void {
         const map: *HookFnSet = &@field(PluginFn, @tagName(req));
         fn callback() void {
             var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
+            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
             var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
+            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
             map.initialized = true;
         }
     };
@@ -135,9 +135,9 @@ inline fn HookFnCallback(comptime hk: Hook) *const fn () void {
         const map: *HookFnSet = PluginFn.hooks.getPtr(hk);
         fn callback() void {
             var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
+            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
             var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_VTABLE, map.initialized);
+            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
             map.initialized = true;
         }
     };
@@ -229,7 +229,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
         }
 
         if (@field(PluginFn, @tagName(.OnInit)).plugin.get(file.name)) |func_init|
-            func_init(GLOBAL_STATE, GLOBAL_VTABLE, false);
+            func_init(GLOBAL_STATE, GLOBAL_FUNCTION, false);
 
         // optional callbacks
         var it_hook = PluginFn.hooks.iterator();

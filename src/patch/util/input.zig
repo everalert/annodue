@@ -6,7 +6,7 @@ const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const global = @import("../global.zig");
 const GlobalState = global.GlobalState;
-const GlobalVTable = global.GlobalVTable;
+const GlobalFn = global.GlobalFn;
 
 pub const INPUT_DOWN: u8 = 0b01;
 pub const INPUT_NEW: u8 = 0b10;
@@ -16,7 +16,7 @@ const state = struct {
     var kb: [256]u8 = std.mem.zeroes([256]u8);
 };
 
-pub fn update_kb(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+pub fn update_kb(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;

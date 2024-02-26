@@ -64,29 +64,23 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
             const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;
             const heat_timer: f32 = if (gs.player.boosting.isOn()) heat_s else cool_s;
             const heat_color: u32 = if (gs.player.boosting.isOn()) 5 else if (gs.player.heat < 100) 2 else 7;
-            _ = std.fmt.bufPrintZ(
-                &buf,
-                "~F0~{d}~s~r{d:0>5.3}",
-                .{ heat_color, heat_timer },
-            ) catch unreachable;
-            rf.swrText_CreateEntry1((320 - 68) * 2, 168 * 2, 255, 255, 255, 190, &buf);
+            _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
+            rf.swrText_CreateEntry1(256, 170, 255, 255, 255, 190, &buf);
 
             // draw lap times
             for (lap_times, 0..) |t, i| {
                 if (t < 0) break;
+                const y: u8 = 128 + @as(u8, @truncate(i)) * 16;
+                const col: u8 = if (lap == i) 255 else 170;
+                _ = std.fmt.bufPrintZ(&buf, "~F0~s{d}", .{i + 1}) catch unreachable;
+                rf.swrText_CreateEntry1(48, y + 6, col, col, col, 190, &buf);
                 // FIXME: move the time formatting logic out of here
                 const t_ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000)));
                 const min: u32 = (t_ms / 1000) / 60;
                 const sec: u32 = (t_ms / 1000) % 60;
                 const ms: u32 = t_ms % 1000;
-                const col: u8 = if (lap == i) 255 else 170;
-                _ = std.fmt.bufPrintZ(
-                    &buf,
-                    "~F1~s{d}  {d}:{d:0>2}.{d:0>3}",
-                    .{ i + 1, min, sec, ms },
-                ) catch unreachable;
-                const y: u8 = 128 + @as(u8, @truncate(i)) * 16;
-                rf.swrText_CreateEntry1(48, y, col, col, col, 190, &buf);
+                _ = std.fmt.bufPrintZ(&buf, "~F1~s{d}:{d:0>2}.{d:0>3}", .{ min, sec, ms }) catch unreachable;
+                rf.swrText_CreateEntry1(64, y, col, col, col, 190, &buf);
             }
         }
     }

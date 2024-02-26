@@ -13,11 +13,12 @@ const rf = r.functions;
 
 const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
 
+// FIXME: custom minimum value; need to update algorithm to impl
 pub const MenuItem = struct {
     idx: *i32,
     wrap: bool = true,
     label: [*:0]const u8,
-    options: []const [*:0]const u8,
+    options: ?[]const [*:0]const u8 = null,
     max: i32,
 };
 
@@ -90,7 +91,11 @@ pub const Menu = struct {
             hl_c = if (self.idx == hl_i) self.hl_col else 1;
             _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s{s}", .{ hl_c, item.label }) catch unreachable;
             rf.swrText_CreateEntry1(x, y, 255, 255, 255, 190, &buf);
-            _ = std.fmt.bufPrintZ(&buf, "~f4~s{s}", .{item.options[@intCast(item.idx.*)]}) catch unreachable;
+            _ = if (item.options) |options|
+                std.fmt.bufPrintZ(&buf, "~f4~s{s}", .{options[@intCast(item.idx.*)]}) catch unreachable
+            else
+                std.fmt.bufPrintZ(&buf, "~f4~s{d}", .{item.idx.*}) catch unreachable;
+
             rf.swrText_CreateEntry1(x + self.x_step, y, 255, 255, 255, 190, &buf);
             hl_i += 1;
         }

@@ -94,6 +94,7 @@ pub fn deinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.
     _ = gs;
     defer state.manager.deinit();
     defer state.prac.deinit();
+    defer state.sav.deinit();
     defer state.gen.deinit();
     defer state.mp.deinit();
 }

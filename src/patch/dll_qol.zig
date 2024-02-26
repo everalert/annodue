@@ -1,6 +1,7 @@
 const Self = @This();
 
 const std = @import("std");
+const win = std.os.windows;
 
 const GlobalState = @import("global.zig").GlobalState;
 const GlobalVTable = @import("global.zig").GlobalVTable;
@@ -174,6 +175,32 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat2(i, rc.UpgradeCategories[cat], &buf);
 }
 
+// TIME-BASED SPINLOCK
+
+// TODO: only wait if inrace and unpaused?
+// FIXME: check for HRT compatibility instead of trying to assign timer repeatedly
+// because sleep() sucks, and timeBeginPeriod() is a bad idea
+const TimeSpinlock = struct {
+    const min_period: u64 = 1_000_000_000 / 500;
+    const max_period: u64 = 1_000_000_000 / 10;
+    var period: u64 = 1_000_000_000 / 24;
+    var timer: ?std.time.Timer = null;
+
+    fn SetPeriod(fps: u32) void {
+        period = std.math.clamp(1_000_000_000 / fps, min_period, max_period);
+    }
+
+    fn Sleep() void {
+        if (timer == null)
+            timer = std.time.Timer.start() catch return;
+
+        while (timer.?.read() < period)
+            _ = win.kernel32.SwitchToThread();
+
+        _ = timer.?.lap();
+    }
+};
+
 // QUICK RACE MENU
 
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
@@ -188,6 +215,7 @@ const QuickRaceMenu = struct {
     var gv: *GlobalVTable = undefined;
 
     const values = struct {
+        var fps: i32 = 24;
         var vehicle: i32 = 0;
         var track: i32 = 0;
         var up_lv: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
@@ -201,7 +229,7 @@ const QuickRaceMenu = struct {
         .confirm_key = .SPACE,
         .x = 64,
         .y = 64,
-        .max = 10,
+        .max = 11,
         .x_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
@@ -215,6 +243,11 @@ const QuickRaceMenu = struct {
             .input_inc = .DOWN,
         },
         .items = &[_]menu.MenuItem{
+            .{
+                .idx = &@This().values.fps,
+                .label = "FPS",
+                .max = 500,
+            },
             .{
                 .idx = &@This().values.vehicle,
                 .label = "Vehicle",
@@ -280,6 +313,7 @@ const QuickRaceMenu = struct {
     };
 
     fn load_race() void {
+        TimeSpinlock.SetPeriod(@intCast(values.fps));
         r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
         r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
         const u = mem.deref(&.{ 0x4D78A4, 0x0C, 0x41 });
@@ -387,6 +421,16 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callc
 }
 
 // HOOKS
+
+// FIXME: implement fps cap into settings at some point; had issues with hash
+// clashing (i think) in initial impl
+export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalVTable, initialized: bool) callconv(.C) void {
+    _ = gv;
+    _ = gs;
+    _ = initialized;
+
+    TimeSpinlock.Sleep();
+}
 
 // FIXME: settings toggles for both of these
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?

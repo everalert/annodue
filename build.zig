@@ -45,6 +45,7 @@ pub fn build(b: *std.Build) void {
         "cosmetic",
         "multiplayer",
         "developer",
+        "inputdisplay",
     };
 
     var bufn: [1024]u8 = undefined;

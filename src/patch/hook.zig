@@ -75,6 +75,8 @@ const Hook = enum(u32) {
     LateEngineUpdateA,
     TimerUpdateB,
     TimerUpdateA,
+    InputUpdateB,
+    InputUpdateA,
     //InitHangQuadsB,
     InitHangQuadsA,
     //InitRaceQuadsB,
@@ -168,6 +170,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookGameSetup(off);
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
+    off = HookInputUpdate(off);
     off = HookTimerUpdate(off);
     off = HookInitRaceQuads(off);
     off = HookInitHangQuads(off);
@@ -325,6 +328,19 @@ fn HookTimerUpdate(memory: usize) usize {
         0x4459AF,
         HookFnCallback(.TimerUpdateB),
         HookFnCallback(.TimerUpdateA),
+    );
+}
+
+// INPUT READING
+
+fn HookInputUpdate(memory: usize) usize {
+    // fn_404DD0, before early engine update; not the only call to this function,
+    // but the only regular one
+    return hook.intercept_call(
+        memory,
+        0x423592,
+        HookFnCallback(.InputUpdateB),
+        HookFnCallback(.InputUpdateA),
     );
 }
 

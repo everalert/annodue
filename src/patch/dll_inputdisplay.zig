@@ -67,7 +67,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 
 // HOOK FUNCTIONS
 
-export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+export fn InputUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     if (gs.in_race.isOn() and !gs.player.in_race_results.isOn()) {

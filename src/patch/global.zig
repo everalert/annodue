@@ -36,7 +36,7 @@ pub const Version = struct {
     pub const patch: u32 = 1;
     pub const tag_type: VersionTag = .None;
     pub const tag_no: u32 = 0;
-    pub const build: u32 = 76; // based on git commits
+    pub const build: u32 = 112; // based on git commits
 };
 
 // TODO: include tag when appropriate

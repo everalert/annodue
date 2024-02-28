@@ -37,7 +37,54 @@ const rf = @import("util/racer_fn.zig");
 
 // OKOKOKOKOK
 
-const Required = enum(u32) {
+const Plugin = plugin: {
+    const stdf = .{
+        .{ "Handle", ?win.HINSTANCE },
+        .{ "Filename", ?[]const u8 },
+        .{ "LoadedFilename", ?[]const u8 },
+        .{ "Initialized", ?bool },
+    };
+    const ev = std.enums.values(PluginExportFn);
+    var fields: [stdf.len + ev.len]std.builtin.Type.StructField = undefined;
+
+    for (stdf, 0..) |f, i| {
+        fields[i] = .{
+            .name = f[0],
+            .type = f[1],
+            .default_value = null,
+            .is_comptime = false,
+            .alignment = 0,
+        };
+    }
+    for (ev, stdf.len..) |f, i| {
+        fields[i] = .{
+            .name = @tagName(f),
+            .type = PluginExportFnType(f),
+            .default_value = null,
+            .is_comptime = false,
+            .alignment = 0,
+        };
+    }
+
+    break :plugin @Type(.{ .Struct = .{
+        .layout = .Auto,
+        .fields = fields[0..],
+        .decls = &[_]std.builtin.Type.Declaration{},
+        .is_tuple = false,
+    } });
+};
+
+fn PluginExportFnType(comptime f: PluginExportFn) type {
+    return switch (f) {
+        .PluginName, .PluginVersion => ?*const fn () callconv(.C) [*:0]const u8,
+        .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
+        //.PluginCategoryFlags => *const fn () callconv(.C) u32,
+        else => ?*const fn (*GlobalState, *GlobalFn, bool) callconv(.C) void,
+    };
+}
+
+const PluginExportFn = enum(u32) {
+    // Setup/Meta Functions
     PluginName,
     PluginVersion,
     PluginCompatibilityVersion,
@@ -48,25 +95,8 @@ const Required = enum(u32) {
     OnDeinit,
     //OnEnable,
     //OnDisable,
-};
 
-const HookFnType = *const fn (state: *GlobalState, vtable: *GlobalFn, initialized: bool) callconv(.C) void;
-
-inline fn RequiredFnType(comptime f: Required) type {
-    return switch (f) {
-        .PluginName => *const fn () callconv(.C) [*:0]const u8,
-        .PluginVersion => *const fn () callconv(.C) [*:0]const u8,
-        .PluginCompatibilityVersion => *const fn () callconv(.C) u32,
-        //.PluginCategoryFlags => *const fn () callconv(.C) u32,
-        else => HookFnType,
-    };
-}
-
-inline fn RequiredFnMapType(comptime f: Required) type {
-    return std.StringHashMap(RequiredFnType(f));
-}
-
-const Hook = enum(u32) {
+    // Hook Functions
     GameLoopB,
     GameLoopA,
     EarlyEngineUpdateB,
@@ -94,78 +124,100 @@ const Hook = enum(u32) {
     TextRenderB,
 };
 
-const HookFnMapType = std.StringHashMap(HookFnType);
-
-inline fn PluginFnSet(comptime T: type) type {
-    return struct {
-        initialized: bool,
-        core: T,
-        plugin: T,
-    };
-}
-
-const HookFnSet = PluginFnSet(HookFnMapType);
-
-const PluginFn = struct {
-    var initialized: bool = false;
-    var hooks = std.enums.EnumArray(Hook, HookFnSet).initUndefined();
-    // FIXME: comptime generation
-    var PluginName: PluginFnSet(RequiredFnMapType(.PluginName)) = undefined;
-    var PluginVersion: PluginFnSet(RequiredFnMapType(.PluginVersion)) = undefined;
-    var PluginCompatibilityVersion: PluginFnSet(RequiredFnMapType(.PluginCompatibilityVersion)) = undefined;
-    var OnInit: PluginFnSet(RequiredFnMapType(.OnInit)) = undefined;
-    var OnInitLate: PluginFnSet(RequiredFnMapType(.OnInitLate)) = undefined;
-    var OnDeinit: PluginFnSet(RequiredFnMapType(.OnDeinit)) = undefined;
+const PluginState = struct {
+    var core: std.ArrayList(Plugin) = undefined;
+    var plugin: std.ArrayList(Plugin) = undefined;
 };
 
-inline fn RequiredFnCallback(comptime req: Required) *const fn () void {
+fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
-        const map: *HookFnSet = &@field(PluginFn, @tagName(req));
         fn callback() void {
-            var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
-            var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
-            map.initialized = true;
+            for (PluginState.core.items) |p|
+                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION, true);
+            for (PluginState.plugin.items) |p|
+                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION, true);
         }
     };
     return &c.callback;
 }
-
-inline fn HookFnCallback(comptime hk: Hook) *const fn () void {
-    const c = struct {
-        const map: *HookFnSet = PluginFn.hooks.getPtr(hk);
-        fn callback() void {
-            var it_core = map.core.valueIterator();
-            while (it_core.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
-            var it_plugin = map.plugin.valueIterator();
-            while (it_plugin.next()) |f| f.*(GLOBAL_STATE, GLOBAL_FUNCTION, map.initialized);
-            map.initialized = true;
-        }
-    };
-    return &c.callback;
-}
-
-//inline fn HookFnCallbackN(hk: []Hook) *const fn () void {
-//    const c = struct {
-//        fn callback() void {
-//            inline for (hk) |h| {
-//                const map: *HookFnSet = comptime PluginFn.hooks.getPtr(h);
-//                var it_core = map.map.core.valueIterator();
-//                while (it_core.next()) |f| f.*(GLOBAL_STATE, map.initialized);
-//                var it_plugin = map.map.plugin.valueIterator();
-//                while (it_plugin.next()) |f| f.*(GLOBAL_STATE, map.initialized);
-//                map.map.initialized = true;
-//            }
-//        }
-//    };
-//    return &c.callback;
-//}
 
 // SETUP
 
 pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     var off: usize = memory;
+    var buf: [1023:0]u8 = undefined;
+
+    PluginState.core = std.ArrayList(Plugin).init(alloc);
+    PluginState.plugin = std.ArrayList(Plugin).init(alloc);
+
+    var p: Plugin = undefined;
+
+    // loading core
+
+    p = std.mem.zeroInit(Plugin, .{});
+    p.GameLoopB = &input.update_kb;
+    PluginState.core.append(p) catch unreachable;
+
+    p = std.mem.zeroInit(Plugin, .{});
+    p.InitRaceQuadsA = &practice.InitRaceQuadsA;
+    p.TextRenderB = &practice.TextRenderB;
+    PluginState.core.append(p) catch unreachable;
+
+    p = std.mem.zeroInit(Plugin, .{});
+    p.OnDeinit = &settings.deinit;
+    PluginState.core.append(p) catch unreachable;
+
+    p = std.mem.zeroInit(Plugin, .{});
+    p.EarlyEngineUpdateA = &global.EarlyEngineUpdateA;
+    p.TimerUpdateA = &global.TimerUpdateA;
+    p.MenuTitleScreenB = &global.MenuTitleScreenB;
+    p.MenuStartRaceB = &global.MenuStartRaceB;
+    p.MenuRaceResultsB = &global.MenuRaceResultsB;
+    p.MenuTrackB = &global.MenuTrackB;
+    PluginState.core.append(p) catch unreachable;
+
+    // loading plugins
+
+    const cwd = std.fs.cwd();
+    var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
+        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
+    defer dir.close();
+
+    var it_dir = dir.iterate();
+    while (it_dir.next() catch unreachable) |file| {
+        if (file.kind != .file) continue;
+
+        p = std.mem.zeroInit(Plugin, .{});
+        _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{file.name}) catch unreachable;
+
+        p.Handle = win32ll.LoadLibraryA(&buf);
+        p.Filename = file.name;
+
+        const fields = comptime std.enums.values(PluginExportFn);
+        inline for (fields) |field| {
+            const process = win32ll.GetProcAddress(p.Handle, @tagName(field));
+            if (process) |proc|
+                @field(p, @tagName(field)) = @ptrCast(proc);
+        }
+
+        if (p.PluginName == null or
+            p.PluginVersion == null or
+            p.PluginCompatibilityVersion == null or
+            p.PluginCompatibilityVersion.?() != PLUGIN_VERSION or
+            p.OnInit == null or
+            p.OnInitLate == null or
+            p.OnDeinit == null)
+        {
+            _ = win32ll.FreeLibrary(p.Handle);
+            _ = PluginState.plugin.pop();
+            continue;
+        }
+
+        p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
+        PluginState.plugin.append(p) catch unreachable;
+    }
+
+    // hooking game
 
     off = HookGameSetup(off);
     off = HookGameLoop(off);
@@ -179,102 +231,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookMenuDrawing(off);
     global.GLOBAL_STATE.patch_offset = off;
 
-    var it_hset = PluginFn.hooks.iterator();
-    while (it_hset.next()) |set| {
-        PluginFn.hooks.set(set.key, .{
-            .initialized = false,
-            .core = HookFnMapType.init(alloc),
-            .plugin = HookFnMapType.init(alloc),
-        });
-    }
-    inline for (@typeInfo(Required).Enum.fields) |f| {
-        const v: Required = @enumFromInt(f.value);
-        @field(PluginFn, f.name) = .{
-            .initialized = false,
-            .core = RequiredFnMapType(v).init(alloc),
-            .plugin = RequiredFnMapType(v).init(alloc),
-        };
-    }
-    PluginFn.initialized = true;
-
-    var map: *HookFnMapType = undefined;
-    var buf: [1023:0]u8 = undefined;
-
-    const cwd = std.fs.cwd();
-    var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
-        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
-    defer dir.close();
-
-    var it_dir = dir.iterate();
-    while (it_dir.next() catch unreachable) |file| {
-        if (file.kind != .file) continue;
-
-        _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{file.name}) catch unreachable;
-        var lib = win32ll.LoadLibraryA(&buf);
-
-        // required callbacks
-        const fields = comptime std.enums.values(Required);
-        const valid: bool = inline for (fields) |field| {
-            const n = @tagName(field);
-            var proc = win32ll.GetProcAddress(lib, n);
-            if (proc == null) break false;
-
-            const func = @as(RequiredFnType(field), @ptrCast(proc));
-            if (field == .PluginCompatibilityVersion and func() != PLUGIN_VERSION) break false;
-            @field(PluginFn, @tagName(field)).plugin.put(file.name, func) catch unreachable;
-        } else true;
-
-        if (!valid) {
-            _ = win32ll.FreeLibrary(lib);
-            inline for (fields) |used_field|
-                _ = @field(PluginFn, @tagName(used_field)).plugin.remove(file.name);
-            continue;
-        }
-
-        if (@field(PluginFn, @tagName(.OnInit)).plugin.get(file.name)) |func_init|
-            func_init(GLOBAL_STATE, GLOBAL_FUNCTION, false);
-
-        // optional callbacks
-        var it_hook = PluginFn.hooks.iterator();
-        while (it_hook.next()) |h| {
-            const name = @tagName(h.key);
-            var proc = win32ll.GetProcAddress(lib, name);
-            if (proc == null) continue;
-
-            map = &PluginFn.hooks.getPtr(h.key).plugin;
-            map.put(file.name, @as(HookFnType, @ptrCast(proc))) catch unreachable;
-        }
-    }
-
-    map = &PluginFn.OnDeinit.core;
-    map.put("settings", &settings.deinit) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.GameLoopB).core;
-    map.put("input", &input.update_kb) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.EarlyEngineUpdateA).core;
-    map.put("global", &global.EarlyEngineUpdateA) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.TimerUpdateA).core;
-    map.put("global", &global.TimerUpdateA) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.InitRaceQuadsA).plugin;
-    map.put("practice", &practice.InitRaceQuadsA) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.MenuTitleScreenB).core;
-    map.put("global", &global.MenuTitleScreenB) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.MenuStartRaceB).core;
-    map.put("global", &global.MenuStartRaceB) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.MenuRaceResultsB).core;
-    map.put("global", &global.MenuRaceResultsB) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.MenuTrackB).core;
-    map.put("global", &global.MenuTrackB) catch unreachable;
-
-    map = &PluginFn.hooks.getPtr(.TextRenderB).plugin;
-    map.put("practice", &practice.TextRenderB) catch unreachable;
+    // fk it we ball
 
     off = global.GLOBAL_STATE.patch_offset;
     return off;
@@ -287,7 +244,7 @@ fn HookGameSetup(memory: usize) usize {
     const addr: usize = 0x4240AD;
     const len: usize = 0x4240B7 - addr;
     const off_call: usize = 0x4240AF - addr;
-    return hook.detour_call(memory, addr, off_call, len, null, RequiredFnCallback(.OnInitLate));
+    return hook.detour_call(memory, addr, off_call, len, null, PluginFnCallback(.OnInitLate));
 }
 
 // GAME LOOP
@@ -296,8 +253,9 @@ fn HookGameLoop(memory: usize) usize {
     return hook.intercept_call(
         memory,
         0x49CE2A,
-        HookFnCallback(.GameLoopB),
-        HookFnCallback(.GameLoopA),
+        //HookFnCallback(.GameLoopB),
+        PluginFnCallback(.GameLoopB),
+        PluginFnCallback(.GameLoopA),
     );
 }
 
@@ -308,13 +266,13 @@ fn HookEngineUpdate(memory: usize) usize {
 
     // fn_445980 case 1
     // physics updates, etc.
-    off = hook.intercept_call(off, 0x445991, HookFnCallback(.EarlyEngineUpdateB), null);
-    off = hook.intercept_call(off, 0x445A00, null, HookFnCallback(.EarlyEngineUpdateA));
+    off = hook.intercept_call(off, 0x445991, PluginFnCallback(.EarlyEngineUpdateB), null);
+    off = hook.intercept_call(off, 0x445A00, null, PluginFnCallback(.EarlyEngineUpdateA));
 
     // fn_445980 case 2
     // text processing, etc. before the actual render
-    off = hook.intercept_call(off, 0x445A10, HookFnCallback(.LateEngineUpdateB), null);
-    off = hook.intercept_call(off, 0x445A40, null, HookFnCallback(.LateEngineUpdateA));
+    off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
+    off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
 
     return off;
 }
@@ -326,8 +284,8 @@ fn HookTimerUpdate(memory: usize) usize {
     return hook.intercept_call(
         memory,
         0x4459AF,
-        HookFnCallback(.TimerUpdateB),
-        HookFnCallback(.TimerUpdateA),
+        PluginFnCallback(.TimerUpdateB),
+        PluginFnCallback(.TimerUpdateA),
     );
 }
 
@@ -339,8 +297,8 @@ fn HookInputUpdate(memory: usize) usize {
     return hook.intercept_call(
         memory,
         0x423592,
-        HookFnCallback(.InputUpdateB),
-        HookFnCallback(.InputUpdateA),
+        PluginFnCallback(.InputUpdateB),
+        PluginFnCallback(.InputUpdateA),
     );
 }
 
@@ -351,7 +309,7 @@ fn HookInitHangQuads(memory: usize) usize {
     const addr: usize = 0x454DCF;
     const len: usize = 0x454DD8 - addr;
     const off_call: usize = 0x454DD0 - addr;
-    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitHangQuadsA));
+    return hook.detour_call(memory, addr, off_call, len, null, PluginFnCallback(.InitHangQuadsA));
 }
 
 // RACE SETUP
@@ -361,7 +319,7 @@ fn HookInitRaceQuads(memory: usize) usize {
     const addr: usize = 0x466D76;
     const len: usize = 0x466D81 - addr;
     const off_call: usize = 0x466D79 - addr;
-    return hook.detour_call(memory, addr, off_call, len, null, HookFnCallback(.InitRaceQuadsA));
+    return hook.detour_call(memory, addr, off_call, len, null, PluginFnCallback(.InitRaceQuadsA));
 }
 
 // GAME END; executable closing
@@ -378,8 +336,8 @@ fn HookGameEnd(memory: usize) usize {
     const exit2_len: usize = 0x49CE48 - exit2_off - 1; // excluding retn
     var offset: usize = memory;
 
-    offset = hook.detour(offset, exit1_off, exit1_len, null, RequiredFnCallback(.OnDeinit));
-    offset = hook.detour(offset, exit2_off, exit2_len, null, RequiredFnCallback(.OnDeinit));
+    offset = hook.detour(offset, exit1_off, exit1_len, null, PluginFnCallback(.OnDeinit));
+    offset = hook.detour(offset, exit2_off, exit2_len, null, PluginFnCallback(.OnDeinit));
 
     return offset;
 }
@@ -390,16 +348,16 @@ fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
 
     // see fn_457620 @ 0x45777F
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, HookFnCallback(.MenuTitleScreenB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, HookFnCallback(.MenuStartRaceB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, HookFnCallback(.MenuJunkyardB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, HookFnCallback(.MenuRaceResultsB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, HookFnCallback(.MenuWattosShopB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, HookFnCallback(.MenuHangarB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, HookFnCallback(.MenuVehicleSelectB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, HookFnCallback(.MenuTrackSelectB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, HookFnCallback(.MenuTrackB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, HookFnCallback(.MenuCantinaEntryB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, PluginFnCallback(.MenuTitleScreenB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, PluginFnCallback(.MenuStartRaceB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, PluginFnCallback(.MenuJunkyardB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, PluginFnCallback(.MenuRaceResultsB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, PluginFnCallback(.MenuWattosShopB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, PluginFnCallback(.MenuHangarB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, PluginFnCallback(.MenuVehicleSelectB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, PluginFnCallback(.MenuTrackSelectB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, PluginFnCallback(.MenuTrackB));
+    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, PluginFnCallback(.MenuCantinaEntryB));
 
     return off;
 }
@@ -407,5 +365,5 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn HookTextRender(memory: usize) usize {
-    return hook.intercept_call(memory, 0x483F8B, null, HookFnCallback(.TextRenderB));
+    return hook.intercept_call(memory, 0x483F8B, null, PluginFnCallback(.TextRenderB));
 }

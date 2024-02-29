@@ -16,8 +16,10 @@ const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
 
-const win32 = @import("zigwin32");
-const win32ll = win32.system.library_loader;
+const w32 = @import("zigwin32");
+const w32ll = w32.system.library_loader;
+const w32f = w32.foundation;
+const w32fs = w32.storage.file_system;
 
 const dbg = @import("util/debug.zig");
 const hook = @import("util/hooking.zig");
@@ -40,9 +42,9 @@ const rf = @import("util/racer_fn.zig");
 const Plugin = plugin: {
     const stdf = .{
         .{ "Handle", ?win.HINSTANCE },
-        .{ "Filename", ?[]const u8 },
-        .{ "LoadedFilename", ?[]const u8 },
-        .{ "Initialized", ?bool },
+        .{ "WriteTime", ?w32f.FILETIME },
+        .{ "Initialized", bool },
+        .{ "Filename", [127:0]u8 },
     };
     const ev = std.enums.values(PluginExportFn);
     var fields: [stdf.len + ev.len]std.builtin.Type.StructField = undefined;
@@ -125,6 +127,8 @@ const PluginExportFn = enum(u32) {
 };
 
 const PluginState = struct {
+    const check_freq: u32 = 1000 / 24; // in lieu of every frame
+    var last_check: u32 = 0;
     var core: std.ArrayList(Plugin) = undefined;
     var plugin: std.ArrayList(Plugin) = undefined;
 };
@@ -141,40 +145,122 @@ fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     return &c.callback;
 }
 
+// MISC
+
+// w32fs.CompareFileTime is slow as balls for some reason???
+fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
+    return (t1.dwLowDateTime == t2.dwLowDateTime and
+        t1.dwHighDateTime == t2.dwHighDateTime);
+}
+
+// FIXME: handle OnInitLate case for reloads, which will not hit it naturally
+// TODO: OnLoad, OnUnload, OnEnable, OnDisable
+// TODO: also stuff for loading and unloading based on watching the directory, outside of
+// updating already loaded plugins
+// NOTE: assumes index is allocated and initialized, to allow different
+// ways of handling the backing data
+// NOTE: returns true when p has valid data, false otherwise; guarantee of
+// no dangling handles
+fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
+    const i_ext = filename.len - 4;
+
+    std.debug.assert(std.mem.eql(u8, ".DLL", filename[i_ext..]) or
+        std.mem.eql(u8, ".dll", filename[i_ext..]));
+
+    var buf1: [2047:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf1, "annodue/plugin/{s}", .{
+        filename,
+    }) catch unreachable;
+
+    // do we even need to do anything
+    var fd1: w32fs.WIN32_FIND_DATAA = undefined;
+    _ = w32fs.FindFirstFileA(&buf1, &fd1);
+    if (p.Initialized and filetime_eql(&fd1.ftLastWriteTime, &p.WriteTime.?))
+        return true;
+
+    // separated from buf1 to minimize work on the hot path
+    var buf0: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf0, "{s}", .{filename}) catch unreachable;
+    var buf2: [2047:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf2, "annodue/plugin/{s}.dllcpy", .{
+        filename[0..i_ext],
+    }) catch unreachable;
+
+    // do we need to unload anything
+    if (p.Handle) |h| {
+        p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
+        _ = w32ll.FreeLibrary(h);
+    }
+
+    // now we ball
+
+    _ = w32fs.CopyFileA(&buf1, &buf2, 0);
+    p.Handle = w32ll.LoadLibraryA(&buf2);
+    p.WriteTime = fd1.ftLastWriteTime;
+    @memcpy(p.Filename[0..], buf0[0..]);
+
+    const fields = comptime std.enums.values(PluginExportFn);
+    inline for (fields) |field| {
+        const process = w32ll.GetProcAddress(p.Handle, @tagName(field));
+        if (process) |proc|
+            @field(p, @tagName(field)) = @ptrCast(proc);
+    }
+
+    if (p.PluginName == null or
+        p.PluginVersion == null or
+        p.PluginCompatibilityVersion == null or
+        p.PluginCompatibilityVersion.?() != PLUGIN_VERSION or
+        p.OnInit == null or
+        p.OnInitLate == null or
+        p.OnDeinit == null)
+    {
+        _ = w32ll.FreeLibrary(p.Handle);
+        p.Initialized = false;
+        return false;
+    }
+
+    p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
+    p.Initialized = true;
+    return true;
+}
+
 // SETUP
 
 pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     var off: usize = memory;
-    var buf: [1023:0]u8 = undefined;
 
     PluginState.core = std.ArrayList(Plugin).init(alloc);
     PluginState.plugin = std.ArrayList(Plugin).init(alloc);
 
-    var p: Plugin = undefined;
+    var p: *Plugin = undefined;
 
     // loading core
 
-    p = std.mem.zeroInit(Plugin, .{});
-    p.GameLoopB = &input.update_kb;
-    PluginState.core.append(p) catch unreachable;
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
+    p.GameLoopB = &GameLoopB;
 
-    p = std.mem.zeroInit(Plugin, .{});
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
+    p.GameLoopB = &input.update_kb;
+
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
     p.InitRaceQuadsA = &practice.InitRaceQuadsA;
     p.TextRenderB = &practice.TextRenderB;
-    PluginState.core.append(p) catch unreachable;
 
-    p = std.mem.zeroInit(Plugin, .{});
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
     p.OnDeinit = &settings.deinit;
-    PluginState.core.append(p) catch unreachable;
 
-    p = std.mem.zeroInit(Plugin, .{});
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
     p.EarlyEngineUpdateA = &global.EarlyEngineUpdateA;
     p.TimerUpdateA = &global.TimerUpdateA;
     p.MenuTitleScreenB = &global.MenuTitleScreenB;
     p.MenuStartRaceB = &global.MenuStartRaceB;
     p.MenuRaceResultsB = &global.MenuRaceResultsB;
     p.MenuTrackB = &global.MenuTrackB;
-    PluginState.core.append(p) catch unreachable;
 
     // loading plugins
 
@@ -186,35 +272,13 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     var it_dir = dir.iterate();
     while (it_dir.next() catch unreachable) |file| {
         if (file.kind != .file) continue;
+        if (!std.mem.eql(u8, ".DLL", file.name[file.name.len - 4 ..]) and
+            !std.mem.eql(u8, ".dll", file.name[file.name.len - 4 ..])) continue;
 
-        p = std.mem.zeroInit(Plugin, .{});
-        _ = std.fmt.bufPrintZ(&buf, "./annodue/plugin/{s}", .{file.name}) catch unreachable;
-
-        p.Handle = win32ll.LoadLibraryA(&buf);
-        p.Filename = file.name;
-
-        const fields = comptime std.enums.values(PluginExportFn);
-        inline for (fields) |field| {
-            const process = win32ll.GetProcAddress(p.Handle, @tagName(field));
-            if (process) |proc|
-                @field(p, @tagName(field)) = @ptrCast(proc);
-        }
-
-        if (p.PluginName == null or
-            p.PluginVersion == null or
-            p.PluginCompatibilityVersion == null or
-            p.PluginCompatibilityVersion.?() != PLUGIN_VERSION or
-            p.OnInit == null or
-            p.OnInitLate == null or
-            p.OnDeinit == null)
-        {
-            _ = win32ll.FreeLibrary(p.Handle);
+        p = PluginState.plugin.addOne() catch unreachable;
+        p.* = std.mem.zeroInit(Plugin, .{});
+        if (!LoadPlugin(p, file.name))
             _ = PluginState.plugin.pop();
-            continue;
-        }
-
-        p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
-        PluginState.plugin.append(p) catch unreachable;
     }
 
     // hooking game
@@ -231,10 +295,23 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookMenuDrawing(off);
     global.GLOBAL_STATE.patch_offset = off;
 
-    // fk it we ball
-
     off = global.GLOBAL_STATE.patch_offset;
     return off;
+}
+
+pub fn GameLoopB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+    _ = initialized;
+    _ = gv;
+    if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
+        for (PluginState.plugin.items, 0..) |*p, i| {
+            const len = for (p.Filename, 0..) |c, j| {
+                if (c == 0) break j;
+            } else p.Filename.len;
+            if (!LoadPlugin(p, p.Filename[0..len]))
+                _ = PluginState.plugin.swapRemove(i);
+        }
+        PluginState.last_check = gs.timestamp;
+    }
 }
 
 // GAME SETUP

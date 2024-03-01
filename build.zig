@@ -1,6 +1,11 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    var buf1: [1024]u8 = undefined;
+    var buf2: [1024]u8 = undefined;
+
+    // BUILD OPTIONS
+
     const target = b.standardTargetOptions(.{
         .default_target = .{
             .cpu_arch = .x86,
@@ -17,9 +22,48 @@ pub fn build(b: *std.Build) void {
 
     //const zigini = b.dependency("zigini", .{});
     //const zigini_m = zigini.module("zigini");
-
     const zigwin32 = b.dependency("zigwin32", .{});
     const zigwin32_m = zigwin32.module("zigwin32");
+
+    // TOOLING
+
+    // FIXME: kinda slow, comparable to manually moving a single file; look into
+    // making this step more efficient
+    // may not actually be the fault of adding the tooling step though
+
+    const copy_step = b.step(
+        "hotcopy",
+        "Build and send output to live 'annodue' directory for hot reloading",
+    );
+    const copypath = b.option(
+        []const u8,
+        "hotcopypath",
+        "Location of output directory for 'hotcopy' step",
+    ) orelse null;
+
+    const postbuild = b.addExecutable(.{
+        .name = "postbuild",
+        .root_source_file = .{ .path = "src/tools/postbuild.zig" },
+        .target = target,
+    });
+    postbuild.addModule("zigwin32", zigwin32_m);
+    postbuild.step.dependOn(&b.install_tls.step);
+
+    const postbuild_core = b.addRunArtifact(postbuild);
+    const postbuild_plugin = b.addRunArtifact(postbuild);
+    if (copypath) |path| {
+        const arg_hci = std.fmt.bufPrint(&buf1, "-I{s}", .{b.lib_dir}) catch unreachable;
+        const arg_hcoc = std.fmt.bufPrint(&buf2, "-O{s}", .{path}) catch unreachable;
+        const arg_hcop = std.fmt.bufPrint(&buf2, "-O{s}/plugin", .{path}) catch unreachable;
+
+        copy_step.dependOn(&postbuild_core.step);
+        postbuild_core.addArg(arg_hci);
+        postbuild_core.addArg(arg_hcoc);
+
+        copy_step.dependOn(&postbuild_plugin.step);
+        postbuild_plugin.addArg(arg_hci);
+        postbuild_plugin.addArg(arg_hcop);
+    }
 
     // MAIN OUTPUT
 
@@ -33,6 +77,8 @@ pub fn build(b: *std.Build) void {
     //patch.addModule("zigini", zigini_m);
     patch.addModule("zigwin32", zigwin32_m);
     b.installArtifact(patch);
+
+    postbuild_core.addArg("-Fannodue.dll");
 
     // PLUGINS OUTPUT
 
@@ -48,11 +94,9 @@ pub fn build(b: *std.Build) void {
         "inputdisplay",
     };
 
-    var bufn: [1024]u8 = undefined;
-    var bufp: [1024]u8 = undefined;
     for (plugin_names) |name| {
-        const n = std.fmt.bufPrint(&bufn, "plugin_{s}", .{name}) catch continue;
-        const p = std.fmt.bufPrint(&bufp, "src/patch/dll_{s}.zig", .{name}) catch continue;
+        const n = std.fmt.bufPrint(&buf1, "plugin_{s}", .{name}) catch continue;
+        const p = std.fmt.bufPrint(&buf2, "src/patch/dll_{s}.zig", .{name}) catch continue;
         const dll = b.addSharedLibrary(.{
             .name = n,
             .root_source_file = .{ .path = p },
@@ -63,7 +107,21 @@ pub fn build(b: *std.Build) void {
         //dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
         b.installArtifact(dll);
+
+        var buf: [1024]u8 = undefined;
+        var bufo = std.fmt.bufPrint(&buf, "-Fplugin_{s}.dll", .{name}) catch continue;
+        postbuild_plugin.addArg(bufo);
     }
+
+    // TODO: look into only copying files that are actually re-compiled
+    // not sure if CopyFileA will just ignore old files anyway tho
+
+    //const dll_install = b.addInstallDirectory(.{
+    //    .source_dir = .{ .path = "annodue" },
+    //    .install_dir = .{ .custom = "annodue" },
+    //    .install_subdir = "",
+    //});
+    //b.default_step.dependOn(&dll_install.step);
 
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.

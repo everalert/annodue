@@ -70,17 +70,19 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
             // draw lap times
             for (lap_times, 0..) |t, i| {
                 if (t < 0) break;
+                const x1: u8 = 48;
+                const x2: u8 = 64;
                 const y: u8 = 128 + @as(u8, @truncate(i)) * 16;
                 const col: u8 = if (lap == i) 255 else 170;
                 _ = std.fmt.bufPrintZ(&buf, "~F0~s{d}", .{i + 1}) catch unreachable;
-                rf.swrText_CreateEntry1(48, y + 6, col, col, col, 190, &buf);
+                rf.swrText_CreateEntry1(x1, y + 6, col, col, col, 190, &buf);
                 // FIXME: move the time formatting logic out of here
                 const t_ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000)));
                 const min: u32 = (t_ms / 1000) / 60;
                 const sec: u32 = (t_ms / 1000) % 60;
                 const ms: u32 = t_ms % 1000;
                 _ = std.fmt.bufPrintZ(&buf, "~F1~s{d}:{d:0>2}.{d:0>3}", .{ min, sec, ms }) catch unreachable;
-                rf.swrText_CreateEntry1(64, y, col, col, col, 190, &buf);
+                rf.swrText_CreateEntry1(x2, y, col, col, col, 190, &buf);
             }
         }
     }

@@ -178,6 +178,7 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // TIME-BASED SPINLOCK
 
 // TODO: only wait if inrace and unpaused?
+// TODO: only wait if game is focused?
 // FIXME: check for HRT compatibility instead of trying to assign timer repeatedly
 // because sleep() sucks, and timeBeginPeriod() is a bad idea
 const TimeSpinlock = struct {

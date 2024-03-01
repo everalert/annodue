@@ -275,6 +275,16 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) call
     _ = gs;
     DrawVersionString();
     DrawMenuPracticeModeLabel();
+
+    //const vk_fields = comptime std.enums.values(win32kb.VIRTUAL_KEY);
+    //for (vk_fields) |vk| {
+    //    if (gv.InputGetKbDown(vk)) {
+    //        var buf: [127:0]u8 = undefined;
+    //        _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{@tagName(vk)}) catch return;
+    //        rf.swrText_CreateEntry1(16, 16, 255, 255, 255, 255, &buf);
+    //        break;
+    //    }
+    //}
 }
 
 pub fn MenuStartRaceB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {

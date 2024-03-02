@@ -75,6 +75,10 @@ const ActiveState = enum(u8) {
 const GLOBAL_STATE_VERSION = 3;
 
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
+// TODO: add index of currently consumed loaded tga IDs, since they are arbitrarily assigned
+//   also, some kind of interface plugins can use to avoid clashes
+//   list of stuff to update when it's made:
+//     inputdisplay, practice mode vis
 pub const GlobalState = extern struct {
     patch_memory: [*]u8 = undefined,
     patch_size: usize = undefined,

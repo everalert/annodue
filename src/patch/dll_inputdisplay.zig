@@ -14,11 +14,14 @@ const r = @import("util/racer.zig");
 const rc = r.constants;
 const rf = r.functions;
 
+// TODO: robustness checking, particularly surrounding init and deinit for
+// hotreloading case
+
 // INPUT DISPLAY
 
 const InputIcon = struct {
-    bg_idx: u16,
-    fg_idx: u16,
+    bg_idx: ?u16,
+    fg_idx: ?u16,
     x: u16,
     y: u16,
     w: u16,
@@ -28,8 +31,8 @@ const InputIcon = struct {
 const InputDisplay = struct {
     var analog: [rc.INPUT_ANALOG_LENGTH]f32 = undefined;
     var digital: [rc.INPUT_DIGITAL_LENGTH]u8 = undefined;
-    var p_triangle: u32 = undefined;
-    var p_square: u32 = undefined;
+    var p_triangle: ?u32 = null;
+    var p_square: ?u32 = null;
     var icons: [12]InputIcon = undefined;
     const x_base: u16 = 420;
     const y_base: u16 = 432;
@@ -75,13 +78,35 @@ const InputDisplay = struct {
         InitIconButton(&icons[2 + rc.INPUT_DIGITAL_REPAIR], x_base + 10, y_base + 19, 1, 1);
     }
 
-    fn InitSingle(i: *u16, spr: u32, x: u16, y: u16, xs: f32, ys: f32, bg: bool) void {
+    fn Deinit() void {
+        for (icons) |icon| {
+            if (icon.fg_idx) |i| {
+                rf.swrQuad_SetActive(i, 0);
+                icon.fg_idx = null;
+            }
+            if (icon.bg_idx) |i| {
+                rf.swrQuad_SetActive(i, 0);
+                icon.bg_idx = null;
+            }
+        }
+        p_triangle = null;
+        p_square = null;
+    }
+
+    fn HideAll() void {
+        for (icons) |icon| {
+            if (icon.bg_idx) |i| rf.swrQuad_SetActive(i, 0);
+            if (icon.fg_idx) |i| rf.swrQuad_SetActive(i, 0);
+        }
+    }
+
+    fn InitSingle(i: *?u16, spr: u32, x: u16, y: u16, xs: f32, ys: f32, bg: bool) void {
         i.* = r.InitNewQuad(spr);
-        rf.swrQuad_SetFlags(i.*, 1 << 16);
-        if (bg) rf.swrQuad_SetColor(i.*, 0x28, 0x28, 0x28, 0x80);
-        if (!bg) rf.swrQuad_SetColor(i.*, 0x00, 0x00, 0x00, 0xFF);
-        rf.swrQuad_SetPosition(i.*, x, y);
-        rf.swrQuad_SetScale(i.*, xs, ys);
+        rf.swrQuad_SetFlags(i.*.?, 1 << 16);
+        if (bg) rf.swrQuad_SetColor(i.*.?, 0x28, 0x28, 0x28, 0x80);
+        if (!bg) rf.swrQuad_SetColor(i.*.?, 0x00, 0x00, 0x00, 0xFF);
+        rf.swrQuad_SetPosition(i.*.?, x, y);
+        rf.swrQuad_SetScale(i.*.?, xs, ys);
     }
 
     fn InitIconSteering(left: *InputIcon, right: *InputIcon, x: u16, y: u16, x_gap: u16) void {
@@ -91,19 +116,19 @@ const InputDisplay = struct {
         left.y = y - 16;
         left.w = 24;
         left.h = 32;
-        InitSingle(&left.fg_idx, p_triangle, left.x, left.y, scale, scale, false);
-        InitSingle(&left.bg_idx, p_triangle, left.x, left.y, scale, scale, true);
-        rf.swrQuad_SetFlags(left.fg_idx, 1 << 2 | 1 << 15);
-        rf.swrQuad_SetFlags(left.bg_idx, 1 << 2 | 1 << 15);
+        InitSingle(&left.fg_idx, p_triangle.?, left.x, left.y, scale, scale, false);
+        InitSingle(&left.bg_idx, p_triangle.?, left.x, left.y, scale, scale, true);
+        rf.swrQuad_SetFlags(left.fg_idx.?, 1 << 2 | 1 << 15);
+        rf.swrQuad_SetFlags(left.bg_idx.?, 1 << 2 | 1 << 15);
 
         right.x = x + x_gap / 2;
         right.y = y - 16;
         right.w = 24;
         right.h = 32;
-        InitSingle(&right.fg_idx, p_triangle, right.x, right.y, scale, scale, false);
-        InitSingle(&right.bg_idx, p_triangle, right.x, right.y, scale, scale, true);
-        rf.swrQuad_SetFlags(right.fg_idx, 1 << 15);
-        rf.swrQuad_SetFlags(right.bg_idx, 1 << 15);
+        InitSingle(&right.fg_idx, p_triangle.?, right.x, right.y, scale, scale, false);
+        InitSingle(&right.bg_idx, p_triangle.?, right.x, right.y, scale, scale, true);
+        rf.swrQuad_SetFlags(right.fg_idx.?, 1 << 15);
+        rf.swrQuad_SetFlags(right.bg_idx.?, 1 << 15);
     }
 
     fn InitIconPitch(top: *InputIcon, bottom: *InputIcon, x: u16, y: u16, y_gap: u16) void {
@@ -114,19 +139,19 @@ const InputDisplay = struct {
         top.y = y - 16 - y_gap / 2;
         top.w = 8;
         top.h = 16;
-        InitSingle(&top.fg_idx, p_square, top.x, top.y, x_scale, y_scale, false);
-        InitSingle(&top.bg_idx, p_square, top.x, top.y, x_scale, y_scale, true);
-        rf.swrQuad_SetFlags(top.fg_idx, 1 << 15);
-        rf.swrQuad_SetFlags(top.bg_idx, 1 << 15);
+        InitSingle(&top.fg_idx, p_square.?, top.x, top.y, x_scale, y_scale, false);
+        InitSingle(&top.bg_idx, p_square.?, top.x, top.y, x_scale, y_scale, true);
+        rf.swrQuad_SetFlags(top.fg_idx.?, 1 << 15);
+        rf.swrQuad_SetFlags(top.bg_idx.?, 1 << 15);
 
         bottom.x = x - 4;
         bottom.y = y + y_gap / 2;
         bottom.w = 8;
         bottom.h = 16;
-        InitSingle(&bottom.fg_idx, p_square, bottom.x, bottom.y, x_scale, y_scale, false);
-        InitSingle(&bottom.bg_idx, p_square, bottom.x, bottom.y, x_scale, y_scale, true);
-        rf.swrQuad_SetFlags(bottom.fg_idx, 1 << 15);
-        rf.swrQuad_SetFlags(bottom.bg_idx, 1 << 15);
+        InitSingle(&bottom.fg_idx, p_square.?, bottom.x, bottom.y, x_scale, y_scale, false);
+        InitSingle(&bottom.bg_idx, p_square.?, bottom.x, bottom.y, x_scale, y_scale, true);
+        rf.swrQuad_SetFlags(bottom.fg_idx.?, 1 << 15);
+        rf.swrQuad_SetFlags(bottom.bg_idx.?, 1 << 15);
     }
 
     fn InitIconButton(i: *InputIcon, x: u16, y: u16, x_scale: f32, y_scale: f32) void {
@@ -134,27 +159,27 @@ const InputDisplay = struct {
         i.y = y;
         i.w = 8;
         i.h = 8;
-        InitSingle(&i.fg_idx, p_square, i.x, i.y, x_scale, y_scale, false);
-        InitSingle(&i.bg_idx, p_square, i.x, i.y, x_scale, y_scale, true);
+        InitSingle(&i.fg_idx, p_square.?, i.x, i.y, x_scale, y_scale, false);
+        InitSingle(&i.bg_idx, p_square.?, i.x, i.y, x_scale, y_scale, true);
     }
 
     fn UpdateIconSteering(left: *InputIcon, right: *InputIcon, input: rc.INPUT_ANALOG) void {
         const axis = InputDisplay.GetStick(input);
         const side = if (axis < 0) left else if (axis > 0) right else null;
 
-        rf.swrQuad_SetActive(left.bg_idx, 1);
-        rf.swrQuad_SetActive(left.fg_idx, 0);
-        rf.swrQuad_SetActive(right.bg_idx, 1);
-        rf.swrQuad_SetActive(right.fg_idx, 0);
+        rf.swrQuad_SetActive(left.bg_idx.?, 1);
+        rf.swrQuad_SetActive(left.fg_idx.?, 0);
+        rf.swrQuad_SetActive(right.bg_idx.?, 1);
+        rf.swrQuad_SetActive(right.fg_idx.?, 0);
 
         if (side) |s| {
             const pre: f32 = m.round(m.fabs(axis) * @as(f32, @floatFromInt(s.w)));
             const out: f32 = pre / @as(f32, @floatFromInt(s.w));
-            rf.swrQuad_SetActive(s.fg_idx, 1);
-            rf.swrQuad_SetScale(s.fg_idx, 0.5 * out, 0.5);
+            rf.swrQuad_SetActive(s.fg_idx.?, 1);
+            rf.swrQuad_SetScale(s.fg_idx.?, 0.5 * out, 0.5);
             if (axis < 0) {
                 const off: u16 = s.w - @as(u16, @intFromFloat(pre));
-                rf.swrQuad_SetPosition(s.fg_idx, s.x + off, s.y);
+                rf.swrQuad_SetPosition(s.fg_idx.?, s.x + off, s.y);
             }
 
             var buf: [127:0]u8 = undefined;
@@ -165,23 +190,23 @@ const InputDisplay = struct {
         }
     }
 
-    fn UpdateIconPitch(top: *InputIcon, bottom: *InputIcon, input: rc.INPUT_ANALOG) void {
+    fn UpdateIconPitch(top: *InputIcon, bot: *InputIcon, input: rc.INPUT_ANALOG) void {
         const axis = InputDisplay.GetStick(input);
-        const side = if (axis < 0) top else if (axis > 0) bottom else null;
+        const side = if (axis < 0) top else if (axis > 0) bot else null;
 
-        rf.swrQuad_SetActive(top.bg_idx, 1);
-        rf.swrQuad_SetActive(top.fg_idx, 0);
-        rf.swrQuad_SetActive(bottom.bg_idx, 1);
-        rf.swrQuad_SetActive(bottom.fg_idx, 0);
+        rf.swrQuad_SetActive(top.bg_idx.?, 1);
+        rf.swrQuad_SetActive(top.fg_idx.?, 0);
+        rf.swrQuad_SetActive(bot.bg_idx.?, 1);
+        rf.swrQuad_SetActive(bot.fg_idx.?, 0);
 
         if (side) |s| {
             const pre: f32 = m.round(m.fabs(axis) * @as(f32, @floatFromInt(s.h)));
             const out: f32 = pre / @as(f32, @floatFromInt(s.h));
-            rf.swrQuad_SetActive(s.fg_idx, 1);
-            rf.swrQuad_SetScale(s.fg_idx, 1, 2 * out);
+            rf.swrQuad_SetActive(s.fg_idx.?, 1);
+            rf.swrQuad_SetScale(s.fg_idx.?, 1, 2 * out);
             if (axis < 0) {
                 const off: u16 = s.h - @as(u16, @intFromFloat(pre));
-                rf.swrQuad_SetPosition(s.fg_idx, s.x, s.y + off);
+                rf.swrQuad_SetPosition(s.fg_idx.?, s.x, s.y + off);
             }
 
             var buf: [127:0]u8 = undefined;
@@ -193,60 +218,8 @@ const InputDisplay = struct {
     }
 
     fn UpdateIconButton(i: *InputIcon, input: rc.INPUT_DIGITAL) void {
-        rf.swrQuad_SetActive(i.bg_idx, 1);
-        rf.swrQuad_SetActive(i.fg_idx, InputDisplay.digital[@intFromEnum(input)]);
-    }
-
-    fn HideAll() void {
-        for (icons) |icon| {
-            rf.swrQuad_SetActive(icon.bg_idx, 0);
-            rf.swrQuad_SetActive(icon.fg_idx, 0);
-        }
-    }
-};
-
-// PRACTICE MODE VIS
-
-const mode_vis = struct {
-    const scale: f32 = 0.35;
-    const x_rt: u16 = 640 - @round(32 * scale);
-    const y_bt: u16 = 480 - @round(32 * scale);
-    var spr: u32 = undefined;
-    var tl: u16 = undefined;
-    var tr: u16 = undefined;
-    var bl: u16 = undefined;
-    var br: u16 = undefined;
-
-    fn init() void {
-        spr = rf.swrQuad_LoadTga("annodue/images/corner_round_32.tga", 8000);
-        init_single(&tl, false, false);
-        init_single(&tr, false, true);
-        init_single(&bl, true, false);
-        init_single(&br, true, true);
-    }
-
-    fn init_single(id: *u16, bt: bool, rt: bool) void {
-        id.* = r.InitNewQuad(spr);
-        rf.swrQuad_SetFlags(id.*, 1 << 15 | 1 << 16);
-        if (rt) rf.swrQuad_SetFlags(id.*, 1 << 2);
-        if (!bt) rf.swrQuad_SetFlags(id.*, 1 << 3);
-        rf.swrQuad_SetColor(id.*, 0xFF, 0xFF, 0x9C, 0xFF);
-        rf.swrQuad_SetPosition(id.*, if (rt) x_rt else 0, if (bt) y_bt else 0);
-        rf.swrQuad_SetScale(id.*, scale, scale);
-    }
-
-    //swrQuad_LoadSprite: *fn (i: u32) callconv(.C) u32 = @ptrFromInt(0x446FB0);
-    fn update(active: bool, cr: u8, cg: u8, cb: u8) void {
-        rf.swrQuad_SetActive(tl, @intFromBool(active));
-        rf.swrQuad_SetActive(tr, @intFromBool(active));
-        rf.swrQuad_SetActive(bl, @intFromBool(active));
-        rf.swrQuad_SetActive(br, @intFromBool(active));
-        if (active) {
-            rf.swrQuad_SetColor(tl, cr, cg, cb, 0xFF);
-            rf.swrQuad_SetColor(tr, cr, cg, cb, 0xFF);
-            rf.swrQuad_SetColor(bl, cr, cg, cb, 0xFF);
-            rf.swrQuad_SetColor(br, cr, cg, cb, 0xFF);
-        }
+        rf.swrQuad_SetActive(i.bg_idx.?, 1);
+        rf.swrQuad_SetActive(i.fg_idx.?, InputDisplay.digital[@intFromEnum(input)]);
     }
 };
 
@@ -267,7 +240,10 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
-    _ = gs;
+    // if re-initialized during race
+    if (gs.in_race.isOn() and !gs.player.in_race_results.isOn()) {
+        InputDisplay.Init();
+    }
 }
 
 export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
@@ -298,21 +274,6 @@ export fn InputUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callc
         if (!gs.player.in_race_results.isOn()) {
             InputDisplay.ReadInputs();
             InputDisplay.UpdateIcons();
-
-            //var buf: [127:0]u8 = undefined;
-            //_ = std.fmt.bufPrintZ(&buf, "~F0~s~c{d:0>3.0} {d:0>3.0} {d}{d}{d}{d}{d}{d}{d}{d}", .{
-            //    std.math.fabs(InputDisplay.GetStick(.Steering) * 100),
-            //    std.math.fabs(InputDisplay.GetStick(.Pitch) * 100),
-            //    InputDisplay.GetButton(.Brake),
-            //    InputDisplay.GetButton(.Acceleration),
-            //    InputDisplay.GetButton(.Boost),
-            //    InputDisplay.GetButton(.Slide),
-            //    InputDisplay.GetButton(.RollLeft),
-            //    InputDisplay.GetButton(.RollRight),
-            //    InputDisplay.GetButton(.Taunt),
-            //    InputDisplay.GetButton(.Repair),
-            //}) catch unreachable;
-            //rf.swrText_CreateEntry1(320, 480 - 16, 255, 255, 255, 190, &buf);
         } else {
             InputDisplay.HideAll();
         }

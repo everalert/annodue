@@ -11,21 +11,23 @@ const r = @import("util/racer.zig");
 const rf = @import("util/racer_fn.zig");
 const rc = @import("util/racer_const.zig");
 
+const t = @import("util/timing.zig");
 const menu = @import("util/menu.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
+// TODO: figure out wtf to do to manage state through hot-reload etc.
+
 // HUD TIMER MS
 
 fn PatchHudTimerMs() void {
-    const off_fnDrawTime3: usize = 0x450760;
     // hudDrawRaceHud
-    _ = x86.call(0x460BD3, off_fnDrawTime3);
-    _ = x86.call(0x460E6B, off_fnDrawTime3);
-    _ = x86.call(0x460ED9, off_fnDrawTime3);
+    _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime3));
+    _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime3));
+    _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime3));
     // hudDrawRaceResults
-    _ = x86.call(0x46252F, off_fnDrawTime3);
-    _ = x86.call(0x462660, off_fnDrawTime3);
+    _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime3));
+    _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime3));
     _ = mem.patch_add(0x4623D7, u8, 12);
     _ = mem.patch_add(0x4623F1, u8, 12);
     _ = mem.patch_add(0x46240B, u8, 12);
@@ -175,33 +177,6 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat2(i, rc.UpgradeCategories[cat], &buf);
 }
 
-// TIME-BASED SPINLOCK
-
-// TODO: only wait if inrace and unpaused?
-// TODO: only wait if game is focused?
-// FIXME: check for HRT compatibility instead of trying to assign timer repeatedly
-// because sleep() sucks, and timeBeginPeriod() is a bad idea
-const TimeSpinlock = struct {
-    const min_period: u64 = 1_000_000_000 / 500;
-    const max_period: u64 = 1_000_000_000 / 10;
-    var period: u64 = 1_000_000_000 / 24;
-    var timer: ?std.time.Timer = null;
-
-    fn SetPeriod(fps: u32) void {
-        period = std.math.clamp(1_000_000_000 / fps, min_period, max_period);
-    }
-
-    fn Sleep() void {
-        if (timer == null)
-            timer = std.time.Timer.start() catch return;
-
-        while (timer.?.read() < period)
-            _ = win.kernel32.SwitchToThread();
-
-        _ = timer.?.lap();
-    }
-};
-
 // QUICK RACE MENU
 
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
@@ -217,6 +192,8 @@ const QuickRaceMenu = struct {
     var menu_active: bool = false;
     var initialized: bool = false;
     var gv: *GlobalFn = undefined;
+
+    var FpsTimer: t.TimeSpinlock = .{};
 
     const values = struct {
         var fps: i32 = 24;
@@ -315,20 +292,16 @@ const QuickRaceMenu = struct {
     };
 
     fn load_race() void {
-        TimeSpinlock.SetPeriod(@intCast(values.fps));
+        FpsTimer.SetPeriod(@intCast(values.fps));
         r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
         r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
-        const u = mem.deref(&.{ 0x4D78A4, 0x0C, 0x41 });
+        const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });
         for (values.up_lv, values.up_hp, 0..) |lv, hp, i| {
             _ = mem.write(u + 0 + i, u8, @as(u8, @intCast(lv)));
             _ = mem.write(u + 7 + i, u8, @as(u8, @intCast(hp)));
         }
 
-        const jdge: usize = mem.deref_read(&.{
-            rc.ADDR_ENTITY_MANAGER_JUMPTABLE,
-            @intFromEnum(rc.ENTITY.Jdge) * 4,
-            0x10,
-        }, usize);
+        const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
         close();
     }
@@ -338,7 +311,7 @@ const QuickRaceMenu = struct {
 
         values.vehicle = r.ReadEntityValue(.Hang, 0, 0x73, u8);
         values.track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
-        const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
+        const u: [14]u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 }, [14]u8);
         for (u[0..7], u[7..14], 0..) |lv, hp, i| {
             values.up_lv[i] = lv;
             values.up_hp[i] = hp;
@@ -394,9 +367,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
-    if (gv.SettingGetB("general", "ms_timer_enable").?) {
+    if (gv.SettingGetB("general", "ms_timer_enable").?)
         PatchHudTimerMs();
-    }
 
     QuickRaceMenu.gv = gv;
 }
@@ -404,16 +376,14 @@ export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C
 export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
+
     const def_laps: u32 = gv.SettingGetU("general", "default_laps") orelse 3;
-    if (def_laps >= 1 and def_laps <= 5) {
-        const laps: usize = mem.deref(&.{ 0x4BFDB8, 0x8F });
-        _ = mem.write(laps, u8, @as(u8, @truncate(def_laps)));
-    }
+    if (def_laps >= 1 and def_laps <= 5)
+        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @truncate(def_laps)));
+
     const def_racers: u32 = gv.SettingGetU("general", "default_racers") orelse 12;
-    if (def_racers >= 1 and def_racers <= 12) {
-        const addr_racers: usize = 0x50C558;
-        _ = mem.write(addr_racers, u8, @as(u8, @truncate(def_racers)));
-    }
+    if (def_racers >= 1 and def_racers <= 12)
+        _ = mem.write(0x50C558, u8, @as(u8, @truncate(def_racers))); // racers
 }
 
 export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
@@ -424,14 +394,12 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 
 // HOOKS
 
-// FIXME: implement fps cap into settings at some point; had issues with hash
-// clashing (i think) in initial impl
 export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
-    _ = gs;
     _ = initialized;
-
-    TimeSpinlock.Sleep();
+    // FIXME: run sleep when in the pre-race cutscene/camera swing
+    if (gs.in_race.isOn() and mem.read(rc.ADDR_GUI_STOPPED, u32) == 0)
+        QuickRaceMenu.FpsTimer.Sleep();
 }
 
 // FIXME: settings toggles for both of these
@@ -440,11 +408,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
     _ = initialized;
     // Quick Reload
     if (gs.in_race.isOn() and gv.InputGetKbDown(.@"2") and gv.InputGetKbPressed(.ESCAPE)) {
-        const jdge: usize = mem.deref_read(&.{
-            rc.ADDR_ENTITY_MANAGER_JUMPTABLE,
-            @intFromEnum(rc.ENTITY.Jdge) * 4,
-            0x10,
-        }, usize);
+        const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 
@@ -461,7 +425,7 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
         if (gs.in_race == .JustOn) race.reset();
         var buf: [127:0]u8 = undefined;
 
-        const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
+        const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const total_time: f32 = race_times[5];
 
         if (gs.player.in_race_count.isOn()) {

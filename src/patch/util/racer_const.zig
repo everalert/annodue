@@ -26,6 +26,8 @@ pub const ADDR_TIME_FRAMETIME: usize = 0xE22A50; // f32
 pub const ADDR_TIME_FRAMECOUNT: usize = 0xE22A30;
 pub const ADDR_TIME_FPS: usize = 0x4C8174; // sithControl_secFPS
 
+pub const ADDR_GUI_STOPPED: usize = 0x50CB64; // u32
+
 // Entity System
 
 pub const ADDR_ENTITY_MANAGER_JUMPTABLE: usize = 0x4BFEC0;
@@ -47,6 +49,8 @@ pub const ADDR_RACE_DATA: usize = 0x4D78A4;
 pub const RACE_DATA_SIZE: usize = 0x88;
 
 // Input
+
+// TODO: fix nomenclature to match game (Axis and Button)
 
 pub const INPUT_ANALOG_LENGTH: usize = 4;
 pub const INPUT_COMBINED_ANALOG_BASE_ADDR: usize = 0xEC8830;

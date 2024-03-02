@@ -8,7 +8,7 @@ const f = functions;
 
 // RACE DATA STRUCT
 
-fn deref_racedata(offset: usize) usize {
+pub fn DerefRaceData(offset: usize) usize {
     return mem.deref(&.{
         c.ADDR_RACE_DATA,
         offset,
@@ -16,28 +16,28 @@ fn deref_racedata(offset: usize) usize {
 }
 
 pub fn ReadRaceDataValue(offset: usize, comptime T: type) T {
-    const address = deref_racedata(offset);
+    const address = DerefRaceData(offset);
     return mem.read(address, T);
 }
 
 pub fn ReadRaceDataValueBytes(offset: usize, out: ?*anyopaque, len: usize) void {
-    const address = deref_racedata(offset);
+    const address = DerefRaceData(offset);
     mem.read_bytes(address, out, len);
 }
 
 pub fn WriteRaceDataValue(offset: usize, comptime T: type, value: T) void {
-    const address = deref_racedata(offset);
+    const address = DerefRaceData(offset);
     _ = mem.write(address, T, value);
 }
 
 pub fn WriteRaceDataValueBytes(offset: usize, in: ?*anyopaque, len: usize) void {
-    const address = deref_racedata(offset);
+    const address = DerefRaceData(offset);
     _ = mem.write_bytes(address, in, len);
 }
 
 // PLAYER TEST ENTITY
 
-fn deref_player(offset: usize) usize {
+pub fn DerefPlayer(offset: usize) usize {
     return mem.deref(&.{
         c.ADDR_RACE_DATA,
         0x84,
@@ -46,28 +46,28 @@ fn deref_player(offset: usize) usize {
 }
 
 pub fn ReadPlayerValue(offset: usize, comptime T: type) T {
-    const address = deref_player(offset);
+    const address = DerefPlayer(offset);
     return mem.read(address, T);
 }
 
 pub fn ReadPlayerValueBytes(offset: usize, out: ?*anyopaque, len: usize) void {
-    const address = deref_player(offset);
+    const address = DerefPlayer(offset);
     mem.read_bytes(address, out, len);
 }
 
 pub fn WritePlayerValue(offset: usize, comptime T: type, value: T) void {
-    const address = deref_player(offset);
+    const address = DerefPlayer(offset);
     _ = mem.write(address, T, value);
 }
 
 pub fn WritePlayerValueBytes(offset: usize, in: ?*anyopaque, len: usize) void {
-    const address = deref_player(offset);
+    const address = DerefPlayer(offset);
     _ = mem.write_bytes(address, in, len);
 }
 
 // ENTITY SYSTEM
 
-fn deref_entity(entity: c.ENTITY, index: u32, offset: usize) usize {
+pub fn DerefEntity(entity: c.ENTITY, index: u32, offset: usize) usize {
     return mem.deref(&.{
         c.ADDR_ENTITY_MANAGER_JUMPTABLE,
         @intFromEnum(entity) * 4,
@@ -77,22 +77,22 @@ fn deref_entity(entity: c.ENTITY, index: u32, offset: usize) usize {
 }
 
 pub fn ReadEntityValue(entity: c.ENTITY, index: u32, offset: usize, comptime T: type) T {
-    const address = deref_entity(entity, index, offset);
+    const address = DerefEntity(entity, index, offset);
     return mem.read(address, T);
 }
 
 pub fn ReadEntityValueBytes(entity: c.ENTITY, index: u32, offset: usize, out: ?*anyopaque, len: usize) void {
-    const address = deref_entity(entity, index, offset);
+    const address = DerefEntity(entity, index, offset);
     mem.read_bytes(address, out, len);
 }
 
 pub fn WriteEntityValue(entity: c.ENTITY, index: u32, offset: usize, comptime T: type, value: T) void {
-    const address = deref_entity(entity, index, offset);
+    const address = DerefEntity(entity, index, offset);
     _ = mem.write(address, T, value);
 }
 
 pub fn WriteEntityValueBytes(entity: c.ENTITY, index: u32, offset: usize, in: ?*anyopaque, len: usize) void {
-    const address = deref_entity(entity, index, offset);
+    const address = DerefEntity(entity, index, offset);
     _ = mem.write_bytes(address, in, len);
 }
 

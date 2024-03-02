@@ -53,4 +53,5 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
     _ = gv;
     _ = initialized;
     _ = gs;
+    PatchDeathSpeed(325, 140);
 }

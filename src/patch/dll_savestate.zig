@@ -136,13 +136,13 @@ const state = struct {
     fn saveable(gs: *GlobalState) bool {
         const space_ok: bool = memory_end_addr - @intFromPtr(data) - offsets[frame] >= frame_size;
         const frames_ok: bool = frame < frames;
-        return gs.in_race.isOn() and space_ok and frames_ok;
+        return gs.in_race.on() and space_ok and frames_ok;
     }
 
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
     fn loadable(gs: *GlobalState) bool {
-        return gs.in_race.isOn();
+        return gs.in_race.on();
     }
 
     fn get_depth(index: usize) usize {
@@ -363,8 +363,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
 
     const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
     const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
-    if (!paused and !tabbed_out and gs.practice_mode and gs.in_race.isOn()) {
-        if (gs.player.in_race_racing.isOn()) UpdateState(gs, gv) else state.reset();
+    if (!paused and !tabbed_out and gs.practice_mode and gs.in_race.on()) {
+        if (gs.player.in_race_racing.on()) UpdateState(gs, gv) else state.reset();
     }
 }
 
@@ -374,8 +374,8 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
 
     //const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
     //const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
-    if (gs.practice_mode and gs.in_race.isOn()) {
-        if (gs.player.in_race_racing.isOn()) {
+    if (gs.practice_mode and gs.in_race.on()) {
+        if (gs.player.in_race_racing.on()) {
             var buff: [1023:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
             rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);

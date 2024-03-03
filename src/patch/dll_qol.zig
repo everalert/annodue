@@ -398,7 +398,7 @@ export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callc
     _ = gv;
     _ = initialized;
     // FIXME: run sleep when in the pre-race cutscene/camera swing
-    if (gs.in_race.isOn() and mem.read(rc.ADDR_GUI_STOPPED, u32) == 0)
+    if (gs.in_race.on() and mem.read(rc.ADDR_GUI_STOPPED, u32) == 0)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
@@ -407,13 +407,13 @@ export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callc
 export fn EarlyEngineUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     // Quick Reload
-    if (gs.in_race.isOn() and gv.InputGetKbDown(.@"2") and gv.InputGetKbPressed(.ESCAPE)) {
+    if (gs.in_race.on() and gv.InputGetKbDown(.@"2") and gv.InputGetKbPressed(.ESCAPE)) {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 
     // Quick Race Menu
-    if (gs.in_race.isOn() and !gs.player.in_race_results.isOn())
+    if (gs.in_race.on() and !gs.player.in_race_results.on())
         QuickRaceMenu.update();
 }
 
@@ -421,18 +421,18 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
     _ = initialized;
     if (!gv.SettingGetB("practice", "practice_tool_enable").?) return;
 
-    if (gs.in_race.isOn()) {
+    if (gs.in_race.on()) {
         if (gs.in_race == .JustOn) race.reset();
         var buf: [127:0]u8 = undefined;
 
         const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const total_time: f32 = race_times[5];
 
-        if (gs.player.in_race_count.isOn()) {
+        if (gs.player.in_race_count.on()) {
             if (gs.player.in_race_count == .JustOn) {
                 // ...
             }
-        } else if (gs.player.in_race_results.isOn()) {
+        } else if (gs.player.in_race_results.on()) {
             // FIXME: final stat calculation is slightly off, seems to be up to
             // a frame early now (since porting to plugin dlls).
             if (gs.player.in_race_results == .JustOn) {
@@ -473,15 +473,15 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
             if (gs.player.dead == .JustOn) race.total_deaths += 1;
 
             if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
-            if (gs.player.boosting.isOn()) race.set_total_boost(total_time);
+            if (gs.player.boosting.on()) race.set_total_boost(total_time);
             if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
 
             if (gs.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
-            if (gs.player.underheating.isOn()) race.set_total_underheat(total_time);
+            if (gs.player.underheating.on()) race.set_total_underheat(total_time);
             if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);
 
             if (gs.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
-            if (gs.player.overheating.isOn()) race.set_total_overheat(total_time);
+            if (gs.player.overheating.on()) race.set_total_overheat(total_time);
             if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
         }
     }

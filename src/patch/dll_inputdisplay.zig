@@ -241,7 +241,7 @@ export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C
     _ = gv;
     _ = initialized;
     // if re-initialized during race
-    if (gs.in_race.isOn() and !gs.player.in_race_results.isOn()) {
+    if (gs.in_race.on() and !gs.player.in_race_results.on()) {
         InputDisplay.Init();
     }
 }
@@ -270,8 +270,8 @@ export fn InitRaceQuadsA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) cal
 export fn InputUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
-    if (gs.in_race.isOn()) {
-        if (!gs.player.in_race_results.isOn()) {
+    if (gs.in_race.on()) {
+        if (!gs.player.in_race_results.on()) {
             InputDisplay.ReadInputs();
             InputDisplay.UpdateIcons();
         } else {

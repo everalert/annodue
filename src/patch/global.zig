@@ -6,6 +6,7 @@ const win = std.os.windows;
 const settings = @import("settings.zig");
 const s = settings.state;
 
+const st = @import("util/active_state.zig");
 const xinput = @import("util/xinput.zig");
 const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
@@ -56,24 +57,6 @@ pub const PLUGIN_VERSION = 10;
 
 // STATE
 
-// FIXME: move to util module
-const ActiveState = enum(u8) {
-    Off = 0,
-    On = 1,
-    JustOff = 2,
-    JustOn = 3,
-
-    pub fn isOn(self: *ActiveState) bool {
-        return (@intFromEnum(self.*) & 1) > 0;
-    }
-
-    pub fn update(self: *ActiveState, on: bool) void {
-        const new: u8 = @intFromBool(on);
-        const changed: u8 = (new ^ @intFromBool(self.isOn())) << 1;
-        self.* = @enumFromInt(new | changed);
-    }
-};
-
 const GLOBAL_STATE_VERSION = 3;
 
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
@@ -97,20 +80,20 @@ pub const GlobalState = extern struct {
     timestamp: u32 = 0,
     framecount: u32 = 0,
 
-    in_race: ActiveState = .Off,
+    in_race: st.ActiveState = .Off,
     player: extern struct {
         upgrades: bool = false,
         upgrades_lv: [7]u8 = undefined,
         upgrades_hp: [7]u8 = undefined,
 
         flags1: u32 = 0,
-        in_race_count: ActiveState = .Off,
-        in_race_results: ActiveState = .Off,
-        in_race_racing: ActiveState = .Off,
-        boosting: ActiveState = .Off,
-        underheating: ActiveState = .On,
-        overheating: ActiveState = .Off,
-        dead: ActiveState = .Off,
+        in_race_count: st.ActiveState = .Off,
+        in_race_results: st.ActiveState = .Off,
+        in_race_racing: st.ActiveState = .Off,
+        boosting: st.ActiveState = .Off,
+        underheating: st.ActiveState = .On,
+        overheating: st.ActiveState = .Off,
+        dead: st.ActiveState = .Off,
 
         heat_rate: f32 = 0,
         cool_rate: f32 = 0,
@@ -154,7 +137,7 @@ pub const GlobalState = extern struct {
         p.dead.update((p.flags1 & (1 << 14)) > 0);
         p.in_race_count.update((p.flags1 & (1 << 0)) > 0);
         p.in_race_results.update((p.flags1 & (1 << 5)) == 0);
-        p.in_race_racing.update(!(p.in_race_count.isOn() or p.in_race_results.isOn()));
+        p.in_race_racing.update(!(p.in_race_count.on() or p.in_race_results.on()));
     }
 };
 
@@ -260,9 +243,9 @@ pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) ca
     _ = initialized;
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
     if (gs.in_race == .JustOn) gs.player_reset();
-    if (gs.in_race.isOn()) gs.player_update();
+    if (gs.in_race.on()) gs.player_update();
 
-    if (input.get_kb_pressed(.P) and (!(gs.in_race.isOn() and gs.practice_mode)))
+    if (input.get_kb_pressed(.P) and (!(gs.in_race.on() and gs.practice_mode)))
         gs.practice_mode = !gs.practice_mode;
 }
 

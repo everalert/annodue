@@ -51,19 +51,19 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
     if (!gv.SettingGetB("practice", "practice_tool_enable").? or
         !gv.SettingGetB("practice", "overlay_enable").?) return;
 
-    if (gs.in_race.isOn()) {
+    if (gs.in_race.on()) {
         var buf: [127:0]u8 = undefined;
 
         const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);
         const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
         const lap_times: []const f32 = race_times[0..5];
 
-        if (gs.player.in_race_racing.isOn() and gs.practice_mode) {
+        if (gs.player.in_race_racing.on() and gs.practice_mode) {
             // draw heat timer
             const heat_s: f32 = gs.player.heat / gs.player.heat_rate;
             const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;
-            const heat_timer: f32 = if (gs.player.boosting.isOn()) heat_s else cool_s;
-            const heat_color: u32 = if (gs.player.boosting.isOn()) 5 else if (gs.player.heat < 100) 2 else 7;
+            const heat_timer: f32 = if (gs.player.boosting.on()) heat_s else cool_s;
+            const heat_color: u32 = if (gs.player.boosting.on()) 5 else if (gs.player.heat < 100) 2 else 7;
             _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
             rf.swrText_CreateEntry1(256, 170, 255, 255, 255, 190, &buf);
 

@@ -69,7 +69,7 @@ pub fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
     _ = initialized;
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
-    if (gs.in_race.isOn()) {
+    if (gs.in_race.on()) {
         var buf: [127:0]u8 = undefined;
         _ = buf;
 

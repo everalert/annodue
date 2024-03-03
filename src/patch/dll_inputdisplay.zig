@@ -53,8 +53,7 @@ const InputDisplay = struct {
     fn UpdateIcons() void {
         UpdateIconSteering(&icons[0], &icons[1], .Steering);
         UpdateIconPitch(&icons[2], &icons[3], .Pitch);
-        UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_BRAKE], .Brake);
-        UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_ACCELERATION], .Acceleration);
+        UpdateIconThrust(&icons[2 + rc.INPUT_DIGITAL_ACCELERATION], &icons[2 + rc.INPUT_DIGITAL_BRAKE], .Thrust, .Acceleration, .Brake);
         UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_BOOST], .Boost);
         UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_SLIDE], .Slide);
         UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_ROLL_LEFT], .RollLeft);
@@ -68,8 +67,7 @@ const InputDisplay = struct {
         p_square = rf.swrQuad_LoadSprite(26);
         InitIconSteering(&icons[0], &icons[1], x_base, y_base, 20);
         InitIconPitch(&icons[2], &icons[3], x_base + 44, y_base + 10, 2);
-        InitIconButton(&icons[2 + rc.INPUT_DIGITAL_BRAKE], x_base - 8, y_base + 1, 2, 2);
-        InitIconButton(&icons[2 + rc.INPUT_DIGITAL_ACCELERATION], x_base - 8, y_base - 17, 2, 2);
+        InitIconThrust(&icons[2 + rc.INPUT_DIGITAL_ACCELERATION], &icons[2 + rc.INPUT_DIGITAL_BRAKE], x_base, y_base, 2);
         InitIconButton(&icons[2 + rc.INPUT_DIGITAL_BOOST], x_base - 18, y_base + 19, 1, 1);
         InitIconButton(&icons[2 + rc.INPUT_DIGITAL_SLIDE], x_base - 8, y_base + 19, 2, 1);
         InitIconButton(&icons[2 + rc.INPUT_DIGITAL_ROLL_LEFT], x_base - 28, y_base + 19, 1, 1);
@@ -79,7 +77,7 @@ const InputDisplay = struct {
     }
 
     fn Deinit() void {
-        for (icons) |icon| {
+        for (&icons) |*icon| {
             if (icon.fg_idx) |i| {
                 rf.swrQuad_SetActive(i, 0);
                 icon.fg_idx = null;
@@ -154,6 +152,29 @@ const InputDisplay = struct {
         rf.swrQuad_SetFlags(bottom.bg_idx.?, 1 << 15);
     }
 
+    fn InitIconThrust(accel: *InputIcon, brake: *InputIcon, x: u16, y: u16, y_gap: u16) void {
+        const x_scale: f32 = 2;
+        const y_scale: f32 = 2;
+
+        accel.x = x - 8;
+        accel.y = y - 16 - y_gap / 2;
+        accel.w = 8;
+        accel.h = 16;
+        InitSingle(&accel.fg_idx, p_square.?, accel.x, accel.y, x_scale, y_scale, false);
+        InitSingle(&accel.bg_idx, p_square.?, accel.x, accel.y, x_scale, y_scale, true);
+        rf.swrQuad_SetFlags(accel.fg_idx.?, 1 << 15);
+        rf.swrQuad_SetFlags(accel.bg_idx.?, 1 << 15);
+
+        brake.x = x - 8;
+        brake.y = y + y_gap / 2;
+        brake.w = 8;
+        brake.h = 16;
+        InitSingle(&brake.fg_idx, p_square.?, brake.x, brake.y, x_scale, y_scale, false);
+        InitSingle(&brake.bg_idx, p_square.?, brake.x, brake.y, x_scale, y_scale, true);
+        rf.swrQuad_SetFlags(brake.fg_idx.?, 1 << 15);
+        rf.swrQuad_SetFlags(brake.bg_idx.?, 1 << 15);
+    }
+
     fn InitIconButton(i: *InputIcon, x: u16, y: u16, x_scale: f32, y_scale: f32) void {
         i.x = x;
         i.y = y;
@@ -217,6 +238,47 @@ const InputDisplay = struct {
         }
     }
 
+    fn UpdateIconThrust(top: *InputIcon, bot: *InputIcon, in_thrust: rc.INPUT_ANALOG, in_accel: rc.INPUT_DIGITAL, in_brake: rc.INPUT_DIGITAL) void {
+        const thrust: f32 = InputDisplay.GetStick(in_thrust);
+        const accel: bool = InputDisplay.GetButton(in_accel) > 0;
+        const brake: bool = InputDisplay.GetButton(in_brake) > 0;
+        const side = if (thrust < 0 and !accel) top else if (thrust > 0 and !brake) bot else null;
+        _ = side;
+
+        rf.swrQuad_SetActive(top.bg_idx.?, 1);
+        rf.swrQuad_SetActive(top.fg_idx.?, 0);
+        rf.swrQuad_SetActive(bot.bg_idx.?, 1);
+        rf.swrQuad_SetActive(bot.fg_idx.?, 0);
+
+        // NOTE: potentially add negative thrust vis to accel, maybe with color to differentiate
+        if (accel) {
+            rf.swrQuad_SetActive(top.bg_idx.?, 1);
+            rf.swrQuad_SetActive(top.fg_idx.?, InputDisplay.digital[@intFromEnum(in_accel)]);
+            rf.swrQuad_SetScale(top.fg_idx.?, 2, 2);
+            rf.swrQuad_SetPosition(top.fg_idx.?, top.x, top.y);
+        } else if (thrust > 0) {
+            const pre: f32 = m.round(m.fabs(thrust) * @as(f32, @floatFromInt(top.h)));
+            const out: f32 = pre / @as(f32, @floatFromInt(top.h));
+            rf.swrQuad_SetActive(top.fg_idx.?, 1);
+            rf.swrQuad_SetScale(top.fg_idx.?, 2, 2 * out);
+            const off: u16 = top.h - @as(u16, @intFromFloat(pre));
+            rf.swrQuad_SetPosition(top.fg_idx.?, top.x, top.y + off);
+            if (thrust < 1) {
+                var buf: [127:0]u8 = undefined;
+                _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{d:1.0}", .{
+                    std.math.fabs(thrust * 100),
+                }) catch unreachable;
+                rf.swrText_CreateEntry1(top.x + 8, top.y - 10, 255, 255, 255, 190, &buf);
+            }
+        }
+        if (brake) {
+            rf.swrQuad_SetActive(bot.bg_idx.?, 1);
+            rf.swrQuad_SetActive(bot.fg_idx.?, InputDisplay.digital[@intFromEnum(in_brake)]);
+            rf.swrQuad_SetScale(bot.fg_idx.?, 2, 2);
+            rf.swrQuad_SetPosition(bot.fg_idx.?, bot.x, bot.y);
+        }
+    }
+
     fn UpdateIconButton(i: *InputIcon, input: rc.INPUT_DIGITAL) void {
         rf.swrQuad_SetActive(i.bg_idx.?, 1);
         rf.swrQuad_SetActive(i.fg_idx.?, InputDisplay.digital[@intFromEnum(input)]);
@@ -256,6 +318,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
     _ = gv;
     _ = initialized;
     _ = gs;
+    InputDisplay.Deinit();
 }
 
 // HOOK FUNCTIONS

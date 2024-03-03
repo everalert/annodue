@@ -65,8 +65,8 @@ pub const INPUT_MOUSE_DIGITAL_BASE_ADDR: usize = 0x4D5EBC;
 pub const INPUT_KEYBOARD_DIGITAL_BASE_ADDR: usize = 0x4D5EF8;
 
 pub const INPUT_ANALOG = enum(u8) {
-    Unk1,
-    Unk2,
+    Thrust,
+    Unk2, // NOTE: not analog brake; that results in digital brake output
     Steering,
     Pitch,
 };

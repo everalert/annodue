@@ -242,7 +242,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
-    p.GameLoopB = &input.update_kb;
+    p.InputUpdateB = &input.update;
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});

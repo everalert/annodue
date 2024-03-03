@@ -6,6 +6,7 @@ const win = std.os.windows;
 const settings = @import("settings.zig");
 const s = settings.state;
 
+const xinput = @import("util/xinput.zig");
 const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
@@ -14,9 +15,10 @@ const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
-const win32 = @import("zigwin32");
-const win32kb = win32.ui.input.keyboard_and_mouse;
-const win32wm = win32.ui.windows_and_messaging;
+const w32 = @import("zigwin32");
+const w32kb = w32.ui.input.keyboard_and_mouse;
+const w32xc = w32.ui.input.xbox_controller;
+const w32wm = w32.ui.windows_and_messaging;
 const KS_DOWN: i16 = -1;
 const KS_PRESSED: i16 = 1; // since last call
 
@@ -50,7 +52,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 9;
+pub const PLUGIN_VERSION = 10;
 
 // STATE
 
@@ -158,7 +160,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_FUNCTION_VERSION = 8;
+pub const GLOBAL_FUNCTION_VERSION = 9;
 
 pub const GlobalFn = extern struct {
     // Settings
@@ -171,6 +173,8 @@ pub const GlobalFn = extern struct {
     InputGetKbUp: *const @TypeOf(input.get_kb_up) = &input.get_kb_up,
     InputGetKbPressed: *const @TypeOf(input.get_kb_pressed) = &input.get_kb_pressed,
     InputGetKbReleased: *const @TypeOf(input.get_kb_released) = &input.get_kb_released,
+    InputGetXInputButton: *const @TypeOf(input.get_xinput_button) = &input.get_xinput_button,
+    InputGetXInputAxis: *const @TypeOf(input.get_xinput_axis) = &input.get_xinput_axis,
     // Game
     GameFreezeEnable: *const @TypeOf(Freeze.freeze) = &Freeze.freeze,
     GameFreezeDisable: *const @TypeOf(Freeze.unfreeze) = &Freeze.unfreeze,
@@ -241,7 +245,7 @@ fn DrawVersionString() void {
 
 pub fn init() void {
     // input-based launch toggles
-    const kb_shift: i16 = win32kb.GetAsyncKeyState(@intFromEnum(win32kb.VK_SHIFT));
+    const kb_shift: i16 = w32kb.GetAsyncKeyState(@intFromEnum(w32kb.VK_SHIFT));
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
     GLOBAL_STATE.practice_mode = kb_shift_dn;
 
@@ -279,6 +283,20 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) call
     _ = gs;
     DrawVersionString();
     DrawMenuPracticeModeLabel();
+
+    //var buf: [127:0]u8 = undefined;
+    //const xa_fields = comptime std.enums.values(input.XINPUT_GAMEPAD_AXIS_INDEX);
+    //for (xa_fields, 0..) |a, i| {
+    //    const axis: f32 = gv.InputGetXInputAxis(a);
+    //    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s} {d:0<7.3}", .{ @tagName(a), axis }) catch return;
+    //    rf.swrText_CreateEntry1(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
+    //}
+    //const xb_fields = comptime std.enums.values(input.XINPUT_GAMEPAD_BUTTON_INDEX);
+    //for (xb_fields, xa_fields.len..) |b, i| {
+    //    const on: bool = gv.InputGetXInputButton(b).on();
+    //    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s} {any}", .{ @tagName(b), on }) catch return;
+    //    rf.swrText_CreateEntry1(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
+    //}
 
     //const vk_fields = comptime std.enums.values(win32kb.VIRTUAL_KEY);
     //for (vk_fields) |vk| {

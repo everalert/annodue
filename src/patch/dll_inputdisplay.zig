@@ -203,11 +203,14 @@ const InputDisplay = struct {
                 rf.swrQuad_SetPosition(s.fg_idx.?, s.x + off, s.y);
             }
 
+            const text_xoff: u16 = 2;
+            std.debug.assert(s.w / 2 >= text_xoff);
             var buf: [127:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{d:1.0}", .{
+            _ = std.fmt.bufPrintZ(&buf, "~F4~s~c{d:1.0}", .{
                 std.math.fabs(axis * 100),
             }) catch unreachable;
-            rf.swrText_CreateEntry1(s.x + s.w / 2, s.y + s.h / 3 * 2, 255, 255, 255, 190, &buf);
+            const txo: u16 = @as(u16, @intCast(@as(i16, @intCast(s.w / 2)) - @as(i16, @intFromFloat(m.sign(axis) * text_xoff))));
+            rf.swrText_CreateEntry1(s.x + txo, s.y + s.h / 2 - 3, 255, 255, 255, 190, &buf);
         }
     }
 
@@ -230,11 +233,14 @@ const InputDisplay = struct {
                 rf.swrQuad_SetPosition(s.fg_idx.?, s.x, s.y + off);
             }
 
+            const text_yoff = 5;
+            std.debug.assert(s.h >= text_yoff);
             var buf: [127:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&buf, "~F0~s{d:1.0}", .{
+            _ = std.fmt.bufPrintZ(&buf, "~F4~s{d:1.0}", .{
                 std.math.fabs(axis * 100),
             }) catch unreachable;
-            rf.swrText_CreateEntry1(s.x + 2, s.y + s.h / 2 - 4, 255, 255, 255, 190, &buf);
+            const tyo: u16 = (if (axis < 0) s.h - text_yoff else text_yoff) - 3;
+            rf.swrText_CreateEntry1(s.x + 2, s.y + tyo, 255, 255, 255, 190, &buf);
         }
     }
 
@@ -265,10 +271,10 @@ const InputDisplay = struct {
             rf.swrQuad_SetPosition(top.fg_idx.?, top.x, top.y + off);
             if (thrust < 1) {
                 var buf: [127:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{d:1.0}", .{
+                _ = std.fmt.bufPrintZ(&buf, "~F4~s~c{d:1.0}", .{
                     std.math.fabs(thrust * 100),
                 }) catch unreachable;
-                rf.swrText_CreateEntry1(top.x + 8, top.y - 10, 255, 255, 255, 190, &buf);
+                rf.swrText_CreateEntry1(top.x + 8, top.y - 8, 255, 255, 255, 190, &buf);
             }
         }
         if (brake) {

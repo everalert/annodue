@@ -53,7 +53,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 10;
+pub const PLUGIN_VERSION = 11;
 
 // STATE
 
@@ -143,7 +143,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_FUNCTION_VERSION = 9;
+pub const GLOBAL_FUNCTION_VERSION = 10;
 
 pub const GlobalFn = extern struct {
     // Settings
@@ -156,6 +156,9 @@ pub const GlobalFn = extern struct {
     InputGetKbUp: *const @TypeOf(input.get_kb_up) = &input.get_kb_up,
     InputGetKbPressed: *const @TypeOf(input.get_kb_pressed) = &input.get_kb_pressed,
     InputGetKbReleased: *const @TypeOf(input.get_kb_released) = &input.get_kb_released,
+    //InputGetMouse: *const @TypeOf(input.get_mouse_window) = &input.get_mouse_window,
+    //InputGetMouseDelta: *const @TypeOf(input.get_mouse_window_d) = &input.get_mouse_window_d,
+    //InputGetMouseInWindow: *const @TypeOf(input.get_mouse_inside) = &input.get_mouse_inside,
     InputGetXInputButton: *const @TypeOf(input.get_xinput_button) = &input.get_xinput_button,
     InputGetXInputAxis: *const @TypeOf(input.get_xinput_axis) = &input.get_xinput_axis,
     // Game

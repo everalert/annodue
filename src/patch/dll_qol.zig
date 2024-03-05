@@ -28,6 +28,7 @@ fn PatchHudTimerMs() void {
     // hudDrawRaceResults
     _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime3));
     _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime3));
+    // FIXME: set actual values directly, hot-reloading messes it up
     _ = mem.patch_add(0x4623D7, u8, 12);
     _ = mem.patch_add(0x4623F1, u8, 12);
     _ = mem.patch_add(0x46240B, u8, 12);

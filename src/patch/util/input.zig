@@ -32,7 +32,7 @@ pub const INPUT_MOUSE = extern struct {
     window_in: st.ActiveState,
 };
 
-const state = struct {
+const state = extern struct {
     var kb: [256]u8 = std.mem.zeroes([256]u8);
     var mouse: INPUT_MOUSE = std.mem.zeroInit(INPUT_MOUSE, .{});
     var xbox_raw: xinput.XINPUT_GAMEPAD = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});

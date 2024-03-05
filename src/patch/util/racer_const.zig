@@ -123,6 +123,16 @@ pub const TEXT_COLOR_PRESET = [10]u32{
 pub const ADDR_QUAD_INITIALIZED_INDEX: usize = 0x4B91B8;
 pub const ADDR_QUAD_STAT_BAR_INDEX: usize = 0x50C928;
 
+// Camera
+
+pub const CAM_METACAM_ARRAY_ADDR: usize = 0xDFB040; // NOTE: need a better name for this
+pub const CAM_METACAM_ARRAY_LEN: usize = 4;
+pub const CAM_METACAM_ITEM_SIZE: usize = 0x16C;
+
+pub const CAM_CAMSTATE_ARRAY_ADDR: usize = 0xE9AA40;
+pub const CAM_CAMSTATE_ARRAY_LEN: usize = 32;
+pub const CAM_CAMSTATE_ITEM_SIZE: usize = 0x7C;
+
 // Helper String Arrays
 
 pub const Vehicles = [_][*:0]const u8{ "Anakin Skywalker", "Teemto Pagalies", "Sebulba", "Ratts Tyerell", "Aldar Beedo", "Mawhonic", "Ark 'Bumpy' Roose", "Wan Sandage", "Mars Guo", "Ebe Endocott", "Dud Bolt", "Gasgano", "Clegg Holdfast", "Elan Mak", "Neva Kee", "Bozzie Baranta", "Boles Roor", "Ody Mandrell", "Fud Sang", "Ben Quadinaros", "Slide Paramita", "Toy Dampner", "Bullseye 'Navior'" };

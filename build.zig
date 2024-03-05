@@ -92,6 +92,7 @@ pub fn build(b: *std.Build) void {
         "multiplayer",
         "developer",
         "inputdisplay",
+        "cam7",
     };
 
     for (plugin_names) |name| {

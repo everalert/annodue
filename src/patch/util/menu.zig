@@ -36,12 +36,12 @@ pub const Menu = struct {
     confirm_fn: ?*fn () void = null,
     confirm_text: ?[*:0]const u8 = null, // default: Confirm
     confirm_key: ?win32kb.VIRTUAL_KEY = null,
-    w: u16 = 320,
-    x: u16 = 320,
-    y: u16 = 128,
-    col_w: u16 = 128,
-    row_h: u16 = 10,
-    row_margin: u16 = 8,
+    w: i16 = 320,
+    x: i16 = 320,
+    y: i16 = 128,
+    col_w: i16 = 128,
+    row_h: i16 = 10,
+    row_margin: i16 = 8,
     x_scroll: ScrollControl,
     y_scroll: ScrollControl,
     hl_color: u8 = 3, // ingame predefined colors with ~{n}, default yellow
@@ -77,13 +77,13 @@ pub const Menu = struct {
             );
         }
 
-        const x1 = self.x - self.w / 2;
+        const x1 = self.x - @divFloor(self.w, 2);
         const x2 = x1 + self.col_w;
         var y = self.y;
         var buf: [127:0]u8 = undefined;
 
         _ = std.fmt.bufPrintZ(&buf, "~f4~s~c{s}", .{self.title}) catch unreachable;
-        rf.swrText_CreateEntry1(self.x / 2, y / 2, 255, 255, 255, 190, &buf);
+        rf.swrText_CreateEntry1(@divFloor(self.x, 2), @divFloor(y, 2), 255, 255, 255, 190, &buf);
         y += self.row_margin * 2;
 
         var hl_i: i32 = 0;

@@ -22,10 +22,10 @@ const rf = r.functions;
 const InputIcon = struct {
     bg_idx: ?u16,
     fg_idx: ?u16,
-    x: u16,
-    y: u16,
-    w: u16,
-    h: u16,
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
 };
 
 const InputDisplay = struct {
@@ -98,7 +98,7 @@ const InputDisplay = struct {
         }
     }
 
-    fn InitSingle(i: *?u16, spr: u32, x: u16, y: u16, xs: f32, ys: f32, bg: bool) void {
+    fn InitSingle(i: *?u16, spr: u32, x: i16, y: i16, xs: f32, ys: f32, bg: bool) void {
         i.* = r.InitNewQuad(spr);
         rf.swrQuad_SetFlags(i.*.?, 1 << 16);
         if (bg) rf.swrQuad_SetColor(i.*.?, 0x28, 0x28, 0x28, 0x80);
@@ -107,10 +107,10 @@ const InputDisplay = struct {
         rf.swrQuad_SetScale(i.*.?, xs, ys);
     }
 
-    fn InitIconSteering(left: *InputIcon, right: *InputIcon, x: u16, y: u16, x_gap: u16) void {
+    fn InitIconSteering(left: *InputIcon, right: *InputIcon, x: i16, y: i16, x_gap: i16) void {
         const scale: f32 = 0.5;
 
-        left.x = x - 24 - x_gap / 2;
+        left.x = x - 24 - @divFloor(x_gap, 2);
         left.y = y - 16;
         left.w = 24;
         left.h = 32;
@@ -119,7 +119,7 @@ const InputDisplay = struct {
         rf.swrQuad_SetFlags(left.fg_idx.?, 1 << 2 | 1 << 15);
         rf.swrQuad_SetFlags(left.bg_idx.?, 1 << 2 | 1 << 15);
 
-        right.x = x + x_gap / 2;
+        right.x = x + @divFloor(x_gap, 2);
         right.y = y - 16;
         right.w = 24;
         right.h = 32;
@@ -129,12 +129,12 @@ const InputDisplay = struct {
         rf.swrQuad_SetFlags(right.bg_idx.?, 1 << 15);
     }
 
-    fn InitIconPitch(top: *InputIcon, bottom: *InputIcon, x: u16, y: u16, y_gap: u16) void {
+    fn InitIconPitch(top: *InputIcon, bottom: *InputIcon, x: i16, y: i16, y_gap: i16) void {
         const x_scale: f32 = 1;
         const y_scale: f32 = 2;
 
         top.x = x - 4;
-        top.y = y - 16 - y_gap / 2;
+        top.y = y - 16 - @divFloor(y_gap, 2);
         top.w = 8;
         top.h = 16;
         InitSingle(&top.fg_idx, p_square.?, top.x, top.y, x_scale, y_scale, false);
@@ -143,7 +143,7 @@ const InputDisplay = struct {
         rf.swrQuad_SetFlags(top.bg_idx.?, 1 << 15);
 
         bottom.x = x - 4;
-        bottom.y = y + y_gap / 2;
+        bottom.y = y + @divFloor(y_gap, 2);
         bottom.w = 8;
         bottom.h = 16;
         InitSingle(&bottom.fg_idx, p_square.?, bottom.x, bottom.y, x_scale, y_scale, false);
@@ -152,12 +152,12 @@ const InputDisplay = struct {
         rf.swrQuad_SetFlags(bottom.bg_idx.?, 1 << 15);
     }
 
-    fn InitIconThrust(accel: *InputIcon, brake: *InputIcon, x: u16, y: u16, y_gap: u16) void {
+    fn InitIconThrust(accel: *InputIcon, brake: *InputIcon, x: i16, y: i16, y_gap: i16) void {
         const x_scale: f32 = 2;
         const y_scale: f32 = 2;
 
         accel.x = x - 8;
-        accel.y = y - 16 - y_gap / 2;
+        accel.y = y - 16 - @divFloor(y_gap, 2);
         accel.w = 8;
         accel.h = 16;
         InitSingle(&accel.fg_idx, p_square.?, accel.x, accel.y, x_scale, y_scale, false);
@@ -166,7 +166,7 @@ const InputDisplay = struct {
         rf.swrQuad_SetFlags(accel.bg_idx.?, 1 << 15);
 
         brake.x = x - 8;
-        brake.y = y + y_gap / 2;
+        brake.y = y + @divFloor(y_gap, 2);
         brake.w = 8;
         brake.h = 16;
         InitSingle(&brake.fg_idx, p_square.?, brake.x, brake.y, x_scale, y_scale, false);
@@ -175,7 +175,7 @@ const InputDisplay = struct {
         rf.swrQuad_SetFlags(brake.bg_idx.?, 1 << 15);
     }
 
-    fn InitIconButton(i: *InputIcon, x: u16, y: u16, x_scale: f32, y_scale: f32) void {
+    fn InitIconButton(i: *InputIcon, x: i16, y: i16, x_scale: f32, y_scale: f32) void {
         i.x = x;
         i.y = y;
         i.w = 8;
@@ -199,18 +199,18 @@ const InputDisplay = struct {
             rf.swrQuad_SetActive(s.fg_idx.?, 1);
             rf.swrQuad_SetScale(s.fg_idx.?, 0.5 * out, 0.5);
             if (axis < 0) {
-                const off: u16 = s.w - @as(u16, @intFromFloat(pre));
+                const off: i16 = s.w - @as(i16, @intFromFloat(pre));
                 rf.swrQuad_SetPosition(s.fg_idx.?, s.x + off, s.y);
             }
 
             const text_xoff: u16 = 2;
-            std.debug.assert(s.w / 2 >= text_xoff);
+            std.debug.assert(@divFloor(s.w, 2) >= text_xoff);
             var buf: [127:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&buf, "~F4~s~c{d:1.0}", .{
                 std.math.fabs(axis * 100),
             }) catch unreachable;
-            const txo: u16 = @as(u16, @intCast(@as(i16, @intCast(s.w / 2)) - @as(i16, @intFromFloat(m.sign(axis) * text_xoff))));
-            rf.swrText_CreateEntry1(s.x + txo, s.y + s.h / 2 - 3, 255, 255, 255, 190, &buf);
+            const txo: i16 = @divFloor(s.w, 2) - @as(i16, @intFromFloat(m.sign(axis) * text_xoff));
+            rf.swrText_CreateEntry1(s.x + txo, s.y + @divFloor(s.h, 2) - 3, 255, 255, 255, 190, &buf);
         }
     }
 
@@ -229,17 +229,17 @@ const InputDisplay = struct {
             rf.swrQuad_SetActive(s.fg_idx.?, 1);
             rf.swrQuad_SetScale(s.fg_idx.?, 1, 2 * out);
             if (axis < 0) {
-                const off: u16 = s.h - @as(u16, @intFromFloat(pre));
+                const off: i16 = s.h - @as(i16, @intFromFloat(pre));
                 rf.swrQuad_SetPosition(s.fg_idx.?, s.x, s.y + off);
             }
 
-            const text_yoff = 5;
+            const text_yoff: u16 = 5;
             std.debug.assert(s.h >= text_yoff);
             var buf: [127:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&buf, "~F4~s{d:1.0}", .{
                 std.math.fabs(axis * 100),
             }) catch unreachable;
-            const tyo: u16 = (if (axis < 0) s.h - text_yoff else text_yoff) - 3;
+            const tyo: i16 = (if (axis < 0) s.h - text_yoff else text_yoff) - 3;
             rf.swrText_CreateEntry1(s.x + 2, s.y + tyo, 255, 255, 255, 190, &buf);
         }
     }
@@ -267,7 +267,7 @@ const InputDisplay = struct {
             const out: f32 = pre / @as(f32, @floatFromInt(top.h));
             rf.swrQuad_SetActive(top.fg_idx.?, 1);
             rf.swrQuad_SetScale(top.fg_idx.?, 2, 2 * out);
-            const off: u16 = top.h - @as(u16, @intFromFloat(pre));
+            const off: i16 = top.h - @as(i16, @intFromFloat(pre));
             rf.swrQuad_SetPosition(top.fg_idx.?, top.x, top.y + off);
             if (thrust < 1) {
                 var buf: [127:0]u8 = undefined;

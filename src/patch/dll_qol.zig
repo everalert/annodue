@@ -39,8 +39,8 @@ fn PatchHudTimerMs() void {
 // PRACTICE/STATISTICAL DATA
 
 const race = struct {
-    const stat_x: u16 = 192;
-    const stat_y: u16 = 48;
+    const stat_x: i16 = 192;
+    const stat_y: i16 = 48;
     const stat_h: u8 = 12;
     const stat_col: u8 = 255;
     var total_deaths: u32 = 0;

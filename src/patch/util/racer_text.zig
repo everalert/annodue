@@ -32,8 +32,6 @@ const msg = @import("message.zig");
 // 3
 // - an api that lets you do both ways, with overlapping ideas homogenized
 
-// TODO: verify whether original game function uses i16 or u16
-
 pub const DEFAULT_STYLE: []const u8 = "~F0~s";
 
 pub const DEFAULT_COLOR: u32 = 0xFFFFFFBE; // 255, 255, 255, 190
@@ -151,7 +149,7 @@ pub inline fn MakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype)
     return buf[0..i];
 }
 
-pub fn DrawText(x: u16, y: u16, rgba: u32, comptime fmt: []const u8, args: anytype, style: ?[]const u8) !void {
+pub fn DrawText(x: i16, y: i16, rgba: u32, comptime fmt: []const u8, args: anytype, style: ?[]const u8) !void {
     const state = struct {
         var buf1: [127:0]u8 = undefined;
         var buf2: [127:0]u8 = undefined;

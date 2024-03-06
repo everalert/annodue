@@ -149,21 +149,22 @@ pub inline fn MakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype)
     return buf[0..i];
 }
 
-pub fn DrawText(x: i16, y: i16, rgba: u32, comptime fmt: []const u8, args: anytype, style: ?[]const u8) !void {
+pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !void {
     const state = struct {
         var buf1: [127:0]u8 = undefined;
         var buf2: [127:0]u8 = undefined;
     };
+    const color: u32 = rgba orelse DEFAULT_COLOR;
     const head: []const u8 = style orelse DEFAULT_STYLE;
     const body = try std.fmt.bufPrintZ(state.buf1[head.len..], fmt, args);
     _ = try std.fmt.bufPrintZ(&state.buf2, "{s}{s}", .{ head, body });
     rf.swrText_CreateEntry1(
         x,
         y,
-        @as(u8, @truncate(rgba >> 24)),
-        @as(u8, @truncate(rgba >> 16)),
-        @as(u8, @truncate(rgba >> 8)),
-        @as(u8, @truncate(rgba >> 0)),
+        @as(u8, @truncate(color >> 24)),
+        @as(u8, @truncate(color >> 16)),
+        @as(u8, @truncate(color >> 8)),
+        @as(u8, @truncate(color >> 0)),
         &state.buf2,
     );
 }

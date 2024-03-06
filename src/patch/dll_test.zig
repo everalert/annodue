@@ -54,8 +54,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
     _ = initialized;
     _ = gs;
 
-    //rt.DrawText(16, 16, rt.DEFAULT_COLOR, "{s} {s}", .{
+    //rt.DrawText(16, 16, "{s} {s}", .{
     //    PLUGIN_NAME,
     //    PLUGIN_VERSION,
-    //}, null) catch {};
+    //}, null, null) catch {};
 }

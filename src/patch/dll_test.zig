@@ -9,6 +9,8 @@ const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 const r = @import("util/racer.zig");
 const rf = @import("util/racer_fn.zig");
 const rc = @import("util/racer_const.zig");
+const rt = @import("util/racer_text.zig");
+const rto = rt.TextStyleOpts;
 
 const PLUGIN_NAME: [*:0]const u8 = "PluginTest";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -51,7 +53,9 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
     _ = gv;
     _ = initialized;
     _ = gs;
-    //var buf: [127:0]u8 = undefined;
-    //_ = std.fmt.bufPrintZ(&buf, "~F0~s{s} {s}", .{ PLUGIN_NAME, PLUGIN_VERSION }) catch return;
-    //rf.swrText_CreateEntry1(16, 16, 255, 255, 255, 190, &buf);
+
+    //rt.DrawText(16, 16, rt.DEFAULT_COLOR, "{s} {s}", .{
+    //    PLUGIN_NAME,
+    //    PLUGIN_VERSION,
+    //}, null) catch {};
 }

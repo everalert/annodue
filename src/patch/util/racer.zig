@@ -3,8 +3,10 @@ const mem = @import("memory.zig");
 
 pub const constants = @import("racer_const.zig");
 pub const functions = @import("racer_fn.zig");
+pub const text = @import("racer_text.zig");
 const c = constants;
 const f = functions;
+const t = text;
 
 // RACE DATA STRUCT
 

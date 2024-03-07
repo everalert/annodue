@@ -8,8 +8,10 @@ const GlobalFn = @import("global.zig").GlobalFn;
 
 const mem = @import("util/memory.zig");
 const r = @import("util/racer.zig");
-const rc = r.constants;
 const rf = r.functions;
+const rc = r.constants;
+const rt = r.text;
+const rto = rt.TextStyleOpts;
 
 // PRACTICE MODE VISUALIZATION
 
@@ -31,13 +33,13 @@ const mode_vis = struct {
         init_single(&br, true, true);
     }
 
-    fn init_single(id: *u16, bt: bool, rt: bool) void {
+    fn init_single(id: *u16, bottom: bool, right: bool) void {
         id.* = r.InitNewQuad(spr);
         rf.swrQuad_SetFlags(id.*, 1 << 15 | 1 << 16);
-        if (rt) rf.swrQuad_SetFlags(id.*, 1 << 2);
-        if (!bt) rf.swrQuad_SetFlags(id.*, 1 << 3);
+        if (right) rf.swrQuad_SetFlags(id.*, 1 << 2);
+        if (!bottom) rf.swrQuad_SetFlags(id.*, 1 << 3);
         rf.swrQuad_SetColor(id.*, 0xFF, 0xFF, 0x9C, 0xFF);
-        rf.swrQuad_SetPosition(id.*, if (rt) x_rt else 0, if (bt) y_bt else 0);
+        rf.swrQuad_SetPosition(id.*, if (right) x_rt else 0, if (bottom) y_bt else 0);
         rf.swrQuad_SetScale(id.*, scale, scale);
     }
 
@@ -94,7 +96,7 @@ pub fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
                 f_b -= @intFromFloat(b_range * flash_cycle);
             }
             // TODO: move text to eventual toast system
-            //rf.swrText_CreateEntry1(640 - 16, 480 - 16, f_rg, f_rg, f_b, 190, "~F0~s~rPractice Mode");
+            //rt.DrawText(640 - 16, 480 - 16, f_rg, f_rg, f_b, 190, "~F0~s~rPractice Mode");
             f_on = true;
         }
         mode_vis.update(f_on, f_r, f_g, f_b);

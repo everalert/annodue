@@ -13,6 +13,8 @@ const mem = @import("util/memory.zig");
 const r = @import("util/racer.zig");
 const rc = r.constants;
 const rf = r.functions;
+const rt = r.text;
+const rto = rt.TextStyleOpts;
 
 // TODO: robustness checking, particularly surrounding init and deinit for
 // hotreloading case
@@ -36,6 +38,8 @@ const InputDisplay = struct {
     var icons: [12]InputIcon = undefined;
     const x_base: u16 = 420;
     const y_base: u16 = 432;
+    const style_center = rt.MakeTextHeadStyle(.Small, true, null, .Center, .{rto.ToggleShadow}) catch "";
+    const style_left = rt.MakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
     fn ReadInputs() void {
         analog = mem.read(rc.INPUT_COMBINED_ANALOG_BASE_ADDR, @TypeOf(analog));
@@ -205,12 +209,10 @@ const InputDisplay = struct {
 
             const text_xoff: u16 = 2;
             std.debug.assert(@divFloor(s.w, 2) >= text_xoff);
-            var buf: [127:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&buf, "~F4~s~c{d:1.0}", .{
-                std.math.fabs(axis * 100),
-            }) catch unreachable;
             const txo: i16 = @divFloor(s.w, 2) - @as(i16, @intFromFloat(m.sign(axis) * text_xoff));
-            rf.swrText_CreateEntry1(s.x + txo, s.y + @divFloor(s.h, 2) - 3, 255, 255, 255, 190, &buf);
+            rt.DrawText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
+                std.math.fabs(axis * 100),
+            }, null, style_center) catch {};
         }
     }
 
@@ -235,12 +237,10 @@ const InputDisplay = struct {
 
             const text_yoff: u16 = 5;
             std.debug.assert(s.h >= text_yoff);
-            var buf: [127:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&buf, "~F4~s{d:1.0}", .{
-                std.math.fabs(axis * 100),
-            }) catch unreachable;
             const tyo: i16 = (if (axis < 0) s.h - text_yoff else text_yoff) - 3;
-            rf.swrText_CreateEntry1(s.x + 2, s.y + tyo, 255, 255, 255, 190, &buf);
+            rt.DrawText(s.x + 2, s.y + tyo, "{d:1.0}", .{
+                std.math.fabs(axis * 100),
+            }, null, style_left) catch {};
         }
     }
 
@@ -270,11 +270,9 @@ const InputDisplay = struct {
             const off: i16 = top.h - @as(i16, @intFromFloat(pre));
             rf.swrQuad_SetPosition(top.fg_idx.?, top.x, top.y + off);
             if (thrust < 1) {
-                var buf: [127:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&buf, "~F4~s~c{d:1.0}", .{
+                rt.DrawText(top.x + 8, top.y - 8, "{d:1.0}", .{
                     std.math.fabs(thrust * 100),
-                }) catch unreachable;
-                rf.swrText_CreateEntry1(top.x + 8, top.y - 8, 255, 255, 255, 190, &buf);
+                }, null, style_center) catch {};
             }
         }
         if (brake) {

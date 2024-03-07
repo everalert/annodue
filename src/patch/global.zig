@@ -13,8 +13,10 @@ const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
-const rc = @import("util/racer_const.zig");
-const rf = @import("util/racer_fn.zig");
+const rf = r.functions;
+const rc = r.constants;
+const rt = r.text;
+const rto = rt.TextStyleOpts;
 
 const w32 = @import("zigwin32");
 const w32kb = w32.ui.input.keyboard_and_mouse;
@@ -215,16 +217,16 @@ pub const Freeze = struct {
 
 // UTIL
 
+const style_practice_label = rt.MakeTextHeadStyle(.Default, true, .Yellow, .Right, .{rto.ToggleShadow}) catch "";
+
 fn DrawMenuPracticeModeLabel() void {
     if (GLOBAL_STATE.practice_mode) {
-        rf.swrText_CreateEntry1(640 - 20, 16, 255, 255, 255, 255, "~F0~3~s~rPractice Mode");
+        rt.DrawText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch {};
     }
 }
 
 fn DrawVersionString() void {
-    var buf: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{VersionStr}) catch return;
-    rf.swrText_CreateEntry1(36, 480 - 24, 255, 255, 255, 255, &buf);
+    rt.DrawText(36, 480 - 24, "{s}", .{VersionStr}, 0xFFFFFFFF, null) catch {};
 }
 
 // INIT
@@ -275,13 +277,13 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) call
     //for (xa_fields, 0..) |a, i| {
     //    const axis: f32 = gv.InputGetXInputAxis(a);
     //    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s} {d:0<7.3}", .{ @tagName(a), axis }) catch return;
-    //    rf.swrText_CreateEntry1(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
+    //    rt.DrawText(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
     //}
     //const xb_fields = comptime std.enums.values(input.XINPUT_GAMEPAD_BUTTON_INDEX);
     //for (xb_fields, xa_fields.len..) |b, i| {
     //    const on: bool = gv.InputGetXInputButton(b).on();
     //    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s} {any}", .{ @tagName(b), on }) catch return;
-    //    rf.swrText_CreateEntry1(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
+    //    rt.DrawText(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
     //}
 
     //const vk_fields = comptime std.enums.values(win32kb.VIRTUAL_KEY);
@@ -289,7 +291,7 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) call
     //    if (gv.InputGetKbDown(vk)) {
     //        var buf: [127:0]u8 = undefined;
     //        _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{@tagName(vk)}) catch return;
-    //        rf.swrText_CreateEntry1(16, 16, 255, 255, 255, 255, &buf);
+    //        rt.DrawText(16, 16, 255, 255, 255, 255, &buf);
     //        break;
     //    }
     //}

@@ -7,8 +7,10 @@ const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
-const rf = @import("util/racer_fn.zig");
-const rc = @import("util/racer_const.zig");
+const rf = r.functions;
+const rc = r.constants;
+const rt = r.text;
+const rto = rt.TextStyleOpts;
 
 const mem = @import("util/memory.zig");
 
@@ -46,14 +48,17 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 
 // HOOKS
 
+const style_heat = rt.MakeTextHeadStyle(.Small, false, .Gray, .Right, .{rto.ToggleShadow}) catch "";
+const style_heat_up = rt.MakeTextHeadStyle(.Small, false, .Red, .Right, .{rto.ToggleShadow}) catch "";
+const style_heat_dn = rt.MakeTextHeadStyle(.Small, false, .Blue, .Right, .{rto.ToggleShadow}) catch "";
+const style_laptime = rt.MakeTextHeadStyle(.Unk2, true, null, null, .{rto.ToggleShadow}) catch "";
+
 export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (!gv.SettingGetB("practice", "practice_tool_enable").? or
         !gv.SettingGetB("practice", "overlay_enable").?) return;
 
     if (gs.in_race.on()) {
-        var buf: [127:0]u8 = undefined;
-
         const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);
         const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
         const lap_times: []const f32 = race_times[0..5];
@@ -63,9 +68,8 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
             const heat_s: f32 = gs.player.heat / gs.player.heat_rate;
             const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;
             const heat_timer: f32 = if (gs.player.boosting.on()) heat_s else cool_s;
-            const heat_color: u32 = if (gs.player.boosting.on()) 5 else if (gs.player.heat < 100) 2 else 7;
-            _ = std.fmt.bufPrintZ(&buf, "~f4~{d}~s~r{d:0>5.3}", .{ heat_color, heat_timer }) catch unreachable;
-            rf.swrText_CreateEntry1(256, 170, 255, 255, 255, 190, &buf);
+            const heat_style = if (gs.player.boosting.on()) style_heat_up else if (gs.player.heat < 100) style_heat_dn else style_heat;
+            rt.DrawText(256, 170, "{d:0>5.3}", .{heat_timer}, null, heat_style) catch {};
 
             // draw lap times
             for (lap_times, 0..) |t, i| {
@@ -73,16 +77,14 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
                 const x1: u8 = 48;
                 const x2: u8 = 64;
                 const y: u8 = 128 + @as(u8, @truncate(i)) * 16;
-                const col: u8 = if (lap == i) 255 else 170;
-                _ = std.fmt.bufPrintZ(&buf, "~F0~s{d}", .{i + 1}) catch unreachable;
-                rf.swrText_CreateEntry1(x1, y + 6, col, col, col, 190, &buf);
-                // FIXME: move the time formatting logic out of here
+                const col: u32 = if (lap == i) 0xFFFFFFBE else 0xAAAAAABE;
+                rt.DrawText(x1, y + 6, "{d}", .{i + 1}, col, null) catch {};
+                // TODO: move the time formatting logic out of here
                 const t_ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000)));
                 const min: u32 = (t_ms / 1000) / 60;
                 const sec: u32 = (t_ms / 1000) % 60;
                 const ms: u32 = t_ms % 1000;
-                _ = std.fmt.bufPrintZ(&buf, "~F1~s{d}:{d:0>2}.{d:0>3}", .{ min, sec, ms }) catch unreachable;
-                rf.swrText_CreateEntry1(x2, y, col, col, col, 190, &buf);
+                rt.DrawText(x2, y, "{d}:{d:0>2}.{d:0>3}", .{ min, sec, ms }, col, style_laptime) catch {};
             }
         }
     }

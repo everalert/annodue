@@ -10,6 +10,8 @@ const input = @import("input.zig");
 const r = @import("racer.zig");
 const rc = r.constants;
 const rf = r.functions;
+const rt = r.text;
+const rto = rt.TextStyleOpts;
 
 const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
 
@@ -44,7 +46,10 @@ pub const Menu = struct {
     row_margin: i16 = 8,
     x_scroll: ScrollControl,
     y_scroll: ScrollControl,
-    hl_color: u8 = 3, // ingame predefined colors with ~{n}, default yellow
+    hl_color: rt.Color = .Yellow, // FIXME: not in use due to text api needing comptime
+    const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{rto.ToggleShadow}) catch "";
+    const style_item_on = rt.MakeTextHeadStyle(.Default, true, .Yellow, null, .{rto.ToggleShadow}) catch "";
+    const style_item_off = rt.MakeTextHeadStyle(.Default, true, .White, null, .{rto.ToggleShadow}) catch "";
 
     pub inline fn UpdateAndDraw(self: *Menu) void {
         self.UpdateAndDrawEx(&input.get_kb_pressed, &input.get_kb_released, &input.get_kb_down);
@@ -80,26 +85,22 @@ pub const Menu = struct {
         const x1 = self.x - @divFloor(self.w, 2);
         const x2 = x1 + self.col_w;
         var y = self.y;
-        var buf: [127:0]u8 = undefined;
 
-        _ = std.fmt.bufPrintZ(&buf, "~f4~s~c{s}", .{self.title}) catch unreachable;
-        rf.swrText_CreateEntry1(@divFloor(self.x, 2), @divFloor(y, 2), 255, 255, 255, 190, &buf);
+        rt.DrawText(@divFloor(self.x, 2), @divFloor(y, 2), "{s}", .{self.title}, null, style_head) catch {};
         y += self.row_margin * 2;
 
         var hl_i: i32 = 0;
-        var hl_c: u8 = undefined;
+        var hl_s: []const u8 = undefined;
         for (self.items) |item| {
             y += self.row_h;
-            hl_c = if (self.idx == hl_i) self.hl_color else 1;
-            _ = std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, item.label }) catch unreachable;
-            rf.swrText_CreateEntry1(x1, y, 255, 255, 255, 190, &buf);
-            _ = if (item.options) |options|
-                std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, options[@intCast(item.idx.*)] }) catch unreachable
-            else
+            hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
+            rt.DrawText(x1, y, "{s}", .{item.label}, null, hl_s) catch {};
+            if (item.options) |options| {
+                rt.DrawText(x2, y, "{s}", .{options[@intCast(item.idx.*)]}, null, hl_s) catch {};
+            } else {
                 // FIXME: number limits off by one when rawdogging
-                std.fmt.bufPrintZ(&buf, "~F0~{d}~s{d}", .{ hl_c, item.idx.* }) catch unreachable;
-
-            rf.swrText_CreateEntry1(x2, y, 255, 255, 255, 190, &buf);
+                rt.DrawText(x2, y, "{d}", .{item.idx.*}, null, hl_s) catch {};
+            }
             hl_i += 1;
         }
 
@@ -107,19 +108,17 @@ pub const Menu = struct {
         if (self.confirm_fn) |f| {
             if (self.idx == hl_i and get_kb_pressed(self.confirm_key.?)) f();
             y += self.row_h;
-            hl_c = if (self.idx == hl_i) self.hl_color else 1;
+            hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
             const label = if (self.confirm_text) |t| t else "Confirm";
-            _ = std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, label }) catch unreachable;
-            rf.swrText_CreateEntry1(x1, y, 255, 255, 255, 190, &buf);
+            rt.DrawText(x1, y, "{s}", .{label}, null, hl_s) catch {};
             hl_i += 1;
         }
         if (self.cancel_fn) |f| {
             if (self.idx == hl_i and get_kb_pressed(self.cancel_key.?)) f();
             y += self.row_h;
-            hl_c = if (self.idx == hl_i) self.hl_color else 1;
+            hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
             const label = if (self.cancel_text) |t| t else "Cancel";
-            _ = std.fmt.bufPrintZ(&buf, "~F0~{d}~s{s}", .{ hl_c, label }) catch unreachable;
-            rf.swrText_CreateEntry1(x1, y, 255, 255, 255, 190, &buf);
+            rt.DrawText(x1, y, "{s}", .{label}, null, hl_s) catch {};
             hl_i += 1;
         }
     }

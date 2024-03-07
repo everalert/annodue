@@ -36,7 +36,7 @@ pub const DEFAULT_STYLE: []const u8 = "~F0~s";
 
 pub const DEFAULT_COLOR: u32 = 0xFFFFFFBE; // 255, 255, 255, 190
 
-const Color = enum(u8) {
+pub const Color = enum(u8) {
     Black = 0,
     White = 1,
     Blue = 2,
@@ -44,12 +44,12 @@ const Color = enum(u8) {
     Green = 4,
     Red = 5,
     Brown = 6,
-    Indigo = 7,
+    Gray = 7,
     Pink = 8,
     Purple = 9,
 };
 
-const ColorRGB = enum(u32) {
+pub const ColorRGB = enum(u32) {
     Black = 0x000000,
     White = 0xFFFFFF,
     Blue = 0x6EB4FF,

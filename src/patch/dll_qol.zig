@@ -8,8 +8,10 @@ const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
-const rf = @import("util/racer_fn.zig");
-const rc = @import("util/racer_const.zig");
+const rf = r.functions;
+const rc = r.constants;
+const rt = r.text;
+const rto = rt.TextStyleOpts;
 
 const t = @import("util/timing.zig");
 const menu = @import("util/menu.zig");
@@ -17,6 +19,7 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
 // TODO: figure out wtf to do to manage state through hot-reload etc.
+// FIXME: hot-reloading while game is frozen causes softlock
 
 // HUD TIMER MS
 
@@ -42,7 +45,7 @@ const race = struct {
     const stat_x: i16 = 192;
     const stat_y: i16 = 48;
     const stat_h: u8 = 12;
-    const stat_col: u8 = 255;
+    const stat_col: ?u32 = 0xFFFFFFFF;
     var total_deaths: u32 = 0;
     var total_boost_duration: f32 = 0;
     var total_boost_ratio: f32 = 0;
@@ -108,41 +111,14 @@ const race = struct {
 };
 
 fn RenderRaceResultStat1(i: u8, label: [*:0]const u8) void {
-    var buf: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "~F0~s~c{s}", .{label}) catch unreachable;
-    rf.swrText_CreateEntry1(
-        640 - race.stat_x,
-        race.stat_y + i * race.stat_h,
-        race.stat_col,
-        race.stat_col,
-        race.stat_col,
-        255,
-        &buf,
-    );
+    const style = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
+    rt.DrawText(640 - race.stat_x, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, style) catch {};
 }
 
 fn RenderRaceResultStat2(i: u8, label: [*:0]const u8, value: [*:0]const u8) void {
-    var buf: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "~F0~s~r{s}", .{label}) catch unreachable;
-    rf.swrText_CreateEntry1(
-        640 - race.stat_x - 8,
-        race.stat_y + i * race.stat_h,
-        race.stat_col,
-        race.stat_col,
-        race.stat_col,
-        255,
-        &buf,
-    );
-    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{value}) catch unreachable;
-    rf.swrText_CreateEntry1(
-        640 - race.stat_x + 8,
-        race.stat_y + i * race.stat_h,
-        race.stat_col,
-        race.stat_col,
-        race.stat_col,
-        255,
-        &buf,
-    );
+    const style = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
+    rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, style) catch {};
+    rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, "{s}", .{value}, race.stat_col, null) catch {};
 }
 
 fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
@@ -157,7 +133,7 @@ fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
     RenderRaceResultStat2(i, label, &buf);
 }
 
-// FIXME: move the time formatting logic out of here
+// TODO: move the time formatting logic out of here
 fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
     const t_ms: u32 = @as(u32, @intFromFloat(@round(time * 1000)));
     const sec: u32 = (t_ms / 1000);
@@ -169,9 +145,8 @@ fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
 
 fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
     var buf: [23:0]u8 = undefined;
-    const hp_col = if (hp < 255) "~5" else "~4";
     _ = std.fmt.bufPrintZ(&buf, "{s}{d:0>3} ~1{s}", .{
-        hp_col,
+        rt.MakeTextStyle(if (hp < 255) .Red else .Green, null, .{}) catch "",
         hp,
         rc.UpgradeNames[cat * 6 + lv],
     }) catch unreachable;

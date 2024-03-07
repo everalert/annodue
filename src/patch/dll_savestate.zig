@@ -10,8 +10,10 @@ const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const r = @import("util/racer.zig");
-const rc = r.constants;
 const rf = r.functions;
+const rc = r.constants;
+const rt = r.text;
+const rto = rt.TextStyleOpts;
 
 // NOTE: some of these might be outdated, review at next refactor
 // FIXME: change disabling during pause to use Freeze api, so that you can still save/load
@@ -376,13 +378,8 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
     //const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
     if (gs.practice_mode and gs.in_race.on()) {
         if (gs.player.in_race_racing.on()) {
-            var buff: [1023:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&buff, "~F0~sFr {d}", .{state.frame}) catch unreachable;
-            rf.swrText_CreateEntry1(16, 480 - 16, 255, 255, 255, 190, &buff);
-
-            var bufs: [1023:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&bufs, "~F0~sSt {d}", .{state.load_frame}) catch unreachable;
-            rf.swrText_CreateEntry1(92, 480 - 16, 255, 255, 255, 190, &bufs);
+            rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};
+            rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
         }
     }
 }

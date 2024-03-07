@@ -21,8 +21,8 @@ pub fn TestMessage(comptime fmt: []const u8, args: anytype) void {
     _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
 }
 
-pub fn ErrMessage(label: []const u8, err: []const u8) void {
-    TestMessage("[ERROR] {s}: {s}", .{ label, err });
+pub fn ErrMessage(label: []const u8, err: anyerror) void {
+    TestMessage("[ERROR] {s}: {s}", .{ label, @errorName(err) });
 }
 
 pub fn PtrMessage(label: []const u8, ptr: usize) void {

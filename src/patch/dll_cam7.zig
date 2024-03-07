@@ -203,9 +203,6 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 const rot: f32 = m.pi * 2;
 
 export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    var buf: [127:0]u8 = undefined;
-    _ = buf;
-
     _ = initialized;
     if (Cam7.saved_camstate_index) |_| {
         const a_lx: f32 = gv.InputGetXInputAxis(.StickLX);

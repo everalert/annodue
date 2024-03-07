@@ -110,47 +110,44 @@ const race = struct {
     }
 };
 
-fn RenderRaceResultStat1(i: u8, label: [*:0]const u8) void {
-    const style = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
-    rt.DrawText(640 - race.stat_x, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, style) catch {};
+const s_head = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
+
+fn RenderRaceResultHeader(i: u8, comptime fmt: []const u8, args: anytype) void {
+    rt.DrawText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch {};
 }
 
-fn RenderRaceResultStat2(i: u8, label: [*:0]const u8, value: [*:0]const u8) void {
-    const style = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
-    rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, style) catch {};
-    rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, "{s}", .{value}, race.stat_col, null) catch {};
+const s_stat = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
+
+fn RenderRaceResultStat(i: u8, label: []const u8, comptime value_fmt: []const u8, value_args: anytype) void {
+    rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch {};
+    rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch {};
 }
 
-fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
-    var buf: [23:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "{d: <7}", .{value}) catch unreachable;
-    RenderRaceResultStat2(i, label, &buf);
+fn RenderRaceResultStatU(i: u8, label: []const u8, value: u32) void {
+    RenderRaceResultStat(i, label, "{d: <7}", .{value});
 }
 
-fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
-    var buf: [23:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "{d:4.3}", .{value}) catch unreachable;
-    RenderRaceResultStat2(i, label, &buf);
+fn RenderRaceResultStatF(i: u8, label: []const u8, value: f32) void {
+    RenderRaceResultStat(i, label, "{d:4.3}", .{value});
 }
 
 // TODO: move the time formatting logic out of here
-fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
+fn RenderRaceResultStatTime(i: u8, label: []const u8, time: f32) void {
     const t_ms: u32 = @as(u32, @intFromFloat(@round(time * 1000)));
     const sec: u32 = (t_ms / 1000);
     const ms: u32 = t_ms % 1000;
-    var buf: [23:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "{d}.{d:0>3}", .{ sec, ms }) catch unreachable;
-    RenderRaceResultStat2(i, label, &buf);
+    RenderRaceResultStat(i, label, "{d}.{d:0>3}", .{ sec, ms });
 }
 
+const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
+const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
+
 fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
-    var buf: [23:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, "{s}{d:0>3} ~1{s}", .{
-        rt.MakeTextStyle(if (hp < 255) .Red else .Green, null, .{}) catch "",
+    RenderRaceResultStat(i, rc.UpgradeCategories[cat], "{s}{d:0>3} ~1{s}", .{
+        if (hp < 255) s_upg_dmg else s_upg_full,
         hp,
         rc.UpgradeNames[cat * 6 + lv],
-    }) catch unreachable;
-    RenderRaceResultStat2(i, rc.UpgradeCategories[cat], &buf);
+    });
 }
 
 // QUICK RACE MENU
@@ -399,7 +396,6 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
 
     if (gs.in_race.on()) {
         if (gs.in_race == .JustOn) race.reset();
-        var buf: [127:0]u8 = undefined;
 
         const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const total_time: f32 = race_times[5];
@@ -420,31 +416,27 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
                 }
             }
 
-            _ = std.fmt.bufPrintZ(
-                &buf,
-                "{d:>2.0}/{s}",
-                .{ gs.fps_avg, rc.UpgradeNames[gs.player.upgrades_lv[0]] },
-            ) catch unreachable;
-            RenderRaceResultStat1(0, &buf);
-
-            const upg_prefix = if (gs.player.upgrades) "" else "NO ";
-            _ = std.fmt.bufPrintZ(&buf, "{s}Upgrades", .{upg_prefix}) catch unreachable;
-            RenderRaceResultStat1(1, &buf);
+            const upg_postfix = if (gs.player.upgrades) "" else "  NU";
+            RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
+                gs.fps_avg,
+                rc.UpgradeNames[gs.player.upgrades_lv[0]],
+                upg_postfix,
+            });
 
             for (0..7) |i| RenderRaceResultStatUpgrade(
-                3 + @as(u8, @truncate(i)),
+                2 + @as(u8, @truncate(i)),
                 @as(u8, @truncate(i)),
                 gs.player.upgrades_lv[i],
                 gs.player.upgrades_hp[i],
             );
 
-            RenderRaceResultStatU(11, "Deaths", race.total_deaths);
-            RenderRaceResultStatTime(12, "Boost Time", race.total_boost_duration);
-            RenderRaceResultStatF(13, "Boost Ratio", race.total_boost_ratio);
-            RenderRaceResultStatTime(14, "First Boost", race.first_boost_time);
-            RenderRaceResultStatTime(15, "Underheat Time", race.total_underheat);
-            RenderRaceResultStatTime(16, "Fire Finish", race.fire_finish_duration);
-            RenderRaceResultStatTime(17, "Overheat Time", race.total_overheat);
+            RenderRaceResultStatU(10, "Deaths", race.total_deaths);
+            RenderRaceResultStatTime(11, "Boost Time", race.total_boost_duration);
+            RenderRaceResultStatF(12, "Boost Ratio", race.total_boost_ratio);
+            RenderRaceResultStatTime(13, "First Boost", race.first_boost_time);
+            RenderRaceResultStatTime(14, "Underheat Time", race.total_underheat);
+            RenderRaceResultStatTime(15, "Fire Finish", race.fire_finish_duration);
+            RenderRaceResultStatTime(16, "Overheat Time", race.total_overheat);
         } else {
             if (gs.player.dead == .JustOn) race.total_deaths += 1;
 

@@ -19,8 +19,8 @@ const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
 pub const MenuItem = struct {
     idx: *i32,
     wrap: bool = true,
-    label: [*:0]const u8,
-    options: ?[]const [*:0]const u8 = null,
+    label: []const u8,
+    options: ?[]const []const u8 = null,
     max: i32,
 };
 

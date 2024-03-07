@@ -72,9 +72,6 @@ pub fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
     if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
     if (gs.in_race.on()) {
-        var buf: [127:0]u8 = undefined;
-        _ = buf;
-
         const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
         const total_time: f32 = race_times[5];
 

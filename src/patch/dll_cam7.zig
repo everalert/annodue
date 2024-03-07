@@ -26,6 +26,11 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 // FIXME: find a good hook spot where the game is naturally updating the camera
 // so that the pause stuff is handled for us
 // FIXME: figure out how to load all map chunks at once instead of piecemeal
+// FIXME: current deadzone strategy means the camera can drift laterally when user
+// is only pressing up/down
+// TODO: disable fog while freecamming or something
+// FIXME: cam seems to not always correct itself upright when switching?
+// FIXME: auto disable freecam on scene change
 // TODO: controls = ???
 //   - drone-style controls as an option for sure tho
 //   - mnk controls
@@ -147,6 +152,7 @@ const camstate_ref_addr: u32 = rc.CAM_METACAM_ARRAY_ADDR + 0x170; // = metacam i
 fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
         _ = mem.write(camstate_ref_addr, u32, i);
+        r.WriteEntityValue(.cMan, 0, 0x78, u32, i);
         Cam7.saved_camstate_index = null;
     }
 }
@@ -159,6 +165,7 @@ fn SaveSavedCam() void {
     );
     Cam7.update_rot_from_cam(&Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
+    r.WriteEntityValue(.cMan, 0, 0x78, u32, 31);
     _ = mem.write(camstate_ref_addr, u32, 31);
 }
 

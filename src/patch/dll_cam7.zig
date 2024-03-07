@@ -15,8 +15,8 @@ const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
-const rf = @import("util/racer_fn.zig");
-const rc = @import("util/racer_const.zig");
+const rf = r.functions;
+const rc = r.constants;
 
 const mem = @import("util/memory.zig");
 
@@ -28,6 +28,7 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 // FIXME: figure out how to load all map chunks at once instead of piecemeal
 // TODO: controls = ???
 //   - drone-style controls as an option for sure tho
+//   - mnk controls
 
 // TODO: move to lib, or replace with real lib
 const Vec3 = extern struct {
@@ -199,6 +200,8 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 
 // HOOKS
 
+const rot: f32 = m.pi * 2;
+
 export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     var buf: [127:0]u8 = undefined;
     _ = buf;
@@ -218,9 +221,9 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
             Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
         //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
 
-        Cam7.xcam_rot_target.x = m.rem(f32, Cam7.xcam_rot_target.x + gs.dt_f * Cam7.rotation_speed / 360 * m.pi * 2 * Cam7.xcam_rotation.x, m.pi * 2) catch unreachable;
-        Cam7.xcam_rot_target.y = 0;
-        Cam7.xcam_rot_target.z = m.rem(f32, Cam7.xcam_rot_target.z + gs.dt_f * Cam7.rotation_speed / 360 * m.pi * 2 * Cam7.xcam_rotation.z, m.pi * 2) catch unreachable;
+        Cam7.xcam_rot_target.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
+        Cam7.xcam_rot_target.y += 0;
+        Cam7.xcam_rot_target.z += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.z;
 
         Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
         Cam7.update_cam_from_rot(&Cam7.xcam_rot);

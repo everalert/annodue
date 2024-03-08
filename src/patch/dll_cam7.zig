@@ -26,8 +26,6 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 // FIXME: find a good hook spot where the game is naturally updating the camera
 // so that the pause stuff is handled for us
 // FIXME: figure out how to load all map chunks at once instead of piecemeal
-// FIXME: current deadzone strategy means the camera can drift laterally when user
-// is only pressing up/down
 // TODO: disable fog while freecamming or something
 // FIXME: cam seems to not always correct itself upright when switching?
 // FIXME: auto disable freecam on scene change
@@ -78,10 +76,12 @@ const Vec3 = extern struct {
 };
 
 const Cam7 = extern struct {
+    const dz: f32 = 0.05;
     const rotation_damp: f32 = 48;
-    const rotation_speed: f32 = 180;
+    const rotation_speed: f32 = 360;
     const motion_damp: f32 = 8;
-    const motion_speed: f32 = 450;
+    const motion_speed_xy: f32 = 650;
+    const motion_speed_z: f32 = 350;
     var saved_camstate_index: ?u32 = null;
     var cam_mat4x4: [4][4]f32 = .{
         .{ 1, 0, 0, 0 },
@@ -209,18 +209,29 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 
 const rot: f32 = m.pi * 2;
 
+// TODO: move
+fn smooth2(scalar: f32) f32 {
+    return m.fabs(scalar) * scalar;
+}
+
 export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     if (Cam7.saved_camstate_index) |_| {
-        const a_lx: f32 = gv.InputGetXInputAxis(.StickLX);
-        const a_ly: f32 = gv.InputGetXInputAxis(.StickLY);
-        const a_rx: f32 = gv.InputGetXInputAxis(.StickRX);
-        const a_ry: f32 = gv.InputGetXInputAxis(.StickRY);
-        const a_t: f32 = (gv.InputGetXInputAxis(.TriggerL) - gv.InputGetXInputAxis(.TriggerR));
+        const _a_lx: f32 = gv.InputGetXInputAxis(.StickLX);
+        const _a_ly: f32 = gv.InputGetXInputAxis(.StickLY);
+        const _a_rx: f32 = gv.InputGetXInputAxis(.StickRX);
+        const _a_ry: f32 = gv.InputGetXInputAxis(.StickRY);
+        const _a_t: f32 = (gv.InputGetXInputAxis(.TriggerL) - gv.InputGetXInputAxis(.TriggerR));
+
+        // rotation
+
+        const a_r_mag: f32 = smooth2(@min(m.sqrt(_a_rx * _a_rx + _a_ry * _a_ry), 1));
+        const a_r_ang: f32 = m.atan2(f32, _a_ry, _a_rx);
+        const a_rx: f32 = if (m.fabs(_a_rx) > Cam7.dz) a_r_mag * m.cos(a_r_ang) else 0;
+        const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
 
         Cam7.xcam_rotation.x = a_rx;
         Cam7.xcam_rotation.z = -a_ry;
-        Cam7.xcam_rotation.apply_deadzone(0.05);
         if (Cam7.xcam_rotation.magnitude() > 1)
             Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
         //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
@@ -232,20 +243,26 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
         Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
         Cam7.update_cam_from_rot(&Cam7.xcam_rot);
 
-        const ang: f32 = m.atan2(f32, a_ly, a_lx);
-        const mag: f32 = @min(m.sqrt(a_lx * a_lx + a_ly * a_ly), 1);
-        Cam7.xcam_motion_target.x = mag * m.cos(ang - Cam7.xcam_rot.x);
-        Cam7.xcam_motion_target.y = mag * m.sin(ang - Cam7.xcam_rot.x);
+        // motion
+
+        // TODO: individual X, Y deadzone; rather than magnitude-based
+        const a_l_mag: f32 = @min(m.sqrt(_a_lx * _a_lx + _a_ly * _a_ly), 1);
+        const a_l_ang: f32 = m.atan2(f32, _a_ly, _a_lx);
+        const a_lx: f32 = smooth2(a_l_mag) * m.cos(a_l_ang - Cam7.xcam_rot.x);
+        const a_ly: f32 = smooth2(a_l_mag) * m.sin(a_l_ang - Cam7.xcam_rot.x);
+        const a_t: f32 = if (m.fabs(_a_t) > Cam7.dz) smooth2(_a_t) else 0;
+
+        Cam7.xcam_motion_target.x = if (a_l_mag > Cam7.dz) a_lx else 0;
+        Cam7.xcam_motion_target.y = if (a_l_mag > Cam7.dz) a_ly else 0;
         Cam7.xcam_motion_target.z = a_t;
-        Cam7.xcam_motion_target.apply_deadzone(0.05);
         if (Cam7.xcam_motion_target.magnitude() > 1)
             Cam7.xcam_motion_target = Cam7.xcam_motion_target.normalize();
 
         Cam7.xcam_motion.damp(&Cam7.xcam_motion_target, Cam7.motion_damp, gs.dt_f);
 
-        Cam7.cam_mat4x4[3][0] += gs.dt_f * Cam7.motion_speed * Cam7.xcam_motion.x;
-        Cam7.cam_mat4x4[3][1] += gs.dt_f * Cam7.motion_speed * Cam7.xcam_motion.y;
-        Cam7.cam_mat4x4[3][2] += gs.dt_f * Cam7.motion_speed * Cam7.xcam_motion.z;
+        Cam7.cam_mat4x4[3][0] += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.x;
+        Cam7.cam_mat4x4[3][1] += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.y;
+        Cam7.cam_mat4x4[3][2] += gs.dt_f * Cam7.motion_speed_z * Cam7.xcam_motion.z;
 
         if (gv.InputGetKbPressed(.@"0")) RestoreSavedCam();
     } else {

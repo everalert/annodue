@@ -231,16 +231,16 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
         const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
 
         Cam7.xcam_rotation.x = a_rx;
+        Cam7.xcam_rotation.z = 0;
         Cam7.xcam_rotation.z = -a_ry;
-        if (Cam7.xcam_rotation.magnitude() > 1)
-            Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
+        //if (Cam7.xcam_rotation.magnitude() > 1)
+        //    Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
         //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
 
-        Cam7.xcam_rot_target.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
-        Cam7.xcam_rot_target.y += 0;
-        Cam7.xcam_rot_target.z += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.z;
-
-        Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
+        Cam7.xcam_rot.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
+        Cam7.xcam_rot.y += 0;
+        Cam7.xcam_rot.z += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.z;
+        //Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
         Cam7.update_cam_from_rot(&Cam7.xcam_rot);
 
         // motion
@@ -255,8 +255,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
         Cam7.xcam_motion_target.x = if (a_l_mag > Cam7.dz) a_lx else 0;
         Cam7.xcam_motion_target.y = if (a_l_mag > Cam7.dz) a_ly else 0;
         Cam7.xcam_motion_target.z = a_t;
-        if (Cam7.xcam_motion_target.magnitude() > 1)
-            Cam7.xcam_motion_target = Cam7.xcam_motion_target.normalize();
+        //if (Cam7.xcam_motion_target.magnitude() > 1)
+        //    Cam7.xcam_motion_target = Cam7.xcam_motion_target.normalize();
 
         Cam7.xcam_motion.damp(&Cam7.xcam_motion_target, Cam7.motion_damp, gs.dt_f);
 

@@ -159,7 +159,8 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 //    i.e. so that it always opens with the current settings even if you dont load via quickrace
 // TODO: make it wait till the end of the pause scroll-in, so that the scroll-out
 // is always the same as a normal pause
-const QuickRaceMenu = struct {
+const QuickRaceMenu = extern struct {
+    const menu_key: [*:0]const u8 = "QuickRaceMenu";
     var menu_active: bool = false;
     var initialized: bool = false;
     var gv: *GlobalFn = undefined;
@@ -292,13 +293,13 @@ const QuickRaceMenu = struct {
     }
 
     fn open() void {
-        gv.GameFreezeEnable();
+        if (!gv.GameFreezeEnable(menu_key)) return;
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
-        gv.GameFreezeDisable();
+        if (!gv.GameFreezeDisable(menu_key)) return;
         _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
         menu_active = false;
     }

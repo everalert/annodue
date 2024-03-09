@@ -6,6 +6,7 @@ const win = std.os.windows;
 const settings = @import("settings.zig");
 const s = settings.state;
 
+const freeze = @import("core/Freeze.zig");
 const st = @import("util/active_state.zig");
 const xinput = @import("util/xinput.zig");
 const dbg = @import("util/debug.zig");
@@ -166,56 +167,11 @@ pub const GlobalFn = extern struct {
     InputGetXInputButton: *const @TypeOf(input.get_xinput_button) = &input.get_xinput_button,
     InputGetXInputAxis: *const @TypeOf(input.get_xinput_axis) = &input.get_xinput_axis,
     // Game
-    GameFreezeEnable: *const @TypeOf(Freeze.freeze) = &Freeze.freeze,
-    GameFreezeDisable: *const @TypeOf(Freeze.unfreeze) = &Freeze.unfreeze,
+    GameFreezeEnable: *const @TypeOf(freeze.Freeze.freeze) = &freeze.Freeze.freeze,
+    GameFreezeDisable: *const @TypeOf(freeze.Freeze.unfreeze) = &freeze.Freeze.unfreeze,
 };
 
 pub var GLOBAL_FUNCTION: GlobalFn = .{};
-
-// FREEZE API
-
-// FIXME: probably want to make this request-based, to prevent plugins from
-// clashing with eachother
-// FIXME: also probably need to start thinking about making a distinction
-// between global state and game manipulation functions
-// TODO: turn off race HUD when freezing
-pub const Freeze = struct {
-    const pausebit: u32 = 1 << 28;
-    var frozen: bool = false;
-    var saved_pausebit: usize = undefined;
-    var saved_pausepage: u8 = undefined;
-    var saved_pausestate: u8 = undefined;
-    var saved_pausescroll: f32 = undefined;
-
-    pub fn freeze() void {
-        if (frozen) return;
-        const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
-
-        saved_pausebit = pauseflags & pausebit;
-        saved_pausepage = mem.read(rc.ADDR_PAUSE_PAGE, u8);
-        saved_pausestate = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        saved_pausescroll = mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
-
-        _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, 2);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 1);
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, 0);
-        _ = r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags & ~pausebit);
-
-        frozen = true;
-    }
-
-    pub fn unfreeze() void {
-        if (!frozen) return;
-        const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
-
-        r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags | saved_pausebit);
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, saved_pausescroll);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, saved_pausestate);
-        _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, saved_pausepage);
-
-        frozen = false;
-    }
-};
 
 // UTIL
 

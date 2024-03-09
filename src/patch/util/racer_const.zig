@@ -50,31 +50,28 @@ pub const RACE_DATA_SIZE: usize = 0x88;
 
 // Input
 
-// TODO: fix nomenclature to match game (Axis and Button)
+pub const INPUT_AXIS_LENGTH: usize = 4;
+pub const INPUT_AXIS_COMBINED_BASE_ADDR: usize = 0xEC8830;
+pub const INPUT_AXIS_JOYSTICK_BASE_ADDR: usize = 0x4D5E30;
+pub const INPUT_AXIS_MOUSE_BASE_ADDR: usize = 0x4D5E40;
+pub const INPUT_AXIS_KEYBOARD_BASE_ADDR: usize = 0x4D5E50;
 
-pub const INPUT_ANALOG_LENGTH: usize = 4;
-pub const INPUT_COMBINED_ANALOG_BASE_ADDR: usize = 0xEC8830;
-pub const INPUT_JOYSTICK_ANALOG_BASE_ADDR: usize = 0x4D5E30;
-pub const INPUT_MOUSE_ANALOG_BASE_ADDR: usize = 0x4D5E40;
-pub const INPUT_KEYBOARD_ANALOG_BASE_ADDR: usize = 0x4D5E50;
-
-pub const INPUT_DIGITAL_LENGTH: usize = 15;
-pub const INPUT_COMBINED_DIGITAL_BASE_ADDR: usize = 0xEC8810;
-pub const INPUT_JOYSTICK_DIGITAL_BASE_ADDR: usize = 0x4D5E80;
-pub const INPUT_MOUSE_DIGITAL_BASE_ADDR: usize = 0x4D5EBC;
-pub const INPUT_KEYBOARD_DIGITAL_BASE_ADDR: usize = 0x4D5EF8;
-
-pub const INPUT_ANALOG = enum(u8) {
+pub const INPUT_AXIS = enum(u8) {
     Thrust,
     Unk2, // NOTE: not analog brake; that results in digital brake output
     Steering,
     Pitch,
 };
+pub const INPUT_AXIS_STEERING: u8 = @intFromEnum(INPUT_AXIS.Steering);
+pub const INPUT_AXIS_PITCH: u8 = @intFromEnum(INPUT_AXIS.Pitch);
 
-pub const INPUT_ANALOG_STEERING: u8 = @intFromEnum(INPUT_ANALOG.Steering);
-pub const INPUT_ANALOG_PITCH: u8 = @intFromEnum(INPUT_ANALOG.Pitch);
+pub const INPUT_BUTTON_LENGTH: usize = 15;
+pub const INPUT_BUTTON_COMBINED_BASE_ADDR: usize = 0xEC8810;
+pub const INPUT_BUTTON_JOYSTICK_BASE_ADDR: usize = 0x4D5E80;
+pub const INPUT_BUTTON_MOUSE_BASE_ADDR: usize = 0x4D5EBC;
+pub const INPUT_BUTTON_KEYBOARD_BASE_ADDR: usize = 0x4D5EF8;
 
-pub const INPUT_DIGITAL = enum(u8) {
+pub const INPUT_BUTTON = enum(u8) {
     Camera,
     LookBack,
     Brake,
@@ -91,17 +88,16 @@ pub const INPUT_DIGITAL = enum(u8) {
     Unk14,
     Unk15,
 };
-
-pub const INPUT_DIGITAL_CAMERA: u8 = @intFromEnum(INPUT_DIGITAL.Camera);
-pub const INPUT_DIGITAL_LOOK_BACK: u8 = @intFromEnum(INPUT_DIGITAL.LookBack);
-pub const INPUT_DIGITAL_BRAKE: u8 = @intFromEnum(INPUT_DIGITAL.Brake);
-pub const INPUT_DIGITAL_ACCELERATION: u8 = @intFromEnum(INPUT_DIGITAL.Acceleration);
-pub const INPUT_DIGITAL_BOOST: u8 = @intFromEnum(INPUT_DIGITAL.Boost);
-pub const INPUT_DIGITAL_SLIDE: u8 = @intFromEnum(INPUT_DIGITAL.Slide);
-pub const INPUT_DIGITAL_ROLL_LEFT: u8 = @intFromEnum(INPUT_DIGITAL.RollLeft);
-pub const INPUT_DIGITAL_ROLL_RIGHT: u8 = @intFromEnum(INPUT_DIGITAL.RollRight);
-pub const INPUT_DIGITAL_TAUNT: u8 = @intFromEnum(INPUT_DIGITAL.Taunt);
-pub const INPUT_DIGITAL_REPAIR: u8 = @intFromEnum(INPUT_DIGITAL.Repair);
+pub const INPUT_BUTTON_CAMERA: u8 = @intFromEnum(INPUT_BUTTON.Camera);
+pub const INPUT_BUTTON_LOOK_BACK: u8 = @intFromEnum(INPUT_BUTTON.LookBack);
+pub const INPUT_BUTTON_BRAKE: u8 = @intFromEnum(INPUT_BUTTON.Brake);
+pub const INPUT_BUTTON_ACCELERATION: u8 = @intFromEnum(INPUT_BUTTON.Acceleration);
+pub const INPUT_BUTTON_BOOST: u8 = @intFromEnum(INPUT_BUTTON.Boost);
+pub const INPUT_BUTTON_SLIDE: u8 = @intFromEnum(INPUT_BUTTON.Slide);
+pub const INPUT_BUTTON_ROLL_LEFT: u8 = @intFromEnum(INPUT_BUTTON.RollLeft);
+pub const INPUT_BUTTON_ROLL_RIGHT: u8 = @intFromEnum(INPUT_BUTTON.RollRight);
+pub const INPUT_BUTTON_TAUNT: u8 = @intFromEnum(INPUT_BUTTON.Taunt);
+pub const INPUT_BUTTON_REPAIR: u8 = @intFromEnum(INPUT_BUTTON.Repair);
 
 // Text
 

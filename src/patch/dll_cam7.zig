@@ -26,15 +26,18 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 // FIXME: find a good hook spot where the game is naturally updating the camera
 // so that the pause stuff is handled for us
-// FIXME: figure out how to load all map chunks at once instead of piecemeal
-// TODO: disable fog while freecamming or something
 // FIXME: cam seems to not always correct itself upright when switching?
 // TODO: controls = ???
 //   - drone-style controls as an option for sure tho
 //   - mnk controls
 // TODO: fog
-// - option to disable fog
+// - option to disable fog entirely
 // - user-selectable fog dist
+// TODO: settings
+// - global enable
+// - control mapping
+// - control axis flipping
+// - future fog stuff
 
 const CamState = enum(u32) {
     None,

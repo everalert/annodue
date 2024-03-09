@@ -39,6 +39,7 @@ const rf = @import("util/racer_fn.zig");
 
 // OKOKOKOKOK
 
+// TODO: remove Initialized, or make it prove its worth
 const Plugin = plugin: {
     const stdf = .{
         .{ "Handle", ?win.HINSTANCE },

@@ -13,6 +13,8 @@ const rf = r.functions;
 
 const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
 
+// TODO: change inputs to take a callback function
+// probably work it the same time as redoing the input api
 pub const ScrollControl = struct {
     scroll: f32 = 0,
     scroll_buf: f32 = 0,

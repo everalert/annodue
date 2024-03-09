@@ -18,6 +18,10 @@ const rto = rt.TextStyleOpts;
 
 // TODO: robustness checking, particularly surrounding init and deinit for
 // hotreloading case
+// TODO: restyling, esp. adding color and maybe redo sprites (rounded?)
+// TODO: settings
+// - global enable
+// - position
 
 // INPUT DISPLAY
 
@@ -31,8 +35,8 @@ const InputIcon = struct {
 };
 
 const InputDisplay = struct {
-    var analog: [rc.INPUT_ANALOG_LENGTH]f32 = undefined;
-    var digital: [rc.INPUT_DIGITAL_LENGTH]u8 = undefined;
+    var analog: [rc.INPUT_AXIS_LENGTH]f32 = undefined;
+    var digital: [rc.INPUT_BUTTON_LENGTH]u8 = undefined;
     var p_triangle: ?u32 = null;
     var p_square: ?u32 = null;
     var icons: [12]InputIcon = undefined;
@@ -42,28 +46,28 @@ const InputDisplay = struct {
     const style_left = rt.MakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
     fn ReadInputs() void {
-        analog = mem.read(rc.INPUT_COMBINED_ANALOG_BASE_ADDR, @TypeOf(analog));
-        digital = mem.read(rc.INPUT_COMBINED_DIGITAL_BASE_ADDR, @TypeOf(digital));
+        analog = mem.read(rc.INPUT_AXIS_COMBINED_BASE_ADDR, @TypeOf(analog));
+        digital = mem.read(rc.INPUT_BUTTON_COMBINED_BASE_ADDR, @TypeOf(digital));
     }
 
-    fn GetStick(input: rc.INPUT_ANALOG) f32 {
+    fn GetStick(input: rc.INPUT_AXIS) f32 {
         return InputDisplay.analog[@intFromEnum(input)];
     }
 
-    fn GetButton(input: rc.INPUT_DIGITAL) u8 {
+    fn GetButton(input: rc.INPUT_BUTTON) u8 {
         return InputDisplay.digital[@intFromEnum(input)];
     }
 
     fn UpdateIcons() void {
         UpdateIconSteering(&icons[0], &icons[1], .Steering);
         UpdateIconPitch(&icons[2], &icons[3], .Pitch);
-        UpdateIconThrust(&icons[2 + rc.INPUT_DIGITAL_ACCELERATION], &icons[2 + rc.INPUT_DIGITAL_BRAKE], .Thrust, .Acceleration, .Brake);
-        UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_BOOST], .Boost);
-        UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_SLIDE], .Slide);
-        UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_ROLL_LEFT], .RollLeft);
-        UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_ROLL_RIGHT], .RollRight);
-        //UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_TAUNT], .Taunt);
-        UpdateIconButton(&icons[2 + rc.INPUT_DIGITAL_REPAIR], .Repair);
+        UpdateIconThrust(&icons[2 + rc.INPUT_BUTTON_ACCELERATION], &icons[2 + rc.INPUT_BUTTON_BRAKE], .Thrust, .Acceleration, .Brake);
+        UpdateIconButton(&icons[2 + rc.INPUT_BUTTON_BOOST], .Boost);
+        UpdateIconButton(&icons[2 + rc.INPUT_BUTTON_SLIDE], .Slide);
+        UpdateIconButton(&icons[2 + rc.INPUT_BUTTON_ROLL_LEFT], .RollLeft);
+        UpdateIconButton(&icons[2 + rc.INPUT_BUTTON_ROLL_RIGHT], .RollRight);
+        //UpdateIconButton(&icons[2 + rc.INPUT_BUTTON_TAUNT], .Taunt);
+        UpdateIconButton(&icons[2 + rc.INPUT_BUTTON_REPAIR], .Repair);
     }
 
     fn Init() void {
@@ -71,13 +75,13 @@ const InputDisplay = struct {
         p_square = rf.swrQuad_LoadSprite(26);
         InitIconSteering(&icons[0], &icons[1], x_base, y_base, 20);
         InitIconPitch(&icons[2], &icons[3], x_base + 44, y_base + 10, 2);
-        InitIconThrust(&icons[2 + rc.INPUT_DIGITAL_ACCELERATION], &icons[2 + rc.INPUT_DIGITAL_BRAKE], x_base, y_base, 2);
-        InitIconButton(&icons[2 + rc.INPUT_DIGITAL_BOOST], x_base - 18, y_base + 19, 1, 1);
-        InitIconButton(&icons[2 + rc.INPUT_DIGITAL_SLIDE], x_base - 8, y_base + 19, 2, 1);
-        InitIconButton(&icons[2 + rc.INPUT_DIGITAL_ROLL_LEFT], x_base - 28, y_base + 19, 1, 1);
-        InitIconButton(&icons[2 + rc.INPUT_DIGITAL_ROLL_RIGHT], x_base + 20, y_base + 19, 1, 1);
-        //InitIconButton(&icons[2 + rc.INPUT_DIGITAL_TAUNT], x_base, y_base, 1);
-        InitIconButton(&icons[2 + rc.INPUT_DIGITAL_REPAIR], x_base + 10, y_base + 19, 1, 1);
+        InitIconThrust(&icons[2 + rc.INPUT_BUTTON_ACCELERATION], &icons[2 + rc.INPUT_BUTTON_BRAKE], x_base, y_base, 2);
+        InitIconButton(&icons[2 + rc.INPUT_BUTTON_BOOST], x_base - 18, y_base + 19, 1, 1);
+        InitIconButton(&icons[2 + rc.INPUT_BUTTON_SLIDE], x_base - 8, y_base + 19, 2, 1);
+        InitIconButton(&icons[2 + rc.INPUT_BUTTON_ROLL_LEFT], x_base - 28, y_base + 19, 1, 1);
+        InitIconButton(&icons[2 + rc.INPUT_BUTTON_ROLL_RIGHT], x_base + 20, y_base + 19, 1, 1);
+        //InitIconButton(&icons[2 + rc.INPUT_BUTTON_TAUNT], x_base, y_base, 1);
+        InitIconButton(&icons[2 + rc.INPUT_BUTTON_REPAIR], x_base + 10, y_base + 19, 1, 1);
     }
 
     fn Deinit() void {
@@ -188,7 +192,7 @@ const InputDisplay = struct {
         InitSingle(&i.bg_idx, p_square.?, i.x, i.y, x_scale, y_scale, true);
     }
 
-    fn UpdateIconSteering(left: *InputIcon, right: *InputIcon, input: rc.INPUT_ANALOG) void {
+    fn UpdateIconSteering(left: *InputIcon, right: *InputIcon, input: rc.INPUT_AXIS) void {
         const axis = InputDisplay.GetStick(input);
         const side = if (axis < 0) left else if (axis > 0) right else null;
 
@@ -216,7 +220,7 @@ const InputDisplay = struct {
         }
     }
 
-    fn UpdateIconPitch(top: *InputIcon, bot: *InputIcon, input: rc.INPUT_ANALOG) void {
+    fn UpdateIconPitch(top: *InputIcon, bot: *InputIcon, input: rc.INPUT_AXIS) void {
         const axis = InputDisplay.GetStick(input);
         const side = if (axis < 0) top else if (axis > 0) bot else null;
 
@@ -244,7 +248,7 @@ const InputDisplay = struct {
         }
     }
 
-    fn UpdateIconThrust(top: *InputIcon, bot: *InputIcon, in_thrust: rc.INPUT_ANALOG, in_accel: rc.INPUT_DIGITAL, in_brake: rc.INPUT_DIGITAL) void {
+    fn UpdateIconThrust(top: *InputIcon, bot: *InputIcon, in_thrust: rc.INPUT_AXIS, in_accel: rc.INPUT_BUTTON, in_brake: rc.INPUT_BUTTON) void {
         const thrust: f32 = InputDisplay.GetStick(in_thrust);
         const accel: bool = InputDisplay.GetButton(in_accel) > 0;
         const brake: bool = InputDisplay.GetButton(in_brake) > 0;
@@ -283,7 +287,7 @@ const InputDisplay = struct {
         }
     }
 
-    fn UpdateIconButton(i: *InputIcon, input: rc.INPUT_DIGITAL) void {
+    fn UpdateIconButton(i: *InputIcon, input: rc.INPUT_BUTTON) void {
         rf.swrQuad_SetActive(i.bg_idx.?, 1);
         rf.swrQuad_SetActive(i.fg_idx.?, InputDisplay.digital[@intFromEnum(input)]);
     }

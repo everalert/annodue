@@ -42,6 +42,28 @@ pub fn test_edx_edx(memory_offset: usize) usize {
     return test_rm32_r32(memory_offset, 0xD2);
 }
 
+pub fn mov_ecx_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
+    std.debug.assert(T == u8 or T == u32);
+    var offset = memory_offset;
+    offset = mem.write(offset, u8, 0xB9); // EDX=BA, EBX=BB
+    offset = mem.write(offset, T, imm32);
+    return offset;
+}
+pub fn mov_eax_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
+    std.debug.assert(T == u8 or T == u32);
+    var offset = memory_offset;
+    offset = mem.write(offset, u8, 0xB8);
+    offset = mem.write(offset, T, imm32);
+    return offset;
+}
+
+pub fn mov_eax_moffs32(memory_offset: usize, moffs32: usize) usize {
+    var offset = memory_offset;
+    offset = mem.write(offset, u8, 0xA1);
+    offset = mem.write(offset, usize, moffs32);
+    return offset;
+}
+
 pub fn mov_r32_rm32(memory_offset: usize, r32: u8, comptime T: type, rm32: T) usize {
     std.debug.assert(T == u8 or T == u32);
     var offset = memory_offset;
@@ -51,12 +73,29 @@ pub fn mov_r32_rm32(memory_offset: usize, r32: u8, comptime T: type, rm32: T) us
     return offset;
 }
 
+// actually, register + u32 offset
+pub fn mov_ecx_u32(memory: usize, u: u32) usize {
+    return mov_r32_rm32(memory, 0x8E, u32, u);
+}
+
+// actually, register + u8 offset
 pub fn mov_ecx_b(memory: usize, b: u8) usize {
     return mov_r32_rm32(memory, 0x4E, u8, b);
 }
 
 pub fn mov_edx(memory_offset: usize, value: u32) usize {
     return mov_r32_rm32(memory_offset, 0x15, u32, value);
+}
+
+// mov r/m32 imm32
+pub fn mov_espoff_imm32(memory_offset: usize, off8: u8, imm32: u32) usize {
+    var offset = memory_offset;
+    offset = mem.write(offset, u8, 0xC7);
+    offset = mem.write(offset, u8, 0x44);
+    offset = mem.write(offset, u8, 0x24);
+    offset = mem.write(offset, u8, off8);
+    offset = mem.write(offset, u32, imm32);
+    return offset;
 }
 
 pub fn mov_rm32_r32(memory_offset: usize, r32: u8) usize {
@@ -68,26 +107,6 @@ pub fn mov_rm32_r32(memory_offset: usize, r32: u8) usize {
 
 pub fn mov_edx_esp(memory_offset: usize) usize {
     return mov_rm32_r32(memory_offset, 0xE2);
-}
-
-pub fn nop(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x90);
-}
-
-pub fn nop_align(memory_offset: usize, increment: usize) usize {
-    var offset: usize = memory_offset;
-    while (offset % increment > 0) {
-        offset = nop(offset);
-    }
-    return offset;
-}
-
-pub fn nop_until(memory_offset: usize, end: usize) usize {
-    var offset: usize = memory_offset;
-    while (offset < end) {
-        offset = nop(offset);
-    }
-    return offset;
 }
 
 pub fn push_eax(memory_offset: usize) usize {
@@ -198,4 +217,24 @@ pub fn jz(memory_offset: usize, address: usize) usize {
 
 pub fn retn(memory_offset: usize) usize {
     return mem.write(memory_offset, u8, 0xC3);
+}
+
+pub fn nop(memory_offset: usize) usize {
+    return mem.write(memory_offset, u8, 0x90);
+}
+
+pub fn nop_align(memory_offset: usize, increment: usize) usize {
+    var offset: usize = memory_offset;
+    while (offset % increment > 0) {
+        offset = nop(offset);
+    }
+    return offset;
+}
+
+pub fn nop_until(memory_offset: usize, end: usize) usize {
+    var offset: usize = memory_offset;
+    while (offset < end) {
+        offset = nop(offset);
+    }
+    return offset;
 }

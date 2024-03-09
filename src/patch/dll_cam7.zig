@@ -19,6 +19,7 @@ const rf = r.functions;
 const rc = r.constants;
 
 const mem = @import("util/memory.zig");
+const x86 = @import("util/x86.zig");
 
 const PLUGIN_NAME: [*:0]const u8 = "Cam7";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -31,6 +32,9 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 // TODO: controls = ???
 //   - drone-style controls as an option for sure tho
 //   - mnk controls
+// TODO: fog
+// - option to disable fog
+// - user-selectable fog dist
 
 const CamState = enum(u32) {
     None,
@@ -44,6 +48,7 @@ const Cam7 = extern struct {
     const motion_damp: f32 = 8;
     const motion_speed_xy: f32 = 650;
     const motion_speed_z: f32 = 350;
+    const fog_dist: f32 = 7500;
     var cam_state: CamState = .None;
     var saved_camstate_index: ?u32 = null;
     var cam_mat4x4: [4][4]f32 = .{
@@ -106,6 +111,9 @@ fn CheckAndResetSavedCam() void {
     if (mem.read(camstate_ref_addr, u32) == 31) return;
 
     r.WriteEntityValue(.cMan, 0, 0x78, u32, 7);
+    _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
+    _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
+    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
     Cam7.saved_camstate_index = null;
     Cam7.cam_state = .None;
 }
@@ -114,6 +122,11 @@ fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
         _ = mem.write(camstate_ref_addr, u32, i);
         r.WriteEntityValue(.cMan, 0, 0x78, u32, i);
+
+        _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
+        _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
+        _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
+
         Cam7.saved_camstate_index = null;
     }
 }
@@ -127,6 +140,11 @@ fn SaveSavedCam() void {
     @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4[0])), @as([*]f32, @ptrFromInt(mat4_addr)));
     Cam7.update_rot_from_cam(&Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
+
+    _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
+    var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, normal case
+    _ = x86.nop_until(o, 0x4539A6);
+    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, flags @0=1 case
 
     r.WriteEntityValue(.cMan, 0, 0x78, u32, 31);
     _ = mem.write(camstate_ref_addr, u32, 31);

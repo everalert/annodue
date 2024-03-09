@@ -23,6 +23,8 @@ const x86 = @import("util/x86.zig");
 
 // HUD TIMER MS
 
+const end_race_timer_offset: u8 = 12;
+
 fn PatchHudTimerMs() void {
     // hudDrawRaceHud
     _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime3));
@@ -31,12 +33,11 @@ fn PatchHudTimerMs() void {
     // hudDrawRaceResults
     _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime3));
     _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime3));
-    // FIXME: set actual values directly, hot-reloading messes it up
-    _ = mem.patch_add(0x4623D7, u8, 12);
-    _ = mem.patch_add(0x4623F1, u8, 12);
-    _ = mem.patch_add(0x46240B, u8, 12);
-    _ = mem.patch_add(0x46241E, u8, 12);
-    _ = mem.patch_add(0x46242D, u8, 12);
+    _ = mem.write(0x4623D7, u8, comptime end_race_timer_offset + 91); // 91
+    _ = mem.write(0x4623F1, u8, comptime end_race_timer_offset + 105); // 105
+    _ = mem.write(0x46240B, u8, comptime end_race_timer_offset + 115); // 115
+    _ = mem.write(0x46241E, u8, comptime end_race_timer_offset + 125); // 125
+    _ = mem.write(0x46242D, u8, comptime end_race_timer_offset + 135); // 135
 }
 
 // PRACTICE/STATISTICAL DATA

@@ -13,6 +13,7 @@ const rt = r.text;
 const rto = rt.TextStyleOpts;
 
 const mem = @import("util/memory.zig");
+const timing = @import("util/timing.zig");
 
 // HOUSEKEEPING
 
@@ -79,12 +80,8 @@ export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callco
                 const y: u8 = 128 + @as(u8, @truncate(i)) * 16;
                 const col: u32 = if (lap == i) 0xFFFFFFBE else 0xAAAAAABE;
                 rt.DrawText(x1, y + 6, "{d}", .{i + 1}, col, null) catch {};
-                // TODO: move the time formatting logic out of here
-                const t_ms: u32 = @as(u32, @intFromFloat(@round(lap_times[i] * 1000)));
-                const min: u32 = (t_ms / 1000) / 60;
-                const sec: u32 = (t_ms / 1000) % 60;
-                const ms: u32 = t_ms % 1000;
-                rt.DrawText(x2, y, "{d}:{d:0>2}.{d:0>3}", .{ min, sec, ms }, col, style_laptime) catch {};
+                const lt = timing.RaceTimeFromFloat(lap_times[i]);
+                rt.DrawText(x2, y, "{d}:{d:0>2}.{d:0>3}", .{ lt.min, lt.sec, lt.ms }, col, style_laptime) catch {};
             }
         }
     }

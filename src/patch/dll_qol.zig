@@ -13,7 +13,7 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-const t = @import("util/timing.zig");
+const timing = @import("util/timing.zig");
 const menu = @import("util/menu.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
@@ -132,12 +132,9 @@ fn RenderRaceResultStatF(i: u8, label: []const u8, value: f32) void {
     RenderRaceResultStat(i, label, "{d:4.3}", .{value});
 }
 
-// TODO: move the time formatting logic out of here
 fn RenderRaceResultStatTime(i: u8, label: []const u8, time: f32) void {
-    const t_ms: u32 = @as(u32, @intFromFloat(@round(time * 1000)));
-    const sec: u32 = (t_ms / 1000);
-    const ms: u32 = t_ms % 1000;
-    RenderRaceResultStat(i, label, "{d}.{d:0>3}", .{ sec, ms });
+    const t = timing.RaceTimeFromFloat(time);
+    RenderRaceResultStat(i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
 
 const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
@@ -167,7 +164,7 @@ const QuickRaceMenu = struct {
     var initialized: bool = false;
     var gv: *GlobalFn = undefined;
 
-    var FpsTimer: t.TimeSpinlock = .{};
+    var FpsTimer: timing.TimeSpinlock = .{};
 
     const values = struct {
         var fps: i32 = 24;

@@ -25,3 +25,18 @@ pub const TimeSpinlock = struct {
         _ = self.timer.?.lap();
     }
 };
+
+pub const RaceTime = extern struct {
+    min: u32,
+    sec: u32,
+    ms: u32,
+};
+
+pub fn RaceTimeFromFloat(t: f32) RaceTime {
+    const total_ms: u32 = @as(u32, @intFromFloat(@round(t * 1000)));
+    return .{
+        .min = total_ms / 60000,
+        .sec = (total_ms / 1000) % 60,
+        .ms = total_ms % 1000,
+    };
+}

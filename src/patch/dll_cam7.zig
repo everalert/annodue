@@ -303,14 +303,13 @@ export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C
     _ = gv;
     _ = initialized;
     _ = gs;
-    // FIXME: this shouldn't be here normally, because game init overrides it
-    // but for now we need it because hot-reload only calls here to re-init
-    rf.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
 }
 
 export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    // FIXME: rework after OnLateInit added to hot reloading
-    OnInit(gs, gv, initialized);
+    _ = initialized;
+    _ = gv;
+    _ = gs;
+    rf.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
 }
 
 export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {

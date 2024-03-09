@@ -71,6 +71,8 @@ pub const GlobalState = extern struct {
     patch_size: usize = undefined,
     patch_offset: usize = undefined,
 
+    init_late_passed: bool = false,
+
     practice_mode: bool = false,
 
     hwnd: ?win.HWND = null,
@@ -242,6 +244,12 @@ pub fn init() void {
 }
 
 // HOOK CALLS
+
+pub fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+    _ = initialized;
+    _ = gv;
+    gs.init_late_passed = true;
+}
 
 pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;

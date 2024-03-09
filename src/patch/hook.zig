@@ -153,14 +153,12 @@ fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
         t1.dwHighDateTime == t2.dwHighDateTime);
 }
 
-// FIXME: handle OnInitLate case for reloads, which will not hit it naturally
 // TODO: OnLoad, OnUnload, OnEnable, OnDisable
 // TODO: also stuff for loading and unloading based on watching the directory, outside of
 // updating already loaded plugins
 // NOTE: assumes index is allocated and initialized, to allow different
 // ways of handling the backing data
-// NOTE: returns true when p has valid data, false otherwise; guarantee of
-// no dangling handles
+/// @return plugin loaded correctly; guarantee of no dangling handles on failure
 fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     const i_ext = filename.len - 4;
 
@@ -220,6 +218,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     }
 
     p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
+    if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
     p.Initialized = true;
     return true;
 }
@@ -255,6 +254,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
+    p.OnInitLate = &global.OnInitLate;
     p.EarlyEngineUpdateA = &global.EarlyEngineUpdateA;
     p.TimerUpdateA = &global.TimerUpdateA;
     p.MenuTitleScreenB = &global.MenuTitleScreenB;

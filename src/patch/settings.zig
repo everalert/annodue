@@ -88,7 +88,7 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 }
 
-pub fn deinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+pub fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;
     _ = initialized;
     _ = gs;

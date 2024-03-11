@@ -242,7 +242,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
-    p.InputUpdateB = &input.update;
+    p.InputUpdateB = &input.InputUpdateB;
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
@@ -251,7 +251,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
-    p.OnDeinit = &settings.deinit;
+    p.OnDeinit = &settings.OnDeinit;
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
@@ -331,7 +331,6 @@ fn HookGameLoop(memory: usize) usize {
     return hook.intercept_call(
         memory,
         0x49CE2A,
-        //HookFnCallback(.GameLoopB),
         PluginFnCallback(.GameLoopB),
         PluginFnCallback(.GameLoopA),
     );

@@ -5,55 +5,35 @@ const std = @import("std");
 const win32 = @import("zigwin32");
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
+const st = @import("active_state.zig");
 const mem = @import("memory.zig");
 const input = @import("input.zig");
 const r = @import("racer.zig");
 const rc = r.constants;
 const rf = r.functions;
 
-const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
+pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 
-// TODO: change inputs to take a callback function
-// probably work it the same time as redoing the input api
 pub const ScrollControl = struct {
     scroll: f32 = 0,
     scroll_buf: f32 = 0,
     scroll_time: f32, // time until max scroll speed
     scroll_units: f32, // units per second at max scroll speed
-    input_dec: win32kb.VIRTUAL_KEY,
-    input_inc: win32kb.VIRTUAL_KEY,
+    input_dec: InputGetFnType,
+    input_inc: InputGetFnType,
 
-    pub inline fn Update(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
-        self.UpdateEx(
-            val,
-            max,
-            wrap,
-            &input.get_kb_pressed,
-            &input.get_kb_released,
-            &input.get_kb_down,
-        );
-    }
-
-    pub fn UpdateEx(
-        self: *ScrollControl,
-        val: *i32,
-        max: i32,
-        wrap: bool,
-        get_kb_pressed: InputGetFnType,
-        get_kb_released: InputGetFnType,
-        get_kb_down: InputGetFnType,
-    ) void {
+    pub fn UpdateEx(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
         const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
 
         var inc: f32 = 0;
-        if (get_kb_pressed(self.input_dec)) inc -= 1;
-        if (get_kb_pressed(self.input_inc)) inc += 1;
-        if (get_kb_released(self.input_dec) or get_kb_released(self.input_inc)) {
+        if (self.input_dec(.JustOn)) inc -= 1;
+        if (self.input_inc(.JustOn)) inc += 1;
+        if (self.input_inc(.JustOff) or self.input_dec(.JustOff)) {
             self.scroll = 0;
             self.scroll_buf = 0;
         }
-        if (get_kb_down(self.input_dec)) self.scroll -= dt;
-        if (get_kb_down(self.input_inc)) self.scroll += dt;
+        if (self.input_dec(.On)) self.scroll -= dt;
+        if (self.input_inc(.On)) self.scroll += dt;
 
         const scroll: f32 = std.math.clamp(self.scroll / self.scroll_time, -1, 1);
         inc += std.math.pow(f32, scroll, 2) * dt * self.scroll_units * std.math.sign(scroll);

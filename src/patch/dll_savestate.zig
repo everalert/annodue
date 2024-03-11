@@ -2,10 +2,14 @@ pub const Self = @This();
 
 const std = @import("std");
 
+const w32 = @import("zigwin32");
+const w32kb = w32.ui.input.keyboard_and_mouse;
+
 const GlobalState = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const st = @import("util/active_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
@@ -86,10 +90,22 @@ const state = struct {
     var scrub: scroll.ScrollControl = .{
         .scroll_time = 3,
         .scroll_units = 24 * 8, // FIXME: doesn't scale with fps
-        .input_dec = .@"3",
-        .input_inc = .@"4",
+        .input_dec = scrub_dec,
+        .input_inc = scrub_inc,
     };
     var scrub_frame: i32 = 0;
+    var scrub_input_dec: w32kb.VIRTUAL_KEY = .@"3";
+    var scrub_input_inc: w32kb.VIRTUAL_KEY = .@"4";
+    var scrub_input_dec_state: st.ActiveState = undefined;
+    var scrub_input_inc_state: st.ActiveState = undefined;
+
+    fn scrub_dec(s: st.ActiveState) callconv(.C) bool {
+        return scrub_input_dec_state == s;
+    }
+
+    fn scrub_inc(s: st.ActiveState) callconv(.C) bool {
+        return scrub_input_inc_state == s;
+    }
 
     const layer_size: isize = 4;
     const layer_depth: isize = 4;
@@ -292,9 +308,9 @@ fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalFn) LoadState {
         &state.scrub_frame,
         std.math.cast(i32, state.frame_total).?,
         false,
-        gv.InputGetKbPressed,
-        gv.InputGetKbReleased,
-        gv.InputGetKbDown,
+        //gv.InputGetKbPressed,
+        //gv.InputGetKbReleased,
+        //gv.InputGetKbDown,
     );
 
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
@@ -358,6 +374,13 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 //pub fn MenuStartRaceB(gs: *GlobalState,gv:*GlobalFn, initialized: bool) callconv(.C) void {
 //    state.reset();
 //}
+
+export fn InputUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+    _ = initialized;
+    _ = gs;
+    state.scrub_input_dec_state = gv.InputGetKbRaw(state.scrub_input_dec);
+    state.scrub_input_inc_state = gv.InputGetKbRaw(state.scrub_input_inc);
+}
 
 export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;

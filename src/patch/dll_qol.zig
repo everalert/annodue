@@ -2,11 +2,14 @@ const Self = @This();
 
 const std = @import("std");
 const win = std.os.windows;
+const w32 = @import("zigwin32");
+const w32kb = w32.ui.input.keyboard_and_mouse;
 
 const GlobalState = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const st = @import("util/active_state.zig");
 const r = @import("util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
@@ -175,23 +178,49 @@ const QuickRaceMenu = extern struct {
         var up_hp: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
     };
 
+    var input_confirm_state: st.ActiveState = undefined;
+    var input_x_dec_state: st.ActiveState = undefined;
+    var input_x_inc_state: st.ActiveState = undefined;
+    var input_y_dec_state: st.ActiveState = undefined;
+    var input_y_inc_state: st.ActiveState = undefined;
+    var input_confirm: w32kb.VIRTUAL_KEY = .SPACE;
+    var input_x_dec: w32kb.VIRTUAL_KEY = .LEFT;
+    var input_x_inc: w32kb.VIRTUAL_KEY = .RIGHT;
+    var input_y_dec: w32kb.VIRTUAL_KEY = .UP;
+    var input_y_inc: w32kb.VIRTUAL_KEY = .DOWN;
+    fn get_input_confirm(i: st.ActiveState) callconv(.C) bool {
+        return input_confirm_state == i;
+    }
+    fn get_input_x_dec(i: st.ActiveState) callconv(.C) bool {
+        return input_x_dec_state == i;
+    }
+    fn get_input_x_inc(i: st.ActiveState) callconv(.C) bool {
+        return input_x_inc_state == i;
+    }
+    fn get_input_y_dec(i: st.ActiveState) callconv(.C) bool {
+        return input_y_dec_state == i;
+    }
+    fn get_input_y_inc(i: st.ActiveState) callconv(.C) bool {
+        return input_y_inc_state == i;
+    }
+
     var data: menu.Menu = .{
         .title = "Quick Race",
         .confirm_text = "RACE!",
         .confirm_fn = @constCast(&@This().load_race),
-        .confirm_key = .SPACE,
+        .confirm_key = get_input_confirm,
         .max = 11,
         .x_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
-            .input_dec = .LEFT,
-            .input_inc = .RIGHT,
+            .input_dec = get_input_x_dec,
+            .input_inc = get_input_x_inc,
         },
         .y_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
-            .input_dec = .UP,
-            .input_inc = .DOWN,
+            .input_dec = get_input_y_dec,
+            .input_inc = get_input_y_inc,
         },
         .items = &[_]menu.MenuItem{
             .{
@@ -314,11 +343,7 @@ const QuickRaceMenu = extern struct {
             open();
         }
 
-        if (menu_active) data.UpdateAndDrawEx(
-            gv.InputGetKbPressed,
-            gv.InputGetKbReleased,
-            gv.InputGetKbDown,
-        );
+        if (menu_active) data.UpdateAndDrawEx();
     }
 };
 
@@ -365,6 +390,16 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 }
 
 // HOOKS
+
+export fn InputUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+    _ = initialized;
+    _ = gs;
+    QuickRaceMenu.input_confirm_state = gv.InputGetKbRaw(QuickRaceMenu.input_confirm);
+    QuickRaceMenu.input_x_dec_state = gv.InputGetKbRaw(QuickRaceMenu.input_x_dec);
+    QuickRaceMenu.input_x_inc_state = gv.InputGetKbRaw(QuickRaceMenu.input_x_inc);
+    QuickRaceMenu.input_y_dec_state = gv.InputGetKbRaw(QuickRaceMenu.input_y_dec);
+    QuickRaceMenu.input_y_inc_state = gv.InputGetKbRaw(QuickRaceMenu.input_y_inc);
+}
 
 export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gv;

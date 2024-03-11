@@ -2,10 +2,11 @@ const Self = @This();
 
 const std = @import("std");
 
-const win32 = @import("zigwin32");
-const win32kb = win32.ui.input.keyboard_and_mouse;
+const w32 = @import("zigwin32");
+const w32kb = w32.ui.input.keyboard_and_mouse;
 
 const ScrollControl = @import("scroll_control.zig").ScrollControl;
+const st = @import("active_state.zig");
 const input = @import("input.zig");
 const r = @import("racer.zig");
 const rc = r.constants;
@@ -13,7 +14,7 @@ const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-const InputGetFnType = *const @TypeOf(input.get_kb_pressed);
+pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 
 // FIXME: custom minimum value; need to update algorithm to impl
 pub const MenuItem = struct {
@@ -34,10 +35,10 @@ pub const Menu = struct {
     max: i32,
     cancel_fn: ?*fn () void = null,
     cancel_text: ?[*:0]const u8 = null, // default: Cancel
-    cancel_key: ?win32kb.VIRTUAL_KEY = null,
+    cancel_key: ?InputGetFnType = null,
     confirm_fn: ?*fn () void = null,
     confirm_text: ?[*:0]const u8 = null, // default: Confirm
-    confirm_key: ?win32kb.VIRTUAL_KEY = null,
+    confirm_key: ?InputGetFnType = null,
     w: i16 = 320,
     x: i16 = 320,
     y: i16 = 128,
@@ -51,35 +52,12 @@ pub const Menu = struct {
     const style_item_on = rt.MakeTextHeadStyle(.Default, true, .Yellow, null, .{rto.ToggleShadow}) catch "";
     const style_item_off = rt.MakeTextHeadStyle(.Default, true, .White, null, .{rto.ToggleShadow}) catch "";
 
-    pub inline fn UpdateAndDraw(self: *Menu) void {
-        self.UpdateAndDrawEx(&input.get_kb_pressed, &input.get_kb_released, &input.get_kb_down);
-    }
-
-    pub fn UpdateAndDrawEx(
-        self: *Menu,
-        get_kb_pressed: InputGetFnType,
-        get_kb_released: InputGetFnType,
-        get_kb_down: InputGetFnType,
-    ) void {
-        self.y_scroll.UpdateEx(
-            &self.idx,
-            self.max,
-            self.wrap,
-            get_kb_pressed,
-            get_kb_released,
-            get_kb_down,
-        );
+    pub fn UpdateAndDrawEx(self: *Menu) void {
+        self.y_scroll.UpdateEx(&self.idx, self.max, self.wrap);
 
         if (self.idx < self.items.len) {
             const item: *const MenuItem = &self.items[@intCast(self.idx)];
-            self.x_scroll.UpdateEx(
-                item.idx,
-                item.max,
-                item.wrap,
-                get_kb_pressed,
-                get_kb_released,
-                get_kb_down,
-            );
+            self.x_scroll.UpdateEx(item.idx, item.max, item.wrap);
         }
 
         const x1 = self.x - @divFloor(self.w, 2);
@@ -106,7 +84,7 @@ pub const Menu = struct {
 
         y += self.row_margin;
         if (self.confirm_fn) |f| {
-            if (self.idx == hl_i and get_kb_pressed(self.confirm_key.?)) f();
+            if (self.idx == hl_i and self.confirm_key.?(.JustOn)) f();
             y += self.row_h;
             hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
             const label = if (self.confirm_text) |t| t else "Confirm";
@@ -114,7 +92,7 @@ pub const Menu = struct {
             hl_i += 1;
         }
         if (self.cancel_fn) |f| {
-            if (self.idx == hl_i and get_kb_pressed(self.cancel_key.?)) f();
+            if (self.idx == hl_i and self.cancel_key.?(.JustOn)) f();
             y += self.row_h;
             hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
             const label = if (self.cancel_text) |t| t else "Cancel";

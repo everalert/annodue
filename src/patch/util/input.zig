@@ -32,14 +32,14 @@ pub const INPUT_MOUSE = extern struct {
     window_in: st.ActiveState,
 };
 
-const state = extern struct {
-    var kb: [256]u8 = std.mem.zeroes([256]u8);
+const InputState = extern struct {
+    var kb: [256]st.ActiveState = std.mem.zeroes([256]st.ActiveState);
     var mouse: INPUT_MOUSE = std.mem.zeroInit(INPUT_MOUSE, .{});
     var xbox_raw: xinput.XINPUT_GAMEPAD = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});
     var xbox: INPUT_XINPUT = std.mem.zeroInit(INPUT_XINPUT, .{});
 };
 
-pub fn update(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+pub fn InputUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = gs;
     _ = gv;
     _ = initialized;
@@ -80,62 +80,68 @@ pub fn update_xinput() callconv(.C) void {
     const controller: u8 = 0;
     var new_state = std.mem.zeroInit(xinput.XINPUT_STATE, .{});
     if (xinput.XInputGetState(controller, &new_state) == 0) {
-        state.xbox_raw = new_state.Gamepad;
+        InputState.xbox_raw = new_state.Gamepad;
         const buttons = comptime std.enums.values(xinput.XINPUT_GAMEPAD_BUTTON);
         for (buttons, 0..) |b, i| {
             const b_int: u16 = @intFromEnum(b);
-            state.xbox.Button[i].update((new_state.Gamepad.wButtons & b_int) > 0);
+            InputState.xbox.Button[i].update((new_state.Gamepad.wButtons & b_int) > 0);
         }
-        state.xbox.Axis[0] = @as(f32, @floatFromInt(new_state.Gamepad.bLeftTrigger)) / 255;
-        state.xbox.Axis[1] = @as(f32, @floatFromInt(new_state.Gamepad.bRightTrigger)) / 255;
-        state.xbox.Axis[2] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbLX)) / 32767;
-        state.xbox.Axis[3] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbLY)) / 32767;
-        state.xbox.Axis[4] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbRX)) / 32767;
-        state.xbox.Axis[5] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbRY)) / 32767;
+        InputState.xbox.Axis[0] = @as(f32, @floatFromInt(new_state.Gamepad.bLeftTrigger)) / 255;
+        InputState.xbox.Axis[1] = @as(f32, @floatFromInt(new_state.Gamepad.bRightTrigger)) / 255;
+        InputState.xbox.Axis[2] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbLX)) / 32767;
+        InputState.xbox.Axis[3] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbLY)) / 32767;
+        InputState.xbox.Axis[4] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbRX)) / 32767;
+        InputState.xbox.Axis[5] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbRY)) / 32767;
     } else {
-        state.xbox_raw = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});
+        InputState.xbox_raw = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});
     }
 }
 
 pub fn get_xinput_button(button: XINPUT_GAMEPAD_BUTTON_INDEX) st.ActiveState {
-    return state.xbox.Button[@intFromEnum(button)];
+    return InputState.xbox.Button[@intFromEnum(button)];
 }
 
 pub fn get_xinput_axis(axis: XINPUT_GAMEPAD_AXIS_INDEX) f32 {
-    return state.xbox.Axis[@intFromEnum(axis)];
+    return InputState.xbox.Axis[@intFromEnum(axis)];
 }
 
 // KEYBOARD
 
 pub fn update_kb() callconv(.C) void {
-    var kb_new: [256]u8 = undefined;
-    _ = w32kb.GetKeyboardState(&kb_new);
-    for (kb_new, 0..) |k, i| {
+    const s = extern struct {
+        var kb_new: [256]u8 = undefined;
+    };
+    _ = w32kb.GetKeyboardState(&s.kb_new);
+
+    for (s.kb_new, 0..) |k, i| {
         const down: u8 = k >> 7; // KB_DOWN
-        const new: u8 = (down ^ state.kb[i] & 0x01) << 1; // KB_NEW
-        state.kb[i] = down | new;
+        const new: u8 = (down ^ @intFromEnum(InputState.kb[i]) & 0x01) << 1; // KB_NEW
+        InputState.kb[i] = @enumFromInt(down | new);
     }
 }
 
-pub fn get_kb(keycode: w32kb.VIRTUAL_KEY, down: bool, new: bool) bool {
-    const key: u8 = state.kb[@as(u8, @truncate(@intFromEnum(keycode)))];
-    return ((key & INPUT_DOWN) > 0) == down and ((key & INPUT_NEW) > 0) == new;
+pub fn get_kb_raw(keycode: w32kb.VIRTUAL_KEY) st.ActiveState {
+    return InputState.kb[@as(u8, @truncate(@intFromEnum(keycode)))];
+}
+
+pub fn get_kb(keycode: w32kb.VIRTUAL_KEY, state: st.ActiveState) bool {
+    return get_kb_raw(keycode) == state;
 }
 
 pub fn get_kb_down(keycode: w32kb.VIRTUAL_KEY) bool {
-    return get_kb(keycode, true, false);
+    return get_kb(keycode, .On);
 }
 
 pub fn get_kb_up(keycode: w32kb.VIRTUAL_KEY) bool {
-    return get_kb(keycode, false, false);
+    return get_kb(keycode, .Off);
 }
 
 pub fn get_kb_pressed(keycode: w32kb.VIRTUAL_KEY) bool {
-    return get_kb(keycode, true, true);
+    return get_kb(keycode, .JustOn);
 }
 
 pub fn get_kb_released(keycode: w32kb.VIRTUAL_KEY) bool {
-    return get_kb(keycode, false, true);
+    return get_kb(keycode, .JustOff);
 }
 
 // MOUSE
@@ -146,7 +152,7 @@ pub fn update_mouse(hwnd: HWND) callconv(.C) void {
     var m: POINT = undefined;
     var c: RECT = undefined;
     if (w32wm.GetCursorPos(&m) > 0 and w32wm.GetClientRect(hwnd, &c) > 0) {
-        const s: *INPUT_MOUSE = &state.mouse;
+        const s: *INPUT_MOUSE = &InputState.mouse;
 
         s.raw_d.x = m.x - s.raw.x;
         s.raw_d.y = m.y - s.raw.y;
@@ -162,26 +168,26 @@ pub fn update_mouse(hwnd: HWND) callconv(.C) void {
         s.window.y = wy;
         s.window_in.update(wx >= 0 and wx < 640 and wy >= 0 and wy < 480);
     } else {
-        state.mouse = std.mem.zeroInit(INPUT_MOUSE, .{});
+        InputState.mouse = std.mem.zeroInit(INPUT_MOUSE, .{});
     }
 }
 
 pub fn get_mouse_raw() callconv(.C) POINT {
-    return state.mouse.raw;
+    return InputState.mouse.raw;
 }
 
 pub fn get_mouse_raw_d() callconv(.C) POINT {
-    return state.mouse.raw_d;
+    return InputState.mouse.raw_d;
 }
 
 pub fn get_mouse_window() callconv(.C) POINT {
-    return state.mouse.window;
+    return InputState.mouse.window;
 }
 
 pub fn get_mouse_window_d() callconv(.C) POINT {
-    return state.mouse.window_d;
+    return InputState.mouse.window_d;
 }
 
 pub fn get_mouse_inside() callconv(.C) st.ActiveState {
-    return state.mouse.window_in;
+    return InputState.mouse.window_in;
 }

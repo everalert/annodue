@@ -22,7 +22,6 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
 // TODO: figure out wtf to do to manage state through hot-reload etc.
-// FIXME: hot-reloading while game is frozen causes softlock
 
 // HUD TIMER MS
 
@@ -387,6 +386,7 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
     _ = gv;
     _ = initialized;
     _ = gs;
+    QuickRaceMenu.close();
 }
 
 // HOOKS

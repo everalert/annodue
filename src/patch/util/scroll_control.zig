@@ -22,7 +22,7 @@ pub const ScrollControl = struct {
     input_dec: InputGetFnType,
     input_inc: InputGetFnType,
 
-    pub fn UpdateEx(self: *ScrollControl, val: *i32, max: i32, wrap: bool) void {
+    pub fn UpdateEx(self: *ScrollControl, val: i32, max: i32, wrap: bool) i32 {
         const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
 
         var inc: f32 = 0;
@@ -42,7 +42,7 @@ pub const ScrollControl = struct {
         const inc_i: i32 = @intFromFloat(self.scroll_buf);
         self.scroll_buf -= @floatFromInt(inc_i);
 
-        const new_val = val.* + inc_i;
-        val.* = if (wrap) @mod(new_val, max) else std.math.clamp(new_val, 0, max - 1);
+        const new_val = val + inc_i;
+        return if (wrap) @mod(new_val, max) else std.math.clamp(new_val, 0, max - 1);
     }
 };

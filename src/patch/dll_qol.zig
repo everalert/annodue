@@ -153,7 +153,6 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // QUICK RACE MENU
 
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
-// TODO: add standard race settings (mirror, etc.)
 // TODO: add convenience buttons for MU/NU
 // TODO: also track related values for coherency
 //  - adjusting selected circuit in menus after switching
@@ -215,7 +214,7 @@ const QuickRaceMenu = extern struct {
         .confirm_text = "RACE!",
         .confirm_fn = @constCast(&load_race),
         .confirm_key = get_input_confirm,
-        .max = 15,
+        .max = QuickRaceMenuItems.len + 1,
         .x_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
@@ -228,102 +227,7 @@ const QuickRaceMenu = extern struct {
             .input_dec = get_input_y_dec,
             .input_inc = get_input_y_inc,
         },
-        .items = &[_]menu.MenuItem{
-            .{
-                .idx = &@This().values.fps,
-                .label = "FPS",
-                .max = 500,
-            },
-            .{
-                .idx = &@This().values.vehicle,
-                .label = "Vehicle",
-                .options = &rc.Vehicles,
-                .max = rc.Vehicles.len,
-            },
-            .{
-                .idx = &@This().values.track,
-                .label = "Track",
-                .options = &rc.TracksById, // FIXME: maybe change to menu order?
-                .max = rc.TracksByMenu.len,
-            },
-            .{
-                .idx = &@This().values.up_lv[0],
-                .label = rc.UpgradeCategories[0],
-                .options = &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*,
-                .max = 6,
-                .wrap = false,
-            },
-            .{
-                .idx = &@This().values.up_lv[1],
-                .label = rc.UpgradeCategories[1],
-                .options = &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*,
-                .max = 6,
-                .wrap = false,
-            },
-            .{
-                .idx = &@This().values.up_lv[2],
-                .label = rc.UpgradeCategories[2],
-                .options = &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*,
-                .max = 6,
-                .wrap = false,
-            },
-            .{
-                .idx = &@This().values.up_lv[3],
-                .label = rc.UpgradeCategories[3],
-                .options = &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*,
-                .max = 6,
-                .wrap = false,
-            },
-            .{
-                .idx = &@This().values.up_lv[4],
-                .label = rc.UpgradeCategories[4],
-                .options = &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*,
-                .max = 6,
-                .wrap = false,
-            },
-            .{
-                .idx = &@This().values.up_lv[5],
-                .label = rc.UpgradeCategories[5],
-                .options = &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*,
-                .max = 6,
-                .wrap = false,
-            },
-            .{
-                .idx = &@This().values.up_lv[6],
-                .label = rc.UpgradeCategories[6],
-                .options = &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*,
-                .max = 6,
-                .wrap = false,
-            },
-            .{
-                .idx = &@This().values.mirror,
-                .label = "Mirror",
-                .options = &[_][]const u8{ "Off", "On" },
-                .max = 2,
-            },
-            .{
-                .idx = &@This().values.laps,
-                .label = "Laps",
-                .options = &[_][]const u8{ "1", "2", "3", "4", "5" },
-                .max = 5,
-            },
-            .{
-                .idx = &@This().values.racers,
-                .label = "Racers",
-                .options = &[_][]const u8{
-                    "1", "2",  "3",  "4",
-                    "5", "6",  "7",  "8",
-                    "9", "10", "11", "12",
-                },
-                .max = 12,
-            },
-            .{
-                .idx = &@This().values.ai_speed,
-                .label = "AI Speed",
-                .options = &[_][]const u8{ "Slow", "Average", "Fast" },
-                .max = 3,
-            },
-        },
+        .items = &QuickRaceMenuItems,
     };
 
     fn load_race() void {
@@ -331,9 +235,9 @@ const QuickRaceMenu = extern struct {
         r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
         r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
         r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
-        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps + 1)));
-        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers + 1))); // 0x50C558
-        r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
+        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps)));
+        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // also: 0x50C558
+        r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed)));
         //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
         const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });
         for (values.up_lv, values.up_hp, 0..) |lv, hp, i| {
@@ -352,9 +256,9 @@ const QuickRaceMenu = extern struct {
         values.vehicle = r.ReadEntityValue(.Hang, 0, 0x73, u8);
         values.track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
         values.mirror = r.ReadEntityValue(.Hang, 0, 0x6E, u8);
-        values.laps = r.ReadEntityValue(.Hang, 0, 0x8F, u8) - 1;
-        values.racers = r.ReadEntityValue(.Hang, 0, 0x72, u8) - 1; // 0x50C558
-        values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8) - 1;
+        values.laps = r.ReadEntityValue(.Hang, 0, 0x8F, u8);
+        values.racers = r.ReadEntityValue(.Hang, 0, 0x72, u8); // also: 0x50C558
+        values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8);
         //values.winnings_split = r.ReadEntityValue(.Hang, 0, 0x91, u8);
         const u: [14]u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 }, [14]u8);
         for (u[0..7], u[7..14], 0..) |lv, hp, i| {
@@ -389,6 +293,26 @@ const QuickRaceMenu = extern struct {
 
         if (menu_active) data.UpdateAndDrawEx();
     }
+};
+
+const QuickRaceMenuItems = [_]menu.MenuItem{
+    menu.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
+    menu.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true),
+    // FIXME: maybe change to menu order?
+    menu.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true),
+    menu.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false),
+    menu.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false),
+    menu.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false),
+    menu.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false),
+    menu.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false),
+    menu.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false),
+    menu.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false),
+    menu.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
+    menu.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
+    menu.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),
+    menu.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{
+        "Slow", "Average", "Fast",
+    }, true),
 };
 
 // HOUSEKEEPING

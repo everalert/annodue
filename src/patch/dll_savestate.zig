@@ -304,13 +304,10 @@ fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalFn) LoadState {
         return .ScrubExiting;
     }
 
-    state.scrub.UpdateEx(
-        &state.scrub_frame,
+    state.scrub_frame = state.scrub.UpdateEx(
+        state.scrub_frame,
         std.math.cast(i32, state.frame_total).?,
         false,
-        //gv.InputGetKbPressed,
-        //gv.InputGetKbReleased,
-        //gv.InputGetKbDown,
     );
 
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);

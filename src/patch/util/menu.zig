@@ -14,8 +14,6 @@ const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-// TODO: spacer
-// TODO: header
 // TODO: button/select-type menu item (to replace confirm, cancel, etc.)
 // TODO: scrolling menu when the menu is too long to fit on screen
 
@@ -23,10 +21,16 @@ pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 
 pub const MenuItem = struct {
     value: ?*i32 = null, // if null, item will be skipped when scrolling through menu
-    label: ?[]const u8,
+    label: ?[]const u8 = null,
     options: ?[]const []const u8 = null,
     min: i32 = 0,
     max: i32,
+    padding: struct {
+        t: i16 = 0,
+        b: i16 = 0,
+        l: i16 = 0,
+        r: i16 = 0,
+    } = .{},
     wrap: bool = true,
     callback: ?*const fn (*Menu, st.ActiveState) callconv(.C) void = null,
 
@@ -45,6 +49,26 @@ pub const MenuItem = struct {
 };
 
 const menu_item_toggle_opts = [_][]const u8{ "Off", "On" };
+
+pub inline fn MenuItemHeader(label: []const u8) MenuItem {
+    return .{
+        .label = label,
+        .padding = .{
+            .t = 8,
+            .b = 4,
+        },
+        .max = 0,
+    };
+}
+
+pub inline fn MenuItemSpacer() MenuItem {
+    return .{
+        .padding = .{
+            .b = 4,
+        },
+        .max = 0,
+    };
+}
 
 pub inline fn MenuItemToggle(
     value: *i32,
@@ -92,6 +116,16 @@ pub inline fn MenuItemList(
 // TODO: play menu sounds, e.g. when scrolling
 // TODO: maybe a key for quick confirm, so you don't have to scroll
 pub const Menu = struct {
+    const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{
+        rto.ToggleShadow,
+    }) catch "";
+    const style_item_on = rt.MakeTextHeadStyle(.Default, true, .Yellow, null, .{
+        rto.ToggleShadow,
+    }) catch "";
+    const style_item_off = rt.MakeTextHeadStyle(.Default, true, .White, null, .{
+        rto.ToggleShadow,
+    }) catch "";
+
     idx: i32 = 0,
     wrap: bool = true,
     title: [*:0]const u8,
@@ -112,9 +146,6 @@ pub const Menu = struct {
     x_scroll: ScrollControl,
     y_scroll: ScrollControl,
     hl_color: rt.Color = .Yellow, // FIXME: not in use due to text api needing comptime
-    const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{rto.ToggleShadow}) catch "";
-    const style_item_on = rt.MakeTextHeadStyle(.Default, true, .Yellow, null, .{rto.ToggleShadow}) catch "";
-    const style_item_off = rt.MakeTextHeadStyle(.Default, true, .White, null, .{rto.ToggleShadow}) catch "";
 
     pub fn UpdateAndDrawEx(self: *Menu) void {
         self.idx = self.y_scroll.UpdateEx(self.idx, self.max, self.wrap);
@@ -125,26 +156,47 @@ pub const Menu = struct {
                 item.rset(self.x_scroll.UpdateEx(item.rval(), item.rmax(), item.wrap));
         }
 
+        var last_real: u32 = 0;
+        for (self.items, 0..) |item, i| {
+            if (item.value) |_|
+                last_real = i;
+            if (item.value == null and self.idx == i) {
+                // TODO: something more sophisticated, that allows quickly switching up/down
+                if (self.y_scroll.input_dec(.On) or self.y_scroll.input_dec(.JustOn))
+                    self.idx = @intCast(last_real);
+                if (self.y_scroll.input_inc(.On) or self.y_scroll.input_inc(.JustOn))
+                    self.idx += 1;
+            }
+        }
+
         const x1 = self.x - @divFloor(self.w, 2);
         const x2 = x1 + self.col_w;
         var y = self.y;
 
-        rt.DrawText(@divFloor(self.x, 2), @divFloor(y, 2), "{s}", .{self.title}, null, style_head) catch {};
+        rt.DrawText(@divFloor(self.x, 2), @divFloor(y, 2), "{s}", .{
+            self.title,
+        }, null, style_head) catch {};
         y += self.row_margin * 2;
 
         var hl_i: i32 = 0;
         var hl_s: []const u8 = undefined;
         for (self.items) |item| {
-            y += self.row_h;
             hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
-            if (item.label) |label| {
+            y += item.padding.t;
+            if (item.label) |label| blk: {
+                y += self.row_h;
                 rt.DrawText(x1, y, "{s}", .{label}, null, hl_s) catch {};
+                if (item.value == null) break :blk;
+
                 if (item.options) |options| {
-                    rt.DrawText(x2, y, "{s}", .{options[@intCast(item.rval())]}, null, hl_s) catch {};
+                    rt.DrawText(x2, y, "{s}", .{
+                        options[@intCast(item.rval())],
+                    }, null, hl_s) catch {};
                 } else {
                     rt.DrawText(x2, y, "{d}", .{item.value.?.*}, null, hl_s) catch {};
                 }
             }
+            y += item.padding.b;
             hl_i += 1;
         }
 

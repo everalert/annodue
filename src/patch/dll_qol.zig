@@ -237,7 +237,7 @@ const QuickRaceMenu = extern struct {
         r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
         r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps)));
         r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // also: 0x50C558
-        r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed)));
+        r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
         //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
         const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });
         for (values.up_lv, values.up_hp, 0..) |lv, hp, i| {
@@ -258,7 +258,7 @@ const QuickRaceMenu = extern struct {
         values.mirror = r.ReadEntityValue(.Hang, 0, 0x6E, u8);
         values.laps = r.ReadEntityValue(.Hang, 0, 0x8F, u8);
         values.racers = r.ReadEntityValue(.Hang, 0, 0x72, u8); // also: 0x50C558
-        values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8);
+        values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8) - 1;
         //values.winnings_split = r.ReadEntityValue(.Hang, 0, 0x91, u8);
         const u: [14]u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 }, [14]u8);
         for (u[0..7], u[7..14], 0..) |lv, hp, i| {
@@ -297,9 +297,11 @@ const QuickRaceMenu = extern struct {
 
 const QuickRaceMenuItems = [_]menu.MenuItem{
     menu.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
+    menu.MenuItemSpacer(),
     menu.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true),
     // FIXME: maybe change to menu order?
     menu.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true),
+    menu.MenuItemSpacer(),
     menu.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false),
     menu.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false),
     menu.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false),
@@ -307,6 +309,7 @@ const QuickRaceMenuItems = [_]menu.MenuItem{
     menu.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false),
     menu.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false),
     menu.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false),
+    menu.MenuItemSpacer(),
     menu.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
     menu.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
     menu.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),

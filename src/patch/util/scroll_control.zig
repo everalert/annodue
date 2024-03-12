@@ -26,14 +26,14 @@ pub const ScrollControl = struct {
         const dt = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
 
         var inc: f32 = 0;
+        if (self.input_dec(.On)) self.scroll -= dt;
+        if (self.input_inc(.On)) self.scroll += dt;
         if (self.input_dec(.JustOn)) inc -= 1;
         if (self.input_inc(.JustOn)) inc += 1;
         if (self.input_inc(.JustOff) or self.input_dec(.JustOff)) {
             self.scroll = 0;
             self.scroll_buf = 0;
         }
-        if (self.input_dec(.On)) self.scroll -= dt;
-        if (self.input_inc(.On)) self.scroll += dt;
 
         const scroll: f32 = std.math.clamp(self.scroll / self.scroll_time, -1, 1);
         inc += std.math.pow(f32, scroll, 2) * dt * self.scroll_units * std.math.sign(scroll);

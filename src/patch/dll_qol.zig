@@ -161,6 +161,8 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 //    i.e. so that it always opens with the current settings even if you dont load via quickrace
 // TODO: make it wait till the end of the pause scroll-in, so that the scroll-out
 // is always the same as a normal pause
+// TODO: add options/differentiation for tournament mode races, and also maybe
+// set the global 'in tournament mode' accordingly
 const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
     var menu_active: bool = false;
@@ -175,6 +177,11 @@ const QuickRaceMenu = extern struct {
         var track: i32 = 0;
         var up_lv: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
         var up_hp: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
+        var mirror: i32 = 0; // hang
+        var laps: i32 = 1; // hang, 1-5
+        var racers: i32 = 1; // 0x50C558, 1-12 normally, up to 20 without crash?
+        var ai_speed: i32 = 2; // hang, 1-3
+        //var winnings_split: i32 = 1; // hang
     };
 
     var input_confirm_state: st.ActiveState = undefined;
@@ -206,9 +213,9 @@ const QuickRaceMenu = extern struct {
     var data: menu.Menu = .{
         .title = "Quick Race",
         .confirm_text = "RACE!",
-        .confirm_fn = @constCast(&@This().load_race),
+        .confirm_fn = @constCast(&load_race),
         .confirm_key = get_input_confirm,
-        .max = 11,
+        .max = 15,
         .x_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
@@ -288,6 +295,34 @@ const QuickRaceMenu = extern struct {
                 .max = 6,
                 .wrap = false,
             },
+            .{
+                .idx = &@This().values.mirror,
+                .label = "Mirror",
+                .options = &[_][]const u8{ "Off", "On" },
+                .max = 2,
+            },
+            .{
+                .idx = &@This().values.laps,
+                .label = "Laps",
+                .options = &[_][]const u8{ "1", "2", "3", "4", "5" },
+                .max = 5,
+            },
+            .{
+                .idx = &@This().values.racers,
+                .label = "Racers",
+                .options = &[_][]const u8{
+                    "1", "2",  "3",  "4",
+                    "5", "6",  "7",  "8",
+                    "9", "10", "11", "12",
+                },
+                .max = 12,
+            },
+            .{
+                .idx = &@This().values.ai_speed,
+                .label = "AI Speed",
+                .options = &[_][]const u8{ "Slow", "Average", "Fast" },
+                .max = 3,
+            },
         },
     };
 
@@ -295,6 +330,11 @@ const QuickRaceMenu = extern struct {
         FpsTimer.SetPeriod(@intCast(values.fps));
         r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
         r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
+        r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
+        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps + 1)));
+        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers + 1))); // 0x50C558
+        r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
+        //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
         const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });
         for (values.up_lv, values.up_hp, 0..) |lv, hp, i| {
             _ = mem.write(u + 0 + i, u8, @as(u8, @intCast(lv)));
@@ -311,6 +351,11 @@ const QuickRaceMenu = extern struct {
 
         values.vehicle = r.ReadEntityValue(.Hang, 0, 0x73, u8);
         values.track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
+        values.mirror = r.ReadEntityValue(.Hang, 0, 0x6E, u8);
+        values.laps = r.ReadEntityValue(.Hang, 0, 0x8F, u8) - 1;
+        values.racers = r.ReadEntityValue(.Hang, 0, 0x72, u8) - 1; // 0x50C558
+        values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8) - 1;
+        //values.winnings_split = r.ReadEntityValue(.Hang, 0, 0x91, u8);
         const u: [14]u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 }, [14]u8);
         for (u[0..7], u[7..14], 0..) |lv, hp, i| {
             values.up_lv[i] = lv;

@@ -14,6 +14,9 @@ const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
+// TODO: bool menu item
+// TODO: numeric menu item
+
 pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 
 // FIXME: custom minimum value; need to update algorithm to impl

@@ -14,10 +14,10 @@ const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-// TODO: button/select-type menu item (to replace confirm, cancel, etc.)
 // TODO: scrolling menu when the menu is too long to fit on screen
 
 pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
+pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) void;
 
 pub const MenuItem = struct {
     value: ?*i32 = null, // if null, item will be skipped when scrolling through menu
@@ -32,7 +32,7 @@ pub const MenuItem = struct {
         r: i16 = 0,
     } = .{},
     wrap: bool = true,
-    callback: ?*const fn (*Menu, st.ActiveState) callconv(.C) void = null,
+    callback: ?MenuItemCallbackType = null,
 
     fn rset(self: *MenuItem, value: i32) void {
         if (self.value) |v| v.* = value + self.min;
@@ -66,6 +66,14 @@ pub inline fn MenuItemSpacer() MenuItem {
         .padding = .{
             .b = 4,
         },
+        .max = 0,
+    };
+}
+
+pub inline fn MenuItemButton(label: []const u8, callback: MenuItemCallbackType) MenuItem {
+    return .{
+        .label = label,
+        .callback = callback,
         .max = 0,
     };
 }
@@ -114,7 +122,7 @@ pub inline fn MenuItemList(
 }
 
 // TODO: play menu sounds, e.g. when scrolling
-// TODO: maybe a key for quick confirm, so you don't have to scroll
+// TODO: a way to quick confirm, so you don't have to scroll to the confirm item
 pub const Menu = struct {
     const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{
         rto.ToggleShadow,
@@ -131,11 +139,7 @@ pub const Menu = struct {
     title: [*:0]const u8,
     items: []const MenuItem,
     max: i32,
-    cancel_fn: ?*fn () void = null,
-    cancel_text: ?[*:0]const u8 = null, // default: Cancel
-    cancel_key: ?InputGetFnType = null,
-    confirm_fn: ?*fn () void = null,
-    confirm_text: ?[*:0]const u8 = null, // default: Confirm
+    //confirm_fn: ?*fn () void = null,
     confirm_key: ?InputGetFnType = null,
     w: i16 = 320,
     x: i16 = 320,
@@ -145,7 +149,7 @@ pub const Menu = struct {
     row_margin: i16 = 8,
     x_scroll: ScrollControl,
     y_scroll: ScrollControl,
-    hl_color: rt.Color = .Yellow, // FIXME: not in use due to text api needing comptime
+    //hl_color: rt.Color = .Yellow, // FIXME: not in use due to text api needing comptime
 
     pub fn UpdateAndDrawEx(self: *Menu) void {
         self.idx = self.y_scroll.UpdateEx(self.idx, self.max, self.wrap);
@@ -158,15 +162,17 @@ pub const Menu = struct {
 
         var last_real: u32 = 0;
         for (self.items, 0..) |item, i| {
-            if (item.value) |_|
+            if (item.value != null or item.callback != null)
                 last_real = i;
-            if (item.value == null and self.idx == i) {
+            if (item.value == null and item.callback == null and self.idx == i) {
                 // TODO: something more sophisticated, that allows quickly switching up/down
+                // FIXME: probably a bug when trying to scroll the extents with a blank item there
                 if (self.y_scroll.input_dec(.On) or self.y_scroll.input_dec(.JustOn))
                     self.idx = @intCast(last_real);
                 if (self.y_scroll.input_inc(.On) or self.y_scroll.input_inc(.JustOn))
                     self.idx += 1;
             }
+            if (item.callback != null and self.idx == i) item.callback.?(self);
         }
 
         const x1 = self.x - @divFloor(self.w, 2);
@@ -178,10 +184,9 @@ pub const Menu = struct {
         }, null, style_head) catch {};
         y += self.row_margin * 2;
 
-        var hl_i: i32 = 0;
         var hl_s: []const u8 = undefined;
-        for (self.items) |item| {
-            hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
+        for (self.items, 0..) |item, i| {
+            hl_s = if (self.idx == i) style_item_on else style_item_off;
             y += item.padding.t;
             if (item.label) |label| blk: {
                 y += self.row_h;
@@ -197,25 +202,6 @@ pub const Menu = struct {
                 }
             }
             y += item.padding.b;
-            hl_i += 1;
-        }
-
-        y += self.row_margin;
-        if (self.confirm_fn) |f| {
-            if (self.idx == hl_i and self.confirm_key.?(.JustOn)) f();
-            y += self.row_h;
-            hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
-            const label = if (self.confirm_text) |t| t else "Confirm";
-            rt.DrawText(x1, y, "{s}", .{label}, null, hl_s) catch {};
-            hl_i += 1;
-        }
-        if (self.cancel_fn) |f| {
-            if (self.idx == hl_i and self.cancel_key.?(.JustOn)) f();
-            y += self.row_h;
-            hl_s = if (self.idx == hl_i) style_item_on else style_item_off;
-            const label = if (self.cancel_text) |t| t else "Cancel";
-            rt.DrawText(x1, y, "{s}", .{label}, null, hl_s) catch {};
-            hl_i += 1;
         }
     }
 };

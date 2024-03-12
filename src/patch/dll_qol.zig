@@ -157,7 +157,7 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // TODO: also track related values for coherency
 //  - adjusting selected circuit in menus after switching
 //  - changing the selected stuff in quick race menu to match loaded stuff,
-//    i.e. so that it always opens with the current settings even if you dont load via quickrace
+//    i.e. sync it so it always opens with the current settings even if you dont load via quickrace
 // TODO: make it wait till the end of the pause scroll-in, so that the scroll-out
 // is always the same as a normal pause
 // TODO: add options/differentiation for tournament mode races, and also maybe
@@ -211,10 +211,9 @@ const QuickRaceMenu = extern struct {
 
     var data: menu.Menu = .{
         .title = "Quick Race",
-        .confirm_text = "RACE!",
-        .confirm_fn = @constCast(&load_race),
+        //.confirm_fn = @constCast(&load_race),
         .confirm_key = get_input_confirm,
-        .max = QuickRaceMenuItems.len + 1,
+        .max = QuickRaceMenuItems.len,
         .x_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
@@ -295,6 +294,12 @@ const QuickRaceMenu = extern struct {
     }
 };
 
+fn QuickRaceConfirm(m: *menu.Menu) callconv(.C) void {
+    if (m.confirm_key) |ck|
+        if (ck(.JustOn))
+            QuickRaceMenu.load_race();
+}
+
 const QuickRaceMenuItems = [_]menu.MenuItem{
     menu.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
     menu.MenuItemSpacer(),
@@ -316,6 +321,8 @@ const QuickRaceMenuItems = [_]menu.MenuItem{
     menu.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{
         "Slow", "Average", "Fast",
     }, true),
+    menu.MenuItemSpacer(),
+    menu.MenuItemButton("Race!", &QuickRaceConfirm),
 };
 
 // HOUSEKEEPING

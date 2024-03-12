@@ -154,7 +154,6 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // QUICK RACE MENU
 
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
-// TODO: add convenience buttons for MU/NU
 // TODO: also keep track of related global values for coherency
 //  - adjusting selected circuit in menus after switching
 //  - changing the selected stuff in quick race menu to match loaded stuff,
@@ -295,6 +294,20 @@ const QuickRaceMenu = extern struct {
     }
 };
 
+fn QuickRaceSetNoUpgrades(m: *Menu) callconv(.C) void {
+    if (m.confirm_key) |ck| {
+        if (ck(.JustOn))
+            QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
+    }
+}
+
+fn QuickRaceSetMaxUpgrades(m: *Menu) callconv(.C) void {
+    if (m.confirm_key) |ck| {
+        if (ck(.JustOn))
+            QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
+    }
+}
+
 fn QuickRaceConfirm(m: *Menu) callconv(.C) void {
     if (m.confirm_key) |ck|
         if (ck(.JustOn))
@@ -322,6 +335,9 @@ const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{
         "Slow", "Average", "Fast",
     }, true),
+    mi.MenuItemSpacer(),
+    mi.MenuItemButton("No Upgrades", &QuickRaceSetNoUpgrades),
+    mi.MenuItemButton("Max Upgrades", &QuickRaceSetMaxUpgrades),
     mi.MenuItemSpacer(),
     mi.MenuItemButton("Race!", &QuickRaceConfirm),
 };

@@ -9,17 +9,18 @@ const GlobalState = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFn;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const timing = @import("util/timing.zig");
+const Menu = @import("util/menu.zig").Menu;
+const mi = @import("util/menu_item.zig");
+const mem = @import("util/memory.zig");
+const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
+
 const r = @import("util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
-
-const timing = @import("util/timing.zig");
-const menu = @import("util/menu.zig");
-const mem = @import("util/memory.zig");
-const x86 = @import("util/x86.zig");
 
 // TODO: figure out wtf to do to manage state through hot-reload etc.
 
@@ -154,7 +155,7 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
 // TODO: add convenience buttons for MU/NU
-// TODO: also track related values for coherency
+// TODO: also keep track of related global values for coherency
 //  - adjusting selected circuit in menus after switching
 //  - changing the selected stuff in quick race menu to match loaded stuff,
 //    i.e. sync it so it always opens with the current settings even if you dont load via quickrace
@@ -209,7 +210,7 @@ const QuickRaceMenu = extern struct {
         return input_y_inc_state == i;
     }
 
-    var data: menu.Menu = .{
+    var data: Menu = .{
         .title = "Quick Race",
         //.confirm_fn = @constCast(&load_race),
         .confirm_key = get_input_confirm,
@@ -290,39 +291,39 @@ const QuickRaceMenu = extern struct {
             open();
         }
 
-        if (menu_active) data.UpdateAndDrawEx();
+        if (menu_active) data.UpdateAndDraw();
     }
 };
 
-fn QuickRaceConfirm(m: *menu.Menu) callconv(.C) void {
+fn QuickRaceConfirm(m: *Menu) callconv(.C) void {
     if (m.confirm_key) |ck|
         if (ck(.JustOn))
             QuickRaceMenu.load_race();
 }
 
-const QuickRaceMenuItems = [_]menu.MenuItem{
-    menu.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
-    menu.MenuItemSpacer(),
-    menu.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true),
+const QuickRaceMenuItems = [_]mi.MenuItem{
+    mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
+    mi.MenuItemSpacer(),
+    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true),
     // FIXME: maybe change to menu order?
-    menu.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true),
-    menu.MenuItemSpacer(),
-    menu.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false),
-    menu.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false),
-    menu.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false),
-    menu.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false),
-    menu.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false),
-    menu.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false),
-    menu.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false),
-    menu.MenuItemSpacer(),
-    menu.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
-    menu.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
-    menu.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),
-    menu.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{
+    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true),
+    mi.MenuItemSpacer(),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false),
+    mi.MenuItemSpacer(),
+    mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
+    mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
+    mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),
+    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{
         "Slow", "Average", "Fast",
     }, true),
-    menu.MenuItemSpacer(),
-    menu.MenuItemButton("Race!", &QuickRaceConfirm),
+    mi.MenuItemSpacer(),
+    mi.MenuItemButton("Race!", &QuickRaceConfirm),
 };
 
 // HOUSEKEEPING

@@ -20,7 +20,6 @@ const rto = rt.TextStyleOpts;
 
 pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 
-// TODO: play menu sounds, e.g. when scrolling
 // TODO: a way to quick confirm, so you don't have to scroll to the confirm item
 pub const Menu = struct {
     const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{
@@ -47,7 +46,9 @@ pub const Menu = struct {
     row_h: i16 = 10,
     row_margin: i16 = 8,
     x_scroll: ScrollControl,
+    x_prev: i32 = 0,
     y_scroll: ScrollControl,
+    y_prev: i32 = 0,
     //hl_color: rt.Color = .Yellow, // FIXME: not in use due to text api needing comptime
 
     pub fn UpdateAndDraw(self: *Menu) void {
@@ -56,14 +57,23 @@ pub const Menu = struct {
     }
 
     pub fn Update(self: *Menu) void {
+        self.y_prev = self.idx;
         self.idx = self.y_scroll.UpdateEx(self.idx, self.max, self.wrap);
+        if (self.idx != self.y_prev)
+            rf.swrSound_PlaySoundMacro(88);
 
         if (self.idx < self.items.len) {
             var item: *MenuItem = @constCast(&self.items[@intCast(self.idx)]);
-            if (item.value) |_|
+            if (item.value) |_| {
+                self.x_prev = item.rval();
                 item.rset(self.x_scroll.UpdateEx(item.rval(), item.rmax(), item.wrap));
-            if (item.callback) |cb|
-                cb(self);
+                if (item.rval() != self.x_prev)
+                    rf.swrSound_PlaySoundMacro(88);
+            }
+            if (item.callback) |cb| {
+                if (cb(self))
+                    rf.swrSound_PlaySoundMacro(88);
+            }
         }
 
         var last_real: u32 = 0;

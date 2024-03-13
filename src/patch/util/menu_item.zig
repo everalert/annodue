@@ -16,7 +16,7 @@ const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) void;
+pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) bool;
 
 pub const MenuItem = struct {
     value: ?*i32 = null, // if null, item will be skipped when scrolling through menu

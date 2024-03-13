@@ -270,12 +270,14 @@ const QuickRaceMenu = extern struct {
 
     fn open() void {
         if (!gv.GameFreezeEnable(menu_key)) return;
+        //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
         if (!gv.GameFreezeDisable(menu_key)) return;
+        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
         menu_active = false;
     }
@@ -294,24 +296,34 @@ const QuickRaceMenu = extern struct {
     }
 };
 
-fn QuickRaceSetNoUpgrades(m: *Menu) callconv(.C) void {
+fn QuickRaceSetNoUpgrades(m: *Menu) callconv(.C) bool {
     if (m.confirm_key) |ck| {
-        if (ck(.JustOn))
+        if (ck(.JustOn)) {
             QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
+            return true;
+        }
     }
+    return false;
 }
 
-fn QuickRaceSetMaxUpgrades(m: *Menu) callconv(.C) void {
+fn QuickRaceSetMaxUpgrades(m: *Menu) callconv(.C) bool {
     if (m.confirm_key) |ck| {
-        if (ck(.JustOn))
+        if (ck(.JustOn)) {
             QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
+            return true;
+        }
     }
+    return false;
 }
 
-fn QuickRaceConfirm(m: *Menu) callconv(.C) void {
-    if (m.confirm_key) |ck|
-        if (ck(.JustOn))
+fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
+    if (m.confirm_key) |ck| {
+        if (ck(.JustOn)) {
             QuickRaceMenu.load_race();
+            return true;
+        }
+    }
+    return false;
 }
 
 const QuickRaceMenuItems = [_]mi.MenuItem{
@@ -332,9 +344,8 @@ const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
     mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
     mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),
-    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{
-        "Slow", "Average", "Fast",
-    }, true),
+    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{ "Slow", "Average", "Fast" }, true),
+    //mi.MenuItemList(&QuickRaceMenu.values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
     mi.MenuItemSpacer(),
     mi.MenuItemButton("No Upgrades", &QuickRaceSetNoUpgrades),
     mi.MenuItemButton("Max Upgrades", &QuickRaceSetMaxUpgrades),
@@ -368,6 +379,8 @@ export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C
 export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
     _ = gs;
+
+    // TODO: look into using in-game default setter, see fn_45BD90
 
     const def_laps: u32 = gv.SettingGetU("general", "default_laps") orelse 3;
     if (def_laps >= 1 and def_laps <= 5)
@@ -409,9 +422,11 @@ export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callc
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
 export fn EarlyEngineUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
     _ = initialized;
+
     // Quick Reload
     if (gs.in_race.on() and gv.InputGetKbDown(.@"2") and gv.InputGetKbPressed(.ESCAPE)) {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
+        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 

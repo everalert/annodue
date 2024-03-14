@@ -19,9 +19,9 @@ const rto = rt.TextStyleOpts;
 // TODO: scrolling menu when the menu is too long to fit on screen
 
 pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
+pub const MenuCallbackType = @import("menu_item.zig").MenuItemCallbackType;
 
-// TODO: a way to quick confirm, so you don't have to scroll to the confirm item
-pub const Menu = struct {
+pub const Menu = extern struct {
     const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{
         rto.ToggleShadow,
     }) catch "";
@@ -35,10 +35,15 @@ pub const Menu = struct {
     idx: i32 = 0,
     wrap: bool = true,
     title: [*:0]const u8,
-    items: []const MenuItem,
-    max: i32,
-    //confirm_fn: ?*fn () void = null,
-    confirm_key: ?InputGetFnType = null,
+    items: extern struct {
+        it: [*]const MenuItem,
+        len: i32,
+    },
+    inputs: extern struct {
+        cb: ?[*]const InputGetFnType = null,
+        len: i32 = 0,
+    } = .{},
+    callback: ?MenuCallbackType = null,
     w: i16 = 320,
     x: i16 = 320,
     y: i16 = 128,
@@ -58,12 +63,16 @@ pub const Menu = struct {
 
     pub fn Update(self: *Menu) void {
         self.y_prev = self.idx;
-        self.idx = self.y_scroll.UpdateEx(self.idx, self.max, self.wrap);
+        self.idx = self.y_scroll.UpdateEx(self.idx, self.items.len, self.wrap);
         if (self.idx != self.y_prev)
             rf.swrSound_PlaySoundMacro(88);
+        if (self.callback) |cb| {
+            if (cb(self))
+                rf.swrSound_PlaySoundMacro(88);
+        }
 
         if (self.idx < self.items.len) {
-            var item: *MenuItem = @constCast(&self.items[@intCast(self.idx)]);
+            var item: *MenuItem = @constCast(&self.items.it[@intCast(self.idx)]);
             if (item.value) |_| {
                 self.x_prev = item.rval();
                 item.rset(self.x_scroll.UpdateEx(item.rval(), item.rmax(), item.wrap));
@@ -77,7 +86,8 @@ pub const Menu = struct {
         }
 
         var last_real: u32 = 0;
-        for (self.items, 0..) |item, i| {
+        for (0..@intCast(self.items.len)) |i| {
+            const item = self.items.it[i];
             if (item.value != null or item.callback != null)
                 last_real = i;
             if (item.value == null and item.callback == null and self.idx == i) {
@@ -103,7 +113,8 @@ pub const Menu = struct {
 
         var hl_s: []const u8 = undefined;
         var hl_c: ?u32 = undefined;
-        for (self.items, 0..) |item, i| {
+        for (0..@intCast(self.items.len)) |i| {
+            const item = self.items.it[i];
             hl_s = if (self.idx == i) style_item_on else style_item_off;
             hl_c = if (self.idx == i) 0xFFFFFFFF else null;
             y += item.padding.t;

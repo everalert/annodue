@@ -18,13 +18,13 @@ const rto = rt.TextStyleOpts;
 
 pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) bool;
 
-pub const MenuItem = struct {
+pub const MenuItem = extern struct {
     value: ?*i32 = null, // if null, item will be skipped when scrolling through menu
-    label: ?[]const u8 = null,
-    options: ?[]const []const u8 = null,
+    label: ?[*:0]const u8 = null,
+    options: ?[*]const [*:0]const u8 = null,
     min: i32 = 0,
     max: i32,
-    padding: struct {
+    padding: extern struct {
         t: i16 = 0,
         b: i16 = 0,
         l: i16 = 0,
@@ -47,9 +47,11 @@ pub const MenuItem = struct {
     }
 };
 
-const menu_item_toggle_opts = [_][]const u8{ "Off", "On" };
+const menu_item_toggle_opts = [_][*:0]const u8{ "Off", "On" };
 
-pub inline fn MenuItemHeader(label: []const u8) MenuItem {
+pub inline fn MenuItemHeader(
+    label: [*:0]const u8,
+) MenuItem {
     return .{
         .label = label,
         .padding = .{
@@ -69,7 +71,10 @@ pub inline fn MenuItemSpacer() MenuItem {
     };
 }
 
-pub inline fn MenuItemButton(label: []const u8, callback: MenuItemCallbackType) MenuItem {
+pub inline fn MenuItemButton(
+    label: [*:0]const u8,
+    callback: MenuItemCallbackType,
+) MenuItem {
     return .{
         .label = label,
         .callback = callback,
@@ -79,7 +84,7 @@ pub inline fn MenuItemButton(label: []const u8, callback: MenuItemCallbackType) 
 
 pub inline fn MenuItemToggle(
     value: *i32,
-    label: []const u8,
+    label: [*:0]const u8,
 ) MenuItem {
     return .{
         .value = value,
@@ -91,7 +96,7 @@ pub inline fn MenuItemToggle(
 
 pub inline fn MenuItemRange(
     value: *i32,
-    label: []const u8,
+    label: [*:0]const u8,
     min: i32,
     max: i32,
     wrap: bool,
@@ -107,14 +112,14 @@ pub inline fn MenuItemRange(
 
 pub inline fn MenuItemList(
     value: *i32,
-    label: []const u8,
-    options: []const []const u8,
+    label: [*:0]const u8,
+    options: []const [*:0]const u8,
     wrap: bool,
 ) MenuItem {
     return .{
         .value = value,
         .label = label,
-        .options = options,
+        .options = @ptrCast(&options[0]),
         .max = options.len,
         .wrap = wrap,
     };

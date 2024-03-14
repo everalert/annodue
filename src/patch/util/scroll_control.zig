@@ -14,7 +14,7 @@ const rf = r.functions;
 
 pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 
-pub const ScrollControl = struct {
+pub const ScrollControl = extern struct {
     scroll: f32 = 0,
     scroll_buf: f32 = 0,
     scroll_time: f32, // time until max scroll speed

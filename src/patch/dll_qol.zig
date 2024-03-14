@@ -11,6 +11,7 @@ const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const timing = @import("util/timing.zig");
 const Menu = @import("util/menu.zig").Menu;
+const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const mi = @import("util/menu_item.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
@@ -122,20 +123,20 @@ fn RenderRaceResultHeader(i: u8, comptime fmt: []const u8, args: anytype) void {
 
 const s_stat = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultStat(i: u8, label: []const u8, comptime value_fmt: []const u8, value_args: anytype) void {
+fn RenderRaceResultStat(i: u8, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
     rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch {};
     rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch {};
 }
 
-fn RenderRaceResultStatU(i: u8, label: []const u8, value: u32) void {
+fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
     RenderRaceResultStat(i, label, "{d: <7}", .{value});
 }
 
-fn RenderRaceResultStatF(i: u8, label: []const u8, value: f32) void {
+fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
     RenderRaceResultStat(i, label, "{d:4.3}", .{value});
 }
 
-fn RenderRaceResultStatTime(i: u8, label: []const u8, time: f32) void {
+fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
     const t = timing.RaceTimeFromFloat(time);
     RenderRaceResultStat(i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
@@ -162,20 +163,26 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // is always the same as a normal pause
 // TODO: add options/differentiation for tournament mode races, and also maybe
 // set the global 'in tournament mode' accordingly
+
+const QuickRaceMenuInput = extern struct {
+    key: w32kb.VIRTUAL_KEY,
+    state: st.ActiveState = undefined,
+};
+
 const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
     var menu_active: bool = false;
     var initialized: bool = false;
-    var gv: *GlobalFn = undefined;
+    var gv: *GlobalFn = undefined; // FIXME: remove
 
     var FpsTimer: timing.TimeSpinlock = .{};
 
-    const values = struct {
+    const values = extern struct {
         var fps: i32 = 24;
         var vehicle: i32 = 0;
         var track: i32 = 0;
-        var up_lv: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
-        var up_hp: [7]i32 = .{ 0, 0, 0, 0, 0, 0, 0 };
+        var up_lv = [_]i32{0} ** 7;
+        var up_hp = [_]i32{0} ** 7;
         var mirror: i32 = 0; // hang
         var laps: i32 = 1; // hang, 1-5
         var racers: i32 = 1; // 0x50C558, 1-12 normally, up to 20 without crash?
@@ -183,50 +190,53 @@ const QuickRaceMenu = extern struct {
         //var winnings_split: i32 = 1; // hang
     };
 
-    var input_confirm_state: st.ActiveState = undefined;
-    var input_x_dec_state: st.ActiveState = undefined;
-    var input_x_inc_state: st.ActiveState = undefined;
-    var input_y_dec_state: st.ActiveState = undefined;
-    var input_y_inc_state: st.ActiveState = undefined;
-    var input_confirm: w32kb.VIRTUAL_KEY = .SPACE;
-    var input_x_dec: w32kb.VIRTUAL_KEY = .LEFT;
-    var input_x_inc: w32kb.VIRTUAL_KEY = .RIGHT;
-    var input_y_dec: w32kb.VIRTUAL_KEY = .UP;
-    var input_y_inc: w32kb.VIRTUAL_KEY = .DOWN;
-    fn get_input_confirm(i: st.ActiveState) callconv(.C) bool {
-        return input_confirm_state == i;
+    var inputs = [_]QuickRaceMenuInput{
+        .{ .key = .UP },
+        .{ .key = .DOWN },
+        .{ .key = .LEFT },
+        .{ .key = .RIGHT },
+        .{ .key = .SPACE }, // confirm
+        .{ .key = .RETURN }, // quick confirm
+        .{ .key = .HOME }, // NU
+        .{ .key = .END }, // MU
+    };
+
+    fn get_input(comptime input: *QuickRaceMenuInput) InputGetFnType {
+        const s = struct {
+            fn gi(i: st.ActiveState) callconv(.C) bool {
+                return input.state == i;
+            }
+        };
+        return &s.gi;
     }
-    fn get_input_x_dec(i: st.ActiveState) callconv(.C) bool {
-        return input_x_dec_state == i;
-    }
-    fn get_input_x_inc(i: st.ActiveState) callconv(.C) bool {
-        return input_x_inc_state == i;
-    }
-    fn get_input_y_dec(i: st.ActiveState) callconv(.C) bool {
-        return input_y_dec_state == i;
-    }
-    fn get_input_y_inc(i: st.ActiveState) callconv(.C) bool {
-        return input_y_inc_state == i;
+
+    inline fn update_input() void {
+        for (&inputs) |*i| i.state = gv.InputGetKbRaw(i.key);
     }
 
     var data: Menu = .{
         .title = "Quick Race",
-        //.confirm_fn = @constCast(&load_race),
-        .confirm_key = get_input_confirm,
-        .max = QuickRaceMenuItems.len,
-        .x_scroll = .{
-            .scroll_time = 0.75,
-            .scroll_units = 18,
-            .input_dec = get_input_x_dec,
-            .input_inc = get_input_x_inc,
+        .items = .{ .it = @ptrCast(&QuickRaceMenuItems), .len = QuickRaceMenuItems.len },
+        .inputs = .{
+            .cb = &[_]InputGetFnType{
+                get_input(&inputs[4]), get_input(&inputs[5]),
+                get_input(&inputs[6]), get_input(&inputs[7]),
+            },
+            .len = 3,
         },
+        .callback = QuickRaceCallback,
         .y_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
-            .input_dec = get_input_y_dec,
-            .input_inc = get_input_y_inc,
+            .input_dec = get_input(&inputs[0]),
+            .input_inc = get_input(&inputs[1]),
         },
-        .items = &QuickRaceMenuItems,
+        .x_scroll = .{
+            .scroll_time = 0.75,
+            .scroll_units = 18,
+            .input_dec = get_input(&inputs[2]),
+            .input_inc = get_input(&inputs[3]),
+        },
     };
 
     fn load_race() void {
@@ -296,36 +306,6 @@ const QuickRaceMenu = extern struct {
     }
 };
 
-fn QuickRaceSetNoUpgrades(m: *Menu) callconv(.C) bool {
-    if (m.confirm_key) |ck| {
-        if (ck(.JustOn)) {
-            QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
-            return true;
-        }
-    }
-    return false;
-}
-
-fn QuickRaceSetMaxUpgrades(m: *Menu) callconv(.C) bool {
-    if (m.confirm_key) |ck| {
-        if (ck(.JustOn)) {
-            QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
-            return true;
-        }
-    }
-    return false;
-}
-
-fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
-    if (m.confirm_key) |ck| {
-        if (ck(.JustOn)) {
-            QuickRaceMenu.load_race();
-            return true;
-        }
-    }
-    return false;
-}
-
 const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
     mi.MenuItemSpacer(),
@@ -344,14 +324,42 @@ const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
     mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
     mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),
-    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][]const u8{ "Slow", "Average", "Fast" }, true),
+    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true),
     //mi.MenuItemList(&QuickRaceMenu.values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
-    mi.MenuItemSpacer(),
-    mi.MenuItemButton("No Upgrades", &QuickRaceSetNoUpgrades),
-    mi.MenuItemButton("Max Upgrades", &QuickRaceSetMaxUpgrades),
     mi.MenuItemSpacer(),
     mi.MenuItemButton("Race!", &QuickRaceConfirm),
 };
+
+fn QuickRaceCallback(m: *Menu) callconv(.C) bool {
+    var result = false;
+    if (m.inputs.cb) |cb| {
+        // set all to NU
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
+            result = true;
+        }
+        // set all to MU
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
+            result = true;
+        }
+        // confirm from anywhere
+        if (cb[1](.JustOn)) {
+            QuickRaceMenu.load_race();
+            return false;
+        }
+    }
+    return result;
+}
+
+fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        if (cb[0](.JustOn)) {
+            QuickRaceMenu.load_race();
+        }
+    }
+    return false;
+}
 
 // HOUSEKEEPING
 
@@ -401,13 +409,10 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 // HOOKS
 
 export fn InputUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+    _ = gv;
     _ = initialized;
     _ = gs;
-    QuickRaceMenu.input_confirm_state = gv.InputGetKbRaw(QuickRaceMenu.input_confirm);
-    QuickRaceMenu.input_x_dec_state = gv.InputGetKbRaw(QuickRaceMenu.input_x_dec);
-    QuickRaceMenu.input_x_inc_state = gv.InputGetKbRaw(QuickRaceMenu.input_x_inc);
-    QuickRaceMenu.input_y_dec_state = gv.InputGetKbRaw(QuickRaceMenu.input_y_dec);
-    QuickRaceMenu.input_y_inc_state = gv.InputGetKbRaw(QuickRaceMenu.input_y_inc);
+    QuickRaceMenu.update_input();
 }
 
 export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {

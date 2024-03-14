@@ -5,8 +5,8 @@ const win32 = @import("zigwin32");
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const global = @import("global.zig");
-const GlobalState = global.GlobalState;
-const GlobalFn = global.GlobalFn;
+const GlobalSt = global.GlobalState;
+const GlobalFn = global.GlobalFunction;
 
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
@@ -88,9 +88,8 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 }
 
-pub fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+pub fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     defer state.manager.deinit();
     defer state.prac.deinit();

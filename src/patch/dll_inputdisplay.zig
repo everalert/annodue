@@ -3,8 +3,8 @@ pub const Self = @This();
 const std = @import("std");
 const m = std.math;
 
-const GlobalState = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFn;
+const GlobalSt = @import("global.zig").GlobalState;
+const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const dbg = @import("util/debug.zig");
@@ -307,40 +307,35 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     // if re-initialized during race
     if (gs.in_race.on() and !gs.player.in_race_results.on()) {
         InputDisplay.Init();
     }
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     InputDisplay.Deinit();
 }
 
 // HOOK FUNCTIONS
 
-export fn InitRaceQuadsA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn InitRaceQuadsA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     InputDisplay.Init();
 }
 
-export fn InputUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn InputUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     if (gs.in_race.on()) {
         if (!gs.player.in_race_results.on()) {
             InputDisplay.ReadInputs();

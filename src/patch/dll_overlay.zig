@@ -2,8 +2,8 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalState = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFn;
+const GlobalSt = @import("global.zig").GlobalState;
+const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
@@ -29,21 +29,18 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
 }
 
@@ -54,10 +51,9 @@ const style_heat_up = rt.MakeTextHeadStyle(.Small, false, .Red, .Right, .{rto.To
 const style_heat_dn = rt.MakeTextHeadStyle(.Small, false, .Blue, .Right, .{rto.ToggleShadow}) catch "";
 const style_laptime = rt.MakeTextHeadStyle(.Unk2, true, null, null, .{rto.ToggleShadow}) catch "";
 
-export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
-    if (!gv.SettingGetB("practice", "practice_tool_enable").? or
-        !gv.SettingGetB("practice", "overlay_enable").?) return;
+export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (!gf.SettingGetB("practice", "practice_tool_enable").? or
+        !gf.SettingGetB("practice", "overlay_enable").?) return;
 
     if (gs.in_race.on()) {
         const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);

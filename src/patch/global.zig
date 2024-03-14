@@ -58,7 +58,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 13;
+pub const PLUGIN_VERSION = 14;
 
 // STATE
 
@@ -152,7 +152,7 @@ pub var GLOBAL_STATE: GlobalState = .{};
 
 pub const GLOBAL_FUNCTION_VERSION = 12;
 
-pub const GlobalFn = extern struct {
+pub const GlobalFunction = extern struct {
     // Settings
     SettingGetB: *const @TypeOf(settings.get_bool) = &settings.get_bool,
     SettingGetI: *const @TypeOf(settings.get_i32) = &settings.get_i32,
@@ -172,7 +172,7 @@ pub const GlobalFn = extern struct {
     GameFreezeIsFrozen: *const @TypeOf(freeze.Freeze.is_frozen) = &freeze.Freeze.is_frozen,
 };
 
-pub var GLOBAL_FUNCTION: GlobalFn = .{};
+pub var GLOBAL_FUNCTION: GlobalFunction = .{};
 
 // UTIL
 
@@ -202,15 +202,13 @@ pub fn init() void {
 
 // HOOK CALLS
 
-pub fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
-    _ = gv;
+pub fn OnInitLate(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    _ = gf;
     gs.init_late_passed = true;
 }
 
-pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    _ = gf;
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
     if (gs.in_race == .JustOn) gs.player_reset();
     if (gs.in_race.on()) gs.player_update();
@@ -219,9 +217,8 @@ pub fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) ca
         gs.practice_mode = !gs.practice_mode;
 }
 
-pub fn TimerUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+pub fn TimerUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    _ = gf;
     gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
     gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
     const fps_res: f32 = 1 / gs.dt_f * 2;
@@ -230,9 +227,8 @@ pub fn TimerUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv
     gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+pub fn MenuTitleScreenB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    _ = gf;
     _ = gs;
     DrawVersionString();
     DrawMenuPracticeModeLabel();
@@ -262,23 +258,20 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) call
     //}
 }
 
-pub fn MenuStartRaceB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+pub fn MenuStartRaceB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    _ = gf;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResultsB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+pub fn MenuRaceResultsB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    _ = gf;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrackB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+pub fn MenuTrackB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    _ = gf;
     _ = gs;
     DrawMenuPracticeModeLabel();
 }

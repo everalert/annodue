@@ -2,8 +2,8 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalState = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFn;
+const GlobalSt = @import("global.zig").GlobalState;
+const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
@@ -298,40 +298,37 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
+export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     var off = gs.patch_offset;
-    if (gv.SettingGetB("multiplayer", "patch_fonts").?) {
+    if (gf.SettingGetB("multiplayer", "patch_fonts").?) {
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
         off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
         off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
         off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
         off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
     }
-    //if (gv.SettingGetB("multiplayer", "patch_audio").?) {
+    //if (gf.SettingGetB("multiplayer", "patch_audio").?) {
     //    const sample_rate: u32 = 22050 * 2;
     //    const bits_per_sample: u8 = 16;
     //    const stereo: bool = true;
     //    PatchAudioStreamQuality(sample_rate, bits_per_sample, stereo);
     //}
-    //if (gv.SettingGetB("multiplayer", "patch_tga_loader").?) {
+    //if (gf.SettingGetB("multiplayer", "patch_tga_loader").?) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
-    if (gv.SettingGetB("multiplayer", "patch_trigger_display").?) {
+    if (gf.SettingGetB("multiplayer", "patch_trigger_display").?) {
         off = PatchTriggerDisplay(off);
     }
     gs.patch_offset = off;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
+export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
-    _ = initialized;
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
     crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
@@ -344,13 +341,12 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 
 // HOOKS
 
-export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
+export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    if (gv.SettingGetB("general", "rainbow_enable").?) {
-        const rb_value: bool = gv.SettingGetB("general", "rainbow_value_enable").?;
-        const rb_label: bool = gv.SettingGetB("general", "rainbow_label_enable").?;
-        const rb_speed: bool = gv.SettingGetB("general", "rainbow_speed_enable").?;
+    if (gf.SettingGetB("general", "rainbow_enable").?) {
+        const rb_value: bool = gf.SettingGetB("general", "rainbow_value_enable").?;
+        const rb_label: bool = gf.SettingGetB("general", "rainbow_label_enable").?;
+        const rb_speed: bool = gf.SettingGetB("general", "rainbow_speed_enable").?;
         PatchHudColRotate(rb_value, rb_label, rb_speed);
     }
 }

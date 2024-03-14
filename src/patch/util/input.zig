@@ -13,8 +13,8 @@ const xinput = @import("xinput.zig");
 const st = @import("active_state.zig");
 
 const global = @import("../global.zig");
-const GlobalState = global.GlobalState;
-const GlobalFn = global.GlobalFn;
+const GlobalSt = global.GlobalState;
+const GlobalFn = global.GlobalFunction;
 
 pub const INPUT_DOWN: u8 = 0b01;
 pub const INPUT_NEW: u8 = 0b10;
@@ -39,10 +39,9 @@ const InputState = extern struct {
     var xbox: INPUT_XINPUT = std.mem.zeroInit(INPUT_XINPUT, .{});
 };
 
-pub fn InputUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+pub fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
-    _ = gv;
-    _ = initialized;
     update_xinput();
     update_kb();
     //update_mouse(@ptrCast(gs.hwnd));

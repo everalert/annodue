@@ -2,8 +2,8 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalState = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFn;
+const GlobalSt = @import("global.zig").GlobalState;
+const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
@@ -141,13 +141,12 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
+export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     var off = gs.patch_offset;
-    if (gv.SettingGetB("multiplayer", "multiplayer_mod_enable").?) {
-        if (gv.SettingGetB("multiplayer", "patch_netplay").?) {
-            const r100 = gv.SettingGetB("multiplayer", "netplay_r100").?;
-            const guid = gv.SettingGetB("multiplayer", "netplay_guid").?;
+    if (gf.SettingGetB("multiplayer", "multiplayer_mod_enable").?) {
+        if (gf.SettingGetB("multiplayer", "patch_netplay").?) {
+            const r100 = gf.SettingGetB("multiplayer", "netplay_r100").?;
+            const guid = gf.SettingGetB("multiplayer", "netplay_guid").?;
             const traction: u8 = if (r100) 3 else 5;
             var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
             var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -160,21 +159,19 @@ export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C
     gs.patch_offset = off;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
 }
 
 // HOOKS
 
-//export fn EarlyEngineUpdateAfter(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
+//export fn EarlyEngineUpdateAfter(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 //    _ = gv;
 //    _ = initialized;
 //    _ = gs;

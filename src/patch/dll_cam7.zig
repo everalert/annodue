@@ -10,8 +10,8 @@ const w32wm = w32.ui.windows_and_messaging;
 const POINT = w32.foundation.POINT;
 const RECT = w32.foundation.RECT;
 
-const GlobalState = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFn;
+const GlobalSt = @import("global.zig").GlobalState;
+const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const r = @import("util/racer.zig");
@@ -153,26 +153,26 @@ fn SaveSavedCam() void {
     _ = mem.write(camstate_ref_addr, u32, 31);
 }
 
-fn DoStateNone(gs: *GlobalState, gv: *GlobalFn) CamState {
+fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
     _ = gs;
-    if (gv.InputGetKb(.@"0", .JustOn)) {
+    if (gf.InputGetKb(.@"0", .JustOn)) {
         SaveSavedCam();
         return .FreeCam;
     }
     return .None;
 }
 
-fn DoStateFreeCam(gs: *GlobalState, gv: *GlobalFn) CamState {
-    if (gv.InputGetKb(.@"0", .JustOn)) {
+fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
+    if (gf.InputGetKb(.@"0", .JustOn)) {
         RestoreSavedCam();
         return .None;
     }
 
-    const _a_lx: f32 = gv.InputGetXInputAxis(.StickLX);
-    const _a_ly: f32 = gv.InputGetXInputAxis(.StickLY);
-    const _a_rx: f32 = gv.InputGetXInputAxis(.StickRX);
-    const _a_ry: f32 = gv.InputGetXInputAxis(.StickRY);
-    const _a_t: f32 = (gv.InputGetXInputAxis(.TriggerL) - gv.InputGetXInputAxis(.TriggerR));
+    const _a_lx: f32 = gf.InputGetXInputAxis(.StickLX);
+    const _a_ly: f32 = gf.InputGetXInputAxis(.StickLY);
+    const _a_rx: f32 = gf.InputGetXInputAxis(.StickRX);
+    const _a_ry: f32 = gf.InputGetXInputAxis(.StickRY);
+    const _a_t: f32 = (gf.InputGetXInputAxis(.TriggerL) - gf.InputGetXInputAxis(.TriggerR));
 
     // rotation
 
@@ -218,7 +218,7 @@ fn DoStateFreeCam(gs: *GlobalState, gv: *GlobalFn) CamState {
     return .FreeCam;
 }
 
-fn UpdateState(gs: *GlobalState, gv: *GlobalFn) void {
+fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
     CheckAndResetSavedCam();
     Cam7.cam_state = switch (Cam7.cam_state) {
         .None => DoStateNone(gs, gv),
@@ -302,22 +302,19 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
-    _ = gv;
+export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     rf.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     RestoreSavedCam();
     rf.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
@@ -325,7 +322,6 @@ export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(
 
 // HOOKS
 
-export fn EarlyEngineUpdateA(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
-    UpdateState(gs, gv);
+export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    UpdateState(gs, gf);
 }

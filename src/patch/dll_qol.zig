@@ -5,8 +5,8 @@ const win = std.os.windows;
 const w32 = @import("zigwin32");
 const w32kb = w32.ui.input.keyboard_and_mouse;
 
-const GlobalState = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFn;
+const GlobalSt = @import("global.zig").GlobalState;
+const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
 const timing = @import("util/timing.zig");
@@ -173,7 +173,7 @@ const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
     var menu_active: bool = false;
     var initialized: bool = false;
-    var gv: *GlobalFn = undefined; // FIXME: remove
+    var gf: *GlobalFn = undefined; // FIXME: remove
 
     var FpsTimer: timing.TimeSpinlock = .{};
 
@@ -211,7 +211,7 @@ const QuickRaceMenu = extern struct {
     }
 
     inline fn update_input() void {
-        for (&inputs) |*i| i.state = gv.InputGetKbRaw(i.key);
+        for (&inputs) |*i| i.state = gf.InputGetKbRaw(i.key);
     }
 
     var data: Menu = .{
@@ -279,14 +279,14 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
-        if (!gv.GameFreezeEnable(menu_key)) return;
+        if (!gf.GameFreezeEnable(menu_key)) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
-        if (!gv.GameFreezeDisable(menu_key)) return;
+        if (!gf.GameFreezeDisable(menu_key)) return;
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
         menu_active = false;
@@ -296,9 +296,9 @@ const QuickRaceMenu = extern struct {
         init();
 
         const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (menu_active and gv.InputGetKb(.ESCAPE, .JustOn)) {
+        if (menu_active and gf.InputGetKb(.ESCAPE, .JustOn)) {
             close();
-        } else if (pausestate == 2 and gv.InputGetKb(.ESCAPE, .JustOn)) {
+        } else if (pausestate == 2 and gf.InputGetKb(.ESCAPE, .JustOn)) {
             open();
         }
 
@@ -375,49 +375,44 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
+export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    if (gv.SettingGetB("general", "ms_timer_enable").?)
+    if (gf.SettingGetB("general", "ms_timer_enable").?)
         PatchHudTimerMs();
 
-    QuickRaceMenu.gv = gv;
+    QuickRaceMenu.gf = gf;
 }
 
-export fn OnInitLate(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
+export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
 
     // TODO: look into using in-game default setter, see fn_45BD90
 
-    const def_laps: u32 = gv.SettingGetU("general", "default_laps") orelse 3;
+    const def_laps: u32 = gf.SettingGetU("general", "default_laps") orelse 3;
     if (def_laps >= 1 and def_laps <= 5)
         r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @truncate(def_laps)));
 
-    const def_racers: u32 = gv.SettingGetU("general", "default_racers") orelse 12;
+    const def_racers: u32 = gf.SettingGetU("general", "default_racers") orelse 12;
     if (def_racers >= 1 and def_racers <= 12)
         _ = mem.write(0x50C558, u8, @as(u8, @truncate(def_racers))); // racers
 }
 
-export fn OnDeinit(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     QuickRaceMenu.close();
 }
 
 // HOOKS
 
-export fn InputUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
     QuickRaceMenu.update_input();
 }
 
-export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = gv;
-    _ = initialized;
+export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     // FIXME: run sleep when in the pre-race cutscene/camera swing
     if (gs.in_race.on() and mem.read(rc.ADDR_GUI_STOPPED, u32) == 0)
         QuickRaceMenu.FpsTimer.Sleep();
@@ -425,11 +420,10 @@ export fn TimerUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callc
 
 // FIXME: settings toggles for both of these
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
-export fn EarlyEngineUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
+export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     // Quick Reload
-    if (gs.in_race.on() and gv.InputGetKb(.@"2", .On) and gv.InputGetKb(.ESCAPE, .JustOn)) {
+    if (gs.in_race.on() and gf.InputGetKb(.@"2", .On) and gf.InputGetKb(.ESCAPE, .JustOn)) {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
@@ -440,9 +434,8 @@ export fn EarlyEngineUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
         QuickRaceMenu.update();
 }
 
-export fn TextRenderB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
-    if (!gv.SettingGetB("practice", "practice_tool_enable").?) return;
+export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (!gf.SettingGetB("practice", "practice_tool_enable").?) return;
 
     if (gs.in_race.on()) {
         if (gs.in_race == .JustOn) race.reset();

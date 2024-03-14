@@ -9,9 +9,9 @@ const win = std.os.windows;
 
 const settings = @import("settings.zig");
 const global = @import("global.zig");
-const GlobalState = global.GlobalState;
+const GlobalSt = global.GlobalState;
 const GLOBAL_STATE = &global.GLOBAL_STATE;
-const GlobalFn = global.GlobalFn;
+const GlobalFn = global.GlobalFunction;
 const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
@@ -39,7 +39,6 @@ const rf = @import("util/racer_fn.zig");
 
 // OKOKOKOKOK
 
-// TODO: remove Initialized, or make it prove its worth
 const Plugin = plugin: {
     const stdf = .{
         .{ "Handle", ?win.HINSTANCE },
@@ -82,7 +81,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginName, .PluginVersion => ?*const fn () callconv(.C) [*:0]const u8,
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
-        else => ?*const fn (*GlobalState, *GlobalFn, bool) callconv(.C) void,
+        else => ?*const fn (*GlobalSt, *GlobalFn) callconv(.C) void,
     };
 }
 
@@ -138,9 +137,9 @@ fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
         fn callback() void {
             for (PluginState.core.items) |p|
-                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION, true);
+                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
             for (PluginState.plugin.items) |p|
-                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION, true);
+                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
         }
     };
     return &c.callback;
@@ -187,7 +186,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     // do we need to unload anything
     if (p.Handle) |h| {
-        p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
+        p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
         _ = w32ll.FreeLibrary(h);
     }
 
@@ -218,8 +217,8 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
         return false;
     }
 
-    p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
-    if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION, false);
+    p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+    if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION);
     p.Initialized = true;
     return true;
 }
@@ -300,9 +299,8 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     return off;
 }
 
-pub fn GameLoopB(gs: *GlobalState, gv: *GlobalFn, initialized: bool) callconv(.C) void {
-    _ = initialized;
-    _ = gv;
+pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
         for (PluginState.plugin.items, 0..) |*p, i| {
             const len = for (p.Filename, 0..) |c, j| {

@@ -58,7 +58,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 12;
+pub const PLUGIN_VERSION = 13;
 
 // STATE
 
@@ -150,7 +150,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_FUNCTION_VERSION = 11;
+pub const GLOBAL_FUNCTION_VERSION = 12;
 
 pub const GlobalFn = extern struct {
     // Settings
@@ -160,10 +160,6 @@ pub const GlobalFn = extern struct {
     SettingGetF: *const @TypeOf(settings.get_f32) = &settings.get_f32,
     // Input
     InputGetKb: *const @TypeOf(input.get_kb) = &input.get_kb,
-    InputGetKbDown: *const @TypeOf(input.get_kb_down) = &input.get_kb_down,
-    InputGetKbUp: *const @TypeOf(input.get_kb_up) = &input.get_kb_up,
-    InputGetKbPressed: *const @TypeOf(input.get_kb_pressed) = &input.get_kb_pressed,
-    InputGetKbReleased: *const @TypeOf(input.get_kb_released) = &input.get_kb_released,
     InputGetKbRaw: *const @TypeOf(input.get_kb_raw) = &input.get_kb_raw,
     //InputGetMouse: *const @TypeOf(input.get_mouse_window) = &input.get_mouse_window,
     //InputGetMouseDelta: *const @TypeOf(input.get_mouse_window_d) = &input.get_mouse_window_d,

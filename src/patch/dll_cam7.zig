@@ -155,7 +155,7 @@ fn SaveSavedCam() void {
 
 fn DoStateNone(gs: *GlobalState, gv: *GlobalFn) CamState {
     _ = gs;
-    if (gv.InputGetKbPressed(.@"0")) {
+    if (gv.InputGetKb(.@"0", .JustOn)) {
         SaveSavedCam();
         return .FreeCam;
     }
@@ -163,7 +163,7 @@ fn DoStateNone(gs: *GlobalState, gv: *GlobalFn) CamState {
 }
 
 fn DoStateFreeCam(gs: *GlobalState, gv: *GlobalFn) CamState {
-    if (gv.InputGetKbPressed(.@"0")) {
+    if (gv.InputGetKb(.@"0", .JustOn)) {
         RestoreSavedCam();
         return .None;
     }

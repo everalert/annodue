@@ -270,10 +270,10 @@ const state = struct {
 fn DoStateRecording(gs: *GlobalState, gv: *GlobalFn) LoadState {
     state.save_compressed(gs, gv);
 
-    if (gv.InputGetKbPressed(.@"1")) {
+    if (gv.InputGetKb(.@"1", .JustOn)) {
         state.load_frame = state.frame - 1;
     }
-    if (gv.InputGetKbPressed(.@"2") and state.frames > 0) {
+    if (gv.InputGetKb(.@"2", .JustOn) and state.frames > 0) {
         state.load_time = state.load_delay + gs.timestamp;
         return .Loading;
     }
@@ -282,7 +282,7 @@ fn DoStateRecording(gs: *GlobalState, gv: *GlobalFn) LoadState {
 }
 
 fn DoStateLoading(gs: *GlobalState, gv: *GlobalFn) LoadState {
-    if (gv.InputGetKbPressed(.@"2")) {
+    if (gv.InputGetKb(.@"2", .JustOn)) {
         state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
         state.frame_total = state.frame;
         return .Scrubbing;
@@ -295,10 +295,10 @@ fn DoStateLoading(gs: *GlobalState, gv: *GlobalFn) LoadState {
 }
 
 fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalFn) LoadState {
-    if (gv.InputGetKbPressed(.@"1")) {
+    if (gv.InputGetKb(.@"1", .JustOn)) {
         state.load_frame = state.frame - 1;
     }
-    if (gv.InputGetKbPressed(.@"2")) {
+    if (gv.InputGetKb(.@"2", .JustOn)) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
         state.load_time = state.load_delay + gs.timestamp;
         return .ScrubExiting;
@@ -317,7 +317,7 @@ fn DoStateScrubbing(gs: *GlobalState, gv: *GlobalFn) LoadState {
 fn DoStateScrubExiting(gs: *GlobalState, gv: *GlobalFn) LoadState {
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
 
-    if (gv.InputGetKbPressed(.@"1")) {
+    if (gv.InputGetKb(.@"1", .JustOn)) {
         state.load_frame = state.frame - 1;
     }
 

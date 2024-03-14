@@ -296,9 +296,9 @@ const QuickRaceMenu = extern struct {
         init();
 
         const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (menu_active and gv.InputGetKbPressed(.ESCAPE)) {
+        if (menu_active and gv.InputGetKb(.ESCAPE, .JustOn)) {
             close();
-        } else if (pausestate == 2 and gv.InputGetKbPressed(.ESCAPE)) {
+        } else if (pausestate == 2 and gv.InputGetKb(.ESCAPE, .JustOn)) {
             open();
         }
 
@@ -429,7 +429,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalState, gv: *GlobalFn, initialized: bool)
     _ = initialized;
 
     // Quick Reload
-    if (gs.in_race.on() and gv.InputGetKbDown(.@"2") and gv.InputGetKbPressed(.ESCAPE)) {
+    if (gs.in_race.on() and gv.InputGetKb(.@"2", .On) and gv.InputGetKb(.ESCAPE, .JustOn)) {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);

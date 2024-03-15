@@ -1,5 +1,7 @@
 pub const Self = @This();
 
+// FIXME: convert ADDR naming to postfix
+
 // Window
 
 pub const ADDR_HWND: usize = 0x52EE70;
@@ -38,6 +40,8 @@ pub fn EntitySize(entity: ENTITY) usize {
     return ENTITY_SIZE[@intFromEnum(entity)];
 }
 
+pub const ENTITY_TEST_PLAYER_TEST_ENTITY_PTR_ADDR: usize = 0x4D78A8;
+
 // Menu / 'Hang'
 
 pub const ADDR_DRAW_MENU_JUMPTABLE: usize = 0x457A88;
@@ -45,7 +49,8 @@ pub const ADDR_DRAW_MENU_JUMPTABLE_SCENE_3: usize = 0x457AD4;
 
 // Race Data (participant metadata)
 
-pub const ADDR_RACE_DATA: usize = 0x4D78A4;
+pub const RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR: usize = 0x4D78A4;
+pub const ADDR_RACE_DATA: usize = 0x4D78A4; // FIXME: change to RACE_DATA_ARRAY_ADDR = 0xE29BC0; confirm static
 pub const RACE_DATA_SIZE: usize = 0x88;
 
 // Input

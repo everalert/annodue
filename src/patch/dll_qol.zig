@@ -412,9 +412,12 @@ export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gs;
     _ = gf;
-    // FIXME: run sleep when in the pre-race cutscene/camera swing
-    if (gs.in_race.on() and mem.read(rc.ADDR_GUI_STOPPED, u32) == 0)
+    // only not nullptr if in race scene
+    const player_ok: bool = mem.read(rc.ENTITY_TEST_PLAYER_TEST_ENTITY_PTR_ADDR, u32) != 0;
+    const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
+    if (player_ok and gui_on)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 

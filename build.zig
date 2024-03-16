@@ -93,6 +93,7 @@ pub fn build(b: *std.Build) void {
         "developer",
         "inputdisplay",
         "cam7",
+        "toast",
     };
 
     for (plugin_names) |name| {

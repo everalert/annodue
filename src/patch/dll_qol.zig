@@ -173,7 +173,8 @@ const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
     var menu_active: bool = false;
     var initialized: bool = false;
-    var gf: *GlobalFn = undefined; // FIXME: remove
+    // TODO: figure out if this can be removed, currently blocked by quick race menu callbacks
+    var gf: *GlobalFn = undefined;
 
     var FpsTimer: timing.TimeSpinlock = .{};
 

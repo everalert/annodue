@@ -24,6 +24,7 @@ const x86 = @import("util/x86.zig");
 const PLUGIN_NAME: [*:0]const u8 = "Cam7";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
+// FIXME: map visuals not updating when starting freecam while the game is pause-frozen
 // FIXME: find a good hook spot where the game is naturally updating the camera
 // so that the pause stuff is handled for us
 // FIXME: cam seems to not always correct itself upright when switching?

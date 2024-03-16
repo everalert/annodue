@@ -9,6 +9,7 @@ const f = functions;
 const t = text;
 
 // RACE DATA STRUCT
+// FIXME: differentiate between player RaceData and RaceData array indexed reads
 
 pub fn DerefRaceData(offset: usize) usize {
     return mem.deref(&.{

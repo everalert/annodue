@@ -13,6 +13,8 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
+// FIXME: refactor and merge with core
+
 // PRACTICE MODE VISUALIZATION
 
 const mode_vis = struct {

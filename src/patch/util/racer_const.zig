@@ -114,7 +114,7 @@ pub const TEXT_COLOR_PRESET = [10]u32{
     0x96FF96, // (green)
     0xFF6450, // (red)
     0xBC865E, // (brown)
-    0x6E6E80, // (indigo-ish)
+    0x6E6E80, // (gray)
     0xFFA7D1, // (pink)
     0x985EFF, // (purple)
 };

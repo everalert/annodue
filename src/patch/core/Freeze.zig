@@ -8,8 +8,6 @@ const rto = rt.TextStyleOpts;
 
 const mem = @import("../util/memory.zig");
 
-// FIXME: also probably need to start thinking about making a distinction
-// between global state and game manipulation functions
 // TODO: turn off race HUD when freezing
 
 pub const Freeze = extern struct {

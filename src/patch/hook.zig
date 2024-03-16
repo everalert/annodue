@@ -3,10 +3,6 @@ const Self = @This();
 const std = @import("std");
 const win = std.os.windows;
 
-// FIXME: move most of these out
-// NOTE: most of the following should be passed into the plugins by reference,
-// not hardcoded into the actual hooking stuff
-
 const settings = @import("settings.zig");
 const global = @import("global.zig");
 const GlobalSt = global.GlobalState;
@@ -30,7 +26,7 @@ const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
-// FIXME: figure out exactly where the patch gets executed on load (i.e. where
+// TODO: figure out exactly where the patch gets executed on load (i.e. where
 // the 'early init' happens), for documentation purposes
 
 // FIXME: hooking (settings?) deinit causes racer process to never end, but only
@@ -234,6 +230,8 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     var p: *Plugin = undefined;
 
     // loading core
+    // TODO: system to handle adding these automatically
+    // TODO: hot-reloading core
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});

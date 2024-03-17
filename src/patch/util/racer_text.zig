@@ -61,11 +61,11 @@ pub const ColorRGB = enum(u32) {
     Pink = 0xFFA7D1,
     Purple = 0x985EFF,
 
-    fn rgba(self: *ColorRGB, a: u8) u32 {
-        return (self.* << 8) | a;
+    pub fn rgba(self: *const ColorRGB, a: u8) u32 {
+        return (@intFromEnum(self.*) << 8) | a;
     }
 
-    fn get(color: Color) ColorRGB {
+    pub fn get(color: Color) ColorRGB {
         return std.enums.values(ColorRGB)[@intFromEnum(color)];
     }
 };

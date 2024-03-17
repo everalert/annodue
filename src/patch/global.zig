@@ -7,6 +7,7 @@ const settings = @import("settings.zig");
 const s = settings.state;
 
 const freeze = @import("core/Freeze.zig");
+const toast = @import("core/Toast.zig");
 const st = @import("util/active_state.zig");
 const xinput = @import("util/xinput.zig");
 const dbg = @import("util/debug.zig");
@@ -58,7 +59,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 14;
+pub const PLUGIN_VERSION = 15;
 
 // STATE
 
@@ -150,7 +151,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_FUNCTION_VERSION = 12;
+pub const GLOBAL_FUNCTION_VERSION = 13;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -170,6 +171,8 @@ pub const GlobalFunction = extern struct {
     GameFreezeEnable: *const @TypeOf(freeze.Freeze.freeze) = &freeze.Freeze.freeze,
     GameFreezeDisable: *const @TypeOf(freeze.Freeze.unfreeze) = &freeze.Freeze.unfreeze,
     GameFreezeIsFrozen: *const @TypeOf(freeze.Freeze.is_frozen) = &freeze.Freeze.is_frozen,
+    // Toast
+    ToastNew: *const @TypeOf(toast.ToastSystem.NewToast) = &toast.ToastSystem.NewToast,
 };
 
 pub var GLOBAL_FUNCTION: GlobalFunction = .{};
@@ -208,13 +211,19 @@ pub fn OnInitLate(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
     if (gs.in_race == .JustOn) gs.player_reset();
     if (gs.in_race.on()) gs.player_update();
 
-    if (input.get_kb_pressed(.P) and (!(gs.in_race.on() and gs.practice_mode)))
+    if (!s.prac.get("practice_tool_enable", bool)) return;
+    // FIXME: investigate usage of practice tool ini setting, not consistent across practice refs?
+    // FIXME: move to Practice when practice stuff moved to core
+    // TODO: ability to toggle off practice mode if still in pre-countdown
+    if (input.get_kb_pressed(.P) and (!(gs.in_race.on() and gs.practice_mode))) {
         gs.practice_mode = !gs.practice_mode;
+        const text: [:0]const u8 = if (gs.practice_mode) "Practice Mode Enabled" else "Practice Mode Disabled";
+        _ = gf.ToastNew(text, rt.ColorRGB.Yellow.rgba(0));
+    }
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {

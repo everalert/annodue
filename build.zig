@@ -81,6 +81,8 @@ pub fn build(b: *std.Build) void {
     postbuild_core.addArg("-Fannodue.dll");
 
     // PLUGINS OUTPUT
+    // TODO: separate build step for test plugin only
+    // TODO: reorganize build script to make this more convenient to edit
 
     const plugin_names = &[_][]const u8{
         "test",
@@ -93,7 +95,6 @@ pub fn build(b: *std.Build) void {
         "developer",
         "inputdisplay",
         "cam7",
-        "toast",
     };
 
     for (plugin_names) |name| {

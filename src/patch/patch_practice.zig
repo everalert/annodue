@@ -6,6 +6,8 @@ const s = @import("settings.zig").state;
 const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 
+const fl = @import("util/flash.zig");
+const st = @import("util/active_state.zig");
 const mem = @import("util/memory.zig");
 const r = @import("util/racer.zig");
 const rf = r.functions;
@@ -69,33 +71,32 @@ pub fn InitRaceQuadsA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 pub fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
-    if (!s.prac.get("practice_tool_enable", bool) or !s.prac.get("overlay_enable", bool)) return;
 
-    if (gs.in_race.on()) {
-        const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
-        const total_time: f32 = race_times[5];
+    const f = struct {
+        var start_time: ?u32 = null;
+        var player_ok: st.ActiveState = .Off;
+    };
 
-        // FIXME: move flashing logic out of here
-        // FIXME: make the flashing start when you activate practice mode
-        var f_r: u8 = 0xFF;
-        var f_g: u8 = 0xFF;
-        var f_b: u8 = 0x9C;
-        var f_on: bool = false;
-        if (gs.practice_mode) {
-            const r_range: u8 = 0xFF / 2;
-            const g_range: u8 = 0xFF / 2;
-            const b_range: u8 = 0x9C / 2;
-            if (total_time <= 0) {
-                const timer: f32 = r.ReadEntityValue(.Jdge, 0, 0x0C, f32);
-                const flash_cycle: f32 = std.math.clamp((std.math.cos(timer * std.math.pi * 12) * 0.5 + 0.5) * std.math.pow(f32, timer / 3, 3), 0, 3);
-                f_r -= @intFromFloat(r_range * flash_cycle);
-                f_g -= @intFromFloat(g_range * flash_cycle);
-                f_b -= @intFromFloat(b_range * flash_cycle);
-            }
-            // TODO: move text to eventual toast system
-            //rt.DrawText(640 - 16, 480 - 16, f_rg, f_rg, f_b, 190, "~F0~s~rPractice Mode");
-            f_on = true;
-        }
-        mode_vis.update(f_on, f_r, f_g, f_b);
+    // TODO: add this to global state, fix QOL fps limiter too once it is
+    f.player_ok.update(mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
+        r.ReadRaceDataValue(0x84, u32) != 0);
+
+    if (f.player_ok == .JustOff)
+        f.start_time = null;
+
+    if (!gs.practice_mode) return;
+
+    if (f.player_ok.on()) blk: {
+        mode_vis.update(false, 0, 0, 0);
+        if (f.start_time != null) break :blk;
+
+        f.start_time = gs.timestamp;
+    }
+
+    // TODO: fade-in/out the corner things
+    if (f.start_time) |ts| {
+        const t = @as(f32, @floatFromInt(gs.timestamp - ts)) / 1000;
+        const color: u32 = fl.flash_color(@intFromEnum(rt.ColorRGB.Yellow), t, 3);
+        mode_vis.update(true, @truncate(color >> 16), @truncate(color >> 8), @truncate(color >> 0));
     }
 }

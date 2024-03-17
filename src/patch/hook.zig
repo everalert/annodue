@@ -11,6 +11,7 @@ const GlobalFn = global.GlobalFunction;
 const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
+const toast = @import("core/Toast.zig");
 
 const w32 = @import("zigwin32");
 const w32ll = w32.system.library_loader;
@@ -259,6 +260,10 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     p.MenuStartRaceB = &global.MenuStartRaceB;
     p.MenuRaceResultsB = &global.MenuRaceResultsB;
     p.MenuTrackB = &global.MenuTrackB;
+
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
+    p.EarlyEngineUpdateA = &toast.EarlyEngineUpdateA;
 
     // loading plugins
 

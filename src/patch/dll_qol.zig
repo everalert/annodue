@@ -416,7 +416,8 @@ export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
     _ = gf;
     // only not nullptr if in race scene
-    const player_ok: bool = mem.read(rc.ENTITY_TEST_PLAYER_TEST_ENTITY_PTR_ADDR, u32) != 0;
+    const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
+        r.ReadRaceDataValue(0x84, u32) != 0;
     const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
     if (player_ok and gui_on)
         QuickRaceMenu.FpsTimer.Sleep();

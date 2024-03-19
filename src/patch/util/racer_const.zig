@@ -55,7 +55,11 @@ pub const RACE_DATA_SIZE: usize = 0x88;
 
 // Input
 
+pub const INPUT_COMBINED_ADDR: usize = 0xEC8810;
+pub const INPUT_COMBINED_SIZE: usize = 0x30;
+
 pub const INPUT_AXIS_LENGTH: usize = 4;
+pub const INPUT_AXIS_SIZE: usize = INPUT_AXIS_LENGTH * 4;
 pub const INPUT_AXIS_COMBINED_BASE_ADDR: usize = 0xEC8830;
 pub const INPUT_AXIS_JOYSTICK_BASE_ADDR: usize = 0x4D5E30;
 pub const INPUT_AXIS_MOUSE_BASE_ADDR: usize = 0x4D5E40;
@@ -71,6 +75,7 @@ pub const INPUT_AXIS_STEERING: u8 = @intFromEnum(INPUT_AXIS.Steering);
 pub const INPUT_AXIS_PITCH: u8 = @intFromEnum(INPUT_AXIS.Pitch);
 
 pub const INPUT_BUTTON_LENGTH: usize = 15;
+pub const INPUT_BUTTON_SIZE: usize = 16;
 pub const INPUT_BUTTON_COMBINED_BASE_ADDR: usize = 0xEC8810;
 pub const INPUT_BUTTON_JOYSTICK_BASE_ADDR: usize = 0x4D5E80;
 pub const INPUT_BUTTON_MOUSE_BASE_ADDR: usize = 0x4D5EBC;

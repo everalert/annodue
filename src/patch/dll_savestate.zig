@@ -39,6 +39,7 @@ const rto = rt.TextStyleOpts;
 // up the frame history
 // TODO: self-expanding frame memory for infinite recording time; likely need to split
 // the memory allocation for this
+// FIXME: stop recording when quitting, pausing, etc.
 
 const LoadState = enum(u32) {
     Recording,
@@ -54,22 +55,24 @@ const state = struct {
     var frame_total: usize = 0;
     var last_framecount: u32 = 0;
 
-    const off_race: usize = 0;
-    const off_test: usize = rc.RACE_DATA_SIZE;
+    const off_input: usize = 0;
+    const off_race: usize = rc.INPUT_COMBINED_SIZE;
+    const off_test: usize = off_race + rc.RACE_DATA_SIZE;
     const off_hang: usize = off_test + rc.EntitySize(.Test);
     const off_cman: usize = off_hang + rc.EntitySize(.Hang);
+    const off_END: usize = off_cman + rc.EntitySize(.cMan);
 
     const frames: usize = 60 * 60 * 8; // 8min @ 60fps
-    const frame_size: usize = off_cman + rc.EntitySize(.cMan);
-    const header_size: usize = std.math.divCeil(usize, frame_size, 4 * 8) catch unreachable;
+    //const frame_size: usize = off_cman + rc.EntitySize(.cMan);
+    const header_size: usize = std.math.divCeil(usize, off_END, 4 * 8) catch unreachable;
     const header_type: type = std.packed_int_array.PackedIntArray(u1, header_bits);
-    const header_bits: usize = frame_size / 4;
+    const header_bits: usize = off_END / 4;
     const offsets_off: usize = 0;
     const offsets_size: usize = frames * 4;
     const headers_off: usize = offsets_off + offsets_size;
     const headers_size: usize = header_size * frames;
     const stage_off: usize = headers_off + headers_size;
-    const data_off: usize = stage_off + frame_size * 2;
+    const data_off: usize = stage_off + off_END * 2;
 
     const memory_size: usize = 1024 * 1024 * 64; // 64MB
     var memory: []u8 = undefined;
@@ -80,7 +83,7 @@ const state = struct {
     var raw_stage: [*]u8 = undefined;
     var offsets: *[frames]usize = undefined;
     var headers: *[frames]header_type = undefined;
-    var stage: *[2][frame_size / 4]u32 = undefined;
+    var stage: *[2][off_END / 4]u32 = undefined;
     var data: [*]u8 = undefined;
 
     var load_delay: usize = 500; // ms
@@ -152,7 +155,7 @@ const state = struct {
     // FIXME: better new-frame checking that doesn't only account for tabbing out
     // i.e. also when pausing, physics frozen with ingame feature, etc.
     fn saveable(gs: *GlobalSt) bool {
-        const space_ok: bool = memory_end_addr - @intFromPtr(data) - offsets[frame] >= frame_size;
+        const space_ok: bool = memory_end_addr - @intFromPtr(data) - offsets[frame] >= off_END;
         const frames_ok: bool = frame < frames;
         return gs.in_race.on() and space_ok and frames_ok;
     }
@@ -193,7 +196,7 @@ const state = struct {
     }
 
     fn uncompress_frame(index: usize, skip_last: bool) void {
-        @memcpy(raw_stage[0..frame_size], data[0..frame_size]);
+        @memcpy(raw_stage[0..off_END], data[0..off_END]);
 
         set_layer_indexes(index);
         var indexes: usize = layer_index_count - @intFromBool(skip_last);
@@ -224,7 +227,8 @@ const state = struct {
         if (frame > 0) {
             uncompress_frame(frame, true);
 
-            const s1_base = raw_stage + frame_size;
+            const s1_base = raw_stage + off_END;
+            mem.read_bytes(rc.INPUT_COMBINED_ADDR, s1_base + off_input, rc.INPUT_COMBINED_SIZE);
             r.ReadRaceDataValueBytes(0, s1_base + off_race, rc.RACE_DATA_SIZE);
             r.ReadPlayerValueBytes(0, s1_base + off_test, rc.EntitySize(.Test));
             r.ReadEntityValueBytes(.Hang, 0, 0, s1_base + off_hang, rc.EntitySize(.Hang));
@@ -243,7 +247,8 @@ const state = struct {
                 }
             }
         } else {
-            data_size = frame_size;
+            data_size = off_END;
+            mem.read_bytes(rc.INPUT_COMBINED_ADDR, data + off_input, rc.INPUT_COMBINED_SIZE);
             r.ReadRaceDataValueBytes(0, data + off_race, rc.RACE_DATA_SIZE);
             r.ReadPlayerValueBytes(0, data + off_test, rc.EntitySize(.Test));
             r.ReadEntityValueBytes(.Hang, 0, 0, data + off_hang, rc.EntitySize(.Hang));
@@ -257,6 +262,7 @@ const state = struct {
         if (!loadable(gs)) return;
 
         uncompress_frame(index, false);
+        _ = mem.write_bytes(rc.INPUT_COMBINED_ADDR, &raw_stage[off_input], rc.INPUT_COMBINED_SIZE);
         r.WriteRaceDataValueBytes(0, &raw_stage[off_race], rc.RACE_DATA_SIZE);
         r.WritePlayerValueBytes(0, &raw_stage[off_test], rc.EntitySize(.Test));
         r.WriteEntityValueBytes(.Hang, 0, 0, &raw_stage[off_hang], rc.EntitySize(.Hang));

@@ -211,6 +211,8 @@ pub fn OnInitLate(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
+    // TODO: move to identifying in-race mode via player Test entity ptr being set; get rid of gs.in_race.on()s
+    // TODO: enum indicating state of in-race mode (none, pre-race, countdown, racing, post-race)
     gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
     if (gs.in_race == .JustOn) gs.player_reset();
     if (gs.in_race.on()) gs.player_update();

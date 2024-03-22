@@ -54,4 +54,9 @@ pub const Freeze = extern struct {
         frozen = false;
         return true;
     }
+
+    /// @return game currently frozen via api
+    pub fn is_frozen() bool {
+        return frozen or owner != null;
+    }
 };

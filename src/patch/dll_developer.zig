@@ -11,6 +11,8 @@ const rf = @import("util/racer_fn.zig");
 
 const mem = @import("util/memory.zig");
 
+// TODO: arbitrary resource dumping?
+
 // SWE1R-PATCHER STUFF
 
 // FIXME: not crashing for now, but need to address virtualalloc size
@@ -74,7 +76,7 @@ fn DumpTextureTable(offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, 
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "TestPlugin";
+    return "Developer";
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {

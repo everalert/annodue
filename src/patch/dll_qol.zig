@@ -461,6 +461,7 @@ export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 // ...
             }
         } else if (gs.player.in_race_results.on()) {
+            // TODO: make end-race stats disappear when the normal end-race overlay does
             // FIXME: final stat calculation is slightly off, seems to be up to
             // a frame early now (since porting to plugin dlls).
             if (gs.player.in_race_results == .JustOn) {

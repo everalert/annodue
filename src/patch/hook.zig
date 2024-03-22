@@ -94,6 +94,7 @@ const PluginExportFn = enum(u32) {
     OnDeinit,
     //OnEnable,
     //OnDisable,
+    //OnSettingsLoad,
 
     // Hook Functions
     GameLoopB,

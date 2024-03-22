@@ -35,10 +35,8 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 // - option to disable fog entirely
 // - user-selectable fog dist
 // TODO: settings
-// - global enable
 // - control mapping
-// - control axis flipping
-// - future fog stuff
+// - future fog stuff (see above)
 
 const CamState = enum(u32) {
     None,
@@ -156,7 +154,7 @@ fn SaveSavedCam() void {
 
 fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
     _ = gs;
-    if (gf.InputGetKb(.@"0", .JustOn)) {
+    if (gf.InputGetKb(.@"0", .JustOn) and gf.SettingGetB("cam7", "enable").?) {
         SaveSavedCam();
         return .FreeCam;
     }
@@ -171,8 +169,8 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
 
     const _a_lx: f32 = gf.InputGetXInputAxis(.StickLX);
     const _a_ly: f32 = gf.InputGetXInputAxis(.StickLY);
-    const _a_rx: f32 = gf.InputGetXInputAxis(.StickRX);
-    const _a_ry: f32 = gf.InputGetXInputAxis(.StickRY);
+    const _a_rx: f32 = if (gf.SettingGetB("cam7", "flip_look_x").?) -gf.InputGetXInputAxis(.StickRX) else gf.InputGetXInputAxis(.StickRX);
+    const _a_ry: f32 = if (gf.SettingGetB("cam7", "flip_look_y").?) -gf.InputGetXInputAxis(.StickRY) else gf.InputGetXInputAxis(.StickRY);
     const _a_t: f32 = (gf.InputGetXInputAxis(.TriggerL) - gf.InputGetXInputAxis(.TriggerR));
 
     // rotation

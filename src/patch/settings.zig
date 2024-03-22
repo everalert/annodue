@@ -24,6 +24,7 @@ pub const state = struct {
     pub var prac: SettingsGroup = undefined;
     pub var sav: SettingsGroup = undefined;
     pub var mp: SettingsGroup = undefined;
+    pub var cam7: SettingsGroup = undefined;
 };
 
 fn get(group: [*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
@@ -85,6 +86,12 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.mp.add("patch_trigger_display", bool, false); // working
     state.manager.add(&state.mp);
 
+    state.cam7 = SettingsGroup.init(alloc, "cam7");
+    state.cam7.add("enable", bool, false);
+    state.cam7.add("flip_look_x", bool, false);
+    state.cam7.add("flip_look_y", bool, false);
+    state.manager.add(&state.cam7);
+
     state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 }
 
@@ -96,4 +103,5 @@ pub fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     defer state.sav.deinit();
     defer state.gen.deinit();
     defer state.mp.deinit();
+    defer state.cam7.deinit();
 }

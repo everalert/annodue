@@ -21,22 +21,21 @@ pub const SettingsError = error{
 };
 
 pub const SettingsGroup = struct {
-    const Self = @This();
     name: []const u8,
     values: std.StringHashMap(IniValue),
 
-    pub fn init(alloc: std.mem.Allocator, name: []const u8) Self {
+    pub fn init(alloc: std.mem.Allocator, name: []const u8) SettingsGroup {
         return .{
             .values = std.StringHashMap(IniValue).init(alloc),
             .name = name,
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *SettingsGroup) void {
         self.values.deinit();
     }
 
-    pub fn add(self: *Self, key: []const u8, comptime T: type, value: T) void {
+    pub fn add(self: *SettingsGroup, key: []const u8, comptime T: type, value: T) void {
         switch (T) {
             bool => self.values.put(key, .{ .b = value }) catch unreachable,
             i32 => self.values.put(key, .{ .i = value }) catch unreachable,
@@ -46,7 +45,7 @@ pub const SettingsGroup = struct {
         }
     }
 
-    pub fn get(self: *Self, key: []const u8, comptime T: type) T {
+    pub fn get(self: *SettingsGroup, key: []const u8, comptime T: type) T {
         var value = self.values.get(key);
         return switch (T) {
             bool => if (value) |v| v.b else false,
@@ -57,7 +56,7 @@ pub const SettingsGroup = struct {
         };
     }
 
-    pub fn update(self: *Self, key: []const u8, value: []const u8) !void {
+    pub fn update(self: *SettingsGroup, key: []const u8, value: []const u8) !void {
         var kv = self.values.getEntry(key);
         if (kv) |item| {
             return switch (item.value_ptr.*) {
@@ -87,27 +86,26 @@ pub const SettingsGroup = struct {
 };
 
 pub const SettingsManager = struct {
-    const Self = @This();
     global: SettingsGroup,
     groups: std.StringHashMap(*SettingsGroup),
 
-    pub fn init(alloc: std.mem.Allocator) Self {
+    pub fn init(alloc: std.mem.Allocator) SettingsManager {
         return .{
             .global = SettingsGroup.init(alloc, "__SettingsManager_global__"),
             .groups = std.StringHashMap(*SettingsGroup).init(alloc),
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *SettingsManager) void {
         self.groups.deinit();
         self.global.deinit();
     }
 
-    pub fn add(self: *Self, group: *SettingsGroup) void {
+    pub fn add(self: *SettingsManager, group: *SettingsGroup) void {
         self.groups.put(group.name, group) catch unreachable;
     }
 
-    pub fn read_ini(self: *Self, alloc: std.mem.Allocator, filename: []const u8) !void {
+    pub fn read_ini(self: *SettingsManager, alloc: std.mem.Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
 

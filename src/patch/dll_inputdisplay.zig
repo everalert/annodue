@@ -23,6 +23,9 @@ const rto = rt.TextStyleOpts;
 // - global enable
 // - position
 
+const PLUGIN_NAME: [*:0]const u8 = "InputDisplay";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
 // INPUT DISPLAY
 
 const InputIcon = struct {
@@ -35,13 +38,14 @@ const InputIcon = struct {
 };
 
 const InputDisplay = struct {
+    var initialized: bool = false;
     var analog: [rc.INPUT_AXIS_LENGTH]f32 = undefined;
     var digital: [rc.INPUT_BUTTON_LENGTH]u8 = undefined;
     var p_triangle: ?u32 = null;
     var p_square: ?u32 = null;
     var icons: [12]InputIcon = undefined;
-    const x_base: u16 = 420;
-    const y_base: u16 = 432;
+    var x_base: i16 = 420;
+    var y_base: i16 = 432;
     const style_center = rt.MakeTextHeadStyle(.Small, true, null, .Center, .{rto.ToggleShadow}) catch "";
     const style_left = rt.MakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
@@ -82,6 +86,8 @@ const InputDisplay = struct {
         InitIconButton(&icons[2 + rc.INPUT_BUTTON_ROLL_RIGHT], x_base + 20, y_base + 19, 1, 1);
         //InitIconButton(&icons[2 + rc.INPUT_BUTTON_TAUNT], x_base, y_base, 1);
         InitIconButton(&icons[2 + rc.INPUT_BUTTON_REPAIR], x_base + 10, y_base + 19, 1, 1);
+
+        initialized = true;
     }
 
     fn Deinit() void {
@@ -97,6 +103,8 @@ const InputDisplay = struct {
         }
         p_triangle = null;
         p_square = null;
+
+        initialized = false;
     }
 
     fn HideAll() void {
@@ -296,11 +304,11 @@ const InputDisplay = struct {
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "InputDisplay";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.1";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -308,9 +316,14 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+    if (gf.SettingGetI("inputdisplay", "pos_x")) |x| InputDisplay.x_base = @as(i16, @truncate(x));
+    if (gf.SettingGetI("inputdisplay", "pos_y")) |y| InputDisplay.y_base = @as(i16, @truncate(y));
+
     // if re-initialized during race
-    if (gs.in_race.on() and !gs.player.in_race_results.on()) {
+    if (gs.in_race.on() and
+        !gs.player.in_race_results.on() and
+        gf.SettingGetB("inputdisplay", "enable").?)
+    {
         InputDisplay.Init();
     }
 }
@@ -329,19 +342,21 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 // HOOK FUNCTIONS
 
 export fn InitRaceQuadsA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
     _ = gs;
-    InputDisplay.Init();
+    if (gf.SettingGetB("inputdisplay", "enable").?)
+        InputDisplay.Init();
 }
 
 export fn InputUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
-    if (gs.in_race.on()) {
+    if (gs.in_race.on() and InputDisplay.initialized) {
         if (!gs.player.in_race_results.on()) {
             InputDisplay.ReadInputs();
             InputDisplay.UpdateIcons();
         } else {
             InputDisplay.HideAll();
         }
+    } else if (gs.in_race == .JustOff) {
+        InputDisplay.initialized = false;
     }
 }

@@ -25,6 +25,7 @@ pub const state = struct {
     pub var sav: SettingsGroup = undefined;
     pub var mp: SettingsGroup = undefined;
     pub var cam7: SettingsGroup = undefined;
+    pub var inputdisplay: SettingsGroup = undefined;
 };
 
 fn get(group: [*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
@@ -91,6 +92,12 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.cam7.add("flip_look_x", bool, false);
     state.cam7.add("flip_look_y", bool, false);
     state.manager.add(&state.cam7);
+
+    state.inputdisplay = SettingsGroup.init(alloc, "inputdisplay");
+    state.inputdisplay.add("enable", bool, false);
+    state.inputdisplay.add("pos_x", i32, 420);
+    state.inputdisplay.add("pos_y", i32, 432);
+    state.manager.add(&state.inputdisplay);
 
     state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 }

@@ -26,6 +26,7 @@ pub const state = struct {
     pub var mp: SettingsGroup = undefined;
     pub var cam7: SettingsGroup = undefined;
     pub var inputdisplay: SettingsGroup = undefined;
+    pub var qol: SettingsGroup = undefined;
 };
 
 fn get(group: [*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
@@ -98,6 +99,11 @@ pub fn init(alloc: std.mem.Allocator) void {
     state.inputdisplay.add("pos_x", i32, 420);
     state.inputdisplay.add("pos_y", i32, 432);
     state.manager.add(&state.inputdisplay);
+
+    state.qol = SettingsGroup.init(alloc, "qol");
+    state.qol.add("quick_restart_enable", bool, false);
+    state.qol.add("quick_race_menu_enable", bool, false);
+    state.manager.add(&state.qol);
 
     state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
 }

@@ -427,16 +427,24 @@ export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
 export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
-    // Quick Reload
-    if (gs.in_race.on() and gf.InputGetKb(.@"2", .On) and gf.InputGetKb(.ESCAPE, .JustOn)) {
+    // Quick Restart
+    if (gs.in_race.on() and
+        gf.InputGetKb(.@"2", .On) and
+        gf.InputGetKb(.ESCAPE, .JustOn) and
+        gf.SettingGetB("qol", "quick_restart_enable").?)
+    {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
     }
 
     // Quick Race Menu
-    if (gs.in_race.on() and !gs.player.in_race_results.on())
+    if (gs.in_race.on() and
+        !gs.player.in_race_results.on() and
+        gf.SettingGetB("qol", "quick_race_menu_enable").?)
+    {
         QuickRaceMenu.update();
+    }
 }
 
 export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {

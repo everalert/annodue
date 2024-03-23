@@ -16,29 +16,60 @@ const x86 = @import("util/x86.zig");
 // TODO:
 //- general: ?? custom static color as an option for the rainbow stuff?
 
+const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
+const CosmeticState = struct {
+    var rb_enable: bool = false;
+    var rb_value_enable: bool = false;
+    var rb_label_enable: bool = false;
+    var rb_speed_enable: bool = false;
+    var rb_value = crot.RotatingRGB.new(95, 255, 0);
+    var rb_label = crot.RotatingRGB.new(95, 255, 1);
+    var rb_speed = crot.RotatingRGB.new(95, 255, 2);
+};
+
 // COLOR CHANGES
 
 fn PatchHudColRotate(v: bool, l: bool, s: bool) void {
-    const col = struct {
-        var value = crot.RotatingRGB.new(95, 255, 0);
-        var label = crot.RotatingRGB.new(95, 255, 1);
-        var speed = crot.RotatingRGB.new(95, 255, 2);
-    };
-    col.value.update();
-    col.label.update();
-    col.speed.update();
+    CosmeticState.rb_value.update();
+    CosmeticState.rb_label.update();
+    CosmeticState.rb_speed.update();
     if (v) {
-        crot.PatchRgbArgs(0x460E5D, col.value.get());
-        crot.PatchRgbArgs(0x460FB1, col.value.get());
-        crot.PatchRgbArgs(0x461045, col.value.get());
+        crot.PatchRgbArgs(0x460E5D, CosmeticState.rb_value.get());
+        crot.PatchRgbArgs(0x460FB1, CosmeticState.rb_value.get());
+        crot.PatchRgbArgs(0x461045, CosmeticState.rb_value.get());
     }
     if (l) {
-        crot.PatchRgbArgs(0x460E8D, col.label.get());
-        crot.PatchRgbArgs(0x460FE3, col.label.get());
-        crot.PatchRgbArgs(0x461069, col.label.get());
+        crot.PatchRgbArgs(0x460E8D, CosmeticState.rb_label.get());
+        crot.PatchRgbArgs(0x460FE3, CosmeticState.rb_label.get());
+        crot.PatchRgbArgs(0x461069, CosmeticState.rb_label.get());
     }
     if (s) {
-        crot.PatchRgbArgs(0x460A6E, col.speed.get());
+        crot.PatchRgbArgs(0x460A6E, CosmeticState.rb_speed.get());
+    }
+}
+
+fn HandleColorSettings(gf: *GlobalFn) callconv(.C) void {
+    CosmeticState.rb_enable = gf.SettingGetB("general", "rainbow_enable").?;
+
+    CosmeticState.rb_value_enable = gf.SettingGetB("general", "rainbow_value_enable").?;
+    if (!CosmeticState.rb_enable or !CosmeticState.rb_value_enable) {
+        crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
+        crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
+        crot.PatchRgbArgs(0x461045, 0xFFFFFF);
+    }
+
+    CosmeticState.rb_label_enable = gf.SettingGetB("general", "rainbow_label_enable").?;
+    if (!CosmeticState.rb_enable or !CosmeticState.rb_label_enable) {
+        crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
+        crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
+        crot.PatchRgbArgs(0x461069, 0xFFFFFF);
+    }
+
+    CosmeticState.rb_speed_enable = gf.SettingGetB("general", "rainbow_speed_enable").?;
+    if (!CosmeticState.rb_enable or !CosmeticState.rb_speed_enable) {
+        crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
     }
 }
 
@@ -287,11 +318,11 @@ fn PatchTriggerDisplay(memory: usize) usize {
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "Cosmetic";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.1";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -299,6 +330,10 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    HandleColorSettings(gf);
+
+    // TODO: convert to use global allocator once it is part of the GlobalFn interface;
+    // then we can properly deinit it when the plugin unloads or the user setting changes
     var off = gs.patch_offset;
     if (gf.SettingGetB("multiplayer", "patch_fonts").?) {
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
@@ -341,12 +376,19 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    if (gf.SettingGetB("general", "rainbow_enable").?) {
-        const rb_value: bool = gf.SettingGetB("general", "rainbow_value_enable").?;
-        const rb_label: bool = gf.SettingGetB("general", "rainbow_label_enable").?;
-        const rb_speed: bool = gf.SettingGetB("general", "rainbow_speed_enable").?;
-        PatchHudColRotate(rb_value, rb_label, rb_speed);
+    HandleColorSettings(gf);
+}
+
+export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
+    _ = gs;
+    if (CosmeticState.rb_enable) {
+        PatchHudColRotate(
+            CosmeticState.rb_value_enable,
+            CosmeticState.rb_label_enable,
+            CosmeticState.rb_speed_enable,
+        );
     }
 }

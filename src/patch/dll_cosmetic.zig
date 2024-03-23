@@ -38,7 +38,7 @@ fn PatchHudColRotate(v: bool, l: bool, s: bool) void {
         crot.PatchRgbArgs(0x461069, col.label.get());
     }
     if (s) {
-        crot.PatchRgbArgs(0x460A6E, col.value.get());
+        crot.PatchRgbArgs(0x460A6E, col.speed.get());
     }
 }
 

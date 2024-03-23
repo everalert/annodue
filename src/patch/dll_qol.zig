@@ -487,7 +487,8 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (!gf.SettingGetB("practice", "practice_tool_enable").?) return;
+    _ = gf;
+    //if (!gf.SettingGetB("practice", "practice_tool_enable").?) return;
 
     if (gs.in_race.on()) {
         if (gs.in_race == .JustOn) race.reset();

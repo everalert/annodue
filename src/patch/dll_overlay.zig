@@ -15,14 +15,17 @@ const rto = rt.TextStyleOpts;
 const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
 
+const PLUGIN_NAME: [*:0]const u8 = "Overlay";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "Overlay";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.1";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -52,8 +55,9 @@ const style_heat_dn = rt.MakeTextHeadStyle(.Small, false, .Blue, .Right, .{rto.T
 const style_laptime = rt.MakeTextHeadStyle(.Unk2, true, null, null, .{rto.ToggleShadow}) catch "";
 
 export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (!gf.SettingGetB("practice", "practice_tool_enable").? or
-        !gf.SettingGetB("practice", "overlay_enable").?) return;
+    //if (!gf.SettingGetB("practice", "practice_tool_enable").? or
+    //    !gf.SettingGetB("overlay", "enable").?) return;
+    if (!gf.SettingGetB("overlay", "enable").?) return;
 
     if (gs.in_race.on()) {
         const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);

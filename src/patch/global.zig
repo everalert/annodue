@@ -217,8 +217,11 @@ pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) vo
     if (gs.in_race == .JustOn) gs.player_reset();
     if (gs.in_race.on()) gs.player_update();
 
-    if (!s.prac.get("practice_tool_enable", bool)) return;
-    // FIXME: investigate usage of practice tool ini setting, not consistent across practice refs?
+    //if (!s.prac.get("practice_tool_enable", bool)) return;
+    // FIXME: investigate past usage of practice tool ini setting; may need to adjust
+    // some things, primarily to do with lifecycle, because the past setting assumed
+    // it would be on permanently. also, do a pass on everything to integrate/migrate
+    // to global practice_mode.
     // FIXME: move to Practice when practice stuff moved to core
     // TODO: ability to toggle off practice mode if still in pre-countdown
     if (input.get_kb_pressed(.P) and (!(gs.in_race.on() and gs.practice_mode))) {

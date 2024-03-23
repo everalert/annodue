@@ -51,23 +51,23 @@ fn PatchHudColRotate(v: bool, l: bool, s: bool) void {
 }
 
 fn HandleColorSettings(gf: *GlobalFn) callconv(.C) void {
-    CosmeticState.rb_enable = gf.SettingGetB("general", "rainbow_enable").?;
+    CosmeticState.rb_enable = gf.SettingGetB("cosmetic", "rainbow_enable").?;
 
-    CosmeticState.rb_value_enable = gf.SettingGetB("general", "rainbow_value_enable").?;
+    CosmeticState.rb_value_enable = gf.SettingGetB("cosmetic", "rainbow_value_enable").?;
     if (!CosmeticState.rb_enable or !CosmeticState.rb_value_enable) {
         crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
         crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
         crot.PatchRgbArgs(0x461045, 0xFFFFFF);
     }
 
-    CosmeticState.rb_label_enable = gf.SettingGetB("general", "rainbow_label_enable").?;
+    CosmeticState.rb_label_enable = gf.SettingGetB("cosmetic", "rainbow_label_enable").?;
     if (!CosmeticState.rb_enable or !CosmeticState.rb_label_enable) {
         crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
         crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
         crot.PatchRgbArgs(0x461069, 0xFFFFFF);
     }
 
-    CosmeticState.rb_speed_enable = gf.SettingGetB("general", "rainbow_speed_enable").?;
+    CosmeticState.rb_speed_enable = gf.SettingGetB("cosmetic", "rainbow_speed_enable").?;
     if (!CosmeticState.rb_enable or !CosmeticState.rb_speed_enable) {
         crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
     }
@@ -335,23 +335,23 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: convert to use global allocator once it is part of the GlobalFn interface;
     // then we can properly deinit it when the plugin unloads or the user setting changes
     var off = gs.patch_offset;
-    if (gf.SettingGetB("multiplayer", "patch_fonts").?) {
+    if (gf.SettingGetB("cosmetic", "patch_fonts").?) {
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
         off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
         off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
         off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
         off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
     }
-    //if (gf.SettingGetB("multiplayer", "patch_audio").?) {
+    //if (gf.SettingGetB("cosmetic", "patch_audio").?) {
     //    const sample_rate: u32 = 22050 * 2;
     //    const bits_per_sample: u8 = 16;
     //    const stereo: bool = true;
     //    PatchAudioStreamQuality(sample_rate, bits_per_sample, stereo);
     //}
-    //if (gf.SettingGetB("multiplayer", "patch_tga_loader").?) {
+    //if (gf.SettingGetB("cosmetic", "patch_tga_loader").?) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
-    if (gf.SettingGetB("multiplayer", "patch_trigger_display").?) {
+    if (gf.SettingGetB("cosmetic", "patch_trigger_display").?) {
         off = PatchTriggerDisplay(off);
     }
     gs.patch_offset = off;

@@ -12,6 +12,9 @@ const rc = @import("util/racer_const.zig");
 
 const mem = @import("util/memory.zig");
 
+const PLUGIN_NAME: [*:0]const u8 = "GameplayTweak";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
 // DEATHSPEED
 
 fn PatchDeathSpeed(min: f32, drop: f32) void {
@@ -22,11 +25,11 @@ fn PatchDeathSpeed(min: f32, drop: f32) void {
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "GameplayTweak";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.1";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -35,9 +38,10 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    if (gf.SettingGetB("general", "death_speed_mod_enable").?) {
-        const dsm: f32 = gf.SettingGetF("general", "death_speed_min") orelse 325;
-        const dsd: f32 = gf.SettingGetF("general", "death_speed_drop") orelse 140;
+    // TODO: add conditional thing for practice mode toggling
+    if (gf.SettingGetB("gameplay", "death_speed_mod_enable").?) {
+        const dsm: f32 = gf.SettingGetF("gameplay", "death_speed_min") orelse 325;
+        const dsd: f32 = gf.SettingGetF("gameplay", "death_speed_drop") orelse 140;
         PatchDeathSpeed(dsm, dsd);
     }
 }

@@ -11,6 +11,9 @@ const rf = @import("util/racer_fn.zig");
 
 const mem = @import("util/memory.zig");
 
+const PLUGIN_NAME: [*:0]const u8 = "Developer";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
 // TODO: arbitrary resource dumping?
 
 // SWE1R-PATCHER STUFF
@@ -76,11 +79,11 @@ fn DumpTextureTable(offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, 
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "Developer";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.1";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -89,15 +92,14 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    if (gf.SettingGetB("multiplayer", "multiplayer_mod_enable").?) {
-        if (gf.SettingGetB("multiplayer", "fonts_dump").?) {
-            // This is a debug feature to dump the original font textures
-            _ = DumpTextureTable(0x4BF91C, 3, 0, 64, 128, "font0");
-            _ = DumpTextureTable(0x4BF7E4, 3, 0, 64, 128, "font1");
-            _ = DumpTextureTable(0x4BF84C, 3, 0, 64, 128, "font2");
-            _ = DumpTextureTable(0x4BF8B4, 3, 0, 64, 128, "font3");
-            _ = DumpTextureTable(0x4BF984, 3, 0, 64, 128, "font4");
-        }
+    // TODO: make sure it only dumps once, even when hot reloading
+    if (gf.SettingGetB("developer", "fonts_dump").?) {
+        // This is a debug feature to dump the original font textures
+        _ = DumpTextureTable(0x4BF91C, 3, 0, 64, 128, "font0");
+        _ = DumpTextureTable(0x4BF7E4, 3, 0, 64, 128, "font1");
+        _ = DumpTextureTable(0x4BF84C, 3, 0, 64, 128, "font2");
+        _ = DumpTextureTable(0x4BF8B4, 3, 0, 64, 128, "font3");
+        _ = DumpTextureTable(0x4BF984, 3, 0, 64, 128, "font4");
     }
 }
 

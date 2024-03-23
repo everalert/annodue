@@ -28,13 +28,15 @@ pub const SettingsState = struct {
     var last_check: u32 = 0;
     var last_filetime: w32f.FILETIME = undefined;
     pub var manager: SettingsManager = undefined;
-    pub var gen: SettingsGroup = undefined;
-    pub var prac: SettingsGroup = undefined;
-    pub var sav: SettingsGroup = undefined;
-    pub var mp: SettingsGroup = undefined;
+    pub var gameplay: SettingsGroup = undefined;
+    pub var overlay: SettingsGroup = undefined;
+    pub var savestate: SettingsGroup = undefined;
+    pub var multiplayer: SettingsGroup = undefined;
     pub var cam7: SettingsGroup = undefined;
     pub var inputdisplay: SettingsGroup = undefined;
     pub var qol: SettingsGroup = undefined;
+    pub var cosmetic: SettingsGroup = undefined;
+    pub var developer: SettingsGroup = undefined;
 };
 
 fn get(group: [*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
@@ -63,36 +65,31 @@ pub fn init() void {
 
     SettingsState.manager = SettingsManager.init(alloc);
 
-    SettingsState.gen = SettingsGroup.init(alloc, "general");
-    SettingsState.gen.add("death_speed_mod_enable", bool, false);
-    SettingsState.gen.add("death_speed_min", f32, 325);
-    SettingsState.gen.add("death_speed_drop", f32, 140);
-    SettingsState.gen.add("rainbow_enable", bool, false);
-    SettingsState.gen.add("rainbow_value_enable", bool, false);
-    SettingsState.gen.add("rainbow_label_enable", bool, false);
-    SettingsState.gen.add("rainbow_speed_enable", bool, false);
-    SettingsState.manager.add(&SettingsState.gen);
+    SettingsState.gameplay = SettingsGroup.init(alloc, "gameplay");
+    SettingsState.gameplay.add("enable", bool, false);
+    SettingsState.gameplay.add("death_speed_mod_enable", bool, false);
+    SettingsState.gameplay.add("death_speed_min", f32, 325);
+    SettingsState.gameplay.add("death_speed_drop", f32, 140);
+    SettingsState.manager.add(&SettingsState.gameplay);
 
-    SettingsState.prac = SettingsGroup.init(alloc, "practice");
-    SettingsState.prac.add("practice_tool_enable", bool, false);
-    SettingsState.prac.add("overlay_enable", bool, false);
-    SettingsState.manager.add(&SettingsState.prac);
+    SettingsState.overlay = SettingsGroup.init(alloc, "overlay");
+    SettingsState.overlay.add("enable", bool, false);
+    SettingsState.manager.add(&SettingsState.overlay);
 
-    SettingsState.sav = SettingsGroup.init(alloc, "savestate");
-    SettingsState.sav.add("enable", bool, false);
-    SettingsState.sav.add("load_delay", u32, 500);
-    SettingsState.manager.add(&SettingsState.sav);
+    SettingsState.savestate = SettingsGroup.init(alloc, "savestate");
+    SettingsState.savestate.add("enable", bool, false);
+    SettingsState.savestate.add("load_delay", u32, 500);
+    SettingsState.manager.add(&SettingsState.savestate);
 
-    SettingsState.mp = SettingsGroup.init(alloc, "multiplayer");
-    SettingsState.mp.add("enable", bool, false); // working? TODO: check collisions
-    SettingsState.mp.add("patch_guid", bool, false); // working?
-    SettingsState.mp.add("patch_r100", bool, false); // working
-    SettingsState.mp.add("patch_audio", bool, false); // FIXME: crashes
-    SettingsState.mp.add("patch_fonts", bool, false); // working
-    SettingsState.mp.add("fonts_dump", bool, false); // working?
-    SettingsState.mp.add("patch_tga_loader", bool, false); // FIXME: need tga files to verify with
-    SettingsState.mp.add("patch_trigger_display", bool, false); // working
-    SettingsState.manager.add(&SettingsState.mp);
+    SettingsState.multiplayer = SettingsGroup.init(alloc, "multiplayer");
+    SettingsState.multiplayer.add("enable", bool, false); // working? TODO: check collisions
+    SettingsState.multiplayer.add("patch_guid", bool, false); // working?
+    SettingsState.multiplayer.add("patch_r100", bool, false); // working
+    SettingsState.manager.add(&SettingsState.multiplayer);
+
+    SettingsState.developer = SettingsGroup.init(alloc, "developer");
+    SettingsState.developer.add("dump_fonts", bool, false); // working?
+    SettingsState.manager.add(&SettingsState.developer);
 
     SettingsState.cam7 = SettingsGroup.init(alloc, "cam7");
     SettingsState.cam7.add("enable", bool, false);
@@ -114,8 +111,19 @@ pub fn init() void {
     SettingsState.qol.add("default_racers", u32, 12);
     SettingsState.manager.add(&SettingsState.qol);
 
-    // FIXME: remove this, and make all the dependencies do settings-based
-    // initialization via OnSettingsLoad
+    SettingsState.cosmetic = SettingsGroup.init(alloc, "cosmetic");
+    SettingsState.cosmetic.add("rainbow_enable", bool, false);
+    SettingsState.cosmetic.add("rainbow_value_enable", bool, false);
+    SettingsState.cosmetic.add("rainbow_label_enable", bool, false);
+    SettingsState.cosmetic.add("rainbow_speed_enable", bool, false);
+    SettingsState.cosmetic.add("patch_tga_loader", bool, false); // FIXME: need tga files to verify with
+    SettingsState.cosmetic.add("patch_trigger_display", bool, false); // working
+    SettingsState.cosmetic.add("patch_audio", bool, false); // FIXME: crashes
+    SettingsState.cosmetic.add("patch_fonts", bool, false); // working
+    SettingsState.manager.add(&SettingsState.cosmetic);
+
+    // FIXME: MAYBE remove this, and make all the dependencies do settings-based
+    // initialization via OnSettingsLoad (not sure if it would change much about DX)
     _ = LoadSettings();
 }
 
@@ -150,11 +158,14 @@ pub fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
     _ = gs;
     defer SettingsState.manager.deinit();
-    defer SettingsState.prac.deinit();
-    defer SettingsState.sav.deinit();
-    defer SettingsState.gen.deinit();
-    defer SettingsState.mp.deinit();
+
+    defer SettingsState.overlay.deinit();
+    defer SettingsState.savestate.deinit();
+    defer SettingsState.gameplay.deinit();
+    defer SettingsState.multiplayer.deinit();
     defer SettingsState.cam7.deinit();
     defer SettingsState.inputdisplay.deinit();
     defer SettingsState.qol.deinit();
+    defer SettingsState.cosmetic.deinit();
+    defer SettingsState.developer.deinit();
 }

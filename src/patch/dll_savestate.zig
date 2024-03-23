@@ -39,7 +39,11 @@ const rto = rt.TextStyleOpts;
 // up the frame history
 // TODO: self-expanding frame memory for infinite recording time; likely need to split
 // the memory allocation for this
+// TODO: convert all allocations to global allocator once part of GlobalFn
 // FIXME: stop recording when quitting, pausing, etc.
+
+const PLUGIN_NAME: [*:0]const u8 = "Savestate";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const LoadState = enum(u32) {
     Recording,
@@ -49,6 +53,8 @@ const LoadState = enum(u32) {
 };
 
 const state = struct {
+    var savestate_enable: bool = false;
+
     var rec_state: LoadState = .Recording;
     var initialized: bool = false;
     var frame: usize = 0;
@@ -123,6 +129,7 @@ const state = struct {
     var layer_index_count: usize = undefined;
 
     fn init(gf: *GlobalFn) void {
+        _ = gf;
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         const alloc = gpa.allocator();
         memory = alloc.alloc(u8, memory_size) catch unreachable;
@@ -137,8 +144,6 @@ const state = struct {
         offsets = @as(@TypeOf(offsets), @ptrFromInt(memory_addr + offsets_off));
         headers = @as(@TypeOf(headers), @ptrFromInt(memory_addr + headers_off));
         stage = @as(@TypeOf(stage), @ptrFromInt(memory_addr + stage_off));
-
-        load_delay = gf.SettingGetU("savestate", "load_delay") orelse 500;
 
         initialized = true;
     }
@@ -269,6 +274,11 @@ const state = struct {
         r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], rc.EntitySize(.cMan));
         frame = index + 1;
     }
+
+    fn handle_settings(gf: *GlobalFn) callconv(.C) void {
+        savestate_enable = gf.SettingGetB("savestate", "enable") orelse false;
+        load_delay = gf.SettingGetU("savestate", "load_delay") orelse 500;
+    }
 };
 
 // LOADER LOGIC
@@ -343,11 +353,11 @@ fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "Savestate";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.0";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -355,8 +365,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
     _ = gs;
+    state.handle_settings(gf);
 }
 
 export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
@@ -375,14 +385,20 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 //    state.reset();
 //}
 
+export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gs;
+    state.handle_settings(gf);
+}
+
 export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
     state.scrub_input_dec_state = gf.InputGetKbRaw(state.scrub_input_dec);
     state.scrub_input_inc_state = gf.InputGetKbRaw(state.scrub_input_inc);
 }
 
+// TODO: maybe reset state/recording if savestates or practice mode disabled?
 export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (!gf.SettingGetB("savestate", "savestate_enable").?) return;
+    if (!state.savestate_enable) return;
 
     const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
     const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
@@ -392,7 +408,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (!gf.SettingGetB("savestate", "savestate_enable").?) return;
+    _ = gf;
+    if (!state.savestate_enable) return;
 
     //const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
     //const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;

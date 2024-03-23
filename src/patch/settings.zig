@@ -82,7 +82,7 @@ pub fn init() void {
     SettingsState.manager.add(&SettingsState.prac);
 
     SettingsState.sav = SettingsGroup.init(alloc, "savestate");
-    SettingsState.sav.add("savestate_enable", bool, false);
+    SettingsState.sav.add("enable", bool, false);
     SettingsState.sav.add("load_delay", u32, 500);
     SettingsState.manager.add(&SettingsState.sav);
 

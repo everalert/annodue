@@ -71,9 +71,6 @@ pub fn init() void {
     SettingsState.gen.add("rainbow_value_enable", bool, false);
     SettingsState.gen.add("rainbow_label_enable", bool, false);
     SettingsState.gen.add("rainbow_speed_enable", bool, false);
-    SettingsState.gen.add("ms_timer_enable", bool, false);
-    SettingsState.gen.add("default_laps", u32, 3);
-    SettingsState.gen.add("default_racers", u32, 12);
     SettingsState.manager.add(&SettingsState.gen);
 
     SettingsState.prac = SettingsGroup.init(alloc, "practice");
@@ -113,6 +110,9 @@ pub fn init() void {
     SettingsState.qol = SettingsGroup.init(alloc, "qol");
     SettingsState.qol.add("quick_restart_enable", bool, false);
     SettingsState.qol.add("quick_race_menu_enable", bool, false);
+    SettingsState.qol.add("ms_timer_enable", bool, false);
+    SettingsState.qol.add("default_laps", u32, 3);
+    SettingsState.qol.add("default_racers", u32, 12);
     SettingsState.manager.add(&SettingsState.qol);
 
     // FIXME: remove this, and make all the dependencies do settings-based

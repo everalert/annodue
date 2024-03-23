@@ -23,25 +23,62 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
+const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
+const QolState = struct {
+    var quickstart: bool = false;
+    var quickrace: bool = false;
+    var default_racers: u32 = 12;
+    var default_laps: u32 = 3;
+    var ms_timer: bool = false;
+};
+
+fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
+    QolState.quickstart = gf.SettingGetB("qol", "quick_restart_enable") orelse false;
+    QolState.quickrace = gf.SettingGetB("qol", "quick_race_menu_enable") orelse false;
+    QolState.default_racers = gf.SettingGetU("qol", "default_racers") orelse 12;
+    QolState.default_laps = gf.SettingGetU("qol", "default_laps") orelse 3;
+    QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
+
+    if (!QolState.quickrace) QuickRaceMenu.close();
+    PatchHudTimerMs(QolState.ms_timer);
+}
+
 // TODO: figure out wtf to do to manage state through hot-reload etc.
 
 // HUD TIMER MS
 
 const end_race_timer_offset: u8 = 12;
 
-fn PatchHudTimerMs() void {
-    // hudDrawRaceHud
-    _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime3));
-    _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime3));
-    _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime3));
-    // hudDrawRaceResults
-    _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime3));
-    _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime3));
-    _ = mem.write(0x4623D7, u8, comptime end_race_timer_offset + 91); // 91
-    _ = mem.write(0x4623F1, u8, comptime end_race_timer_offset + 105); // 105
-    _ = mem.write(0x46240B, u8, comptime end_race_timer_offset + 115); // 115
-    _ = mem.write(0x46241E, u8, comptime end_race_timer_offset + 125); // 125
-    _ = mem.write(0x46242D, u8, comptime end_race_timer_offset + 135); // 135
+fn PatchHudTimerMs(enable: bool) void {
+    if (enable) {
+        // hudDrawRaceHud
+        _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime3));
+        _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime3));
+        _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime3));
+        // hudDrawRaceResults
+        _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime3));
+        _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime3));
+        _ = mem.write(0x4623D7, u8, comptime end_race_timer_offset + 91); // 91
+        _ = mem.write(0x4623F1, u8, comptime end_race_timer_offset + 105); // 105
+        _ = mem.write(0x46240B, u8, comptime end_race_timer_offset + 115); // 115
+        _ = mem.write(0x46241E, u8, comptime end_race_timer_offset + 125); // 125
+        _ = mem.write(0x46242D, u8, comptime end_race_timer_offset + 135); // 135
+    } else {
+        // hudDrawRaceHud
+        _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime2));
+        _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime2));
+        _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime2));
+        // hudDrawRaceResults
+        _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime2));
+        _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime2));
+        _ = mem.write(0x4623D7, u8, end_race_timer_offset);
+        _ = mem.write(0x4623F1, u8, end_race_timer_offset);
+        _ = mem.write(0x46240B, u8, end_race_timer_offset);
+        _ = mem.write(0x46241E, u8, end_race_timer_offset);
+        _ = mem.write(0x46242D, u8, end_race_timer_offset);
+    }
 }
 
 // PRACTICE/STATISTICAL DATA
@@ -365,11 +402,11 @@ fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "QualityOfLife";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.1";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -378,24 +415,21 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    if (gf.SettingGetB("general", "ms_timer_enable").?)
-        PatchHudTimerMs();
+    HandleSettings(gf);
 
     QuickRaceMenu.gf = gf;
 }
 
 export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
     _ = gs;
-
     // TODO: look into using in-game default setter, see fn_45BD90
 
-    const def_laps: u32 = gf.SettingGetU("general", "default_laps") orelse 3;
-    if (def_laps >= 1 and def_laps <= 5)
-        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @truncate(def_laps)));
+    if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
+        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @truncate(QolState.default_laps)));
 
-    const def_racers: u32 = gf.SettingGetU("general", "default_racers") orelse 12;
-    if (def_racers >= 1 and def_racers <= 12)
-        _ = mem.write(0x50C558, u8, @as(u8, @truncate(def_racers))); // racers
+    if (QolState.default_racers >= 1 and QolState.default_racers <= 12)
+        _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
 }
 
 export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
@@ -405,6 +439,11 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 // HOOKS
+
+export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gs;
+    HandleSettings(gf);
+}
 
 export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
@@ -431,7 +470,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on() and
         gf.InputGetKb(.@"2", .On) and
         gf.InputGetKb(.ESCAPE, .JustOn) and
-        gf.SettingGetB("qol", "quick_restart_enable").?)
+        QolState.quickstart)
     {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
@@ -441,7 +480,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // Quick Race Menu
     if (gs.in_race.on() and
         !gs.player.in_race_results.on() and
-        gf.SettingGetB("qol", "quick_race_menu_enable").?)
+        QolState.quickrace)
     {
         QuickRaceMenu.update();
     }

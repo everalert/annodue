@@ -12,6 +12,7 @@ const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
 const toast = @import("core/Toast.zig");
+const allocator = @import("core/Allocator.zig");
 
 const w32 = @import("zigwin32");
 const w32ll = w32.system.library_loader;
@@ -94,7 +95,7 @@ const PluginExportFn = enum(u32) {
     OnDeinit,
     //OnEnable,
     //OnDisable,
-    //OnSettingsLoad,
+    OnSettingsLoad,
 
     // Hook Functions
     GameLoopB,
@@ -131,7 +132,7 @@ const PluginState = struct {
     var plugin: std.ArrayList(Plugin) = undefined;
 };
 
-fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
+pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
         fn callback() void {
             for (PluginState.core.items) |p|
@@ -223,7 +224,8 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
 // SETUP
 
-pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
+pub fn init(memory: usize) usize {
+    const alloc = allocator.allocator();
     var off: usize = memory;
 
     PluginState.core = std.ArrayList(Plugin).init(alloc);
@@ -250,6 +252,7 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
+    p.GameLoopB = &settings.GameLoopB;
     p.OnDeinit = &settings.OnDeinit;
 
     p = PluginState.core.addOne() catch unreachable;
@@ -299,7 +302,6 @@ pub fn init(alloc: std.mem.Allocator, memory: usize) usize {
     off = HookMenuDrawing(off);
     global.GLOBAL_STATE.patch_offset = off;
 
-    off = global.GLOBAL_STATE.patch_offset;
     return off;
 }
 

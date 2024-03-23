@@ -1,12 +1,16 @@
 const Self = @This();
 
 const std = @import("std");
-const win32 = @import("zigwin32");
-const win32kb = win32.ui.input.keyboard_and_mouse;
+const w32 = @import("zigwin32");
+const w32f = w32.foundation;
+const w32fs = w32.storage.file_system;
 
 const global = @import("global.zig");
 const GlobalSt = global.GlobalState;
 const GlobalFn = global.GlobalFunction;
+
+const hook = @import("hook.zig");
+const allocator = @import("core/Allocator.zig");
 
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
@@ -18,7 +22,11 @@ const SettingsManager = @import("util/settings.zig").SettingsManager;
 // we need to keep, and go back to deinit-ing. then we also
 // wouldn't have to do hash lookups constantly too.
 
-pub const state = struct {
+pub const SettingsState = struct {
+    const check_freq: u32 = 1000 / 24; // in lieu of every frame
+    const load_callback: *const fn () void = hook.PluginFnCallback(.OnSettingsLoad);
+    var last_check: u32 = 0;
+    var last_filetime: w32f.FILETIME = undefined;
     pub var manager: SettingsManager = undefined;
     pub var gen: SettingsGroup = undefined;
     pub var prac: SettingsGroup = undefined;
@@ -30,7 +38,7 @@ pub const state = struct {
 };
 
 fn get(group: [*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
-    const sg = state.manager.groups.get(std.mem.span(group));
+    const sg = SettingsState.manager.groups.get(std.mem.span(group));
     return if (sg) |g| g.get(std.mem.span(setting), T) else null;
 }
 
@@ -50,71 +58,104 @@ pub fn get_f32(group: [*:0]const u8, setting: [*:0]const u8) ?f32 {
     return get(group, setting, f32);
 }
 
-pub fn init(alloc: std.mem.Allocator) void {
-    state.manager = SettingsManager.init(alloc);
+pub fn init() void {
+    const alloc = allocator.allocator();
 
-    state.gen = SettingsGroup.init(alloc, "general");
-    state.gen.add("death_speed_mod_enable", bool, false);
-    state.gen.add("death_speed_min", f32, 325);
-    state.gen.add("death_speed_drop", f32, 140);
-    state.gen.add("rainbow_enable", bool, false);
-    state.gen.add("rainbow_value_enable", bool, false);
-    state.gen.add("rainbow_label_enable", bool, false);
-    state.gen.add("rainbow_speed_enable", bool, false);
-    state.gen.add("ms_timer_enable", bool, false);
-    state.gen.add("default_laps", u32, 3);
-    state.gen.add("default_racers", u32, 12);
-    state.manager.add(&state.gen);
+    SettingsState.manager = SettingsManager.init(alloc);
 
-    state.prac = SettingsGroup.init(alloc, "practice");
-    state.prac.add("practice_tool_enable", bool, false);
-    state.prac.add("overlay_enable", bool, false);
-    state.manager.add(&state.prac);
+    SettingsState.gen = SettingsGroup.init(alloc, "general");
+    SettingsState.gen.add("death_speed_mod_enable", bool, false);
+    SettingsState.gen.add("death_speed_min", f32, 325);
+    SettingsState.gen.add("death_speed_drop", f32, 140);
+    SettingsState.gen.add("rainbow_enable", bool, false);
+    SettingsState.gen.add("rainbow_value_enable", bool, false);
+    SettingsState.gen.add("rainbow_label_enable", bool, false);
+    SettingsState.gen.add("rainbow_speed_enable", bool, false);
+    SettingsState.gen.add("ms_timer_enable", bool, false);
+    SettingsState.gen.add("default_laps", u32, 3);
+    SettingsState.gen.add("default_racers", u32, 12);
+    SettingsState.manager.add(&SettingsState.gen);
 
-    state.sav = SettingsGroup.init(alloc, "savestate");
-    state.sav.add("savestate_enable", bool, false);
-    state.sav.add("load_delay", u32, 500);
-    state.manager.add(&state.sav);
+    SettingsState.prac = SettingsGroup.init(alloc, "practice");
+    SettingsState.prac.add("practice_tool_enable", bool, false);
+    SettingsState.prac.add("overlay_enable", bool, false);
+    SettingsState.manager.add(&SettingsState.prac);
 
-    state.mp = SettingsGroup.init(alloc, "multiplayer");
-    state.mp.add("multiplayer_mod_enable", bool, false); // working?
-    state.mp.add("patch_netplay", bool, false); // working? ups ok, coll ?
-    state.mp.add("netplay_guid", bool, false); // working?
-    state.mp.add("netplay_r100", bool, false); // working
-    state.mp.add("patch_audio", bool, false); // FIXME: crashes
-    state.mp.add("patch_fonts", bool, false); // working
-    state.mp.add("fonts_dump", bool, false); // working?
-    state.mp.add("patch_tga_loader", bool, false); // FIXME: need tga files to verify with
-    state.mp.add("patch_trigger_display", bool, false); // working
-    state.manager.add(&state.mp);
+    SettingsState.sav = SettingsGroup.init(alloc, "savestate");
+    SettingsState.sav.add("savestate_enable", bool, false);
+    SettingsState.sav.add("load_delay", u32, 500);
+    SettingsState.manager.add(&SettingsState.sav);
 
-    state.cam7 = SettingsGroup.init(alloc, "cam7");
-    state.cam7.add("enable", bool, false);
-    state.cam7.add("flip_look_x", bool, false);
-    state.cam7.add("flip_look_y", bool, false);
-    state.manager.add(&state.cam7);
+    SettingsState.mp = SettingsGroup.init(alloc, "multiplayer");
+    SettingsState.mp.add("multiplayer_mod_enable", bool, false); // working?
+    SettingsState.mp.add("patch_netplay", bool, false); // working? ups ok, coll ?
+    SettingsState.mp.add("netplay_guid", bool, false); // working?
+    SettingsState.mp.add("netplay_r100", bool, false); // working
+    SettingsState.mp.add("patch_audio", bool, false); // FIXME: crashes
+    SettingsState.mp.add("patch_fonts", bool, false); // working
+    SettingsState.mp.add("fonts_dump", bool, false); // working?
+    SettingsState.mp.add("patch_tga_loader", bool, false); // FIXME: need tga files to verify with
+    SettingsState.mp.add("patch_trigger_display", bool, false); // working
+    SettingsState.manager.add(&SettingsState.mp);
 
-    state.inputdisplay = SettingsGroup.init(alloc, "inputdisplay");
-    state.inputdisplay.add("enable", bool, false);
-    state.inputdisplay.add("pos_x", i32, 420);
-    state.inputdisplay.add("pos_y", i32, 432);
-    state.manager.add(&state.inputdisplay);
+    SettingsState.cam7 = SettingsGroup.init(alloc, "cam7");
+    SettingsState.cam7.add("enable", bool, false);
+    SettingsState.cam7.add("flip_look_x", bool, false);
+    SettingsState.cam7.add("flip_look_y", bool, false);
+    SettingsState.manager.add(&SettingsState.cam7);
 
-    state.qol = SettingsGroup.init(alloc, "qol");
-    state.qol.add("quick_restart_enable", bool, false);
-    state.qol.add("quick_race_menu_enable", bool, false);
-    state.manager.add(&state.qol);
+    SettingsState.inputdisplay = SettingsGroup.init(alloc, "inputdisplay");
+    SettingsState.inputdisplay.add("enable", bool, false);
+    SettingsState.inputdisplay.add("pos_x", i32, 420);
+    SettingsState.inputdisplay.add("pos_y", i32, 432);
+    SettingsState.manager.add(&SettingsState.inputdisplay);
 
-    state.manager.read_ini(alloc, "annodue/settings.ini") catch unreachable;
+    SettingsState.qol = SettingsGroup.init(alloc, "qol");
+    SettingsState.qol.add("quick_restart_enable", bool, false);
+    SettingsState.qol.add("quick_race_menu_enable", bool, false);
+    SettingsState.manager.add(&SettingsState.qol);
+
+    // FIXME: remove this, and make all the dependencies do settings-based
+    // initialization via OnSettingsLoad
+    _ = LoadSettings();
+}
+
+// FIXME: copied from hook.zig; move both to util?
+fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
+    return (t1.dwLowDateTime == t2.dwLowDateTime and
+        t1.dwHighDateTime == t2.dwHighDateTime);
+}
+
+fn LoadSettings() bool {
+    var fd: w32fs.WIN32_FIND_DATAA = undefined;
+    _ = w32fs.FindFirstFileA("annodue/settings.ini", &fd);
+    if (filetime_eql(&fd.ftLastWriteTime, &SettingsState.last_filetime))
+        return false;
+
+    const alloc = allocator.allocator();
+    SettingsState.manager.read_ini(alloc, "annodue/settings.ini") catch return false;
+    SettingsState.last_filetime = fd.ftLastWriteTime;
+
+    return true;
+}
+
+pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
+    if (gs.timestamp > SettingsState.last_check + SettingsState.check_freq)
+        if (LoadSettings())
+            SettingsState.load_callback();
+    SettingsState.last_check = gs.timestamp;
 }
 
 pub fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
     _ = gs;
-    defer state.manager.deinit();
-    defer state.prac.deinit();
-    defer state.sav.deinit();
-    defer state.gen.deinit();
-    defer state.mp.deinit();
-    defer state.cam7.deinit();
+    defer SettingsState.manager.deinit();
+    defer SettingsState.prac.deinit();
+    defer SettingsState.sav.deinit();
+    defer SettingsState.gen.deinit();
+    defer SettingsState.mp.deinit();
+    defer SettingsState.cam7.deinit();
+    defer SettingsState.inputdisplay.deinit();
+    defer SettingsState.qol.deinit();
 }

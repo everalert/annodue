@@ -1,7 +1,8 @@
 const std = @import("std");
 
 const global = @import("global.zig");
-const hooking = @import("hook.zig");
+const hook = @import("hook.zig");
+const allocator = @import("core/Allocator.zig");
 const settings = @import("settings.zig");
 
 const msg = @import("util/message.zig");
@@ -14,8 +15,7 @@ const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 // DO THE THING!!!
 
 export fn Patch() void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
+    const alloc = allocator.allocator();
     const memory = alloc.alloc(u8, patch_size) catch unreachable;
     var off: usize = @intFromPtr(memory.ptr);
 
@@ -24,11 +24,11 @@ export fn Patch() void {
     global.GLOBAL_STATE.patch_memory = @ptrCast(memory.ptr);
     global.GLOBAL_STATE.patch_size = patch_size;
 
-    global.init();
-    settings.init(alloc);
-    off = hooking.init(alloc, off);
-
+    // FIXME: cleanup all the redundant 'off' in this path
     global.GLOBAL_STATE.patch_offset = off;
+    global.init();
+    settings.init();
+    off = hook.init(off);
 
     // debug
 

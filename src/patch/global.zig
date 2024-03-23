@@ -4,7 +4,7 @@ const std = @import("std");
 const win = std.os.windows;
 
 const settings = @import("settings.zig");
-const s = settings.state;
+const s = settings.SettingsState;
 
 const freeze = @import("core/Freeze.zig");
 const toast = @import("core/Toast.zig");

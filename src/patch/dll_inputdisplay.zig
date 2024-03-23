@@ -38,6 +38,7 @@ const InputIcon = struct {
 };
 
 const InputDisplay = struct {
+    var enable: bool = false;
     var initialized: bool = false;
     var analog: [rc.INPUT_AXIS_LENGTH]f32 = undefined;
     var digital: [rc.INPUT_BUTTON_LENGTH]u8 = undefined;
@@ -299,6 +300,13 @@ const InputDisplay = struct {
         rf.swrQuad_SetActive(i.bg_idx.?, 1);
         rf.swrQuad_SetActive(i.fg_idx.?, InputDisplay.digital[@intFromEnum(input)]);
     }
+
+    // TODO: handle updating position without having to reload race
+    fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
+        enable = gf.SettingGetB("inputdisplay", "enable") orelse false;
+        if (gf.SettingGetI("inputdisplay", "pos_x")) |x| x_base = @as(i16, @truncate(x));
+        if (gf.SettingGetI("inputdisplay", "pos_y")) |y| y_base = @as(i16, @truncate(y));
+    }
 };
 
 // HOUSEKEEPING
@@ -316,13 +324,10 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (gf.SettingGetI("inputdisplay", "pos_x")) |x| InputDisplay.x_base = @as(i16, @truncate(x));
-    if (gf.SettingGetI("inputdisplay", "pos_y")) |y| InputDisplay.y_base = @as(i16, @truncate(y));
-
-    // if re-initialized during race
+    InputDisplay.HandleSettings(gf);
     if (gs.in_race.on() and
         !gs.player.in_race_results.on() and
-        gf.SettingGetB("inputdisplay", "enable").?)
+        InputDisplay.enable)
     {
         InputDisplay.Init();
     }
@@ -341,16 +346,29 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // HOOK FUNCTIONS
 
-export fn InitRaceQuadsA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    if (gf.SettingGetB("inputdisplay", "enable").?)
+    InputDisplay.HandleSettings(gf);
+}
+
+export fn InitRaceQuadsA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
+    _ = gs;
+    if (InputDisplay.enable)
         InputDisplay.Init();
 }
 
+// TODO: probably cleaner with a state machine
 export fn InputUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
-    if (gs.in_race.on() and InputDisplay.initialized) {
-        if (!gs.player.in_race_results.on()) {
+    if (gs.in_race.on()) {
+        if (InputDisplay.enable and !InputDisplay.initialized)
+            InputDisplay.Init();
+
+        if (InputDisplay.enable and
+            InputDisplay.initialized and
+            !gs.player.in_race_results.on())
+        {
             InputDisplay.ReadInputs();
             InputDisplay.UpdateIcons();
         } else {

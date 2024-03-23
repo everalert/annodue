@@ -12,14 +12,28 @@ const rf = @import("util/racer_fn.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-//plugin/Multiplayer
-//- mp: patch network collisions
-//- mp: patch network upgrades
+// TODO: custom upgrades
 
-// NETPLAY PATCHES
+const PLUGIN_NAME: [*:0]const u8 = "Multiplayer";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
+const MpState = struct {
+    var mp_enable: bool = false;
+    var patch_r100: bool = false;
+    var patch_guid: bool = false;
+};
+
+fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
+    MpState.mp_enable = gf.SettingGetB("multiplayer", "enable").?;
+    MpState.patch_r100 = gf.SettingGetB("multiplayer", "patch_r100").?;
+    MpState.patch_guid = gf.SettingGetB("multiplayer", "patch_guid").?;
+}
+
+// PATCHES
 
 // NOTE: max data size 256
 // FIXME: new guid not equivalent to swe1r-patcher for some reason, but close
+// maybe redo the whole thing with a new algo, or just scrap it
 fn ModifyNetworkGuid(data: []u8) void {
     // RC4 hash
     const state = struct {
@@ -130,11 +144,11 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
-    return "Multiplayer";
+    return PLUGIN_NAME;
 }
 
 export fn PluginVersion() callconv(.C) [*:0]const u8 {
-    return "0.0.1";
+    return PLUGIN_VERSION;
 }
 
 export fn PluginCompatibilityVersion() callconv(.C) u32 {
@@ -142,19 +156,18 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    HandleSettings(gf);
+
+    // TODO: move this to settings handler, once global allocation figured out
     var off = gs.patch_offset;
-    if (gf.SettingGetB("multiplayer", "multiplayer_mod_enable").?) {
-        if (gf.SettingGetB("multiplayer", "patch_netplay").?) {
-            const r100 = gf.SettingGetB("multiplayer", "netplay_r100").?;
-            const guid = gf.SettingGetB("multiplayer", "netplay_guid").?;
-            const traction: u8 = if (r100) 3 else 5;
-            var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
-            var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-            const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
-            const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
-            off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, guid);
-            off = PatchNetworkCollisions(off, guid);
-        }
+    if (MpState.mp_enable) {
+        const traction: u8 = if (MpState.patch_r100) 3 else 5;
+        var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
+        var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+        const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
+        const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
+        off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.patch_guid);
+        off = PatchNetworkCollisions(off, MpState.patch_guid);
     }
     gs.patch_offset = off;
 }
@@ -171,8 +184,7 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-//export fn EarlyEngineUpdateAfter(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-//    _ = gv;
-//    _ = initialized;
-//    _ = gs;
-//}
+export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gs;
+    HandleSettings(gf);
+}

@@ -84,10 +84,9 @@ pub fn init() void {
     SettingsState.manager.add(&SettingsState.sav);
 
     SettingsState.mp = SettingsGroup.init(alloc, "multiplayer");
-    SettingsState.mp.add("multiplayer_mod_enable", bool, false); // working?
-    SettingsState.mp.add("patch_netplay", bool, false); // working? ups ok, coll ?
-    SettingsState.mp.add("netplay_guid", bool, false); // working?
-    SettingsState.mp.add("netplay_r100", bool, false); // working
+    SettingsState.mp.add("enable", bool, false); // working? TODO: check collisions
+    SettingsState.mp.add("patch_guid", bool, false); // working?
+    SettingsState.mp.add("patch_r100", bool, false); // working
     SettingsState.mp.add("patch_audio", bool, false); // FIXME: crashes
     SettingsState.mp.add("patch_fonts", bool, false); // working
     SettingsState.mp.add("fonts_dump", bool, false); // working?

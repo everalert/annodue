@@ -44,6 +44,10 @@ const CamState = enum(u32) {
 };
 
 const Cam7 = extern struct {
+    var enable: bool = false;
+    var flip_look_x: bool = false;
+    var flip_look_y: bool = false;
+
     const dz: f32 = 0.05;
     const rotation_damp: f32 = 48;
     const rotation_speed: f32 = 360;
@@ -152,9 +156,17 @@ fn SaveSavedCam() void {
     _ = mem.write(camstate_ref_addr, u32, 31);
 }
 
+fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
+    Cam7.enable = gf.SettingGetB("cam7", "enable") orelse false;
+    Cam7.flip_look_x = gf.SettingGetB("cam7", "flip_look_x") orelse false;
+    Cam7.flip_look_y = gf.SettingGetB("cam7", "flip_look_y") orelse false;
+}
+
+// STATE MACHINE
+
 fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
     _ = gs;
-    if (gf.InputGetKb(.@"0", .JustOn) and gf.SettingGetB("cam7", "enable").?) {
+    if (gf.InputGetKb(.@"0", .JustOn) and Cam7.enable) {
         SaveSavedCam();
         return .FreeCam;
     }
@@ -162,15 +174,15 @@ fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
 }
 
 fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
-    if (gf.InputGetKb(.@"0", .JustOn)) {
+    if (gf.InputGetKb(.@"0", .JustOn) or !Cam7.enable) {
         RestoreSavedCam();
         return .None;
     }
 
     const _a_lx: f32 = gf.InputGetXInputAxis(.StickLX);
     const _a_ly: f32 = gf.InputGetXInputAxis(.StickLY);
-    const _a_rx: f32 = if (gf.SettingGetB("cam7", "flip_look_x").?) -gf.InputGetXInputAxis(.StickRX) else gf.InputGetXInputAxis(.StickRX);
-    const _a_ry: f32 = if (gf.SettingGetB("cam7", "flip_look_y").?) -gf.InputGetXInputAxis(.StickRY) else gf.InputGetXInputAxis(.StickRY);
+    const _a_rx: f32 = if (Cam7.flip_look_x) -gf.InputGetXInputAxis(.StickRX) else gf.InputGetXInputAxis(.StickRX);
+    const _a_ry: f32 = if (Cam7.flip_look_y) -gf.InputGetXInputAxis(.StickRY) else gf.InputGetXInputAxis(.StickRY);
     const _a_t: f32 = (gf.InputGetXInputAxis(.TriggerL) - gf.InputGetXInputAxis(.TriggerR));
 
     // rotation
@@ -302,8 +314,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
     _ = gs;
+    HandleSettings(gf);
 }
 
 export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
@@ -320,6 +332,11 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 // HOOKS
+
+export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gs;
+    HandleSettings(gf);
+}
 
 export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     UpdateState(gs, gf);

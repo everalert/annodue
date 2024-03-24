@@ -9,6 +9,9 @@ const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 const POINT = w32.foundation.POINT;
 const RECT = w32.foundation.RECT;
+const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
+const XINPUT_GAMEPAD_AXIS_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
+const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
 const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
@@ -18,6 +21,7 @@ const r = @import("util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
 
+const st = @import("util/active_state.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
@@ -69,6 +73,54 @@ const Cam7 = extern struct {
     var xcam_rotation_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
     var xcam_motion: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
     var xcam_motion_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
+
+    const input_move_x_kbL: VIRTUAL_KEY = .A;
+    const input_move_x_kbR: VIRTUAL_KEY = .D;
+    const input_move_x_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickLX;
+    const input_move_y_kbU: VIRTUAL_KEY = .W;
+    const input_move_y_kbD: VIRTUAL_KEY = .S;
+    const input_move_y_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickLY;
+    const input_look_x_kbL: VIRTUAL_KEY = .LEFT;
+    const input_look_x_kbR: VIRTUAL_KEY = .RIGHT;
+    const input_look_x_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickRX;
+    const input_look_y_kbU: VIRTUAL_KEY = .UP;
+    const input_look_y_kbD: VIRTUAL_KEY = .DOWN;
+    const input_look_y_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickRY;
+    const input_pitch_kbU: VIRTUAL_KEY = .SPACE;
+    const input_pitch_kbD: VIRTUAL_KEY = .SHIFT;
+    const input_pitch_xiU: XINPUT_GAMEPAD_AXIS_INDEX = .TriggerL;
+    const input_pitch_xiD: XINPUT_GAMEPAD_AXIS_INDEX = .TriggerR;
+    var input_move_x: f32 = 0;
+    var input_move_y: f32 = 0;
+    var input_look_x: f32 = 0;
+    var input_look_y: f32 = 0;
+    var input_pitch: f32 = 0;
+    const input_toggle_kb: VIRTUAL_KEY = .@"0";
+    const input_toggle_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .BACK;
+    var input_toggle: st.ActiveState = .Off;
+
+    // TODO: mouse input
+    // TODO: maybe normalizing XY stuff
+    fn update_input(gf: *GlobalFn) void {
+        input_move_x = m.clamp(gf.InputGetXInputAxis(input_move_x_xi) -
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_x_kbL).on()))) +
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_x_kbR).on()))), -1, 1);
+        input_move_y = m.clamp(gf.InputGetXInputAxis(input_move_y_xi) +
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_y_kbU).on()))) -
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_y_kbD).on()))), -1, 1);
+        input_look_x = m.clamp(gf.InputGetXInputAxis(input_look_x_xi) -
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_x_kbL).on()))) * 0.65 +
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_x_kbR).on()))) * 0.65, -1, 1);
+        input_look_y = m.clamp(gf.InputGetXInputAxis(input_look_y_xi) +
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_y_kbU).on()))) * 0.65 -
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_y_kbD).on()))) * 0.65, -1, 1);
+        input_pitch = m.clamp(gf.InputGetXInputAxis(input_pitch_xiU) -
+            gf.InputGetXInputAxis(input_pitch_xiD) +
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_pitch_kbU).on()))) -
+            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_pitch_kbD).on()))), -1, 1);
+        input_toggle.update(gf.InputGetKbRaw(input_toggle_kb).on() or
+            gf.InputGetXInputButton(input_toggle_xi).on());
+    }
 
     fn update_cam_from_rot(euler: *const Vec3) void {
         // TODO: probably can do better than this, at least more efficient
@@ -124,6 +176,7 @@ fn CheckAndResetSavedCam() void {
     Cam7.cam_state = .None;
 }
 
+// FIXME: reset momentum to 0 when turning off cam, also probably apply same to CheckAndResetSavedCam
 fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
         _ = mem.write(camstate_ref_addr, u32, i);
@@ -165,8 +218,9 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 // STATE MACHINE
 
 fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
+    _ = gf;
     _ = gs;
-    if (gf.InputGetKb(.@"0", .JustOn) and Cam7.enable) {
+    if (Cam7.input_toggle == .JustOn and Cam7.enable) {
         SaveSavedCam();
         return .FreeCam;
     }
@@ -174,16 +228,17 @@ fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
 }
 
 fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
-    if (gf.InputGetKb(.@"0", .JustOn) or !Cam7.enable) {
+    _ = gf;
+    if (Cam7.input_toggle == .JustOn or !Cam7.enable) {
         RestoreSavedCam();
         return .None;
     }
 
-    const _a_lx: f32 = gf.InputGetXInputAxis(.StickLX);
-    const _a_ly: f32 = gf.InputGetXInputAxis(.StickLY);
-    const _a_rx: f32 = if (Cam7.flip_look_x) -gf.InputGetXInputAxis(.StickRX) else gf.InputGetXInputAxis(.StickRX);
-    const _a_ry: f32 = if (Cam7.flip_look_y) -gf.InputGetXInputAxis(.StickRY) else gf.InputGetXInputAxis(.StickRY);
-    const _a_t: f32 = (gf.InputGetXInputAxis(.TriggerL) - gf.InputGetXInputAxis(.TriggerR));
+    const _a_lx: f32 = Cam7.input_move_x;
+    const _a_ly: f32 = Cam7.input_move_y;
+    const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x else Cam7.input_look_x;
+    const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y else Cam7.input_look_y;
+    const _a_t: f32 = Cam7.input_pitch;
 
     // rotation
 
@@ -332,6 +387,11 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 // HOOKS
+
+export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gs;
+    Cam7.update_input(gf);
+}
 
 export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;

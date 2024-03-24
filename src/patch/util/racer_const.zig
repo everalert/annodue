@@ -55,6 +55,10 @@ pub const RACE_DATA_SIZE: usize = 0x88;
 
 // Input
 
+pub const INPUT_RAW_STATE_TIMESTAMP: usize = 0x50E028;
+pub const INPUT_RAW_STATE_ON: usize = 0x50E868;
+pub const INPUT_RAW_STATE_JUST_ON: usize = 0x50F668;
+
 pub const INPUT_COMBINED_ADDR: usize = 0xEC8810;
 pub const INPUT_COMBINED_SIZE: usize = 0x30;
 

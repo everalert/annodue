@@ -44,6 +44,18 @@ pub const swrSound_PlaySound: *fn (id: i32, unk2: i32, pitch: f32, vol: f32, unk
 
 pub const swrSound_PlaySoundMacro: *fn (id: i32) callconv(.C) void = @ptrFromInt(0x440550);
 
+// Input
+
+pub const swrInput_ProcessInput: *fn () callconv(.C) void = @ptrFromInt(0x404DD0);
+
+pub const swrInput_ReadControls: *fn () callconv(.C) void = @ptrFromInt(0x485630);
+
+pub const swrInput_ReadKeyboard: *fn () callconv(.C) void = @ptrFromInt(0x486170);
+
+pub const swrInput_ReadJoysticks: *fn () callconv(.C) void = @ptrFromInt(0x486340);
+
+pub const swrInput_ReadMouse: *fn () callconv(.C) void = @ptrFromInt(0x486710);
+
 // Loading
 
 pub const TriggerLoad_InRace: *fn (jdge: usize, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);

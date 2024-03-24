@@ -108,6 +108,14 @@ const PluginExportFn = enum(u32) {
     TimerUpdateA,
     InputUpdateB,
     InputUpdateA,
+    InputUpdateControlsB,
+    InputUpdateControlsA,
+    InputUpdateKeyboardB,
+    InputUpdateKeyboardA,
+    InputUpdateJoysticksB,
+    InputUpdateJoysticksA,
+    InputUpdateMouseB,
+    InputUpdateMouseA,
     //InitHangQuadsB,
     InitHangQuadsA,
     //InitRaceQuadsB,
@@ -370,15 +378,41 @@ fn HookTimerUpdate(memory: usize) usize {
 
 // INPUT READING
 
+// NOTE: before early engine update in main loop; not the only calls to the
+// hooked functions, but the main ones
 fn HookInputUpdate(memory: usize) usize {
-    // fn_404DD0, before early engine update; not the only call to this function,
-    // but the only regular one
-    return hook.intercept_call(
-        memory,
+    var off = memory;
+    off = hook.intercept_call( // fn_404DD0
+        off,
         0x423592,
         PluginFnCallback(.InputUpdateB),
         PluginFnCallback(.InputUpdateA),
     );
+    off = hook.intercept_call( // fn_485630
+        off,
+        0x404DD7,
+        PluginFnCallback(.InputUpdateControlsB),
+        PluginFnCallback(.InputUpdateControlsA),
+    );
+    off = hook.intercept_call( // fn_486170
+        off,
+        0x4856B3,
+        PluginFnCallback(.InputUpdateKeyboardB),
+        PluginFnCallback(.InputUpdateKeyboardA),
+    );
+    off = hook.intercept_call( // fn_486340
+        off,
+        0x4856C1,
+        PluginFnCallback(.InputUpdateJoysticksB),
+        PluginFnCallback(.InputUpdateJoysticksA),
+    );
+    off = hook.intercept_call( // fn_486710
+        off,
+        0x4856C6,
+        PluginFnCallback(.InputUpdateMouseB),
+        PluginFnCallback(.InputUpdateMouseA),
+    );
+    return off;
 }
 
 // 'HANG' SETUP

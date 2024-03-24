@@ -3,7 +3,8 @@ const Self = @This();
 const std = @import("std");
 const win = std.os.windows;
 const w32 = @import("zigwin32");
-const w32kb = w32.ui.input.keyboard_and_mouse;
+const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
+const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
 const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
@@ -32,9 +33,23 @@ const QolState = struct {
     var default_racers: u32 = 12;
     var default_laps: u32 = 3;
     var ms_timer: bool = false;
+
+    var input_pause_kb: VIRTUAL_KEY = .ESCAPE;
+    var input_pause_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .START;
+    var input_pause_state: st.ActiveState = .Off;
+    var input_quickstart_kb: VIRTUAL_KEY = .@"2";
+    var input_quickstart_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .BACK;
+    var input_quickstart_state: st.ActiveState = .Off;
 };
 
-fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
+fn QolUpdateInput(gf: *GlobalFn) callconv(.C) void {
+    QolState.input_pause_state.update(gf.InputGetKbRaw(QolState.input_pause_kb).on() or
+        gf.InputGetXInputButton(QolState.input_pause_xi).on());
+    QolState.input_quickstart_state.update(gf.InputGetKbRaw(QolState.input_quickstart_kb).on() or
+        gf.InputGetXInputButton(QolState.input_quickstart_xi).on());
+}
+
+fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
     QolState.quickstart = gf.SettingGetB("qol", "quick_restart_enable") orelse false;
     QolState.quickrace = gf.SettingGetB("qol", "quick_race_menu_enable") orelse false;
     QolState.default_racers = gf.SettingGetU("qol", "default_racers") orelse 12;
@@ -202,7 +217,8 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // set the global 'in tournament mode' accordingly
 
 const QuickRaceMenuInput = extern struct {
-    key: w32kb.VIRTUAL_KEY,
+    kb: VIRTUAL_KEY,
+    xi: XINPUT_GAMEPAD_BUTTON_INDEX,
     state: st.ActiveState = undefined,
 };
 
@@ -229,14 +245,14 @@ const QuickRaceMenu = extern struct {
     };
 
     var inputs = [_]QuickRaceMenuInput{
-        .{ .key = .UP },
-        .{ .key = .DOWN },
-        .{ .key = .LEFT },
-        .{ .key = .RIGHT },
-        .{ .key = .SPACE }, // confirm
-        .{ .key = .RETURN }, // quick confirm
-        .{ .key = .HOME }, // NU
-        .{ .key = .END }, // MU
+        .{ .kb = .UP, .xi = .DPAD_UP },
+        .{ .kb = .DOWN, .xi = .DPAD_DOWN },
+        .{ .kb = .LEFT, .xi = .DPAD_LEFT },
+        .{ .kb = .RIGHT, .xi = .DPAD_RIGHT },
+        .{ .kb = .SPACE, .xi = .A }, // confirm
+        .{ .kb = .RETURN, .xi = .B }, // quick confirm
+        .{ .kb = .HOME, .xi = .LEFT_SHOULDER }, // NU
+        .{ .kb = .END, .xi = .RIGHT_SHOULDER }, // MU
     };
 
     fn get_input(comptime input: *QuickRaceMenuInput) InputGetFnType {
@@ -249,7 +265,8 @@ const QuickRaceMenu = extern struct {
     }
 
     inline fn update_input() void {
-        for (&inputs) |*i| i.state = gf.InputGetKbRaw(i.key);
+        for (&inputs) |*i|
+            i.state.update(gf.InputGetKbRaw(i.kb).on() or gf.InputGetXInputButton(i.xi).on());
     }
 
     var data: Menu = .{
@@ -334,9 +351,9 @@ const QuickRaceMenu = extern struct {
         init();
 
         const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (menu_active and gf.InputGetKb(.ESCAPE, .JustOn)) {
+        if (menu_active and QolState.input_pause_state == .JustOn) {
             close();
-        } else if (pausestate == 2 and gf.InputGetKb(.ESCAPE, .JustOn)) {
+        } else if (pausestate == 2 and QolState.input_pause_state == .JustOn) {
             open();
         }
 
@@ -415,7 +432,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    HandleSettings(gf);
+    QolHandleSettings(gf);
 
     QuickRaceMenu.gf = gf;
 }
@@ -442,13 +459,22 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    HandleSettings(gf);
+    QolHandleSettings(gf);
 }
 
 export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gs;
+    QolUpdateInput(gf);
+    QuickRaceMenu.update_input();
+}
+
+export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
     _ = gs;
-    QuickRaceMenu.update_input();
+    const start_on: u32 = @intFromBool(QolState.input_pause_state == .On);
+    const start_just_on: u32 = @intFromBool(QolState.input_pause_state == .JustOn);
+    _ = mem.write(rc.INPUT_RAW_STATE_ON + 4, u32, start_on);
+    _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
 
 export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
@@ -465,11 +491,12 @@ export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 // FIXME: settings toggles for both of these
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
 export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
 
     // Quick Restart
     if (gs.in_race.on() and
-        gf.InputGetKb(.@"2", .On) and
-        gf.InputGetKb(.ESCAPE, .JustOn) and
+        QolState.input_quickstart_state == .On and
+        QolState.input_pause_state == .JustOn and
         QolState.quickstart)
     {
         const jdge = r.DerefEntity(.Jdge, 0, 0);

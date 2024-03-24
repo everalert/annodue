@@ -224,9 +224,8 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
 // SETUP
 
-pub fn init(memory: usize) usize {
+pub fn init() void {
     const alloc = allocator.allocator();
-    var off: usize = memory;
 
     PluginState.core = std.ArrayList(Plugin).init(alloc);
     PluginState.plugin = std.ArrayList(Plugin).init(alloc);
@@ -290,6 +289,7 @@ pub fn init(memory: usize) usize {
 
     // hooking game
 
+    var off = global.GLOBAL_STATE.patch_offset;
     off = HookGameSetup(off);
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
@@ -301,8 +301,6 @@ pub fn init(memory: usize) usize {
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
     global.GLOBAL_STATE.patch_offset = off;
-
-    return off;
 }
 
 pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {

@@ -24,6 +24,10 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
+const InputMap = @import("util/input.zig").InputMap;
+const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
+const AxisInputMap = @import("util/input.zig").AxisInputMap;
+
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
@@ -34,19 +38,15 @@ const QolState = struct {
     var default_laps: u32 = 3;
     var ms_timer: bool = false;
 
-    var input_pause_kb: VIRTUAL_KEY = .ESCAPE;
-    var input_pause_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .START;
-    var input_pause_state: st.ActiveState = .Off;
-    var input_quickstart_kb: VIRTUAL_KEY = .@"2";
-    var input_quickstart_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .BACK;
-    var input_quickstart_state: st.ActiveState = .Off;
+    var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
+    var input_quickstart_data = ButtonInputMap{ .kb = .@"2", .xi = .BACK };
+    var input_pause = input_pause_data.inputMap();
+    var input_quickstart = input_quickstart_data.inputMap();
 };
 
 fn QolUpdateInput(gf: *GlobalFn) callconv(.C) void {
-    QolState.input_pause_state.update(gf.InputGetKbRaw(QolState.input_pause_kb).on() or
-        gf.InputGetXInputButton(QolState.input_pause_xi).on());
-    QolState.input_quickstart_state.update(gf.InputGetKbRaw(QolState.input_quickstart_kb).on() or
-        gf.InputGetXInputButton(QolState.input_quickstart_xi).on());
+    QolState.input_pause.update(gf);
+    QolState.input_quickstart.update(gf);
 }
 
 fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
@@ -351,9 +351,9 @@ const QuickRaceMenu = extern struct {
         init();
 
         const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (menu_active and QolState.input_pause_state == .JustOn) {
+        if (menu_active and QolState.input_pause.gets() == .JustOn) {
             close();
-        } else if (pausestate == 2 and QolState.input_pause_state == .JustOn) {
+        } else if (pausestate == 2 and QolState.input_pause.gets() == .JustOn) {
             open();
         }
 
@@ -471,8 +471,8 @@ export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
     _ = gs;
-    const start_on: u32 = @intFromBool(QolState.input_pause_state == .On);
-    const start_just_on: u32 = @intFromBool(QolState.input_pause_state == .JustOn);
+    const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
+    const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
     _ = mem.write(rc.INPUT_RAW_STATE_ON + 4, u32, start_on);
     _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
@@ -495,8 +495,8 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     // Quick Restart
     if (gs.in_race.on() and
-        QolState.input_quickstart_state == .On and
-        QolState.input_pause_state == .JustOn and
+        QolState.input_quickstart.gets() == .On and
+        QolState.input_pause.gets() == .JustOn and
         QolState.quickstart)
     {
         const jdge = r.DerefEntity(.Jdge, 0, 0);

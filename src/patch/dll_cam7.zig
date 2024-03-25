@@ -25,6 +25,10 @@ const st = @import("util/active_state.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
+const InputMap = @import("util/input.zig").InputMap;
+const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
+const AxisInputMap = @import("util/input.zig").AxisInputMap;
+
 const PLUGIN_NAME: [*:0]const u8 = "Cam7";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
@@ -74,52 +78,28 @@ const Cam7 = extern struct {
     var xcam_motion: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
     var xcam_motion_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
 
-    const input_move_x_kbL: VIRTUAL_KEY = .A;
-    const input_move_x_kbR: VIRTUAL_KEY = .D;
-    const input_move_x_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickLX;
-    const input_move_y_kbU: VIRTUAL_KEY = .W;
-    const input_move_y_kbD: VIRTUAL_KEY = .S;
-    const input_move_y_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickLY;
-    const input_look_x_kbL: VIRTUAL_KEY = .LEFT;
-    const input_look_x_kbR: VIRTUAL_KEY = .RIGHT;
-    const input_look_x_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickRX;
-    const input_look_y_kbU: VIRTUAL_KEY = .UP;
-    const input_look_y_kbD: VIRTUAL_KEY = .DOWN;
-    const input_look_y_xi: XINPUT_GAMEPAD_AXIS_INDEX = .StickRY;
-    const input_pitch_kbU: VIRTUAL_KEY = .SPACE;
-    const input_pitch_kbD: VIRTUAL_KEY = .SHIFT;
-    const input_pitch_xiU: XINPUT_GAMEPAD_AXIS_INDEX = .TriggerL;
-    const input_pitch_xiD: XINPUT_GAMEPAD_AXIS_INDEX = .TriggerR;
-    var input_move_x: f32 = 0;
-    var input_move_y: f32 = 0;
-    var input_look_x: f32 = 0;
-    var input_look_y: f32 = 0;
-    var input_pitch: f32 = 0;
-    const input_toggle_kb: VIRTUAL_KEY = .@"0";
-    const input_toggle_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .BACK;
-    var input_toggle: st.ActiveState = .Off;
+    var input_toggle_data = ButtonInputMap{ .kb = .@"0", .xi = .BACK };
+    var input_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX };
+    var input_look_y_data = AxisInputMap{ .kb_dec = .DOWN, .kb_inc = .UP, .xi_inc = .StickRY };
+    var input_move_x_data = AxisInputMap{ .kb_dec = .A, .kb_inc = .D, .xi_inc = .StickLX };
+    var input_move_y_data = AxisInputMap{ .kb_dec = .W, .kb_inc = .S, .xi_inc = .StickLY };
+    var input_move_z_data = AxisInputMap{ .kb_dec = .SHIFT, .kb_inc = .SPACE, .xi_dec = .TriggerR, .xi_inc = .TriggerL, .kb_scale = 0.65 };
+    var input_toggle = input_toggle_data.inputMap();
+    var input_look_x = input_look_x_data.inputMap();
+    var input_look_y = input_look_y_data.inputMap();
+    var input_move_x = input_move_x_data.inputMap();
+    var input_move_y = input_move_y_data.inputMap();
+    var input_move_z = input_move_z_data.inputMap();
 
     // TODO: mouse input
     // TODO: maybe normalizing XY stuff
     fn update_input(gf: *GlobalFn) void {
-        input_move_x = m.clamp(gf.InputGetXInputAxis(input_move_x_xi) -
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_x_kbL).on()))) +
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_x_kbR).on()))), -1, 1);
-        input_move_y = m.clamp(gf.InputGetXInputAxis(input_move_y_xi) +
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_y_kbU).on()))) -
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_move_y_kbD).on()))), -1, 1);
-        input_look_x = m.clamp(gf.InputGetXInputAxis(input_look_x_xi) -
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_x_kbL).on()))) * 0.65 +
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_x_kbR).on()))) * 0.65, -1, 1);
-        input_look_y = m.clamp(gf.InputGetXInputAxis(input_look_y_xi) +
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_y_kbU).on()))) * 0.65 -
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_look_y_kbD).on()))) * 0.65, -1, 1);
-        input_pitch = m.clamp(gf.InputGetXInputAxis(input_pitch_xiU) -
-            gf.InputGetXInputAxis(input_pitch_xiD) +
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_pitch_kbU).on()))) -
-            @as(f32, @floatFromInt(@intFromBool(gf.InputGetKbRaw(input_pitch_kbD).on()))), -1, 1);
-        input_toggle.update(gf.InputGetKbRaw(input_toggle_kb).on() or
-            gf.InputGetXInputButton(input_toggle_xi).on());
+        input_toggle.update(gf);
+        input_look_x.update(gf);
+        input_look_y.update(gf);
+        input_move_x.update(gf);
+        input_move_y.update(gf);
+        input_move_z.update(gf);
     }
 
     fn update_cam_from_rot(euler: *const Vec3) void {
@@ -220,7 +200,7 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
     _ = gf;
     _ = gs;
-    if (Cam7.input_toggle == .JustOn and Cam7.enable) {
+    if (Cam7.input_toggle.gets() == .JustOn and Cam7.enable) {
         SaveSavedCam();
         return .FreeCam;
     }
@@ -229,16 +209,16 @@ fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
 
 fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     _ = gf;
-    if (Cam7.input_toggle == .JustOn or !Cam7.enable) {
+    if (Cam7.input_toggle.gets() == .JustOn or !Cam7.enable) {
         RestoreSavedCam();
         return .None;
     }
 
-    const _a_lx: f32 = Cam7.input_move_x;
-    const _a_ly: f32 = Cam7.input_move_y;
-    const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x else Cam7.input_look_x;
-    const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y else Cam7.input_look_y;
-    const _a_t: f32 = Cam7.input_pitch;
+    const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x.getf() else Cam7.input_look_x.getf();
+    const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
+    const _a_lx: f32 = Cam7.input_move_x.getf();
+    const _a_ly: f32 = Cam7.input_move_y.getf();
+    const _a_t: f32 = Cam7.input_move_z.getf();
 
     // rotation
 

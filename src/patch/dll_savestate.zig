@@ -20,6 +20,10 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
+const InputMap = @import("util/input.zig").InputMap;
+const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
+const AxisInputMap = @import("util/input.zig").AxisInputMap;
+
 // NOTE: some of these might be outdated, review at next refactor
 // FIXME: change disabling during pause to use Freeze api, so that you can still save/load
 // during a real pause
@@ -98,12 +102,10 @@ const state = struct {
     var load_frame: usize = 0;
 
     // TODO: some kind of unified mapping thing, once dinput is implemented
-    var save_input_st_kb: VIRTUAL_KEY = .@"1";
-    var save_input_st_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .DPAD_DOWN;
-    var save_input_ld_kb: VIRTUAL_KEY = .@"2";
-    var save_input_ld_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .DPAD_UP;
-    var save_input_st_state: st.ActiveState = .Off;
-    var save_input_ld_state: st.ActiveState = .Off;
+    var save_input_st_data = ButtonInputMap{ .kb = .@"1", .xi = .DPAD_DOWN };
+    var save_input_ld_data = ButtonInputMap{ .kb = .@"2", .xi = .DPAD_UP };
+    var save_input_st = save_input_st_data.inputMap();
+    var save_input_ld = save_input_ld_data.inputMap();
 
     var scrub: scroll.ScrollControl = .{
         .scroll_time = 3,
@@ -112,19 +114,17 @@ const state = struct {
         .input_inc = scrub_inc,
     };
     var scrub_frame: i32 = 0;
-    var scrub_input_dec_kb: VIRTUAL_KEY = .@"3";
-    var scrub_input_dec_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .DPAD_LEFT;
-    var scrub_input_inc_kb: VIRTUAL_KEY = .@"4";
-    var scrub_input_inc_xi: XINPUT_GAMEPAD_BUTTON_INDEX = .DPAD_RIGHT;
-    var scrub_input_dec_state: st.ActiveState = .Off;
-    var scrub_input_inc_state: st.ActiveState = .Off;
+    var scrub_input_dec_data = ButtonInputMap{ .kb = .@"3", .xi = .DPAD_LEFT };
+    var scrub_input_inc_data = ButtonInputMap{ .kb = .@"4", .xi = .DPAD_RIGHT };
+    var scrub_input_dec = scrub_input_dec_data.inputMap();
+    var scrub_input_inc = scrub_input_inc_data.inputMap();
 
     fn scrub_dec(s: st.ActiveState) callconv(.C) bool {
-        return scrub_input_dec_state == s;
+        return scrub_input_dec.gets() == s;
     }
 
     fn scrub_inc(s: st.ActiveState) callconv(.C) bool {
-        return scrub_input_inc_state == s;
+        return scrub_input_inc.gets() == s;
     }
 
     const layer_size: isize = 4;
@@ -297,10 +297,10 @@ const state = struct {
 fn DoStateRecording(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     state.save_compressed(gs, gf);
 
-    if (state.save_input_st_state == .JustOn) {
+    if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.frame - 1;
     }
-    if (state.save_input_ld_state == .JustOn and state.frames > 0) {
+    if (state.save_input_ld.gets() == .JustOn and state.frames > 0) {
         state.load_time = state.load_delay + gs.timestamp;
         return .Loading;
     }
@@ -310,7 +310,7 @@ fn DoStateRecording(gs: *GlobalSt, gf: *GlobalFn) LoadState {
 
 fn DoStateLoading(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     _ = gf;
-    if (state.save_input_ld_state == .JustOn) {
+    if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
         state.frame_total = state.frame;
         return .Scrubbing;
@@ -324,10 +324,10 @@ fn DoStateLoading(gs: *GlobalSt, gf: *GlobalFn) LoadState {
 
 fn DoStateScrubbing(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     _ = gf;
-    if (state.save_input_st_state == .JustOn) {
+    if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.frame - 1;
     }
-    if (state.save_input_ld_state == .JustOn) {
+    if (state.save_input_ld.gets() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
         state.load_time = state.load_delay + gs.timestamp;
         return .ScrubExiting;
@@ -347,7 +347,7 @@ fn DoStateScrubExiting(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     _ = gf;
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
 
-    if (state.save_input_st_state == .JustOn) {
+    if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.frame - 1;
     }
 
@@ -406,14 +406,10 @@ export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
-    state.scrub_input_dec_state.update(gf.InputGetKbRaw(state.scrub_input_dec_kb).on() or
-        gf.InputGetXInputButton(state.scrub_input_dec_xi).on());
-    state.scrub_input_inc_state.update(gf.InputGetKbRaw(state.scrub_input_inc_kb).on() or
-        gf.InputGetXInputButton(state.scrub_input_inc_xi).on());
-    state.save_input_st_state.update(gf.InputGetKbRaw(state.save_input_st_kb).on() or
-        gf.InputGetXInputButton(state.save_input_st_xi).on());
-    state.save_input_ld_state.update(gf.InputGetKbRaw(state.save_input_ld_kb).on() or
-        gf.InputGetXInputButton(state.save_input_ld_xi).on());
+    state.scrub_input_dec.update(gf);
+    state.scrub_input_inc.update(gf);
+    state.save_input_st.update(gf);
+    state.save_input_ld.update(gf);
 }
 
 // TODO: maybe reset state/recording if savestates or practice mode disabled?

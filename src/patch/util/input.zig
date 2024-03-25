@@ -19,19 +19,6 @@ const GlobalFn = global.GlobalFunction;
 pub const INPUT_DOWN: u8 = 0b01;
 pub const INPUT_NEW: u8 = 0b10;
 
-pub const INPUT_XINPUT = extern struct {
-    Button: [std.enums.values(XINPUT_GAMEPAD_BUTTON_INDEX).len]st.ActiveState,
-    Axis: [std.enums.values(XINPUT_GAMEPAD_AXIS_INDEX).len]f32,
-};
-
-pub const INPUT_MOUSE = extern struct {
-    raw: POINT,
-    raw_d: POINT,
-    window: POINT,
-    window_d: POINT,
-    window_in: st.ActiveState,
-};
-
 const InputState = extern struct {
     var kb: [256]st.ActiveState = std.mem.zeroes([256]st.ActiveState);
     var mouse: INPUT_MOUSE = std.mem.zeroInit(INPUT_MOUSE, .{});
@@ -47,7 +34,84 @@ pub fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     //update_mouse(@ptrCast(gs.hwnd));
 }
 
+// MAPPING
+
+pub const InputMap = struct {
+    ptr: *anyopaque,
+    s_val: ?*st.ActiveState = null,
+    f_val: ?*f32 = null,
+    updateFn: *const fn (ptr: *anyopaque, gf: *GlobalFn) void,
+
+    pub fn update(self: *InputMap, gf: *GlobalFn) void {
+        self.updateFn(self.ptr, gf);
+    }
+
+    pub fn gets(self: *InputMap) st.ActiveState {
+        return if (self.s_val) |v| v.* else .Off;
+    }
+
+    pub fn getf(self: *InputMap) f32 {
+        return if (self.f_val) |v| v.* else 0;
+    }
+};
+
+pub const AxisInputMap = struct {
+    kb_dec: ?w32kb.VIRTUAL_KEY = null,
+    kb_inc: ?w32kb.VIRTUAL_KEY = null,
+    xi_dec: ?XINPUT_GAMEPAD_AXIS_INDEX = null,
+    xi_inc: ?XINPUT_GAMEPAD_AXIS_INDEX = null,
+    kb_scale: f32 = 1,
+    state: f32 = 0,
+
+    fn update(ptr: *anyopaque, gf: *GlobalFn) void {
+        const self: *AxisInputMap = @ptrCast(@alignCast(ptr));
+
+        const kb_dec: f32 = if (self.kb_dec) |k| @floatFromInt(@intFromBool(gf.InputGetKbRaw(k).on())) else 0;
+        const kb_inc: f32 = if (self.kb_inc) |k| @floatFromInt(@intFromBool(gf.InputGetKbRaw(k).on())) else 0;
+        const xi_dec: f32 = if (self.xi_dec) |x| gf.InputGetXInputAxis(x) else 0;
+        const xi_inc: f32 = if (self.xi_inc) |x| gf.InputGetXInputAxis(x) else 0;
+
+        self.state = std.math.clamp(xi_inc - xi_dec + (kb_inc - kb_dec) * self.kb_scale, -1, 1);
+    }
+
+    pub fn inputMap(self: *AxisInputMap) InputMap {
+        return .{
+            .ptr = self,
+            .f_val = &self.state,
+            .updateFn = update,
+        };
+    }
+};
+
+pub const ButtonInputMap = struct {
+    kb: ?w32kb.VIRTUAL_KEY = null,
+    xi: ?XINPUT_GAMEPAD_BUTTON_INDEX = null,
+    state: st.ActiveState = .Off,
+
+    fn update(ptr: *anyopaque, gf: *GlobalFn) void {
+        const self: *ButtonInputMap = @ptrCast(@alignCast(ptr));
+
+        const kb: bool = if (self.kb) |k| gf.InputGetKbRaw(k).on() else false;
+        const xi: bool = if (self.xi) |x| gf.InputGetXInputButton(x).on() else false;
+
+        self.state.update(kb or xi);
+    }
+
+    pub fn inputMap(self: *ButtonInputMap) InputMap {
+        return .{
+            .ptr = self,
+            .s_val = &self.state,
+            .updateFn = update,
+        };
+    }
+};
+
 // XINPUT GAMEPAD
+
+pub const INPUT_XINPUT = extern struct {
+    Button: [std.enums.values(XINPUT_GAMEPAD_BUTTON_INDEX).len]st.ActiveState,
+    Axis: [std.enums.values(XINPUT_GAMEPAD_AXIS_INDEX).len]f32,
+};
 
 pub const XINPUT_GAMEPAD_AXIS_INDEX = enum(u16) {
     TriggerL,
@@ -144,6 +208,14 @@ pub fn get_kb_released(keycode: w32kb.VIRTUAL_KEY) bool {
 }
 
 // MOUSE
+
+pub const INPUT_MOUSE = extern struct {
+    raw: POINT,
+    raw_d: POINT,
+    window: POINT,
+    window_d: POINT,
+    window_in: st.ActiveState,
+};
 
 // FIXME: this code worked properly at one point, but now behaves like the normal
 // game cursor. maybe it only worked because of dgvoodoo forcing a resize after tab-out?

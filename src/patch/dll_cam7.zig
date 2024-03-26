@@ -101,46 +101,38 @@ const Cam7 = extern struct {
         input_move_y.update(gf);
         input_move_z.update(gf);
     }
-
-    fn update_cam_from_rot(euler: *const Vec3) void {
-        // TODO: probably can do better than this, at least more efficient
-        // if not switching to quaternions or smth
-        var x: [3][3]f32 = .{
-            .{ m.cos(euler.x), -m.sin(euler.x), 0 },
-            .{ m.sin(euler.x), m.cos(euler.x), 0 },
-            .{ 0, 0, 1 },
-        };
-        var y: [3][3]f32 = .{
-            .{ m.cos(euler.y), 0, m.sin(euler.y) },
-            .{ 0, 1, 0 },
-            .{ -m.sin(euler.y), 0, m.cos(euler.y) },
-        };
-        var z: [3][3]f32 = .{
-            .{ 1, 0, 0 },
-            .{ 0, m.cos(euler.z), -m.sin(euler.z) },
-            .{ 0, m.sin(euler.z), m.cos(euler.z) },
-        };
-        var out: [3][3]f32 = undefined;
-        mmul(3, &z, &x, &out);
-        mmul(3, &y, &out, &out);
-        @memcpy(@as(*[3]f32, @ptrCast(&Cam7.cam_mat4x4[0])), &out[0]);
-        @memcpy(@as(*[3]f32, @ptrCast(&Cam7.cam_mat4x4[1])), &out[1]);
-        @memcpy(@as(*[3]f32, @ptrCast(&Cam7.cam_mat4x4[2])), &out[2]);
-    }
-
-    fn update_rot_from_cam(euler: *Vec3) void {
-        const mat = &Cam7.cam_mat4x4;
-        const t1: f32 = m.atan2(f32, mat[1][2], mat[2][2]); // Z
-        const c2: f32 = m.sqrt(mat[0][0] * mat[0][0] + mat[0][1] * mat[0][1]);
-        const t2: f32 = m.atan2(f32, -mat[0][2], c2); // Y
-        const c1: f32 = m.cos(t1);
-        const s1: f32 = m.sin(t1);
-        const t3: f32 = m.atan2(f32, s1 * mat[2][0] - c1 * mat[1][0], c1 * mat[1][1] - s1 * mat[2][1]); // X
-        euler.x = -t3;
-        euler.y = t2;
-        euler.z = t1;
-    }
 };
+
+// NOTE: stolen from Mat4x4_Rotate_430E00
+fn mat4x4_set_rotation(mat: *[4][4]f32, euler: *const Vec3) void {
+    const Xsin: f32 = m.sin(euler.x);
+    const Xcos: f32 = m.cos(euler.x);
+    const Ysin: f32 = m.sin(euler.y);
+    const Ycos: f32 = m.cos(euler.y);
+    const Zsin: f32 = m.sin(euler.z);
+    const Zcos: f32 = m.cos(euler.z);
+    mat[0][0] = Zcos * Xcos - Zsin * Xsin * Ysin;
+    mat[0][1] = Zsin * Xcos * Ysin + Zcos * Xsin;
+    mat[0][2] = -(Zsin * Ycos);
+    mat[1][0] = -(Ycos * Xsin);
+    mat[1][1] = Ycos * Xcos;
+    mat[1][2] = Ysin;
+    mat[2][0] = Zcos * Xsin * Ysin + Zsin * Xcos;
+    mat[2][1] = Zsin * Xsin - Zcos * Xcos * Ysin;
+    mat[2][2] = Zcos * Ycos;
+}
+
+fn mat4x4_get_rotation(mat: *const [4][4]f32, euler: *Vec3) void {
+    const t1: f32 = m.atan2(f32, mat[1][2], mat[2][2]); // Z
+    const c2: f32 = m.sqrt(mat[0][0] * mat[0][0] + mat[0][1] * mat[0][1]);
+    const t2: f32 = m.atan2(f32, -mat[0][2], c2); // Y
+    const c1: f32 = m.cos(t1);
+    const s1: f32 = m.sin(t1);
+    const t3: f32 = m.atan2(f32, s1 * mat[2][0] - c1 * mat[1][0], c1 * mat[1][1] - s1 * mat[2][1]); // X
+    euler.x = t3;
+    euler.y = t2;
+    euler.z = t1;
+}
 
 const camstate_ref_addr: u32 = rc.CAM_METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
 
@@ -177,7 +169,7 @@ fn SaveSavedCam() void {
     const mat4_addr: u32 = rc.CAM_CAMSTATE_ARRAY_ADDR +
         Cam7.saved_camstate_index.? * rc.CAM_CAMSTATE_ITEM_SIZE + 0x14;
     @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4[0])), @as([*]f32, @ptrFromInt(mat4_addr)));
-    Cam7.update_rot_from_cam(&Cam7.xcam_rot);
+    mat4x4_get_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
 
     _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
@@ -227,26 +219,26 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     const a_rx: f32 = if (m.fabs(_a_rx) > Cam7.dz) a_r_mag * m.cos(a_r_ang) else 0;
     const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
 
-    Cam7.xcam_rotation.x = a_rx;
+    Cam7.xcam_rotation.x = -a_rx;
+    Cam7.xcam_rotation.y = a_ry;
     Cam7.xcam_rotation.z = 0;
-    Cam7.xcam_rotation.z = -a_ry;
     //if (Cam7.xcam_rotation.magnitude() > 1)
     //    Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
     //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
 
     Cam7.xcam_rot.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
-    Cam7.xcam_rot.y += 0;
-    Cam7.xcam_rot.z += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.z;
+    Cam7.xcam_rot.y += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.y;
+    Cam7.xcam_rot.z += 0;
     //Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
-    Cam7.update_cam_from_rot(&Cam7.xcam_rot);
+    mat4x4_set_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
 
     // motion
 
     // TODO: individual X, Y deadzone; rather than magnitude-based
     const a_l_mag: f32 = @min(m.sqrt(_a_lx * _a_lx + _a_ly * _a_ly), 1);
     const a_l_ang: f32 = m.atan2(f32, _a_ly, _a_lx);
-    const a_lx: f32 = smooth2(a_l_mag) * m.cos(a_l_ang - Cam7.xcam_rot.x);
-    const a_ly: f32 = smooth2(a_l_mag) * m.sin(a_l_ang - Cam7.xcam_rot.x);
+    const a_lx: f32 = smooth2(a_l_mag) * m.cos(a_l_ang + Cam7.xcam_rot.x);
+    const a_ly: f32 = smooth2(a_l_mag) * m.sin(a_l_ang + Cam7.xcam_rot.x);
     const a_t: f32 = if (m.fabs(_a_t) > Cam7.dz) smooth2(_a_t) else 0;
 
     Cam7.xcam_motion_target.x = if (a_l_mag > Cam7.dz) a_lx else 0;
@@ -321,6 +313,13 @@ const Vec3 = extern struct {
         self.y = std.math.lerp(self.y, target.y, 1 - std.math.exp(-t * dt));
         self.z = std.math.lerp(self.z, target.z, 1 - std.math.exp(-t * dt));
     }
+};
+
+const Mat4x4 = extern struct {
+    x: f32[4] = f32{ 1, 0, 0, 0 },
+    y: f32[4] = f32{ 0, 1, 0, 0 },
+    z: f32[4] = f32{ 0, 0, 1, 0 },
+    w: f32[4] = f32{ 0, 0, 0, 1 },
 };
 
 // TODO: move to vec lib, or find glm equivalent

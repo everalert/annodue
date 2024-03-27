@@ -3,6 +3,7 @@ const Self = @This();
 const std = @import("std");
 const win = std.os.windows;
 const w32 = @import("zigwin32");
+const w32wm = w32.ui.windows_and_messaging;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
@@ -30,6 +31,12 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
+// TODO: figure out wtf to do to manage state through hot-reload etc.
+
+// FEATURES
+// - disable mouse cursor fix
+// - .. TODO
 
 const QolState = struct {
     var quickstart: bool = false;
@@ -59,8 +66,6 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
     if (!QolState.quickrace) QuickRaceMenu.close();
     PatchHudTimerMs(QolState.ms_timer);
 }
-
-// TODO: figure out wtf to do to manage state through hot-reload etc.
 
 // HUD TIMER MS
 
@@ -432,6 +437,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
+    _ = w32wm.ShowCursor(0);
     QolHandleSettings(gf);
 
     QuickRaceMenu.gf = gf;

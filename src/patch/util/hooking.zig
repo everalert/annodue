@@ -14,8 +14,15 @@ pub fn addr_from_call(src_call: usize) usize {
     return orig_dest_abs;
 }
 
+// FIXME: the naming of these functions sucks balls
+// also, the naming of the arguments
+
+// TODO: version that only detours a CALL (5 bytes) with JMP, for simplicity
 // NOTE: assumes no relative shenanigans are in the detoured range other than
 // the intercepted CALL
+/// @addr_detour    the starting address of the sequence of instructions to replace
+/// @off_call       the number of bytes after @addr_detour where the CALL instruction to replace is
+/// @len            the total length of the sequence of instructions to replace
 pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
     std.debug.assert(len >= 5);
     std.debug.assert(len <= DETOUR_LIMIT);
@@ -57,6 +64,21 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
     if (dest_before) |dest| off = x86.jmp(off, @intFromPtr(dest));
     off = mem.write_bytes(off, &scratch, len);
     if (dest_after) |dest| off = x86.jmp(off, @intFromPtr(dest));
+    off = x86.retn(off);
+    off = x86.nop_align(off, ALIGN_SIZE);
+
+    return off;
+}
+
+/// @addr    address of the original RETN instruction; requires 4 trailing NOPs
+pub fn detour_retn(memory: usize, addr: usize, dest: *const fn () void) usize {
+    std.debug.assert(std.mem.eql(u8, @as(*[5]u8, @ptrFromInt(addr)), &[5]u8{ 0xC3, 0x90, 0x90, 0x90, 0x90 }));
+
+    var off: usize = memory;
+
+    _ = x86.jmp(addr, off);
+
+    off = x86.call(off, @intFromPtr(dest));
     off = x86.retn(off);
     off = x86.nop_align(off, ALIGN_SIZE);
 

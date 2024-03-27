@@ -27,9 +27,6 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 const PLUGIN_NAME: [*:0]const u8 = "Cam7";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
-// FIXME: map visuals not updating when starting freecam while the game is pause-frozen
-// FIXME: find a good hook spot where the game is naturally updating the camera
-// so that the pause stuff is handled for us
 // FIXME: cam seems to not always correct itself upright when switching?
 // TODO: controls = ???
 //   - drone-style controls as an option for sure tho
@@ -60,7 +57,7 @@ const Cam7 = extern struct {
     const fog_dist: f32 = 7500;
     var cam_state: CamState = .None;
     var saved_camstate_index: ?u32 = null;
-    var cam_mat4x4: [4][4]f32 = .{
+    var cam_mat4x4: [4][4]f32 = .{ // TODO: use actual Mat4x4
         .{ 1, 0, 0, 0 },
         .{ 0, 1, 0, 0 },
         .{ 0, 0, 1, 0 },
@@ -99,7 +96,7 @@ const Cam7 = extern struct {
         input_move_x.update(gf);
         input_move_y.update(gf);
         input_move_z.update(gf);
-        if (cam_state == .FreeCam) {
+        if (cam_state == .FreeCam and mem.read(rc.ADDR_PAUSE_STATE, u8) == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
             const mouse_d: POINT = gf.InputGetMouseDelta();
@@ -401,6 +398,6 @@ export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleSettings(gf);
 }
 
-export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     UpdateState(gs, gf);
 }

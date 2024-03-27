@@ -104,6 +104,14 @@ const PluginExportFn = enum(u32) {
     EarlyEngineUpdateA,
     LateEngineUpdateB,
     LateEngineUpdateA,
+    //EngineUpdateStage14B,
+    EngineUpdateStage14A,
+    //EngineUpdateStage18B,
+    EngineUpdateStage18A,
+    //EngineUpdateStage1CB,
+    EngineUpdateStage1CA,
+    //EngineUpdateStage20B,
+    EngineUpdateStage20A,
     TimerUpdateB,
     TimerUpdateA,
     InputUpdateB,
@@ -360,6 +368,13 @@ fn HookEngineUpdate(memory: usize) usize {
     // text processing, etc. before the actual render
     off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
     off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
+
+    // entity system stages in EarlyEngineUpdate (CallAll0x14, etc.)
+    // will only run when game is not paused
+    off = hook.intercept_call(off, 0x4459D6, null, PluginFnCallback(.EngineUpdateStage14A));
+    off = hook.intercept_call(off, 0x4459E0, null, PluginFnCallback(.EngineUpdateStage18A));
+    off = hook.intercept_call(off, 0x4459E5, null, PluginFnCallback(.EngineUpdateStage1CA));
+    off = hook.intercept_call(off, 0x4459EF, null, PluginFnCallback(.EngineUpdateStage20A));
 
     return off;
 }

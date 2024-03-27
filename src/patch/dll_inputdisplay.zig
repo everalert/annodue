@@ -7,6 +7,7 @@ const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const nt = @import("util/normalized_transform.zig");
 const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
@@ -19,9 +20,6 @@ const rto = rt.TextStyleOpts;
 // TODO: robustness checking, particularly surrounding init and deinit for
 // hotreloading case
 // TODO: restyling, esp. adding color and maybe redo sprites (rounded?)
-// TODO: settings
-// - global enable
-// - position
 
 const PLUGIN_NAME: [*:0]const u8 = "InputDisplay";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -112,6 +110,15 @@ const InputDisplay = struct {
         for (icons) |icon| {
             if (icon.bg_idx) |i| rf.swrQuad_SetActive(i, 0);
             if (icon.fg_idx) |i| rf.swrQuad_SetActive(i, 0);
+        }
+    }
+
+    fn SetOpacityAll(a: f32) void {
+        const a_bg: u8 = @intFromFloat(nt.pow2(a) * 127);
+        const a_fg: u8 = @intFromFloat(nt.pow2(a) * 255);
+        for (icons) |icon| {
+            if (icon.bg_idx) |i| rf.swrQuad_SetColor(i, 0x28, 0x28, 0x28, a_bg);
+            if (icon.fg_idx) |i| rf.swrQuad_SetColor(i, 0x00, 0x00, 0x00, a_fg);
         }
     }
 
@@ -223,9 +230,11 @@ const InputDisplay = struct {
             const text_xoff: u16 = 2;
             std.debug.assert(@divFloor(s.w, 2) >= text_xoff);
             const txo: i16 = @divFloor(s.w, 2) - @as(i16, @intFromFloat(m.sign(axis) * text_xoff));
+            const col: u32 = 0xFFFFFF00 |
+                @as(u32, @intFromFloat(nt.pow2(1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32)) * 255));
             rt.DrawText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
                 std.math.fabs(axis * 100),
-            }, null, style_center) catch {};
+            }, col, style_center) catch {};
         }
     }
 
@@ -251,9 +260,11 @@ const InputDisplay = struct {
             const text_yoff: u16 = 5;
             std.debug.assert(s.h >= text_yoff);
             const tyo: i16 = (if (axis < 0) s.h - text_yoff else text_yoff) - 3;
+            const col: u32 = 0xFFFFFF00 |
+                @as(u32, @intFromFloat(nt.pow2(1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32)) * 255));
             rt.DrawText(s.x + 2, s.y + tyo, "{d:1.0}", .{
                 std.math.fabs(axis * 100),
-            }, null, style_left) catch {};
+            }, col, style_left) catch {};
         }
     }
 
@@ -283,9 +294,11 @@ const InputDisplay = struct {
             const off: i16 = top.h - @as(i16, @intFromFloat(pre));
             rf.swrQuad_SetPosition(top.fg_idx.?, top.x, top.y + off);
             if (thrust < 1) {
+                const col: u32 = 0xFFFFFF00 |
+                    @as(u32, @intFromFloat(nt.pow2(1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32)) * 255));
                 rt.DrawText(top.x + 8, top.y - 8, "{d:1.0}", .{
                     std.math.fabs(thrust * 100),
-                }, null, style_center) catch {};
+                }, col, style_center) catch {};
             }
         }
         if (brake) {
@@ -367,10 +380,13 @@ export fn InputUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
         if (InputDisplay.enable and
             InputDisplay.initialized and
+            mem.read(rc.ADDR_PAUSE_STATE, u8) != 1 and
             !gs.player.in_race_results.on())
         {
+            const a: f32 = 1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
             InputDisplay.ReadInputs();
             InputDisplay.UpdateIcons();
+            InputDisplay.SetOpacityAll(a);
         } else {
             InputDisplay.HideAll();
         }

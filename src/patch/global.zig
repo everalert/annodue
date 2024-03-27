@@ -59,7 +59,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 15;
+pub const PLUGIN_VERSION = 16;
 
 // STATE
 
@@ -151,7 +151,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_FUNCTION_VERSION = 13;
+pub const GLOBAL_FUNCTION_VERSION = 14;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -162,8 +162,9 @@ pub const GlobalFunction = extern struct {
     // Input
     InputGetKb: *const @TypeOf(input.get_kb) = &input.get_kb,
     InputGetKbRaw: *const @TypeOf(input.get_kb_raw) = &input.get_kb_raw,
-    //InputGetMouse: *const @TypeOf(input.get_mouse_window) = &input.get_mouse_window,
-    //InputGetMouseDelta: *const @TypeOf(input.get_mouse_window_d) = &input.get_mouse_window_d,
+    InputGetMouse: *const @TypeOf(input.get_mouse_raw) = &input.get_mouse_raw,
+    InputGetMouseDelta: *const @TypeOf(input.get_mouse_raw_d) = &input.get_mouse_raw_d,
+    InputLockMouse: *const @TypeOf(input.lock_mouse) = &input.lock_mouse,
     //InputGetMouseInWindow: *const @TypeOf(input.get_mouse_inside) = &input.get_mouse_inside,
     InputGetXInputButton: *const @TypeOf(input.get_xinput_button) = &input.get_xinput_button,
     InputGetXInputAxis: *const @TypeOf(input.get_xinput_axis) = &input.get_xinput_axis,

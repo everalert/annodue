@@ -6,12 +6,7 @@ const m = std.math;
 const deg2rad = m.degreesToRadians;
 
 const w32 = @import("zigwin32");
-const w32wm = w32.ui.windows_and_messaging;
 const POINT = w32.foundation.POINT;
-const RECT = w32.foundation.RECT;
-const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
-const XINPUT_GAMEPAD_AXIS_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
 const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
@@ -90,8 +85,12 @@ const Cam7 = extern struct {
     var input_move_x = input_move_x_data.inputMap();
     var input_move_y = input_move_y_data.inputMap();
     var input_move_z = input_move_z_data.inputMap();
+    var input_mouse_d_x: f32 = 0;
+    var input_mouse_d_y: f32 = 0;
+    var input_mouse_dpi: f32 = 1600; // only needed for sens calc, does not set mouse dpi
+    var input_mouse_cm360: f32 = 24; // real-world space per full rotation
+    var input_mouse_sens: f32 = 15118.1; // mouse units per full rotation
 
-    // TODO: mouse input
     // TODO: maybe normalizing XY stuff
     fn update_input(gf: *GlobalFn) void {
         input_toggle.update(gf);
@@ -100,6 +99,13 @@ const Cam7 = extern struct {
         input_move_x.update(gf);
         input_move_y.update(gf);
         input_move_z.update(gf);
+        if (cam_state == .FreeCam) {
+            gf.InputLockMouse();
+            // TODO: move to InputMap
+            const mouse_d: POINT = gf.InputGetMouseDelta();
+            input_mouse_d_x = @as(f32, @floatFromInt(mouse_d.x)) / input_mouse_sens;
+            input_mouse_d_y = @as(f32, @floatFromInt(mouse_d.y)) / input_mouse_sens;
+        }
     }
 };
 
@@ -185,6 +191,9 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.enable = gf.SettingGetB("cam7", "enable") orelse false;
     Cam7.flip_look_x = gf.SettingGetB("cam7", "flip_look_x") orelse false;
     Cam7.flip_look_y = gf.SettingGetB("cam7", "flip_look_y") orelse false;
+    Cam7.input_mouse_dpi = @floatFromInt(gf.SettingGetU("cam7", "mouse_dpi") orelse 1600);
+    Cam7.input_mouse_cm360 = gf.SettingGetF("cam7", "mouse_cm360") orelse 24;
+    Cam7.input_mouse_sens = Cam7.input_mouse_cm360 / 2.54 * Cam7.input_mouse_dpi;
 }
 
 // STATE MACHINE
@@ -206,33 +215,44 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         return .None;
     }
 
-    const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x.getf() else Cam7.input_look_x.getf();
-    const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
-    const _a_lx: f32 = Cam7.input_move_x.getf();
-    const _a_ly: f32 = Cam7.input_move_y.getf();
-    const _a_t: f32 = Cam7.input_move_z.getf();
-
     // rotation
 
-    const a_r_mag: f32 = smooth2(@min(m.sqrt(_a_rx * _a_rx + _a_ry * _a_ry), 1));
-    const a_r_ang: f32 = m.atan2(f32, _a_ry, _a_rx);
-    const a_rx: f32 = if (m.fabs(_a_rx) > Cam7.dz) a_r_mag * m.cos(a_r_ang) else 0;
-    const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
+    if (Cam7.input_mouse_d_x != 0 or Cam7.input_mouse_d_y != 0) {
+        const _a_rx: f32 = if (Cam7.flip_look_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
+        const _a_ry: f32 = if (Cam7.flip_look_y) Cam7.input_mouse_d_y else -Cam7.input_mouse_d_y;
 
-    Cam7.xcam_rotation.x = -a_rx;
-    Cam7.xcam_rotation.y = a_ry;
-    Cam7.xcam_rotation.z = 0;
-    //if (Cam7.xcam_rotation.magnitude() > 1)
-    //    Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
-    //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
+        Cam7.xcam_rot.x += _a_rx * rot;
+        Cam7.xcam_rot.y += _a_ry * rot;
+        Cam7.xcam_rot.z += 0;
+    } else {
+        const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x.getf() else Cam7.input_look_x.getf();
+        const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
 
-    Cam7.xcam_rot.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
-    Cam7.xcam_rot.y += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.y;
-    Cam7.xcam_rot.z += 0;
+        const a_r_mag: f32 = smooth2(@min(m.sqrt(_a_rx * _a_rx + _a_ry * _a_ry), 1));
+        const a_r_ang: f32 = m.atan2(f32, _a_ry, _a_rx);
+        const a_rx: f32 = if (m.fabs(_a_rx) > Cam7.dz) a_r_mag * m.cos(a_r_ang) else 0;
+        const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
+
+        Cam7.xcam_rotation.x = -a_rx;
+        Cam7.xcam_rotation.y = a_ry;
+        Cam7.xcam_rotation.z = 0;
+        //if (Cam7.xcam_rotation.magnitude() > 1)
+        //    Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
+        //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
+
+        Cam7.xcam_rot.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
+        Cam7.xcam_rot.y += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.y;
+        Cam7.xcam_rot.z += 0;
+    }
     //Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
     mat4x4_set_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
 
     // motion
+
+    // TODO: normalize XY only
+    const _a_lx: f32 = Cam7.input_move_x.getf();
+    const _a_ly: f32 = Cam7.input_move_y.getf();
+    const _a_t: f32 = Cam7.input_move_z.getf();
 
     // TODO: individual X, Y deadzone; rather than magnitude-based
     const a_l_mag: f32 = @min(m.sqrt(_a_lx * _a_lx + _a_ly * _a_ly), 1);

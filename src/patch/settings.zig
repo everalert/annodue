@@ -95,6 +95,8 @@ pub fn init() void {
     SettingsState.cam7.add("enable", bool, false);
     SettingsState.cam7.add("flip_look_x", bool, false);
     SettingsState.cam7.add("flip_look_y", bool, false);
+    SettingsState.cam7.add("mouse_dpi", u32, 1600);
+    SettingsState.cam7.add("mouse_cm360", f32, 24);
     SettingsState.manager.add(&SettingsState.cam7);
 
     SettingsState.inputdisplay = SettingsGroup.init(alloc, "inputdisplay");

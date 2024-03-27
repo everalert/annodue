@@ -21,17 +21,18 @@ pub const INPUT_NEW: u8 = 0b10;
 
 const InputState = extern struct {
     var kb: [256]st.ActiveState = std.mem.zeroes([256]st.ActiveState);
-    var mouse: INPUT_MOUSE = std.mem.zeroInit(INPUT_MOUSE, .{});
     var xbox_raw: xinput.XINPUT_GAMEPAD = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});
     var xbox: INPUT_XINPUT = std.mem.zeroInit(INPUT_XINPUT, .{});
+    var mouse: INPUT_MOUSE = std.mem.zeroInit(INPUT_MOUSE, .{});
+    var mouse_lock: bool = false;
 };
 
 pub fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
-    _ = gs;
     update_xinput();
     update_kb();
-    //update_mouse(@ptrCast(gs.hwnd));
+    //update_mouse();
+    update_mouse(@ptrCast(gs.hwnd));
 }
 
 // MAPPING
@@ -212,35 +213,46 @@ pub fn get_kb_released(keycode: w32kb.VIRTUAL_KEY) bool {
 pub const INPUT_MOUSE = extern struct {
     raw: POINT,
     raw_d: POINT,
-    window: POINT,
-    window_d: POINT,
-    window_in: st.ActiveState,
+    //window: POINT,
+    //window_d: POINT,
+    //window_in: st.ActiveState,
 };
 
-// FIXME: this code worked properly at one point, but now behaves like the normal
+// FIXME: add window-relative coordinates to output in OS units, not 640x480
+// old code worked properly at one point, but now behaves like the normal
 // game cursor. maybe it only worked because of dgvoodoo forcing a resize after tab-out?
 pub fn update_mouse(hwnd: HWND) callconv(.C) void {
-    var m: POINT = undefined;
-    var c: RECT = undefined;
-    if (w32wm.GetCursorPos(&m) > 0 and w32wm.GetClientRect(hwnd, &c) > 0) {
+    const static = struct {
+        var m: POINT = undefined;
+        var c: RECT = undefined;
+    };
+
+    if (w32wm.GetCursorPos(&static.m) > 0 and w32wm.GetClientRect(hwnd, &static.c) > 0) {
         const s: *INPUT_MOUSE = &InputState.mouse;
 
-        s.raw_d.x = m.x - s.raw.x;
-        s.raw_d.y = m.y - s.raw.y;
-        s.raw = m;
+        s.raw_d.x = static.m.x - s.raw.x;
+        s.raw_d.y = static.m.y - s.raw.y;
+        s.raw = static.m;
 
-        const x_scale: f32 = 640 / @as(f32, @floatFromInt(c.right - c.left));
-        const y_scale: f32 = 480 / @as(f32, @floatFromInt(c.bottom - c.top));
-        const wx: i16 = @intFromFloat(@as(f32, @floatFromInt(m.x - c.left)) * x_scale);
-        const wy: i16 = @intFromFloat(@as(f32, @floatFromInt(m.y - c.top)) * y_scale);
-        s.window_d.x = wx - s.window.x;
-        s.window_d.y = wy - s.window.y;
-        s.window.x = wx;
-        s.window.y = wy;
-        s.window_in.update(wx >= 0 and wx < 640 and wy >= 0 and wy < 480);
+        // TODO: move mouse lock to state-based system
+        // FIXME: game sometimes loses focus when moving mouse left
+        // ClipCursor was meant to help but doesn't seem to (fully?) solve the problem
+        if (InputState.mouse_lock) {
+            InputState.mouse_lock = false;
+            s.raw.x = static.c.left + @divTrunc(static.c.right - static.c.left, 2);
+            s.raw.y = static.c.top + @divTrunc(static.c.bottom - static.c.top, 2);
+            _ = w32wm.SetCursorPos(s.raw.x, s.raw.y);
+            //_ = w32wm.ClipCursor(&static.c);
+            _ = w32wm.ShowCursor(0);
+        }
     } else {
         InputState.mouse = std.mem.zeroInit(INPUT_MOUSE, .{});
     }
+}
+
+// for one frame
+pub fn lock_mouse() callconv(.C) void {
+    InputState.mouse_lock = true;
 }
 
 pub fn get_mouse_raw() callconv(.C) POINT {
@@ -251,14 +263,14 @@ pub fn get_mouse_raw_d() callconv(.C) POINT {
     return InputState.mouse.raw_d;
 }
 
-pub fn get_mouse_window() callconv(.C) POINT {
-    return InputState.mouse.window;
-}
+//pub fn get_mouse_window() callconv(.C) POINT {
+//    return InputState.mouse.window;
+//}
 
-pub fn get_mouse_window_d() callconv(.C) POINT {
-    return InputState.mouse.window_d;
-}
+//pub fn get_mouse_window_d() callconv(.C) POINT {
+//    return InputState.mouse.window_d;
+//}
 
-pub fn get_mouse_inside() callconv(.C) st.ActiveState {
-    return InputState.mouse.window_in;
-}
+//pub fn get_mouse_inside() callconv(.C) st.ActiveState {
+//    return InputState.mouse.window_in;
+//}

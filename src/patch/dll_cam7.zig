@@ -150,11 +150,13 @@ fn CheckAndResetSavedCam() void {
     _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
     _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
+
+    Cam7.xcam_motion_target = comptime .{ .x = 0, .y = 0, .z = 0 };
+    Cam7.xcam_motion = comptime .{ .x = 0, .y = 0, .z = 0 };
     Cam7.saved_camstate_index = null;
     Cam7.cam_state = .None;
 }
 
-// FIXME: reset momentum to 0 when turning off cam, also probably apply same to CheckAndResetSavedCam
 fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
         _ = mem.write(camstate_ref_addr, u32, i);
@@ -164,6 +166,8 @@ fn RestoreSavedCam() void {
         _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
         _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
 
+        Cam7.xcam_motion_target = comptime .{ .x = 0, .y = 0, .z = 0 };
+        Cam7.xcam_motion = comptime .{ .x = 0, .y = 0, .z = 0 };
         Cam7.saved_camstate_index = null;
     }
 }

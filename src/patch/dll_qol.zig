@@ -533,8 +533,7 @@ export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             if (gs.player.in_race_count == .JustOn) {
                 // ...
             }
-        } else if (gs.player.in_race_results.on()) {
-            // TODO: make end-race stats disappear when the normal end-race overlay does
+        } else if (gs.player.in_race_results.on()) blk: {
             // FIXME: final stat calculation is slightly off, seems to be up to
             // a frame early now (since porting to plugin dlls).
             if (gs.player.in_race_results == .JustOn) {
@@ -545,6 +544,9 @@ export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     race.set_total_overheat(total_time);
                 }
             }
+
+            const hide_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F != 2;
+            if (hide_stats) break :blk;
 
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{

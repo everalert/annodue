@@ -212,10 +212,6 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 // QUICK RACE MENU
 
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
-// TODO: also keep track of related global values for coherency
-//  - adjusting selected circuit in menus after switching
-//  - changing the selected stuff in quick race menu to match loaded stuff,
-//    i.e. sync it so it always opens with the current settings even if you dont load via quickrace
 // TODO: make it wait till the end of the pause scroll-in, so that the scroll-out
 // is always the same as a normal pause
 // TODO: add options/differentiation for tournament mode races, and also maybe
@@ -231,7 +227,8 @@ const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
     var menu_active: bool = false;
     var initialized: bool = false;
-    // TODO: figure out if this can be removed, currently blocked by quick race menu callbacks
+    // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
+    var gs: *GlobalSt = undefined;
     var gf: *GlobalFn = undefined;
 
     var FpsTimer: timing.TimeSpinlock = .{};
@@ -303,6 +300,7 @@ const QuickRaceMenu = extern struct {
         FpsTimer.SetPeriod(@intCast(values.fps));
         r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
         r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
+        r.WriteEntityValue(.Hang, 0, 0x5E, u8, rc.TrackCircuitIdMap[@intCast(values.track)]);
         r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
         r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps)));
         r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // also: 0x50C558
@@ -319,9 +317,9 @@ const QuickRaceMenu = extern struct {
         close();
     }
 
+    // TODO: repurpose to run every EventJdgeBegn, maybe add different init if
+    // that introduces issues with state loop
     fn init() void {
-        if (initialized) return;
-
         values.vehicle = r.ReadEntityValue(.Hang, 0, 0x73, u8);
         values.track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
         values.mirror = r.ReadEntityValue(.Hang, 0, 0x6E, u8);
@@ -353,7 +351,10 @@ const QuickRaceMenu = extern struct {
     }
 
     fn update() void {
-        init();
+        if (gs.in_race == .JustOn)
+            init();
+
+        if (!gs.in_race.on() or !initialized) return;
 
         const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
         if (menu_active and QolState.input_pause.gets() == .JustOn) {
@@ -436,10 +437,10 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
     _ = w32wm.ShowCursor(0);
     QolHandleSettings(gf);
 
+    QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
 }
 
@@ -511,12 +512,8 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 
     // Quick Race Menu
-    if (gs.in_race.on() and
-        !gs.player.in_race_results.on() and
-        QolState.quickrace)
-    {
+    if (QolState.quickrace)
         QuickRaceMenu.update();
-    }
 }
 
 export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {

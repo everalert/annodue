@@ -28,11 +28,6 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 // FIXME: change disabling during pause to use Freeze api, so that you can still save/load
 // during a real pause
 // FIXME: stop assuming entities will be in index 0, particularly Test entity
-// FIXME: game crashes after a bit when tabbing out; probably the allocated memory
-// filling up quickly because there is no frame pacing while tabbed out? not sure
-// why it's able to overflow though, saveable() is supposed to prevent this.
-// update - prevented saving while tabbed out, core issue still remains tho
-// update - prevented running updates while paused, core issue still not fixed
 // FIXME: sometimes crashes when rendering race stats, not sure why but seems
 // correlated to dying. doesn't seem to be an issue if you don't load any states
 // during the run.
@@ -172,7 +167,7 @@ const state = struct {
     // i.e. also when pausing, physics frozen with ingame feature, etc.
     fn saveable(gs: *GlobalSt) bool {
         const space_ok: bool = memory_end_addr - @intFromPtr(data) - offsets[frame] >= off_END;
-        const frames_ok: bool = frame < frames;
+        const frames_ok: bool = frame < frames - 1;
         return gs.in_race.on() and space_ok and frames_ok;
     }
 

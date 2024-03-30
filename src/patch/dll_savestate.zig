@@ -408,7 +408,7 @@ export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 // TODO: maybe reset state/recording if savestates or practice mode disabled?
-export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
     const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
@@ -418,12 +418,10 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
     if (!state.savestate_enable) return;
 
-    //const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
-    //const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
     if (gs.practice_mode and gs.in_race.on()) {
         if (gs.player.in_race_racing.on()) {
             rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};

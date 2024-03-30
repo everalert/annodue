@@ -168,6 +168,8 @@ fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
         t1.dwHighDateTime == t2.dwHighDateTime);
 }
 
+// TODO: possibly assert that this fully sets all fields and acts as an initializer
+// to a plugin struct, not just something that hooks up the fn refs
 // TODO: OnLoad, OnUnload, OnEnable, OnDisable
 // TODO: also stuff for loading and unloading based on watching the directory, outside of
 // updating already loaded plugins
@@ -215,8 +217,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     const fields = comptime std.enums.values(PluginExportFn);
     inline for (fields) |field| {
         const process = w32ll.GetProcAddress(p.Handle, @tagName(field));
-        if (process) |proc|
-            @field(p, @tagName(field)) = @ptrCast(proc);
+        @field(p, @tagName(field)) = if (process) |proc| @ptrCast(proc) else null;
     }
 
     if (p.PluginName == null or

@@ -44,6 +44,7 @@ const QolState = struct {
     var default_racers: u32 = 12;
     var default_laps: u32 = 3;
     var ms_timer: bool = false;
+    var fps_limiter: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_quickstart_data = ButtonInputMap{ .kb = .@"2", .xi = .BACK };
@@ -62,6 +63,7 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
     QolState.default_racers = gf.SettingGetU("qol", "default_racers") orelse 12;
     QolState.default_laps = gf.SettingGetU("qol", "default_laps") orelse 3;
     QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
+    QolState.fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
 
     if (!QolState.quickrace) QuickRaceMenu.close();
     PatchHudTimerMs(QolState.ms_timer);
@@ -487,11 +489,12 @@ export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
     _ = gf;
+    // TODO: move to global state
     // only not nullptr if in race scene
     const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
         r.ReadRaceDataValue(0x84, u32) != 0;
     const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
-    if (player_ok and gui_on)
+    if (player_ok and gui_on and QolState.fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
@@ -518,8 +521,6 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
-    //if (!gf.SettingGetB("practice", "practice_tool_enable").?) return;
-
     if (gs.in_race.on()) {
         if (gs.in_race == .JustOn) race.reset();
 

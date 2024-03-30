@@ -13,8 +13,9 @@ const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-// TODO:
-//- general: ?? custom static color as an option for the rainbow stuff?
+// TODO: ?? custom static color as an option for the rainbow stuff?
+// TODO: ?? realtime-based color scrolling (rather than frame-based)
+// TODO: convert all allocations to global allocator once part of GlobalFn
 
 const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -256,6 +257,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     return off;
 }
 
+// TODO: might be able to just ditch the function hooking and use our own toast system
 fn PatchTriggerDisplay(memory: usize) usize {
     var off = memory;
 
@@ -333,7 +335,9 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleColorSettings(gf);
 
     // TODO: convert to use global allocator once it is part of the GlobalFn interface;
-    // then we can properly deinit it when the plugin unloads or the user setting changes
+    // then we can properly deinit it when the plugin unloads or the user setting changes.
+    // could also statically allocate space on the DLL and include them in the binary
+    // at comptime, in the format racer expects them.
     var off = gs.patch_offset;
     if (gf.SettingGetB("cosmetic", "patch_fonts").?) {
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");

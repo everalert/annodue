@@ -16,6 +16,12 @@ const rt = r.text;
 const rto = rt.TextStyleOpts;
 
 // FIXME: refactor and merge with core
+// TODO: allow toggling mode at any time (during race), but only update the visualization
+// in a "more legit" direction when outside a race; e.g. if you switch from practice mode
+// to play mode during a race, the system will still indicate that it's in practice mode
+// until you exit the race or restart, BUT if you go in the direction of play -> practice,
+// the visualization will update immediately
+// also, same concept for anticheat stuff
 
 // PRACTICE MODE VISUALIZATION
 

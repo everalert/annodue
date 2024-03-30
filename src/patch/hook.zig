@@ -128,6 +128,8 @@ const PluginExportFn = enum(u32) {
     InitHangQuadsA,
     //InitRaceQuadsB,
     InitRaceQuadsA,
+    //EventJdgeBegnB,
+    //EventJdgeBegnA,
     MenuTitleScreenB,
     MenuStartRaceB,
     MenuJunkyardB,
@@ -456,6 +458,8 @@ fn HookInitRaceQuads(memory: usize) usize {
 // FIXME: probably just switch to fn_4240D0 (GameShutdown), not sure if hook should
 // be before or after the function contents (or both); might want to make available
 // opportunity to intercept e.g. the final savedata write
+// also look into doexit_49EA80, may be the last thing called regardless of exit path,
+// will definitely come after GameShutdown though
 // WARNING: in the current scheme, core deinit happens before plugin deinit, keep this
 // hook location as a stage2 or core-only deinit and use above for arbitrary deinit?
 fn HookGameEnd(memory: usize) usize {

@@ -9,6 +9,7 @@ const rto = rt.TextStyleOpts;
 const mem = @import("../util/memory.zig");
 
 // TODO: turn off race HUD when freezing
+// TODO: turn off/fade out other displays when freezing? e.g. savestate, overlay
 
 pub const Freeze = extern struct {
     const pausebit: u32 = 1 << 28;

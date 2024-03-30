@@ -35,7 +35,7 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 // TODO: figure out wtf to do to manage state through hot-reload etc.
 
 // FEATURES
-// - disable mouse cursor fix
+// - fix: disable mouse cursor
 // - .. TODO
 
 const QolState = struct {

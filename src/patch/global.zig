@@ -65,6 +65,8 @@ pub const PLUGIN_VERSION = 16;
 
 const GLOBAL_STATE_VERSION = 3;
 
+// TODO: move all references to patch_memory to use internal allocator; add
+// allocator interface to GlobalFunction
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
 // TODO: add index of currently consumed loaded tga IDs, since they are arbitrarily assigned
 //   also, some kind of interface plugins can use to avoid clashes
@@ -245,6 +247,7 @@ pub fn TimerUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
 pub fn MenuTitleScreenB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
     _ = gf;
     _ = gs;
+    // TODO: make text only appear on the actual title screen, i.e. remove from file select etc.
     DrawVersionString();
     DrawMenuPracticeModeLabel();
 

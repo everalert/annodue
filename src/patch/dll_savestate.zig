@@ -41,6 +41,7 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 // the memory allocation for this
 // TODO: convert all allocations to global allocator once part of GlobalFn
 // FIXME: stop recording when quitting, pausing, etc.
+// TODO: recording during the opening cutscene, to account for world animations (SMR, etc.)
 
 const PLUGIN_NAME: [*:0]const u8 = "Savestate";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -422,6 +423,9 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
     if (!state.savestate_enable) return;
 
+    // TODO: experiment with positioning
+    // TODO: experiment with conditionally showing each string; only show fr
+    // if playing back, only show st if a frame is actually saved?
     if (gs.practice_mode and gs.in_race.on()) {
         if (gs.player.in_race_racing.on()) {
             rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};
@@ -431,7 +435,9 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 // COMPRESSION-RELATED FUNCTIONS
-// not really in use/needs work
+// not really in use/needs work, basically just stuff for testing
+
+// TODO: move to compression lib whenever that happens
 
 // FIXME: assumes array of raw data; rework to adapt it to new compressed data
 fn save_file() void {

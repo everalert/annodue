@@ -196,14 +196,16 @@ fn DrawVersionString() void {
 
 // INIT
 
-pub fn init() void {
-    // input-based launch toggles
+pub fn init() bool {
     const kb_shift: i16 = w32kb.GetAsyncKeyState(@intFromEnum(w32kb.VK_SHIFT));
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
-    GLOBAL_STATE.practice_mode = kb_shift_dn;
+    if (kb_shift_dn)
+        return false;
 
     GLOBAL_STATE.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
     GLOBAL_STATE.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
+
+    return true;
 }
 
 // HOOK CALLS

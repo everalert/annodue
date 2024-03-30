@@ -15,16 +15,16 @@ const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 // DO THE THING!!!
 
 export fn Patch() void {
-    const alloc = allocator.allocator();
-    const memory = alloc.alloc(u8, patch_size) catch unreachable;
+    if (!global.init()) return;
 
     // init
 
+    const alloc = allocator.allocator();
+    const memory = alloc.alloc(u8, patch_size) catch unreachable;
     global.GLOBAL_STATE.patch_memory = @ptrCast(memory.ptr);
     global.GLOBAL_STATE.patch_size = patch_size;
     global.GLOBAL_STATE.patch_offset = @intFromPtr(memory.ptr);
 
-    global.init();
     settings.init();
     hook.init();
 

@@ -529,25 +529,27 @@ export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const total_time: f32 = race_times[5];
 
-        if (gs.player.in_race_count.on()) {
-            if (gs.player.in_race_count == .JustOn) {
-                // ...
-            }
-        } else if (gs.player.in_race_results.on()) blk: {
-            // FIXME: final stat calculation is slightly off, seems to be up to
-            // a frame early now (since porting to plugin dlls).
-            if (gs.player.in_race_results == .JustOn) {
-                if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
-                if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);
-                if (gs.player.overheating == .JustOff) {
-                    race.set_fire_finish_duration(total_time);
-                    race.set_total_overheat(total_time);
-                }
-            }
+        //if (gs.player.in_race_count.on()) {}
 
-            const hide_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F != 2;
-            if (hide_stats) break :blk;
+        if (!gs.player.in_race_count.on()) {
+            if (gs.player.dead == .JustOn) race.total_deaths += 1;
 
+            if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
+            if (gs.player.boosting.on()) race.set_total_boost(total_time);
+            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
+
+            if (gs.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
+            if (gs.player.underheating.on()) race.set_total_underheat(total_time);
+            if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);
+
+            if (gs.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
+            if (gs.player.overheating.on()) race.set_total_overheat(total_time);
+            if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
+            if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
+        }
+
+        const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
+        if (gs.player.in_race_results.on() and show_stats) {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
@@ -569,20 +571,6 @@ export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             RenderRaceResultStatTime(14, "Underheat Time", race.total_underheat);
             RenderRaceResultStatTime(15, "Fire Finish", race.fire_finish_duration);
             RenderRaceResultStatTime(16, "Overheat Time", race.total_overheat);
-        } else {
-            if (gs.player.dead == .JustOn) race.total_deaths += 1;
-
-            if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
-            if (gs.player.boosting.on()) race.set_total_boost(total_time);
-            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
-
-            if (gs.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
-            if (gs.player.underheating.on()) race.set_total_underheat(total_time);
-            if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);
-
-            if (gs.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
-            if (gs.player.overheating.on()) race.set_total_overheat(total_time);
-            if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
         }
     }
 }

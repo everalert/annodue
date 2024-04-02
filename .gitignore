@@ -1,4 +1,5 @@
 .notes/
+src/**/*.bin
 
 zig-cache/
 zig-out/

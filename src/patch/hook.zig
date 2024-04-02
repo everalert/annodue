@@ -19,14 +19,17 @@ const w32ll = w32.system.library_loader;
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
-const dbg = @import("util/debug.zig");
 const hook = @import("util/hooking.zig");
-const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
+
+const Sha512 = std.crypto.hash.sha2.Sha512;
+const plugin_hashes_data = @embedFile("plugin_hash.bin");
+const plugin_hashes_len: u32 = (plugin_hashes_data.len - 4) / 64;
+const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAsValue([plugin_hashes_len][64]u8, plugin_hashes_data[4..]);
 
 // TODO: figure out exactly where the patch gets executed on load (i.e. where
 // the 'early init' happens), for documentation purposes
@@ -170,6 +173,26 @@ fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
         t1.dwHighDateTime == t2.dwHighDateTime);
 }
 
+// TODO: move to lib, share with generate_safe_plugin_hash_file.zig
+fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
+    const file = try std.fs.cwd().openFile(filename, .{});
+    defer file.close();
+
+    var sha512 = Sha512.init(.{});
+    const rdr = file.reader();
+
+    var buf: [std.mem.page_size]u8 = undefined;
+    var n = try rdr.read(&buf);
+    while (n != 0) {
+        sha512.update(buf[0..n]);
+        n = try rdr.read(&buf);
+    }
+
+    return sha512.finalResult();
+}
+
+// TODO: ignore hash check to re-enable hot reloading for dev and unofficial plugins
+// only, probably want modal system in place properly first
 // TODO: possibly assert that this fully sets all fields and acts as an initializer
 // to a plugin struct, not just something that hooks up the fn refs
 // TODO: OnLoad, OnUnload, OnEnable, OnDisable
@@ -185,7 +208,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
         std.mem.eql(u8, ".dll", filename[i_ext..]));
 
     var buf1: [2047:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf1, "annodue/plugin/{s}", .{
+    var filepath = std.fmt.bufPrintZ(&buf1, "annodue/plugin/{s}", .{
         filename,
     }) catch unreachable;
 
@@ -194,6 +217,14 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     _ = w32fs.FindFirstFileA(&buf1, &fd1);
     if (p.Initialized and filetime_eql(&fd1.ftLastWriteTime, &p.WriteTime.?))
         return true;
+
+    blk: {
+        const this_hash = getFileSha512(filepath) catch return false;
+        for (plugin_hashes) |hash|
+            if (std.mem.eql(u8, &this_hash, &hash))
+                break :blk;
+        return false;
+    }
 
     // separated from buf1 to minimize work on the hot path
     var buf0: [127:0]u8 = undefined;

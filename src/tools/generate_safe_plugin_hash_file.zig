@@ -9,6 +9,9 @@ const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
 // TODO: add output param
+// TODO: remove length from format
+// TODO: add hash of the hashes at the end
+// TODO: include filename in hashing
 
 // Generates 'plugin_hash.bin' to be included in annodue.dll via @embedFile
 
@@ -45,7 +48,8 @@ pub fn main() !void {
 
     // generate hash file
 
-    std.debug.print("\nGenerating: plugin_hash.bin... ", .{});
+    //std.debug.print("\n", .{});
+    //std.debug.print("Generating: plugin_hash.bin... ", .{});
 
     const hash_filename = try std.fmt.allocPrint(alloc, "{s}/plugin_hash.bin", .{i_path.?});
     const hash_file = try std.fs.cwd().createFile(hash_filename, .{});
@@ -64,7 +68,8 @@ pub fn main() !void {
     for (hashes.items) |h|
         _ = try hash_file.write(&h);
 
-    std.debug.print("OK\n", .{});
+    std.debug.print("GENERATE HASHFILE SUCCESS\n", .{});
+    //std.debug.print("\n", .{});
 }
 
 // helpers

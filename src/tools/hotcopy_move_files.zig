@@ -39,11 +39,13 @@ pub fn main() !void {
     if (i_path == null) return error.NoInputPath;
     if (o_path == null) return error.NoOutputPath;
 
+    //std.debug.print("\n", .{});
+
     if (0 == w32fs.CreateDirectoryA(o_path.?, null)) {
         var e = w.kernel32.GetLastError();
         if (e == w.Win32Error.PATH_NOT_FOUND) {
             std.debug.print(
-                "ERROR  Cannot create directory \"{s}\"; intermediary path does not exist.\n",
+                "MOVE ERROR  Cannot create directory \"{s}\"; intermediary path does not exist.\n",
                 .{o_path.?},
             );
             return error.InvalidOutputDirectory;
@@ -59,16 +61,18 @@ pub fn main() !void {
         var o = try std.fmt.bufPrintZ(&buf2, "{s}/{s}", .{ o_path.?, f });
         if (0 == w32fs.CopyFileA(i, o, 0)) {
             var e = w.kernel32.GetLastError();
-            std.debug.print("ERROR  {s}  {s}\n", .{ @tagName(e), f });
+            std.debug.print("MOVE ERROR  {s}  {s}\n", .{ @tagName(e), f });
             copy_all = false;
         } else copy_partial = true;
     }
 
     if (!copy_partial) {
-        std.debug.print("ERROR  No files copied to {s}\n", .{o_path.?});
+        std.debug.print("MOVE ERROR  No files copied to {s}\n", .{o_path.?});
         //return error.CopyFileFailure;
     } else if (!copy_all) {
-        std.debug.print("ERROR  Some files not copied to {s}\n", .{o_path.?});
+        std.debug.print("MOVE ERROR  Some files not copied to {s}\n", .{o_path.?});
         //return error.PartialCopyFileFailure;
-    } else std.debug.print("SUCCESS  {s}\n", .{o_path.?});
+    } else std.debug.print("MOVE SUCCESS  {s}\n", .{o_path.?});
+
+    //std.debug.print("\n", .{});
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-// TODO: split up main dll and plugin dll steps
+// TODO: review overall efficiency/readability
 
 pub fn build(b: *std.Build) void {
     var buf1: [1024]u8 = undefined;
@@ -27,12 +27,13 @@ pub fn build(b: *std.Build) void {
     const zigwin32 = b.dependency("zigwin32", .{});
     const zigwin32_m = zigwin32.module("zigwin32");
 
-    // TOOLING
+    // STEP - HOTCOPY
 
-    // hotcopy
     // FIXME: kinda slow, comparable to manually moving a single file; look into
     // making this step more efficient
     // may not actually be the fault of adding the tooling step though
+    // TODO: look into only copying files that are actually re-compiled
+    // not sure if CopyFileA will just ignore old files anyway tho
 
     const copy_step = b.step(
         "hotcopy",
@@ -50,7 +51,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     hotcopy_move_files.addModule("zigwin32", zigwin32_m);
-    hotcopy_move_files.step.dependOn(&b.install_tls.step);
 
     const hotcopy_move_files_core = b.addRunArtifact(hotcopy_move_files);
     const hotcopy_move_files_plugin = b.addRunArtifact(hotcopy_move_files);
@@ -68,15 +68,10 @@ pub fn build(b: *std.Build) void {
         hotcopy_move_files_plugin.addArg(arg_hcop);
     }
 
-    // plugin hashing
+    // STEP - PLUGIN HASHING
 
     // TODO: direct build step to output file to a directory src can use to
     // include via @embedFile
-
-    const hash_step = b.step(
-        "hash_plugins",
-        "Build and output plugin file hashes",
-    );
 
     const generate_safe_plugin_hash_file = b.addExecutable(.{
         .name = "generate_safe_plugin_hash_file",
@@ -84,34 +79,29 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     generate_safe_plugin_hash_file.addModule("zigwin32", zigwin32_m);
-    generate_safe_plugin_hash_file.step.dependOn(&b.install_tls.step);
 
     const generate_safe_plugin_hash_file_plugin = b.addRunArtifact(generate_safe_plugin_hash_file);
-    {
-        const arg_hci = std.fmt.bufPrint(&buf1, "-I{s}", .{b.lib_dir}) catch unreachable;
+    const arg_phi = std.fmt.bufPrint(&buf1, "-I{s}", .{b.lib_dir}) catch unreachable;
+    generate_safe_plugin_hash_file_plugin.addArg(arg_phi);
 
-        hash_step.dependOn(&generate_safe_plugin_hash_file_plugin.step);
-        generate_safe_plugin_hash_file_plugin.addArg(arg_hci);
-    }
+    var hash_step = &generate_safe_plugin_hash_file_plugin.step;
 
-    // MAIN OUTPUT
+    const hash_plugins_step = b.step(
+        "hashfile",
+        "Generate valid plugin hashfile",
+    );
+    hash_plugins_step.dependOn(hash_step);
 
-    const patch = b.addSharedLibrary(.{
-        .name = "annodue",
-        .root_source_file = .{ .path = "src/patch/patch.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    patch.linkLibC();
-    //patch.addModule("zigini", zigini_m);
-    patch.addModule("zigwin32", zigwin32_m);
-    b.installArtifact(patch);
+    // STEP - BUILD PLUGINS
 
-    hotcopy_move_files_core.addArg("-Fannodue.dll");
-
-    // PLUGINS OUTPUT
     // TODO: separate build step for test plugin only
     // TODO: reorganize build script to make this more convenient to edit
+
+    var plugin_step = b.step(
+        "plugins",
+        "Build plugin DLLs",
+    );
+    hash_step.dependOn(plugin_step);
 
     const PluginDef = struct { name: []const u8, to_hash: bool = true };
     const plugins = [_]PluginDef{
@@ -137,9 +127,11 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         dll.linkLibC();
-        //dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
-        b.installArtifact(dll);
+
+        // TODO: investigate options arg
+        var dll_install = b.addInstallArtifact(dll, .{});
+        plugin_step.dependOn(&dll_install.step);
 
         var buf: [1024]u8 = undefined;
         var bufo = std.fmt.bufPrint(&buf, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
@@ -147,8 +139,29 @@ pub fn build(b: *std.Build) void {
         if (plugin.to_hash) generate_safe_plugin_hash_file_plugin.addArg(bufo);
     }
 
-    // TODO: look into only copying files that are actually re-compiled
-    // not sure if CopyFileA will just ignore old files anyway tho
+    // STEP - BUILD MAIN DLL
+
+    const core = b.addSharedLibrary(.{
+        .name = "annodue",
+        .root_source_file = .{ .path = "src/patch/patch.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    core.linkLibC();
+    core.addModule("zigwin32", zigwin32_m);
+    core.step.dependOn(hash_step);
+
+    // TODO: investigate options arg
+    const core_install = b.addInstallArtifact(core, .{});
+
+    hotcopy_move_files_core.addArg("-Fannodue.dll");
+    hotcopy_move_files.step.dependOn(&core_install.step);
+
+    // DEFAULT STEP
+
+    b.default_step.dependOn(&core_install.step);
+
+    // MISC OLD STUFF
 
     //const dll_install = b.addInstallDirectory(.{
     //    .source_dir = .{ .path = "annodue" },

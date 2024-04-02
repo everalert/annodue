@@ -17,6 +17,7 @@ const w32fs = w32.storage.file_system;
 
 // CLI Arguments:
 //   -Isrc_dir
+//   -Odest_dir
 //   -Ffile     [repeatable]
 
 // Output File Format
@@ -33,25 +34,39 @@ pub fn main() !void {
     defer args.deinit();
 
     var i_path: ?[:0]u8 = null;
+    var o_path: ?[:0]u8 = null;
     var files = std.ArrayList([]u8).init(alloc);
     defer files.deinit();
 
     while (args.next()) |a| {
         if (a.len > 2 and std.mem.eql(u8, "-I", a[0..2]))
             i_path = @constCast(a[2..]);
+        if (a.len > 2 and std.mem.eql(u8, "-O", a[0..2]))
+            o_path = @constCast(a[2..]);
         if (a.len > 2 and std.mem.eql(u8, "-F", a[0..2]))
             try files.append(@constCast(a[2..]));
     }
 
     if (i_path == null) return error.NoInputPath;
-    if (files.items.len == 0) return error.NoInputFiles;
+    if (o_path == null) return error.NoOutputPath;
+
+    if (0 == w32fs.CreateDirectoryA(o_path.?, null)) {
+        var e = w.kernel32.GetLastError();
+        if (e == w.Win32Error.PATH_NOT_FOUND) {
+            std.debug.print(
+                "MOVE ERROR  Cannot create directory \"{s}\"; intermediary path does not exist.\n",
+                .{o_path.?},
+            );
+            return error.InvalidOutputDirectory;
+        }
+    }
 
     // generate hash file
 
     //std.debug.print("\n", .{});
     //std.debug.print("Generating: plugin_hash.bin... ", .{});
 
-    const hash_filename = try std.fmt.allocPrint(alloc, "{s}/plugin_hash.bin", .{i_path.?});
+    const hash_filename = try std.fmt.allocPrint(alloc, "{s}/hashfile.bin", .{o_path.?});
     const hash_file = try std.fs.cwd().createFile(hash_filename, .{});
     defer hash_file.close();
 

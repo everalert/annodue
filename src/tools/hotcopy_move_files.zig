@@ -39,8 +39,6 @@ pub fn main() !void {
     if (i_path == null) return error.NoInputPath;
     if (o_path == null) return error.NoOutputPath;
 
-    //std.debug.print("\n", .{});
-
     if (0 == w32fs.CreateDirectoryA(o_path.?, null)) {
         var e = w.kernel32.GetLastError();
         if (e == w.Win32Error.PATH_NOT_FOUND) {
@@ -51,6 +49,8 @@ pub fn main() !void {
             return error.InvalidOutputDirectory;
         }
     }
+
+    //std.debug.print("\n", .{});
 
     var copy_all: bool = true;
     var copy_partial: bool = false;

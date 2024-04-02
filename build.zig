@@ -1,10 +1,12 @@
 const std = @import("std");
 
 // TODO: review overall efficiency/readability
+// TODO: look into adding hashfile as a module so we don't have to write to the src dir
+// TODO: look into getting rid of zigini from git once and for all!!1
 
 pub fn build(b: *std.Build) void {
-    var buf1: [1024]u8 = undefined;
-    var buf2: [1024]u8 = undefined;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = gpa.allocator();
 
     // BUILD OPTIONS
 
@@ -55,9 +57,9 @@ pub fn build(b: *std.Build) void {
     const hotcopy_move_files_core = b.addRunArtifact(hotcopy_move_files);
     const hotcopy_move_files_plugin = b.addRunArtifact(hotcopy_move_files);
     if (copypath) |path| {
-        const arg_hci = std.fmt.bufPrint(&buf1, "-I{s}", .{b.lib_dir}) catch unreachable;
-        const arg_hcoc = std.fmt.bufPrint(&buf2, "-O{s}", .{path}) catch unreachable;
-        const arg_hcop = std.fmt.bufPrint(&buf2, "-O{s}/plugin", .{path}) catch unreachable;
+        const arg_hci = std.fmt.allocPrint(alloc, "-I{s}", .{b.lib_dir}) catch unreachable;
+        const arg_hcoc = std.fmt.allocPrint(alloc, "-O{s}", .{path}) catch unreachable;
+        const arg_hcop = std.fmt.allocPrint(alloc, "-O{s}/plugin", .{path}) catch unreachable;
 
         copy_step.dependOn(&hotcopy_move_files_core.step);
         hotcopy_move_files_core.addArg(arg_hci);
@@ -81,7 +83,10 @@ pub fn build(b: *std.Build) void {
     generate_safe_plugin_hash_file.addModule("zigwin32", zigwin32_m);
 
     const generate_safe_plugin_hash_file_plugin = b.addRunArtifact(generate_safe_plugin_hash_file);
-    const arg_phi = std.fmt.bufPrint(&buf1, "-I{s}", .{b.lib_dir}) catch unreachable;
+    const arg_pho_path = b.build_root.handle.realpathAlloc(alloc, "./src/patch") catch unreachable;
+    const arg_pho = std.fmt.allocPrint(alloc, "-O{s}", .{arg_pho_path}) catch unreachable;
+    const arg_phi = std.fmt.allocPrint(alloc, "-I{s}", .{b.lib_dir}) catch unreachable;
+    generate_safe_plugin_hash_file_plugin.addArg(arg_pho);
     generate_safe_plugin_hash_file_plugin.addArg(arg_phi);
 
     var hash_step = &generate_safe_plugin_hash_file_plugin.step;
@@ -118,8 +123,8 @@ pub fn build(b: *std.Build) void {
     };
 
     for (plugins) |plugin| {
-        const n = std.fmt.bufPrint(&buf1, "plugin_{s}", .{plugin.name}) catch continue;
-        const p = std.fmt.bufPrint(&buf2, "src/patch/dll_{s}.zig", .{plugin.name}) catch continue;
+        const n = std.fmt.allocPrint(alloc, "plugin_{s}", .{plugin.name}) catch continue;
+        const p = std.fmt.allocPrint(alloc, "src/patch/dll_{s}.zig", .{plugin.name}) catch continue;
         const dll = b.addSharedLibrary(.{
             .name = n,
             .root_source_file = .{ .path = p },
@@ -133,8 +138,7 @@ pub fn build(b: *std.Build) void {
         var dll_install = b.addInstallArtifact(dll, .{});
         plugin_step.dependOn(&dll_install.step);
 
-        var buf: [1024]u8 = undefined;
-        var bufo = std.fmt.bufPrint(&buf, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
+        var bufo = std.fmt.allocPrint(alloc, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
         hotcopy_move_files_plugin.addArg(bufo);
         if (plugin.to_hash) generate_safe_plugin_hash_file_plugin.addArg(bufo);
     }

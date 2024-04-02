@@ -27,7 +27,7 @@ const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
 const Sha512 = std.crypto.hash.sha2.Sha512;
-const plugin_hashes_data = @embedFile("plugin_hash.bin");
+const plugin_hashes_data = @embedFile("hashfile.bin");
 const plugin_hashes_len: u32 = (plugin_hashes_data.len - 4) / 64;
 const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAsValue([plugin_hashes_len][64]u8, plugin_hashes_data[4..]);
 

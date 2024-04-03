@@ -434,7 +434,9 @@ export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
     const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
-    if (!paused and !tabbed_out and gs.practice_mode and gs.in_race.on()) {
+    const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
+        r.ReadRaceDataValue(0x84, u32) != 0;
+    if (!paused and !tabbed_out and gs.practice_mode and player_ok) {
         if (gs.player.in_race_racing.on()) UpdateState(gs, gf) else state.reset();
     }
 }

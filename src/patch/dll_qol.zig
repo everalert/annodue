@@ -530,7 +530,7 @@ export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gs;
     _ = gf;
-    // TODO: move to global state
+    // TODO: move to global state, see also qll_savestate->EarlyEngineUpdateStage20A
     // only not nullptr if in race scene
     const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
         r.ReadRaceDataValue(0x84, u32) != 0;

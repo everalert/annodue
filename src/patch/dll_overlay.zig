@@ -21,7 +21,7 @@ const timing = @import("util/timing.zig");
 // - Show individual lap times during race
 // - Show time to overheat/underheat
 // - SETTINGS:
-//   enable     bool    * requires game restart to apply
+//   enable     bool
 
 // TODO: finish porting overlay features from original practice tool
 // TODO: settings for individual elements, hot-reloadable, with local settings change handling

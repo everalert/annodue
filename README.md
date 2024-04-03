@@ -1,15 +1,37 @@
 # Annodue
 
-**A universal modification platform for STAR WARS Episode I Racer.**
+**A universal extension platform for *STAR WARS Episode I Racer* oriented toward speedrunning.**
 
-Currently functionality:
-- Fully ported [swe1r-patcher](https://github.com/everalert/swe1r-patcher) features (the "multiplayer mod")
-- Miscellaneous "toy" features (see configuration)
+######Functionality
 
-Immediate concerns:
-- Porting core [swe1r-overlay](https://github.com/everalert/swe1r-overlay) functionality
-- Plugin system
-- Automatic updates
+- Plugin system (custom plugins disabled for now)
+- New game features
+	- Free Camera
+	- Savestates & Rewinding
+	- Quick Race Menu - setup a new race without going back to the cantina
+	- Input display
+	- Extended post-race summary
+	- Extended race UI overlay
+	- Framerate limiter
+- Quality of life
+	- Pause mapped to gamepad
+	- Race restart hotkey
+	- Showing milliseconds digit on all timers
+	- Configurable defaults for free-play racers and laps
+	- Double mouse cursor fix
+	- Collisions disabled in multiplayer
+	- Pod upgrades in multiplayer
+- Cosmetic
+	- Hi-res fonts
+	- Triggered race events displayed on UI
+	- Rainbow-colored race UI elements
+
+See [MANUAL.md](MANUAL.md) for full details and configuration.
+
+
+######*Disclaimer*
+
+*Annodue is in active development and not yet greenlit for submissions to Speedrun.com at the time of writing. For current information on how this can be used for speedrunning, please contact the speedrun moderators via the [Racer discord server](https://discord.com/servers/star-wars-episode-i-racer-441839750555369474) or [speedrun.com](https://www.speedrun.com/swe1r).*
 
 ## Installation
 

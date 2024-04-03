@@ -15,6 +15,17 @@ const rto = rt.TextStyleOpts;
 const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
 
+// Usable in Practice Mode only
+
+// FEATURES
+// - Show individual lap times during race
+// - Show time to overheat/underheat
+// - SETTINGS:
+//   enable     bool    * requires game restart to apply
+
+// TODO: finish porting overlay features from original practice tool
+// TODO: settings for individual elements, hot-reloadable, with local settings change handling
+
 const PLUGIN_NAME: [*:0]const u8 = "Overlay";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
@@ -55,16 +66,14 @@ const style_heat_dn = rt.MakeTextHeadStyle(.Small, false, .Blue, .Right, .{rto.T
 const style_laptime = rt.MakeTextHeadStyle(.Unk2, true, null, null, .{rto.ToggleShadow}) catch "";
 
 export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    //if (!gf.SettingGetB("practice", "practice_tool_enable").? or
-    //    !gf.SettingGetB("overlay", "enable").?) return;
-    if (!gf.SettingGetB("overlay", "enable").?) return;
+    if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
     if (gs.in_race.on()) {
         const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);
         const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
         const lap_times: []const f32 = race_times[0..5];
 
-        if (gs.player.in_race_racing.on() and gs.practice_mode) {
+        if (gs.player.in_race_racing.on()) {
             // draw heat timer
             const heat_s: f32 = gs.player.heat / gs.player.heat_rate;
             const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;

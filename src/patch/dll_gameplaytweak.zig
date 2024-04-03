@@ -12,6 +12,18 @@ const rc = @import("util/racer_const.zig");
 
 const mem = @import("util/memory.zig");
 
+// FEATURES
+// - Patch DeathSpeedMin (minimum speed required to die from collision)
+// - Patch DeathSpeedDrop (minimum speed loss in 1 frame to die from collision)
+// - SETTINGS:
+//   * all settings require game restart to apply
+//   death_speed_mod_enable     bool
+//   death_speed_min            f32
+//   death_speed_drop           f32
+
+// TODO: hot reloading settings
+// TODO: integrate with modal ecosystem, once that is ready
+
 const PLUGIN_NAME: [*:0]const u8 = "GameplayTweak";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 

@@ -24,19 +24,39 @@ const InputMap = @import("util/input.zig").InputMap;
 const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
 const AxisInputMap = @import("util/input.zig").AxisInputMap;
 
-const PLUGIN_NAME: [*:0]const u8 = "Cam7";
-const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+// Named after Camera 7 in Trackmania
+
+// FEATURES
+// - free cam
+// - usable both in race and in cantina
+// - CONTROLS:      keyboard        xinput
+//   toggle         0               Back
+//   XY-move        WASD            L Stick
+//   XY-rotate      Mouse or ↑↓→←   R Stick
+//   Z-move up      Space           L Trigger
+//   Z-move down    Shift           R Trigger
+// - SETTINGS:
+//   enable         bool
+//   flip_look_x    bool
+//   flip_look_y    bool
+//   mouse_dpi      u32     reference for mouse sensitivity calculations; does not change mouse
+//   mouse_cm360    f32     physical centimeters of motion for one 360-degree rotation
+//                          if you don't know what that means, just treat this value as a sensitivity scale
 
 // FIXME: cam seems to not always correct itself upright when switching?
 // TODO: controls = ???
-//   - drone-style controls as an option for sure tho
-//   - mnk controls
+//   - option: drone-style controls, including Z-rotate
+//   - option: z-control moving along view axis rather than world axis
+//   - dinput controls
+//   - speed toggles; infinite accel toggle
+//   - control mapping
 // TODO: fog
-// - option to disable fog entirely
-// - user-selectable fog dist
-// TODO: settings
-// - control mapping
-// - future fog stuff (see above)
+// - option: disable fog entirely
+// - option: fog dist
+// TODO: settings for all of the above
+
+const PLUGIN_NAME: [*:0]const u8 = "Cam7";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const CamState = enum(u32) {
     None,

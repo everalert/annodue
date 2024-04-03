@@ -17,9 +17,19 @@ const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
+// FEATURES
+// - Visualize inputs during race
+// - Shows inputs as they are after the game finishes device read merging and post-processing
+// - SETTINGS:
+//   * game considers screen to be 640x480 regardless of window size
+//   enable     bool
+//   pos_x      i32
+//   pos_y      i32
+
 // TODO: robustness checking, particularly surrounding init and deinit for
 // hotreloading case
 // TODO: restyling, esp. adding color and maybe redo sprites (rounded?)
+// TODO: finalize representing negative thrust case
 
 const PLUGIN_NAME: [*:0]const u8 = "InputDisplay";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";

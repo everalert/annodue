@@ -12,6 +12,13 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
+// FEATURES
+// -
+// - CONTROLS:      keyboard        xinput
+//   ..             ..              ..
+// - SETTINGS:
+//   ..             type    note
+
 const PLUGIN_NAME: [*:0]const u8 = "PluginTest";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 

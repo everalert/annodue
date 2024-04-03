@@ -11,10 +11,16 @@ const rf = @import("util/racer_fn.zig");
 
 const mem = @import("util/memory.zig");
 
-const PLUGIN_NAME: [*:0]const u8 = "Developer";
-const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+// FEATURES
+// - Dump font data to file on launch
+// - SETTINGS:
+//   * all settings require game restart to apply
+//   dump_fonts     bool
 
 // TODO: arbitrary resource dumping?
+
+const PLUGIN_NAME: [*:0]const u8 = "Developer";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 // SWE1R-PATCHER STUFF
 

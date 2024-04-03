@@ -29,14 +29,51 @@ const InputMap = @import("util/input.zig").InputMap;
 const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
 const AxisInputMap = @import("util/input.zig").AxisInputMap;
 
+// FEATURES
+// - fix: remove double mouse cursor
+// - fix: pause game with xinput controller (maps Start -> Esc)
+// - feat: quick restart
+//     - CONTROLS:          F1+Esc          Back+Start
+// - feat: quick race menu
+//     - create a new race from inside a race
+//     - select pod, track, upgrade stack and other race settings
+//     - CONTROLS:          keyboard        xinput
+//       Open/Close         Esc             Start           Press during normal pause delay (i.e. double-tap)
+//       Navigate           ↑↓→←            D-Pad
+//       Interact           Space           A
+//       Quick Confirm      Enter           B
+//       All Upgrades MIN   Home            LB
+//       All Upgrades MAX   End             RB
+// - feat: end-race stats readout
+//     - tfps
+//     - full upgrade stack with healths
+//     - death count
+//     - total boost duration
+//     - boost ratio
+//     - first boost timestamp
+//     - underheat duration
+//     - fire finish duration
+//     - overheat duration
+// - feat: show milliseconds on all timers
+// - feat: limit fps during races (configurable via quick race menu)
+// - feat: custom default number of racers
+// - feat: custom default number of laps
+// - SETTINGS:
+//   quick_restart_enable       bool
+//   quick_race_menu_enable     bool
+//   ms_timer_enable            bool
+//   fps_limiter_enable         bool
+//   default_racers             u32     max 12
+//   default_laps               u32     max 5
+
+// TODO: dinput controls
+// TODO: setting for fps limiter default value
+// TODO: global fps limiter
+// TODO: figure out wtf to do to manage state through hot-reload etc.
+// FIXME: quick race menu stops working after hot reload??
+
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
-
-// TODO: figure out wtf to do to manage state through hot-reload etc.
-
-// FEATURES
-// - fix: disable mouse cursor
-// - .. TODO
 
 const QolState = struct {
     var quickstart: bool = false;
@@ -47,7 +84,7 @@ const QolState = struct {
     var fps_limiter: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
-    var input_quickstart_data = ButtonInputMap{ .kb = .@"2", .xi = .BACK };
+    var input_quickstart_data = ButtonInputMap{ .kb = .F1, .xi = .BACK };
     var input_pause = input_pause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
 };
@@ -213,11 +250,13 @@ fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
 
 // QUICK RACE MENU
 
+// TODO: labels next to tracks to indicate planet (or circuit)
 // TODO: generalize menuing and add hooks to let plugins add pages to the menu
 // TODO: make it wait till the end of the pause scroll-in, so that the scroll-out
 // is always the same as a normal pause
 // TODO: add options/differentiation for tournament mode races, and also maybe
 // set the global 'in tournament mode' accordingly
+// TODO: set upgrade healths (hold interact to set health instead of level)
 
 const QuickRaceMenuInput = extern struct {
     kb: VIRTUAL_KEY,
@@ -481,6 +520,7 @@ export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
     _ = gs;
+    // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
     _ = mem.write(rc.INPUT_RAW_STATE_ON + 4, u32, start_on);

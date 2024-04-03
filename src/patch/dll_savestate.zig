@@ -24,6 +24,25 @@ const InputMap = @import("util/input.zig").InputMap;
 const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
 const AxisInputMap = @import("util/input.zig").AxisInputMap;
 
+// Usable in Practice Mode only
+
+// FEATURES
+// - feat: set and restore a save point to quickly retry parts of a track
+// - feat: delay for restoring a state, to help with getting your hand back in position in time
+// - feat: freeze, rewind and scrub to any moment in the run
+// - planned: scrub forward at the end of recorded history to record TAS input
+// - planned: save replays/ghosts to file
+// - CONTROLS:              keyboard    xinput
+//   Save State             1           D-Down
+//   Reload State           2           D-Up        Will load beginning of race if no state saved
+//   Scrub Mode On/Off      2           D-Up        Press during reload delay when toggling on (i.e. double-tap)
+//   Scrub Back             3           D-Left      Hold to rewind
+//   Scrub Forward          4           D-Right     Hold to fast-forward
+// - SETTINGS:
+//   savestate_enable       bool
+//   load_delay             u32         amount of time to delay restoring a savestate, in ms
+//                                      * setting to a low value can interfere with ability to enter scrub mode
+
 // NOTE: some of these might be outdated, review at next refactor
 // FIXME: change disabling during pause to use Freeze api, so that you can still save/load
 // during a real pause
@@ -42,6 +61,7 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 // TODO: convert all allocations to global allocator once part of GlobalFn
 // FIXME: stop recording when quitting, pausing, etc.
 // TODO: recording during the opening cutscene, to account for world animations (SMR, etc.)
+// TODO: dinput controls
 
 const PLUGIN_NAME: [*:0]const u8 = "Savestate";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";

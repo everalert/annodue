@@ -13,9 +13,30 @@ const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
+// FEATURES
+// - High-resolution fonts
+// - Rotating rainbow colors for race UI elements: top values, top labels, speedo
+// - Show race trigger interactions via game notification system
+// - (disabled) High-fidelity audio
+// - (disabled) Load sprites from TGA
+// - SETTINGS:
+//   rainbow_enable         bool    toggle all rainbow features collectively
+//   rainbow_value_enable   bool
+//   rainbow_label_enable   bool
+//   rainbow_speed_enable   bool
+//   patch_fonts            bool    * requires game restart to apply
+//   patch_trigger_display  bool    * requires game restart to apply
+//   patch_audio            bool    ignored
+//   patch_tga_loader       bool    ignored
+
+// TODO: finish porting/fixing swe1r-patcher features
 // TODO: ?? custom static color as an option for the rainbow stuff?
 // TODO: ?? realtime-based color scrolling (rather than frame-based)
+// TODO: ?? tighter rotation of colors, so they look like they're following each other
 // TODO: convert all allocations to global allocator once part of GlobalFn
+// TODO: all settings hot-reloadable
+// TODO: convert trigger display to our notification system
+// TODO: embed fonts and point to ours, rather than patching the whole thing (for faster loadtimes)
 
 const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";

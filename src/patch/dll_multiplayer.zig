@@ -12,7 +12,20 @@ const rf = @import("util/racer_fn.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-// TODO: custom upgrades
+// FEATURES
+// - Disable multiplayer collisions
+// - Max upgrades in multiplayer
+// - Patch GUID to prevent joined players using different multiplayer settings
+// - SETTINGS:
+//   * all settings require game restart to apply
+//   enable         bool
+//   patch_guid     bool
+//   patch_r100     bool    Use R-100 traction in the patched upgrade stack
+
+// TODO: custom upgrades; user-level upgrades
+// TODO: fix/reimpl GUID to be more robust
+// TODO: remaining settings for every aspect? (collisions, etc.)
+// TODO: make settings hot-reloadable (see comment in OnInit)
 
 const PLUGIN_NAME: [*:0]const u8 = "Multiplayer";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";

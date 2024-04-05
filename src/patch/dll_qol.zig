@@ -56,6 +56,7 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 //     - overheat duration
 // - feat: show milliseconds on all timers
 // - feat: limit fps during races (configurable via quick race menu)
+// - feat: skip planet cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
 // - SETTINGS:
@@ -82,6 +83,7 @@ const QolState = struct {
     var default_laps: u32 = 3;
     var ms_timer: bool = false;
     var fps_limiter: bool = false;
+    var skip_planet_cutscenes: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_quickstart_data = ButtonInputMap{ .kb = .F1, .xi = .BACK };
@@ -101,9 +103,12 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
     QolState.default_laps = gf.SettingGetU("qol", "default_laps") orelse 3;
     QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
     QolState.fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
+    QolState.skip_planet_cutscenes = gf.SettingGetB("qol", "skip_planet_cutscenes") orelse false;
 
     if (!QolState.quickrace) QuickRaceMenu.close();
+    // FIXME: add these to deinit?
     PatchHudTimerMs(QolState.ms_timer);
+    PatchPlanetCutscenes(QolState.skip_planet_cutscenes);
 }
 
 // HUD TIMER MS
@@ -137,6 +142,16 @@ fn PatchHudTimerMs(enable: bool) void {
         _ = mem.write(0x46240B, u8, end_race_timer_offset);
         _ = mem.write(0x46241E, u8, end_race_timer_offset);
         _ = mem.write(0x46242D, u8, end_race_timer_offset);
+    }
+}
+
+// PLANET CUTSCENES
+
+fn PatchPlanetCutscenes(enable: bool) void {
+    if (enable) {
+        _ = x86.nop_until(0x45753D, comptime 0x45753D + 5);
+    } else {
+        _ = x86.call(0x45753D, @intFromPtr(rf.swrVideo_PlayVideoFile));
     }
 }
 

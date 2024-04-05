@@ -18,6 +18,7 @@
 	- Race restart hotkey
 	- Showing milliseconds digit on all timers
 	- Configurable defaults for free-play racers and laps
+	- Skip planet cutscenes
 	- Double mouse cursor fix
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer

@@ -44,6 +44,11 @@ pub const swrSound_PlaySound: *fn (id: i32, unk2: i32, pitch: f32, vol: f32, unk
 
 pub const swrSound_PlaySoundMacro: *fn (id: i32) callconv(.C) void = @ptrFromInt(0x440550);
 
+// Video
+
+/// @filename   a .znm file located in /data/anims
+pub const swrVideo_PlayVideoFile: *fn (filename: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4252A0);
+
 // Input
 
 pub const swrInput_ProcessInput: *fn () callconv(.C) void = @ptrFromInt(0x404DD0);

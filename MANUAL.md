@@ -110,6 +110,7 @@ Configured under `[overlay]`
 - End-race stats readout
 - Show milliseconds on all timers
 - Limit framerate during races (configurable via Quick Race Menu)
+- Skip planet cutscenes
 - Custom default number of racers
 - Custom default number of laps
 
@@ -134,6 +135,7 @@ Configured under `[qol]`
 |`quick_race_menu_enable`|`bool`|&nbsp;
 |`ms_timer_enable`       |`bool`|&nbsp;
 |`fps_limiter_enable`    |`bool`|&nbsp;
+|`skip_planet_cutscenes` |`bool`|&nbsp;
 |`default_racers`        |`u32` |1 to 12
 |`default_laps`          |`u32` |1 to 5
 

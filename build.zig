@@ -10,6 +10,14 @@ pub fn build(b: *std.Build) void {
 
     // BUILD OPTIONS
 
+    const options = b.addOptions();
+    const options_label = "BuildOptions";
+
+    const BuildMode = enum(u8) { Developer, Release };
+    const DEV_MODE = b.option(bool, "dev", "Enable developer features") orelse false;
+    const BUILD_MODE: BuildMode = if (DEV_MODE) .Developer else .Release;
+    options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
+
     const target = b.standardTargetOptions(.{
         .default_target = .{
             .cpu_arch = .x86,
@@ -132,6 +140,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         dll.linkLibC();
+        dll.addOptions(options_label, options);
         dll.addModule("zigwin32", zigwin32_m);
 
         // TODO: investigate options arg
@@ -152,8 +161,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     core.linkLibC();
+    core.addOptions(options_label, options);
     core.addModule("zigwin32", zigwin32_m);
-    core.step.dependOn(hash_step);
+    core.step.dependOn(
+        // we skip runtime hash checks in dev builds
+        if (DEV_MODE) plugin_step else hash_step,
+    );
 
     // TODO: investigate options arg
     const core_install = b.addInstallArtifact(core, .{});

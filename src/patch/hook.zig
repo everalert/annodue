@@ -1,5 +1,7 @@
 const Self = @This();
 
+const BuildOptions = @import("BuildOptions");
+
 const std = @import("std");
 const win = std.os.windows;
 
@@ -218,7 +220,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     if (p.Initialized and filetime_eql(&fd1.ftLastWriteTime, &p.WriteTime.?))
         return true;
 
-    blk: {
+    if (BuildOptions.BUILD_MODE != .Developer) blk: {
         const this_hash = getFileSha512(filepath) catch return false;
         for (plugin_hashes) |hash|
             if (std.mem.eql(u8, &this_hash, &hash))

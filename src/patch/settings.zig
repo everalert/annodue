@@ -65,54 +65,16 @@ pub fn init() void {
 
     SettingsState.manager = SettingsManager.init(alloc);
 
-    SettingsState.gameplay = SettingsGroup.init(alloc, "gameplay");
-    SettingsState.gameplay.add("enable", bool, false);
-    SettingsState.gameplay.add("death_speed_mod_enable", bool, false);
-    SettingsState.gameplay.add("death_speed_min", f32, 325);
-    SettingsState.gameplay.add("death_speed_drop", f32, 140);
-    SettingsState.manager.add(&SettingsState.gameplay);
-
-    SettingsState.overlay = SettingsGroup.init(alloc, "overlay");
-    SettingsState.overlay.add("enable", bool, false);
-    SettingsState.manager.add(&SettingsState.overlay);
-
-    SettingsState.savestate = SettingsGroup.init(alloc, "savestate");
-    SettingsState.savestate.add("enable", bool, false);
-    SettingsState.savestate.add("load_delay", u32, 500);
-    SettingsState.manager.add(&SettingsState.savestate);
-
-    SettingsState.multiplayer = SettingsGroup.init(alloc, "multiplayer");
-    SettingsState.multiplayer.add("enable", bool, false); // working? TODO: check collisions
-    SettingsState.multiplayer.add("patch_guid", bool, false); // working?
-    SettingsState.multiplayer.add("patch_r100", bool, false); // working
-    SettingsState.manager.add(&SettingsState.multiplayer);
-
-    SettingsState.developer = SettingsGroup.init(alloc, "developer");
-    SettingsState.developer.add("dump_fonts", bool, false); // working?
-    SettingsState.manager.add(&SettingsState.developer);
-
-    SettingsState.cam7 = SettingsGroup.init(alloc, "cam7");
-    SettingsState.cam7.add("enable", bool, false);
-    SettingsState.cam7.add("flip_look_x", bool, false);
-    SettingsState.cam7.add("flip_look_y", bool, false);
-    SettingsState.cam7.add("mouse_dpi", u32, 1600);
-    SettingsState.cam7.add("mouse_cm360", f32, 24);
-    SettingsState.manager.add(&SettingsState.cam7);
-
-    SettingsState.inputdisplay = SettingsGroup.init(alloc, "inputdisplay");
-    SettingsState.inputdisplay.add("enable", bool, false);
-    SettingsState.inputdisplay.add("pos_x", i32, 420);
-    SettingsState.inputdisplay.add("pos_y", i32, 432);
-    SettingsState.manager.add(&SettingsState.inputdisplay);
+    // set defaults
 
     SettingsState.qol = SettingsGroup.init(alloc, "qol");
-    SettingsState.qol.add("quick_restart_enable", bool, false);
-    SettingsState.qol.add("quick_race_menu_enable", bool, false);
-    SettingsState.qol.add("ms_timer_enable", bool, false);
-    SettingsState.qol.add("fps_limiter_enable", bool, false);
-    SettingsState.qol.add("skip_planet_cutscenes", bool, false);
+    SettingsState.qol.add("quick_restart_enable", bool, true);
+    SettingsState.qol.add("quick_race_menu_enable", bool, true);
+    SettingsState.qol.add("ms_timer_enable", bool, true);
+    SettingsState.qol.add("fps_limiter_enable", bool, true);
+    SettingsState.qol.add("skip_planet_cutscenes", bool, true);
     SettingsState.qol.add("default_laps", u32, 3);
-    SettingsState.qol.add("default_racers", u32, 12);
+    SettingsState.qol.add("default_racers", u32, 1);
     SettingsState.manager.add(&SettingsState.qol);
 
     SettingsState.cosmetic = SettingsGroup.init(alloc, "cosmetic");
@@ -126,9 +88,83 @@ pub fn init() void {
     SettingsState.cosmetic.add("patch_fonts", bool, false); // working
     SettingsState.manager.add(&SettingsState.cosmetic);
 
+    SettingsState.cam7 = SettingsGroup.init(alloc, "cam7");
+    SettingsState.cam7.add("enable", bool, true);
+    SettingsState.cam7.add("flip_look_x", bool, false);
+    SettingsState.cam7.add("flip_look_y", bool, false);
+    SettingsState.cam7.add("mouse_dpi", u32, 1600);
+    SettingsState.cam7.add("mouse_cm360", f32, 24.0);
+    SettingsState.manager.add(&SettingsState.cam7);
+
+    SettingsState.savestate = SettingsGroup.init(alloc, "savestate");
+    SettingsState.savestate.add("enable", bool, true);
+    SettingsState.savestate.add("load_delay", u32, 500);
+    SettingsState.manager.add(&SettingsState.savestate);
+
+    SettingsState.inputdisplay = SettingsGroup.init(alloc, "inputdisplay");
+    SettingsState.inputdisplay.add("enable", bool, false);
+    SettingsState.inputdisplay.add("pos_x", i32, 420);
+    SettingsState.inputdisplay.add("pos_y", i32, 432);
+    SettingsState.manager.add(&SettingsState.inputdisplay);
+
+    SettingsState.overlay = SettingsGroup.init(alloc, "overlay");
+    SettingsState.overlay.add("enable", bool, false);
+    SettingsState.manager.add(&SettingsState.overlay);
+
+    SettingsState.multiplayer = SettingsGroup.init(alloc, "multiplayer");
+    SettingsState.multiplayer.add("enable", bool, false); // working? TODO: check collisions
+    SettingsState.multiplayer.add("patch_guid", bool, false); // working?
+    SettingsState.multiplayer.add("patch_r100", bool, false); // working
+    SettingsState.manager.add(&SettingsState.multiplayer);
+
+    SettingsState.gameplay = SettingsGroup.init(alloc, "gameplay");
+    SettingsState.gameplay.add("enable", bool, false);
+    SettingsState.gameplay.add("death_speed_mod_enable", bool, false);
+    SettingsState.gameplay.add("death_speed_min", f32, 325);
+    SettingsState.gameplay.add("death_speed_drop", f32, 140);
+    SettingsState.manager.add(&SettingsState.gameplay);
+
+    SettingsState.developer = SettingsGroup.init(alloc, "developer");
+    SettingsState.developer.add("dump_fonts", bool, false); // working?
+    SettingsState.manager.add(&SettingsState.developer);
+
+    // load settings
+
     // FIXME: MAYBE remove this, and make all the dependencies do settings-based
     // initialization via OnSettingsLoad (not sure if it would change much about DX)
-    _ = LoadSettings();
+    defer _ = LoadSettings();
+
+    const file = std.fs.cwd().createFile("annodue/settings.ini", .{ .exclusive = true }) catch return;
+    defer file.close();
+
+    if (SettingsState.manager.global.values.count() > 0) {
+        var globals = SettingsState.manager.global.values.iterator();
+        while (globals.next()) |kv| {
+            const val = kv.value_ptr.allocFmt(alloc) catch continue;
+            defer alloc.free(val);
+            const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ kv.key_ptr.*, val }) catch continue;
+            defer alloc.free(str);
+            _ = file.write(str) catch continue;
+        }
+        _ = file.write("\n") catch {};
+    }
+
+    var groups = SettingsState.manager.groups.valueIterator();
+    while (groups.next()) |group| {
+        if (group.*.values.count() > 0) {
+            const header = std.fmt.allocPrint(alloc, "[{s}]\n", .{group.*.name}) catch continue;
+            _ = file.write(header) catch continue;
+            var items = group.*.values.iterator();
+            while (items.next()) |kv| {
+                const val = kv.value_ptr.allocFmt(alloc) catch continue;
+                defer alloc.free(val);
+                const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ kv.key_ptr.*, val }) catch continue;
+                defer alloc.free(str);
+                _ = file.write(str) catch continue;
+            }
+            _ = file.write("\n") catch continue;
+        }
+    }
 }
 
 // FIXME: copied from hook.zig; move both to util?

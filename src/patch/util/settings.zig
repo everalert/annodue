@@ -3,11 +3,23 @@ const settings = @This();
 const std = @import("std");
 const ini = @import("../import/import.zig").ini;
 
+// TODO: convert hashmaps to ArrayList, so that settings in default file retains
+// order as defined in patch/settings.zig
+
 pub const IniValue = union(enum) {
     b: bool,
     i: i32,
     u: u32,
     f: f32,
+
+    pub fn allocFmt(self: *IniValue, alloc: std.mem.Allocator) ![]u8 {
+        return switch (self.*) {
+            .b => |val| std.fmt.allocPrint(alloc, "{s}", .{if (val) "true" else "false"}),
+            .i => |val| std.fmt.allocPrint(alloc, "{d}", .{val}),
+            .u => |val| std.fmt.allocPrint(alloc, "{d}", .{val}),
+            .f => |val| std.fmt.allocPrint(alloc, "{d:4.2}", .{val}),
+        };
+    }
 };
 
 pub const IniValueError = error{

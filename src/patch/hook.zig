@@ -3,7 +3,11 @@ const Self = @This();
 const BuildOptions = @import("BuildOptions");
 
 const std = @import("std");
-const win = std.os.windows;
+const w = std.os.windows;
+const w32 = @import("zigwin32");
+const w32ll = w32.system.library_loader;
+const w32f = w32.foundation;
+const w32fs = w32.storage.file_system;
 
 const settings = @import("settings.zig");
 const global = @import("global.zig");
@@ -15,11 +19,6 @@ const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
 const toast = @import("core/Toast.zig");
 const allocator = @import("core/Allocator.zig");
-
-const w32 = @import("zigwin32");
-const w32ll = w32.system.library_loader;
-const w32f = w32.foundation;
-const w32fs = w32.storage.file_system;
 
 const hook = @import("util/hooking.zig");
 const mem = @import("util/memory.zig");
@@ -44,7 +43,7 @@ const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAs
 
 const Plugin = plugin: {
     const stdf = .{
-        .{ "Handle", ?win.HINSTANCE },
+        .{ "Handle", ?w.HINSTANCE },
         .{ "WriteTime", ?w32f.FILETIME },
         .{ "Initialized", bool },
         .{ "Filename", [127:0]u8 },
@@ -193,6 +192,21 @@ fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
     return sha512.finalResult();
 }
 
+// TODO: move to lib
+/// @return     requested directory exists
+fn ensureDirectoryExists(alloc: std.mem.Allocator, path: []const u8) bool {
+    if (std.mem.lastIndexOf(u8, path, "/")) |end|
+        _ = ensureDirectoryExists(alloc, path[0..end]);
+
+    const p = std.fmt.allocPrintZ(alloc, "{s}", .{path}) catch return false;
+    defer alloc.free(p);
+
+    if (0 != w32fs.CreateDirectoryA(p, null)) return true;
+    if (w.kernel32.GetLastError() == w.Win32Error.ALREADY_EXISTS) return true;
+
+    return false;
+}
+
 // TODO: ignore hash check to re-enable hot reloading for dev and unofficial plugins
 // only, probably want modal system in place properly first
 // TODO: possibly assert that this fully sets all fields and acts as an initializer
@@ -232,7 +246,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     var buf0: [127:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf0, "{s}", .{filename}) catch unreachable;
     var buf2: [2047:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf2, "annodue/plugin/{s}.dllcpy", .{
+    _ = std.fmt.bufPrintZ(&buf2, "annodue/tmp/plugin/{s}.tmp.dll", .{
         filename[0..i_ext],
     }) catch unreachable;
 
@@ -278,6 +292,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
 pub fn init() void {
     const alloc = allocator.allocator();
+    _ = ensureDirectoryExists(alloc, "annodue/tmp/plugin");
 
     PluginState.core = std.ArrayList(Plugin).init(alloc);
     PluginState.plugin = std.ArrayList(Plugin).init(alloc);

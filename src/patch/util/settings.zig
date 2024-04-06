@@ -32,6 +32,12 @@ pub const SettingsError = error{
     ManagerNotInitialized,
 };
 
+// FIXME: basically just StringHashMap->Entry, how to get that type?
+const SettingsGroupItem = extern struct {
+    key: *[]const u8,
+    value: *IniValue,
+};
+
 pub const SettingsGroup = struct {
     name: []const u8,
     values: std.StringHashMap(IniValue),
@@ -95,6 +101,35 @@ pub const SettingsGroup = struct {
             };
         }
     }
+
+    fn lessThanFnItem(_: void, a: SettingsGroupItem, b: SettingsGroupItem) bool {
+        const a_k = a.key.*;
+        const b_k = b.key.*;
+        var i: u32 = 0;
+        while (i < a_k.len and i < b_k.len) : (i += 1) {
+            if (a_k[i] == b_k[i]) continue;
+            return a_k[i] < b_k[i];
+        }
+        return a_k.len < b_k.len;
+    }
+
+    pub fn sorted(self: *SettingsGroup) !std.ArrayList(SettingsGroupItem) {
+        var list = std.ArrayList(SettingsGroupItem).init(self.values.allocator);
+
+        var it = self.values.iterator();
+        while (it.next()) |kv|
+            try list.append(.{ .key = kv.key_ptr, .value = kv.value_ptr });
+
+        std.mem.sort(SettingsGroupItem, list.items, {}, lessThanFnItem);
+
+        return list;
+    }
+};
+
+// FIXME: basically just StringHashMap->Entry, how to get that type?
+const SettingsManagerItem = struct {
+    key: *[]const u8,
+    value: *SettingsGroup,
 };
 
 pub const SettingsManager = struct {
@@ -138,5 +173,28 @@ pub const SettingsManager = struct {
                 },
             }
         }
+    }
+
+    fn lessThanFnItem(_: void, a: SettingsManagerItem, b: SettingsManagerItem) bool {
+        const a_k = a.key.*;
+        const b_k = b.key.*;
+        var i: u32 = 0;
+        while (i < a_k.len and i < b_k.len) : (i += 1) {
+            if (a_k[i] == b_k[i]) continue;
+            return a_k[i] < b_k[i];
+        }
+        return a_k.len < b_k.len;
+    }
+
+    pub fn sorted(self: *SettingsManager) !std.ArrayList(SettingsManagerItem) {
+        var list = std.ArrayList(SettingsManagerItem).init(self.groups.allocator);
+
+        var it = self.groups.iterator();
+        while (it.next()) |kv|
+            try list.append(.{ .key = kv.key_ptr, .value = kv.value_ptr.* });
+
+        std.mem.sort(SettingsManagerItem, list.items, {}, lessThanFnItem);
+
+        return list;
     }
 };

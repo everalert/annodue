@@ -17,6 +17,10 @@ const SettingsManager = @import("util/settings.zig").SettingsManager;
 
 const SETTINGS_VERSION: u32 = 1;
 
+// TODO: default settings.ini generation that is not sorted but in order of
+// adding the values
+// TODO: move default settings.ini generation to settings util lib
+
 // copypasted
 // FIXME: deinits happen in GameEnd, see HookGameEnd.
 // probably not necessary to deinit at all tho.
@@ -140,28 +144,32 @@ pub fn init() void {
     const file = std.fs.cwd().createFile("annodue/settings.ini", .{ .exclusive = true }) catch return;
     defer file.close();
 
-    var globals = SettingsState.manager.global.values.iterator();
-    while (globals.next()) |kv| {
-        const val = kv.value_ptr.allocFmt(alloc) catch continue;
+    const mitems = SettingsState.manager.global.sorted() catch return;
+    defer mitems.deinit();
+    for (mitems.items) |item| {
+        const val = item.value.allocFmt(alloc) catch continue;
         defer alloc.free(val);
-        const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ kv.key_ptr.*, val }) catch continue;
+        const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ item.key.*, val }) catch continue;
         defer alloc.free(str);
         _ = file.write(str) catch continue;
     }
     _ = file.write("\n") catch {};
 
-    var groups = SettingsState.manager.groups.valueIterator();
-    while (groups.next()) |group| {
-        if (group.*.values.count() == 0) continue;
+    var groups = SettingsState.manager.sorted() catch return;
+    defer groups.deinit();
+    for (groups.items) |group| {
+        if (group.value.values.count() == 0) continue;
 
-        const header = std.fmt.allocPrint(alloc, "[{s}]\n", .{group.*.name}) catch continue;
+        const header = std.fmt.allocPrint(alloc, "[{s}]\n", .{group.key.*}) catch continue;
+        defer alloc.free(header);
         _ = file.write(header) catch continue;
 
-        var items = group.*.values.iterator();
-        while (items.next()) |kv| {
-            const val = kv.value_ptr.allocFmt(alloc) catch continue;
+        const items = group.value.sorted() catch continue;
+        defer items.deinit();
+        for (items.items) |item| {
+            const val = item.value.allocFmt(alloc) catch continue;
             defer alloc.free(val);
-            const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ kv.key_ptr.*, val }) catch continue;
+            const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ item.key.*, val }) catch continue;
             defer alloc.free(str);
             _ = file.write(str) catch continue;
         }

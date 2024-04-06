@@ -15,6 +15,8 @@ const allocator = @import("core/Allocator.zig");
 const SettingsGroup = @import("util/settings.zig").SettingsGroup;
 const SettingsManager = @import("util/settings.zig").SettingsManager;
 
+const SETTINGS_VERSION: u32 = 1;
+
 // copypasted
 // FIXME: deinits happen in GameEnd, see HookGameEnd.
 // probably not necessary to deinit at all tho.
@@ -64,6 +66,7 @@ pub fn init() void {
     const alloc = allocator.allocator();
 
     SettingsState.manager = SettingsManager.init(alloc);
+    SettingsState.manager.global.add("SETTINGS_VERSION", u32, SETTINGS_VERSION);
 
     // set defaults
 
@@ -137,33 +140,32 @@ pub fn init() void {
     const file = std.fs.cwd().createFile("annodue/settings.ini", .{ .exclusive = true }) catch return;
     defer file.close();
 
-    if (SettingsState.manager.global.values.count() > 0) {
-        var globals = SettingsState.manager.global.values.iterator();
-        while (globals.next()) |kv| {
+    var globals = SettingsState.manager.global.values.iterator();
+    while (globals.next()) |kv| {
+        const val = kv.value_ptr.allocFmt(alloc) catch continue;
+        defer alloc.free(val);
+        const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ kv.key_ptr.*, val }) catch continue;
+        defer alloc.free(str);
+        _ = file.write(str) catch continue;
+    }
+    _ = file.write("\n") catch {};
+
+    var groups = SettingsState.manager.groups.valueIterator();
+    while (groups.next()) |group| {
+        if (group.*.values.count() == 0) continue;
+
+        const header = std.fmt.allocPrint(alloc, "[{s}]\n", .{group.*.name}) catch continue;
+        _ = file.write(header) catch continue;
+
+        var items = group.*.values.iterator();
+        while (items.next()) |kv| {
             const val = kv.value_ptr.allocFmt(alloc) catch continue;
             defer alloc.free(val);
             const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ kv.key_ptr.*, val }) catch continue;
             defer alloc.free(str);
             _ = file.write(str) catch continue;
         }
-        _ = file.write("\n") catch {};
-    }
-
-    var groups = SettingsState.manager.groups.valueIterator();
-    while (groups.next()) |group| {
-        if (group.*.values.count() > 0) {
-            const header = std.fmt.allocPrint(alloc, "[{s}]\n", .{group.*.name}) catch continue;
-            _ = file.write(header) catch continue;
-            var items = group.*.values.iterator();
-            while (items.next()) |kv| {
-                const val = kv.value_ptr.allocFmt(alloc) catch continue;
-                defer alloc.free(val);
-                const str = std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ kv.key_ptr.*, val }) catch continue;
-                defer alloc.free(str);
-                _ = file.write(str) catch continue;
-            }
-            _ = file.write("\n") catch continue;
-        }
+        _ = file.write("\n") catch continue;
     }
 }
 

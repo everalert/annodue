@@ -71,6 +71,7 @@ pub fn init() void {
 
     SettingsState.manager = SettingsManager.init(alloc);
     SettingsState.manager.global.add("SETTINGS_VERSION", u32, SETTINGS_VERSION);
+    SettingsState.manager.global.add("AUTO_UPDATE", bool, true);
 
     // set defaults
 

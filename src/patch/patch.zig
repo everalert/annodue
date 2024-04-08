@@ -14,7 +14,7 @@ const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 
 // DO THE THING!!!
 
-export fn Patch() void {
+export fn Init() void {
     if (!global.init()) return;
 
     // init
@@ -33,4 +33,8 @@ export fn Patch() void {
     if (false) {
         msg.Message("{s}", .{global.VersionStr}, "Patching SWE1R...", .{});
     }
+}
+
+export fn Deinit() void {
+    // ...
 }

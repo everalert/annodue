@@ -31,31 +31,22 @@ const KS_PRESSED: i16 = 1; // since last call
 
 // VERSION
 
-const VersionTag = enum(u32) {
-    None,
-    Alpha,
-    Beta,
-    ReleaseCandidate,
-};
-
-// TODO: see: std.SemanticVersion
-pub const Version = struct {
-    pub const major: u32 = 0;
-    pub const minor: u32 = 0;
-    pub const patch: u32 = 1;
-    pub const tag_type: VersionTag = .None;
-    pub const tag_no: u32 = 0;
-    pub const build: u32 = 112; // based on git commits
-};
-
 // TODO: include tag when appropriate
+pub const Version = std.SemanticVersion{
+    .major = 0,
+    .minor = 1,
+    .patch = 0,
+    .build = "112",
+};
+
+// TODO: use SemanticVersion parse fn instead
 pub const VersionStr: [:0]u8 = s: {
     var buf: [127:0]u8 = undefined;
-    break :s std.fmt.bufPrintZ(&buf, "Annodue {d}.{d}.{d}.{d}", .{
+    break :s std.fmt.bufPrintZ(&buf, "Annodue {d}.{d}.{d}.{s}", .{
         Version.major,
         Version.minor,
         Version.patch,
-        Version.build,
+        Version.build.?,
     }) catch unreachable;
 };
 

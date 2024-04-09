@@ -19,6 +19,7 @@ const PLUGIN_VERSION = global.PLUGIN_VERSION;
 const practice = @import("patch_practice.zig");
 const toast = @import("core/Toast.zig");
 const allocator = @import("core/Allocator.zig");
+const update = @import("core/Update.zig");
 
 const hook = @import("util/hooking.zig");
 const mem = @import("util/memory.zig");
@@ -334,6 +335,10 @@ pub fn init() void {
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
     p.EarlyEngineUpdateA = &toast.EarlyEngineUpdateA;
+
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
+    p.EarlyEngineUpdateB = &update.EarlyEngineUpdateB;
 
     // loading plugins
 

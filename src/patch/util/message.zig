@@ -15,6 +15,12 @@ pub fn Message(comptime fmt_t: []const u8, args_t: anytype, comptime fmt_m: []co
     _ = MessageBoxA(null, &buf_m, &buf_t, MB_OK);
 }
 
+pub fn StdMessage(comptime fmt: []const u8, args: anytype) void {
+    var buf: [2047:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
+    _ = MessageBoxA(null, &buf, "Annodue", MB_OK);
+}
+
 pub fn TestMessage(comptime fmt: []const u8, args: anytype) void {
     var buf: [2047:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf, fmt, args) catch return;

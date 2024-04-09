@@ -28,20 +28,21 @@ pub const MAGIC_ENTITY = enum(u32) {
 
 pub const MAGIC_EVENT = enum(u32) {
     Paws = 0x50617773,
+    Load = 0x4C6F6164,
     Free = 0x46726565,
-    // Jdge
+    Stop = 0x53746F70,
+    Slep = 0x536C6570,
+    Wake = 0x57616B65,
+    RSet = 0x52536574,
     Abrt = 0x41627274,
+    // Jdge
     RStr = 0x52537472,
     Fini = 0x46696E69,
     JAsn = 0x4A41736E,
     NAsn = 0x4E41736E,
     Begn = 0x4265676E,
-    Load = 0x4C6F6164,
     Join = 0x4A6F696E,
     Mstr = 0x4D737472,
-    RSet = 0x52536574,
-    Slep = 0x536C6570,
-    Wake = 0x57616B65,
 };
 
 // Global State

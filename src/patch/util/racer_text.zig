@@ -57,7 +57,7 @@ pub const ColorRGB = enum(u32) {
     Green = 0x96FF96,
     Red = 0xFF6450,
     Brown = 0xBC865E,
-    Indigo = 0x6E6E80,
+    Gray = 0x6E6E80,
     Pink = 0xFFA7D1,
     Purple = 0x985EFF,
 

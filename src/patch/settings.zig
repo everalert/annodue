@@ -45,24 +45,24 @@ pub const SettingsState = struct {
     pub var developer: SettingsGroup = undefined;
 };
 
-fn get(group: [*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
-    const sg = SettingsState.manager.groups.get(std.mem.span(group));
+fn get(group: ?[*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
+    const sg: ?*SettingsGroup = if (group) |g| SettingsState.manager.groups.get(std.mem.span(g)) else &SettingsState.manager.global;
     return if (sg) |g| g.get(std.mem.span(setting), T) else null;
 }
 
-pub fn get_bool(group: [*:0]const u8, setting: [*:0]const u8) ?bool {
+pub fn get_bool(group: ?[*:0]const u8, setting: [*:0]const u8) ?bool {
     return get(group, setting, bool);
 }
 
-pub fn get_i32(group: [*:0]const u8, setting: [*:0]const u8) ?i32 {
+pub fn get_i32(group: ?[*:0]const u8, setting: [*:0]const u8) ?i32 {
     return get(group, setting, i32);
 }
 
-pub fn get_u32(group: [*:0]const u8, setting: [*:0]const u8) ?u32 {
+pub fn get_u32(group: ?[*:0]const u8, setting: [*:0]const u8) ?u32 {
     return get(group, setting, u32);
 }
 
-pub fn get_f32(group: [*:0]const u8, setting: [*:0]const u8) ?f32 {
+pub fn get_f32(group: ?[*:0]const u8, setting: [*:0]const u8) ?f32 {
     return get(group, setting, f32);
 }
 

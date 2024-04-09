@@ -50,7 +50,7 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable;
 };
 
-pub const PLUGIN_VERSION = 16;
+pub const PLUGIN_VERSION = 17;
 
 // STATE
 
@@ -144,7 +144,7 @@ pub const GlobalState = extern struct {
 
 pub var GLOBAL_STATE: GlobalState = .{};
 
-pub const GLOBAL_FUNCTION_VERSION = 14;
+pub const GLOBAL_FUNCTION_VERSION = 15;
 
 pub const GlobalFunction = extern struct {
     // Settings

@@ -10,5 +10,9 @@
             .url = "https://github.com/marlersoft/zigwin32/archive/aec51b5b77764bd474a3a8e074d011492eb7e5ed.tar.gz",
             .hash = "12207523d070abaf0b3a078c58c8afbc5445f21e5779b7e2745514e34e0f90f10652",
         },
+        .zzip = .{
+            .url = "https://github.com/everalert/zzip/archive/8745d9215df23932026e24e7186d22d017fcdb04.tar.gz",
+            .hash = "12200827dd0f08fd215687fc1714db6e3fce3f1e86951f9f438ad49d921ba20f27ce",
+        },
     },
 }

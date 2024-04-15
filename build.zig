@@ -36,6 +36,8 @@ pub fn build(b: *std.Build) void {
     //const zigini_m = zigini.module("zigini");
     const zigwin32 = b.dependency("zigwin32", .{});
     const zigwin32_m = zigwin32.module("zigwin32");
+    const zzip = b.dependency("zzip", .{});
+    const zzip_m = zzip.module("zzip");
 
     // STEP - HOTCOPY
 
@@ -61,6 +63,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     hotcopy_move_files.addModule("zigwin32", zigwin32_m);
+    hotcopy_move_files.addModule("zzip", zzip_m);
 
     const hotcopy_move_files_core = b.addRunArtifact(hotcopy_move_files);
     const hotcopy_move_files_plugin = b.addRunArtifact(hotcopy_move_files);
@@ -89,6 +92,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     generate_safe_plugin_hash_file.addModule("zigwin32", zigwin32_m);
+    generate_safe_plugin_hash_file.addModule("zzip", zzip_m);
 
     const generate_safe_plugin_hash_file_plugin = b.addRunArtifact(generate_safe_plugin_hash_file);
     const arg_pho_path = b.build_root.handle.realpathAlloc(alloc, "./src/patch") catch unreachable;
@@ -142,6 +146,7 @@ pub fn build(b: *std.Build) void {
         dll.linkLibC();
         dll.addOptions(options_label, options);
         dll.addModule("zigwin32", zigwin32_m);
+        dll.addModule("zzip", zzip_m);
 
         // TODO: investigate options arg
         var dll_install = b.addInstallArtifact(dll, .{});
@@ -163,6 +168,7 @@ pub fn build(b: *std.Build) void {
     core.linkLibC();
     core.addOptions(options_label, options);
     core.addModule("zigwin32", zigwin32_m);
+    core.addModule("zzip", zzip_m);
     core.step.dependOn(
         // we skip runtime hash checks in dev builds
         if (DEV_MODE) plugin_step else hash_step,

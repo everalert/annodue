@@ -21,16 +21,19 @@ pub fn StdMessage(comptime fmt: []const u8, args: anytype) void {
     _ = MessageBoxA(null, &buf, "Annodue", MB_OK);
 }
 
-pub fn TestMessage(comptime fmt: []const u8, args: anytype) void {
+// TODO: automatically get caller function type?
+/// @F  caller function type, use @This() when calling
+pub fn TestMessage(comptime F: type, comptime fmt: []const u8, args: anytype) void {
     var buf: [2047:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
+    const label = std.fmt.bufPrintZ(&buf, "[{s}] ", .{@typeName(F)}) catch return;
+    _ = std.fmt.bufPrintZ(buf[label.len..], fmt, args) catch return;
     _ = MessageBoxA(null, &buf, "annodue.dll", MB_OK);
 }
 
-pub fn ErrMessage(label: []const u8, err: anyerror) void {
-    TestMessage("[ERROR] {s}: {s}", .{ label, @errorName(err) });
+pub fn ErrMessage(comptime F: type, label: []const u8, err: anyerror) void {
+    TestMessage(F, "[ERROR] {s}: {s}", .{ label, @errorName(err) });
 }
 
-pub fn PtrMessage(label: []const u8, ptr: usize) void {
-    TestMessage("{s}: 0x{s}", .{ label, ptr });
+pub fn PtrMessage(comptime F: type, label: []const u8, ptr: usize) void {
+    TestMessage(F, "{s}: 0x{s}", .{ label, ptr });
 }

@@ -1,6 +1,9 @@
+const BuildOptions = @import("BuildOptions");
+
 const std = @import("std");
 const http = std.http;
 const json = std.json;
+
 const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 
@@ -26,11 +29,14 @@ pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     //if (s.init) return;
     if (!gf.InputGetKb(.U, .JustOn)) return;
+    // TODO: http requests crashing in debug builds only; extra option for auto
+    // checking for updates at runtime, or just always do it in release and disable
+    // entirely for debug builds? doing latter for now..
+    if (BuildOptions.OPTIMIZE == .Debug) return;
 
     const alloc = allocator.allocator();
 
     // checking for update
-    // FIXME: crashing (even though same code is running ok in mvp project, lol)
 
     var client = http.Client{ .allocator = alloc };
     defer client.deinit();
@@ -44,36 +50,25 @@ pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     headers.append("accept", "application/vnd.github+json") catch return;
     headers.append("x-github-api-version", "2022-11-28") catch return;
 
-    // .. up to here not crashing
-
+    // NOTE: client.request crash happens here; seems fine in release builds
     // TODO: retry n times, for whole process up to json parsed
+    // TODO: settings option for skipping prerelease tags
     var request = client.request(.GET, uri, headers, .{}) catch return;
     defer request.deinit();
-    TestMessage("Update: Request OK", .{}); // FIXME: doesn't make it to this, wtf is up with request
     request.start() catch return;
-    TestMessage("Update: Request Start OK", .{});
     request.wait() catch return;
-    TestMessage("Update: Request Wait OK", .{});
     if (request.response.status != .ok) return;
-
-    TestMessage("Update: Response OK", .{});
 
     const body = request.reader().readAllAlloc(alloc, 1 << 31) catch return;
     defer alloc.free(body);
 
-    TestMessage("Update: Body OK", .{});
-
     const parsed = json.parseFromSlice(json.Value, alloc, body, .{}) catch return;
     defer parsed.deinit();
-
-    TestMessage("Update: Parse OK", .{});
 
     const tag = parsed.value.object.get("tag_name").?.string;
     //const tag: []const u8 = "1.1.1";
     const tag_ver = std.SemanticVersion.parse(tag) catch return;
     if (std.SemanticVersion.order(Version, tag_ver) != .lt) return;
-
-    TestMessage("Update: Tag OK", .{});
 
     s.init = true;
 

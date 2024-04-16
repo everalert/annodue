@@ -10,14 +10,6 @@ pub fn build(b: *std.Build) void {
 
     // BUILD OPTIONS
 
-    const options = b.addOptions();
-    const options_label = "BuildOptions";
-
-    const BuildMode = enum(u8) { Developer, Release };
-    const DEV_MODE = b.option(bool, "dev", "Enable developer features") orelse false;
-    const BUILD_MODE: BuildMode = if (DEV_MODE) .Developer else .Release;
-    options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
-
     const target = b.standardTargetOptions(.{
         .default_target = .{
             .cpu_arch = .x86,
@@ -27,8 +19,17 @@ pub fn build(b: *std.Build) void {
     });
 
     const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .Debug,
+        //.preferred_optimize_mode = .Debug, // NOTE: setting this removes -Doptimize from cli opts
     });
+
+    const options = b.addOptions();
+    const options_label = "BuildOptions";
+
+    const BuildMode = enum(u8) { Developer, Release };
+    const DEV_MODE = b.option(bool, "dev", "Enable developer features") orelse false;
+    const BUILD_MODE: BuildMode = if (DEV_MODE) .Developer else .Release;
+    options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
+    options.addOption(std.builtin.Mode, "OPTIMIZE", optimize);
 
     // MODULES
 
@@ -46,6 +47,7 @@ pub fn build(b: *std.Build) void {
     // may not actually be the fault of adding the tooling step though
     // TODO: look into only copying files that are actually re-compiled
     // not sure if CopyFileA will just ignore old files anyway tho
+    // TODO: merge with -Ddev, and simply skip file copying if -Dhotcopypath is not set
 
     const copy_step = b.step(
         "hotcopy",

@@ -20,19 +20,22 @@ const msg = @import("../util/message.zig");
 
 // FIXME: remove
 const TestMessage = msg.TestMessage;
+const ErrMessage = msg.ErrMessage;
 
-pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const s = struct {
         var init: bool = false;
         var buf: [127:0]u8 = undefined;
     };
 
-    //if (s.init) return;
-    if (!gf.InputGetKb(.U, .JustOn)) return;
     // TODO: http requests crashing in debug builds only; extra option for auto
     // checking for updates at runtime, or just always do it in release and disable
     // entirely for debug builds? doing latter for now..
     if (BuildOptions.OPTIMIZE == .Debug) return;
+
+    // FIXME: remove early AUTO_UPDATE check in future version, once we verify
+    // the update system is stable
+    if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) return;
 
     const alloc = allocator.allocator();
 
@@ -41,8 +44,8 @@ pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     var client = http.Client{ .allocator = alloc };
     defer client.deinit();
 
-    const api_url: []const u8 = "https://api.github.com/repos/ziglang/zig/releases/latest";
-    //const api_url: []const u8 = "https://api.github.com/repos/everalert/annodue/releases/latest";
+    const api_url = "https://api.github.com/repos/ziglang/zig/releases/latest";
+    //const api_url = "https://api.github.com/repos/everalert/annodue/releases/latest";
     const uri = std.Uri.parse(api_url) catch return;
 
     var headers = std.http.Headers.init(alloc);
@@ -92,4 +95,9 @@ pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // -> notify user to restart game
     msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{tag});
     _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
+}
+
+pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (gf.InputGetKb(.U, .JustOn))
+        OnInitLate(gs, gf);
 }

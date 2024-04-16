@@ -338,6 +338,7 @@ pub fn init() void {
 
     p = PluginState.core.addOne() catch unreachable;
     p.* = std.mem.zeroInit(Plugin, .{});
+    p.OnInitLate = &update.OnInitLate;
     p.EarlyEngineUpdateB = &update.EarlyEngineUpdateB;
 
     // loading plugins

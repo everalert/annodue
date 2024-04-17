@@ -1,8 +1,15 @@
 const BuildOptions = @import("BuildOptions");
 
+const zzip = @import("zzip");
+const EOCDRecord = zzip.EndOfCentralDirectoryRecord.EndOfCentralDirectoryRecord;
+const DirHeader = zzip.CentralDirectoryFileHeader.Header;
+const LocHeader = zzip.LocalFileHeader.Header;
+
 const std = @import("std");
 const http = std.http;
 const json = std.json;
+const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
 
 const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
@@ -21,82 +28,216 @@ const msg = @import("../util/message.zig");
 // FIXME: remove
 const TestMessage = msg.TestMessage;
 const ErrMessage = msg.ErrMessage;
+const dbg = @import("../util/debug.zig");
+
+// BUSINESS LOGIC
+
+// https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28
+// https://docs.github.com/en/rest/releases/assets?apiVersion=2022-11-28
+
+// FIXME: update
+//const ANNODUE_PATH = if (BuildOptions.BUILD_MODE == .Release) "annodue" else "annodue/tmp/updatetest";
+const ANNODUE_PATH = "annodue/tmp/updatetest";
+
+// NOTE: update this list with each new version
+// TODO: see about auto-generating this list at comptime, and exposing it via build system
+const DELETE_ITEMS = [_][]const u8{
+    "plugin/*",
+    "images/*",
+    "textures/*",
+    "annodue.dll",
+};
+
+// FIXME: do we even need AnnodueUpdateTagEF struct?
+const UPDATE_TAG_EXTRA_FIELD_ID: u16 = 0x5055; // UP
+
+fn ToastUpdateAvailable(alloc: Allocator, gf: *GlobalFn, ver: []const u8) void {
+    const new_update_text = std.fmt.allocPrintZ(alloc, "Update Available: {s}", .{ver}) catch return;
+    defer alloc.free(new_update_text);
+    _ = gf.ToastNew(new_update_text, rt.ColorRGB.Red.rgba(0));
+}
+
+// HOOK FUNCTIONS
 
 pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const s = struct {
+        const retry_delay: u32 = 5 * 60 * 1000; // 5min
+        var last_try: u32 = 0;
         var init: bool = false;
-        var buf: [127:0]u8 = undefined;
     };
 
     // TODO: http requests crashing in debug builds only; extra option for auto
     // checking for updates at runtime, or just always do it in release and disable
     // entirely for debug builds? doing latter for now..
-    if (BuildOptions.OPTIMIZE == .Debug) return;
+    if (comptime BuildOptions.OPTIMIZE == .Debug) return;
 
     // FIXME: remove early AUTO_UPDATE check in future version, once we verify
     // the update system is stable
     if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) return;
 
-    const alloc = allocator.allocator();
+    if (s.init or gs.timestamp - s.last_try < s.retry_delay) return;
+    s.last_try = gs.timestamp;
 
-    // checking for update
+    const alloc = allocator.allocator();
 
     var client = http.Client{ .allocator = alloc };
     defer client.deinit();
 
-    const api_url = "https://api.github.com/repos/ziglang/zig/releases/latest";
-    //const api_url = "https://api.github.com/repos/everalert/annodue/releases/latest";
-    const uri = std.Uri.parse(api_url) catch return;
+    var update_tag: []const u8 = undefined;
+    var update_url: ?[]const u8 = null;
+    var update_size: i64 = undefined;
 
-    var headers = std.http.Headers.init(alloc);
-    defer headers.deinit();
-    headers.append("accept", "application/vnd.github+json") catch return;
-    headers.append("x-github-api-version", "2022-11-28") catch return;
+    // checking for update
+    {
+        const api_url = "https://api.github.com/repos/ziglang/zig/releases/latest";
+        //const api_url = "https://api.github.com/repos/everalert/annodue/releases/latest";
+        //const api_url = "https://api.github.com/repos/everalert/annodue/releases/tags/{s}"; // for old vers
+        const uri = std.Uri.parse(api_url) catch return;
 
-    // NOTE: client.request crash happens here; seems fine in release builds
-    // TODO: retry n times, for whole process up to json parsed
-    // TODO: settings option for skipping prerelease tags
-    var request = client.request(.GET, uri, headers, .{}) catch return;
-    defer request.deinit();
-    request.start() catch return;
-    request.wait() catch return;
-    if (request.response.status != .ok) return;
+        var headers = std.http.Headers.init(alloc);
+        defer headers.deinit();
+        headers.append("accept", "application/vnd.github+json") catch return;
+        headers.append("x-github-api-version", "2022-11-28") catch return;
 
-    const body = request.reader().readAllAlloc(alloc, 1 << 31) catch return;
-    defer alloc.free(body);
+        // NOTE: client.request crash happens here; seems fine in release builds
+        // TODO: retry n times, for whole process up to json parsed
+        // TODO: settings option for skipping prerelease tags
+        var request = client.request(.GET, uri, headers, .{}) catch return;
+        defer request.deinit();
+        request.start() catch return;
+        request.wait() catch return;
+        if (request.response.status != .ok) return;
 
-    const parsed = json.parseFromSlice(json.Value, alloc, body, .{}) catch return;
-    defer parsed.deinit();
+        const body = request.reader().readAllAlloc(alloc, 1 << 31) catch return;
+        defer alloc.free(body);
 
-    const tag = parsed.value.object.get("tag_name").?.string;
-    //const tag: []const u8 = "1.1.1";
-    const tag_ver = std.SemanticVersion.parse(tag) catch return;
-    if (std.SemanticVersion.order(Version, tag_ver) != .lt) return;
+        const parsed = json.parseFromSlice(json.Value, alloc, body, .{}) catch return;
+        defer parsed.deinit();
 
-    s.init = true;
+        // TODO: extra check + setting for opting in to debug releases?
+        update_tag = parsed.value.object.get("tag_name").?.string;
+        const tag_ver = std.SemanticVersion.parse(update_tag) catch return;
+        if (std.SemanticVersion.order(Version, tag_ver) != .lt) return;
 
-    // downloading and installing new update
+        s.init = true; // at this point it doesn't matter if we can dl or not
 
-    // -> check settings for AUTO_UPDATE
-    if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) {
-        _ = std.fmt.bufPrintZ(&s.buf, "Update Available: {s}", .{tag}) catch return;
-        _ = gf.ToastNew(&s.buf, rt.ColorRGB.Red.rgba(0));
-        return;
+        // TODO: use label too in future?
+        const assets = parsed.value.object.get("assets").?.array;
+        for (assets.items) |asset| {
+            // for now: filename ends with "update.zip", e.g. annodue-0.1.0-update.zip
+            // future: same file as release zip, annodue-<semver>.zip
+            const name = asset.object.get("name").?.string;
+            if (!std.mem.endsWith(u8, name, "-update.zip")) continue;
+
+            const state = asset.object.get("state").?.string;
+            if (!std.mem.eql(u8, state, "uploaded")) return; // we know we can't update now
+
+            update_url = asset.object.get("browser_download_url").?.string;
+            update_size = asset.object.get("size").?.integer;
+            break;
+        }
+
+        if (update_url == null) return;
     }
 
-    // -> download update.zip from the release
+    // downloading and installing new update
+    {
+        ToastUpdateAvailable(alloc, gf, update_tag);
 
-    // -> verify download succeeded/packed data is valid somehow?
+        // -> check settings for AUTO_UPDATE
+        if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) return;
 
-    // -> delete relevant files in file system
+        // -> download update.zip from the release
+        while (true) {
+            const uri = std.Uri.parse(update_url.?) catch unreachable;
 
-    // -> unpack files to file system
+            var headers = std.http.Headers.init(alloc);
+            defer headers.deinit();
+            headers.append("accept", "application/octet-stream") catch return;
 
-    // -> notify user to restart game
-    msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{tag});
-    _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
+            var request = client.request(.GET, uri, headers, .{}) catch return;
+            defer request.deinit();
+            request.start() catch return;
+            request.wait() catch return;
+
+            // for now: filename ends with "update.zip", e.g. annodue-0.1.0-update.zip
+            //    only includes update files + "MINVER.txt" (<semver>\n<release_api_url>)
+            //    internal dir structure equivalent to /annodue/*
+            // future: same file as release zip, annodue-<semver>.zip
+            //    packed files use extra field to identify which to extract
+            if (request.response.status == .ok) {
+                const raw_data = request.reader().readAllAlloc(alloc, 1 << 31) catch return;
+                defer alloc.free(raw_data);
+
+                // -> verify download succeeded/packed data is valid somehow?
+                // TODO: check update dependencies and recursively download until
+                // finding a valid update version (impl after 0.1.0 release)
+
+                // size checking
+                // MINVER.txt validation
+
+                // -> delete relevant files in file system
+                // TODO: maybe don't delete in future; depends on plugin ecosystem
+                for (DELETE_ITEMS) |path| {
+                    std.debug.assert(std.mem.count(u8, path, "/") <= 1);
+                    // TODO: just skip the path check and don't use "/*"?
+                    const p = std.fmt.allocPrintZ(alloc, "{s}/{s}", .{
+                        ANNODUE_PATH,
+                        if (std.mem.endsWith(u8, path, "/*")) path[0 .. path.len - 2] else path,
+                    }) catch return;
+                    defer alloc.free(p);
+                    //std.fs.cwd().deleteTree(p) catch return;
+                    dbg.ConsoleOut("{s}\n", .{p}) catch return;
+                    //std.fs.cwd().deleteFile(p) catch return; // TODO: confirm not needed
+                }
+
+                // -> unpack files to file system
+                // TODO: only files with the annodue update tag extended field
+                // FIXME: error handling in case writing new files fails; re-download
+                // old version and restore that way? make a copy of the old files in tmp
+                // and track new stuff in order to go backward?
+                const eocd = EOCDRecord.parse(raw_data) catch return;
+                var dir_it = DirHeader.iterator(&eocd);
+                while (dir_it.next()) |df| {
+                    const lf = LocHeader.parse(raw_data[df.local_header_offset..], raw_data) catch return;
+                    const filename = std.fmt.allocPrint(alloc, "{s}/{s}", .{
+                        ANNODUE_PATH,
+                        lf.filename,
+                    }) catch return;
+                    defer alloc.free(filename);
+
+                    const data_off: usize = df.local_header_offset + 30 + lf.len_filename + lf.len_extra_field;
+                    const data = raw_data[data_off .. data_off + lf.size_compressed];
+
+                    if (std.mem.lastIndexOf(u8, filename, "/")) |end|
+                        std.fs.cwd().makePath(filename[0..end]) catch return;
+                    const out = std.fs.cwd().createFile(filename, .{}) catch return;
+                    defer out.close();
+
+                    lf.compression.uncompress(alloc, data, out.writer(), df.crc32) catch return;
+                }
+
+                // -> notify user to restart game
+                _ = gf.ToastNew("Update installed, please restart", rt.ColorRGB.Red.rgba(0));
+                //msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{release_tag});
+                //_ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
+                return;
+            }
+
+            if (request.response.status == .found) {
+                // TODO: case checking? github api seems to return lowercase headers
+                if (request.response.headers.getFirstValue("location")) |loc| {
+                    update_url = loc;
+                    continue;
+                }
+            }
+
+            break;
+        }
+    }
 }
 
+// FIXME: remove, or convert to proper system for manual updating
 pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gf.InputGetKb(.U, .JustOn))
         OnInitLate(gs, gf);

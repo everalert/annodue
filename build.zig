@@ -1,6 +1,6 @@
 const std = @import("std");
 
-// TODO: review overall efficiency/readability
+// TODO: review overall efficiency/readability, graph seems slow after rework when adding hashfile
 // TODO: look into adding hashfile as a module so we don't have to write to the src dir
 // TODO: look into getting rid of zigini from git once and for all!!1
 
@@ -22,14 +22,10 @@ pub fn build(b: *std.Build) void {
         //.preferred_optimize_mode = .Debug, // NOTE: setting this removes -Doptimize from cli opts
     });
 
-    const options = b.addOptions();
-    const options_label = "BuildOptions";
+    const DEV_MODE = b.option(bool, "dev", "Enable DEV_MODE") orelse false;
 
     const BuildMode = enum(u8) { Developer, Release };
-    const DEV_MODE = b.option(bool, "dev", "Enable developer features") orelse false;
     const BUILD_MODE: BuildMode = if (DEV_MODE) .Developer else .Release;
-    options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
-    options.addOption(std.builtin.Mode, "OPTIMIZE", optimize);
 
     // MODULES
 
@@ -40,23 +36,20 @@ pub fn build(b: *std.Build) void {
     const zzip = b.dependency("zzip", .{});
     const zzip_m = zzip.module("zzip");
 
+    const options = b.addOptions();
+    const options_label = "BuildOptions";
+    options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
+    options.addOption(std.builtin.Mode, "OPTIMIZE", optimize);
+
     // STEP - HOTCOPY
 
-    // FIXME: kinda slow, comparable to manually moving a single file; look into
-    // making this step more efficient
-    // may not actually be the fault of adding the tooling step though
     // TODO: look into only copying files that are actually re-compiled
     // not sure if CopyFileA will just ignore old files anyway tho
-    // TODO: merge with -Ddev, and simply skip file copying if -Dhotcopypath is not set
 
-    const copy_step = b.step(
-        "hotcopy",
-        "Build and send output to live 'annodue' directory for hot reloading",
-    );
     const copypath = b.option(
         []const u8,
-        "hotcopypath",
-        "Location of output directory for 'hotcopy' step",
+        "copypath",
+        "Path to game directory for hot-reloading in DEV_MODE; will not copy files if not specified",
     ) orelse null;
 
     const hotcopy_move_files = b.addExecutable(.{
@@ -71,14 +64,12 @@ pub fn build(b: *std.Build) void {
     const hotcopy_move_files_plugin = b.addRunArtifact(hotcopy_move_files);
     if (copypath) |path| {
         const arg_hci = std.fmt.allocPrint(alloc, "-I{s}", .{b.lib_dir}) catch unreachable;
-        const arg_hcoc = std.fmt.allocPrint(alloc, "-O{s}", .{path}) catch unreachable;
-        const arg_hcop = std.fmt.allocPrint(alloc, "-O{s}/plugin", .{path}) catch unreachable;
 
-        copy_step.dependOn(&hotcopy_move_files_core.step);
+        const arg_hcoc = std.fmt.allocPrint(alloc, "-O{s}", .{path}) catch unreachable;
         hotcopy_move_files_core.addArg(arg_hci);
         hotcopy_move_files_core.addArg(arg_hcoc);
 
-        copy_step.dependOn(&hotcopy_move_files_plugin.step);
+        const arg_hcop = std.fmt.allocPrint(alloc, "-O{s}/plugin", .{path}) catch unreachable;
         hotcopy_move_files_plugin.addArg(arg_hci);
         hotcopy_move_files_plugin.addArg(arg_hcop);
     }
@@ -185,6 +176,10 @@ pub fn build(b: *std.Build) void {
     // DEFAULT STEP
 
     b.default_step.dependOn(&core_install.step);
+    if (DEV_MODE and copypath != null) {
+        b.default_step.dependOn(&hotcopy_move_files_core.step);
+        b.default_step.dependOn(&hotcopy_move_files_plugin.step);
+    }
 
     // MISC OLD STUFF
 

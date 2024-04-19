@@ -102,6 +102,33 @@ pub fn build(b: *std.Build) void {
     );
     hash_plugins_step.dependOn(hash_step);
 
+    // STEP - PACKAGE ZIP FOR RELEASE
+
+    // TODO: update once script is actually written
+
+    const generate_release_zip_files = b.addExecutable(.{
+        .name = "generate_release_zip_files",
+        .root_source_file = .{ .path = "src/tools/generate_release_zip_files.zig" },
+        .target = target,
+    });
+    generate_release_zip_files.addModule("zigwin32", zigwin32_m);
+    generate_release_zip_files.addModule("zzip", zzip_m);
+
+    const generate_release_zip_files_run = b.addRunArtifact(generate_release_zip_files);
+    generate_release_zip_files_run.addArg("-I Z:/GOG/STAR WARS Racer/annodue");
+    generate_release_zip_files_run.addArg("-D C:/msys64/home/EVAL/annodue/build");
+    generate_release_zip_files_run.addArg("-O .release");
+    generate_release_zip_files_run.addArg("-ver 0.0.1");
+    generate_release_zip_files_run.addArg("-minver 0.0.0");
+
+    var zip_step = &generate_release_zip_files_run.step;
+
+    const release_zip_files_step = b.step(
+        "zip",
+        "Package built files for release",
+    );
+    release_zip_files_step.dependOn(zip_step);
+
     // STEP - BUILD PLUGINS
 
     // TODO: separate build step for test plugin only
@@ -172,6 +199,7 @@ pub fn build(b: *std.Build) void {
 
     hotcopy_move_files_core.addArg("-Fannodue.dll");
     hotcopy_move_files.step.dependOn(&core_install.step);
+    //generate_release_zip_files.step.dependOn(&core_install.step);
 
     // DEFAULT STEP
 

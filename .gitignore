@@ -1,4 +1,5 @@
 .notes/
+.release/
 src/**/*.bin
 
 zig-cache/

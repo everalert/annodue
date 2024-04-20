@@ -75,6 +75,8 @@ pub fn main() !void {
 
     var z = Zip.init(alloc);
     defer z.deinit();
+    var z_up = Zip.init(alloc);
+    defer z_up.deinit();
 
     var base_dir = try cwd.openIterableDir(i_path.?, .{});
     defer base_dir.close();
@@ -98,21 +100,12 @@ pub fn main() !void {
 
         const path = try std.fmt.allocPrint(alloc, "{s}", .{entry.path}); // lifetime
         try appendFileToFile(alloc, &z, &base_dir.dir, path);
+
+        if (std.mem.startsWith(u8, path, "annodue\\"))
+            try appendFileToFile(alloc, &z_up, &base_dir.dir, path);
     }
 
-    // TODO: also add readme.txt?
-    // TODO: use anno-minver.txt and anno-readme.txt?
-    if (minver_exists and minver != null) {
-        const data = try std.fmt.allocPrint(
-            alloc,
-            "{s}\nhttps://api.github.com/repos/everalert/annodue/releases/tags/{s}",
-            .{ minver.?, minver.? },
-        );
-        try appendDataToFile(alloc, &z, data, "minver.txt");
-    } else {
-        std.debug.print("[ZIP] WARNING: '-minver' missing or invalid, minver.txt will not be generated\n", .{});
-    }
-
+    // TODO: might need to include dinput.dll in future update zips too
     if (dinput_exists and dinput != null) {
         var dir = try cwd.openDir(dinput.?, .{});
         defer dir.close();
@@ -121,12 +114,22 @@ pub fn main() !void {
         std.debug.print("[ZIP] WARNING: '-D' missing, dinput.dll assumed to already be in input path\n", .{});
     }
 
-    var archive = ArrayList(u8).init(alloc);
-    defer archive.deinit();
-    try z.write(&archive, null);
+    // TODO: also add readme.txt to non-update zip?
+    if (minver_exists and minver != null) {
+        const data = try std.fmt.allocPrint(
+            alloc,
+            "{s}\nhttps://api.github.com/repos/everalert/annodue/releases/tags/{s}",
+            .{ minver.?, minver.? },
+        );
+        try appendDataToFile(alloc, &z_up, data, "minver.txt");
+    } else {
+        std.debug.print("[ZIP] WARNING: '-minver' missing or invalid, minver.txt will not be generated\n", .{});
+    }
 
-    // write output files
-    // TODO: generate same for annodue-<SemVer>-update in future versions
+    const readme_data = try std.fmt.allocPrint(alloc, "Unzip the contents of this archive to the game directory to install.\n\nFor more information, go to https://github.com/everalert/annodue/tree/{s}", .{minver.?});
+    try appendDataToFile(alloc, &z, readme_data, "readme.txt");
+
+    // write the output to disk
 
     if (o_path == null)
         std.debug.print("[ZIP] WARNING: '-O' missing, writing output to current directory\n", .{});
@@ -135,16 +138,34 @@ pub fn main() !void {
     var o_dir = try cwd.makeOpenPath(o_fullpath, .{});
     defer o_dir.close();
 
+    var archive = ArrayList(u8).init(alloc);
+    defer archive.deinit();
+    try z.write(&archive, null);
+
     const o_filename = try std.fmt.allocPrint(alloc, "annodue-{s}.zip", .{ver.?});
     const out = try o_dir.createFile(o_filename, .{});
     defer out.close();
     try out.writeAll(archive.items);
 
+    var archive_up = ArrayList(u8).init(alloc);
+    defer archive_up.deinit();
+    try z_up.write(&archive_up, null);
+
+    const o_filename_up = try std.fmt.allocPrint(alloc, "annodue-{s}-update.zip", .{ver.?});
+    const out_up = try o_dir.createFile(o_filename_up, .{});
+    defer out_up.close();
+    try out_up.writeAll(archive_up.items);
+
     const out_crc32 = try o_dir.createFile("CRC32.txt", .{});
     defer out_crc32.close();
-    _ = try out_crc32.write(try std.fmt.allocPrint(alloc, "{X}\t{s: <24}\n", .{
+    const crc_row_fmt = "{X}\t{s: <24}\n";
+    _ = try out_crc32.write(try std.fmt.allocPrint(alloc, crc_row_fmt, .{
         Crc32.hash(archive.items),
         o_filename,
+    }));
+    _ = try out_crc32.write(try std.fmt.allocPrint(alloc, crc_row_fmt, .{
+        Crc32.hash(archive_up.items),
+        o_filename_up,
     }));
 }
 

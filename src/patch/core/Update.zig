@@ -161,7 +161,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             request.wait() catch return;
 
             // for now: filename ends with "update.zip", e.g. annodue-0.1.0-update.zip
-            //    only includes update files + "MINVER.txt" (<semver>\n<release_api_url>)
+            //    only includes update files + "minver.txt" (<semver>\n<release_api_url>)
             //    internal dir structure equivalent to /annodue/*
             // future: same file as release zip, annodue-<semver>.zip
             //    packed files use extra field to identify which to extract

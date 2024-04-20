@@ -2,11 +2,14 @@ const std = @import("std");
 
 // TODO: review overall efficiency/readability, graph seems slow after rework when adding hashfile
 // TODO: look into adding hashfile as a module so we don't have to write to the src dir
+// https://ziglang.org/learn/build-system/#producing-assets-for-embedfile
 // TODO: look into getting rid of zigini from git once and for all!!1
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
+    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+    defer arena.deinit();
+    const alloc = arena.allocator();
 
     // BUILD OPTIONS
 
@@ -45,6 +48,7 @@ pub fn build(b: *std.Build) void {
 
     // TODO: look into only copying files that are actually re-compiled
     // not sure if CopyFileA will just ignore old files anyway tho
+    // TODO: look into ObjCopy build system stuff
 
     const copypath = b.option(
         []const u8,
@@ -78,6 +82,7 @@ pub fn build(b: *std.Build) void {
 
     // TODO: direct build step to output file to a directory src can use to
     // include via @embedFile
+    // https://ziglang.org/learn/build-system/#producing-assets-for-embedfile
 
     const generate_safe_plugin_hash_file = b.addExecutable(.{
         .name = "generate_safe_plugin_hash_file",
@@ -105,6 +110,17 @@ pub fn build(b: *std.Build) void {
     // STEP - PACKAGE ZIP FOR RELEASE
 
     // TODO: update once script is actually written
+    // TODO: automate version input somehow?
+
+    const dinputpath = b.option(
+        []const u8,
+        "dbp",
+        "Path to dinput.dll build directory; used to locate dinput.dll when packaging a release build",
+    ) orelse null;
+
+    // NOTE: minver checks fail if not specified
+    const release_ver = b.option([]const u8, "ver", "release version") orelse "0.0.0";
+    const release_minver = b.option([]const u8, "minver", "minimum version needed to auto-update to this release") orelse release_ver;
 
     const generate_release_zip_files = b.addExecutable(.{
         .name = "generate_release_zip_files",
@@ -115,19 +131,41 @@ pub fn build(b: *std.Build) void {
     generate_release_zip_files.addModule("zzip", zzip_m);
 
     const generate_release_zip_files_run = b.addRunArtifact(generate_release_zip_files);
-    generate_release_zip_files_run.addArg("-I Z:/GOG/STAR WARS Racer/annodue");
-    generate_release_zip_files_run.addArg("-D C:/msys64/home/EVAL/annodue/build");
-    generate_release_zip_files_run.addArg("-O .release");
-    generate_release_zip_files_run.addArg("-ver 0.0.1");
-    generate_release_zip_files_run.addArg("-minver 0.0.0");
+    {
+        const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_ip);
+
+        if (dinputpath) |path| {
+            const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{path}) catch unreachable;
+            generate_release_zip_files_run.addArg(arg_z_dp);
+        }
+
+        const arg_z_op_path = b.build_root.handle.realpathAlloc(alloc, "./.release") catch unreachable;
+        const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{arg_z_op_path}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_op);
+
+        const arg_z_ver = std.fmt.allocPrint(alloc, "-ver {s}", .{release_ver}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_ver);
+
+        const arg_z_minver = std.fmt.allocPrint(alloc, "-minver {s}", .{release_minver}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_minver);
+    }
 
     var zip_step = &generate_release_zip_files_run.step;
 
-    const release_zip_files_step = b.step(
-        "zip",
-        "Package built files for release",
-    );
-    release_zip_files_step.dependOn(zip_step);
+    const asset_install = b.addInstallDirectory(.{
+        .source_dir = .{ .path = "assets" },
+        .install_dir = .{ .custom = "release" },
+        .install_subdir = "annodue",
+    });
+    zip_step.dependOn(&asset_install.step);
+
+    const arg_z_cleanup_path = std.fmt.allocPrint(alloc, "{s}/release", .{b.install_path}) catch unreachable;
+    const zip_cleanup = b.addRemoveDirTree(arg_z_cleanup_path);
+    zip_cleanup.step.dependOn(zip_step);
+
+    const release_zip_files_step = b.step("release", "package built files for release");
+    release_zip_files_step.dependOn(&zip_cleanup.step);
 
     // STEP - BUILD PLUGINS
 
@@ -175,6 +213,13 @@ pub fn build(b: *std.Build) void {
         var bufo = std.fmt.allocPrint(alloc, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
         hotcopy_move_files_plugin.addArg(bufo);
         if (plugin.to_hash) generate_safe_plugin_hash_file_plugin.addArg(bufo);
+
+        var dll_release = b.addInstallArtifact(dll, .{
+            .dest_dir = .{ .override = .{ .custom = "release/annodue/plugin" } },
+            .pdb_dir = .disabled,
+            .implib_dir = .disabled,
+        });
+        if (plugin.to_hash) zip_step.dependOn(&dll_release.step);
     }
 
     // STEP - BUILD MAIN DLL
@@ -199,7 +244,13 @@ pub fn build(b: *std.Build) void {
 
     hotcopy_move_files_core.addArg("-Fannodue.dll");
     hotcopy_move_files.step.dependOn(&core_install.step);
-    //generate_release_zip_files.step.dependOn(&core_install.step);
+
+    var core_release = b.addInstallArtifact(core, .{
+        .dest_dir = .{ .override = .{ .custom = "release/annodue" } },
+        .pdb_dir = .disabled,
+        .implib_dir = .disabled,
+    });
+    zip_step.dependOn(&core_release.step);
 
     // DEFAULT STEP
 
@@ -210,13 +261,6 @@ pub fn build(b: *std.Build) void {
     }
 
     // MISC OLD STUFF
-
-    //const dll_install = b.addInstallDirectory(.{
-    //    .source_dir = .{ .path = "annodue" },
-    //    .install_dir = .{ .custom = "annodue" },
-    //    .install_subdir = "",
-    //});
-    //b.default_step.dependOn(&dll_install.step);
 
     //    // Creates a step for unit testing. This only builds the test executable
     //    // but does not run it.

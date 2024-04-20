@@ -1,6 +1,5 @@
 .notes/
 .release/
-src/**/*.bin
 
 zig-cache/
 zig-out/

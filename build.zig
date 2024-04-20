@@ -1,9 +1,14 @@
 const std = @import("std");
 
-// TODO: review overall efficiency/readability, graph seems slow after rework when adding hashfile
-// TODO: look into adding hashfile as a module so we don't have to write to the src dir
-// https://ziglang.org/learn/build-system/#producing-assets-for-embedfile
 // TODO: look into getting rid of zigini from git once and for all!!1
+// TODO: review overall efficiency/readability, graph seems slow after rework when adding hashfile
+// TODO: review idiomatic-ness, see: https://ziglang.org/learn/build-system
+//  - esp. using addArgs(.{...}) instead of formatting them manually
+// TODO: tooling code review
+// TODO: get up to date on tooling error and success messaging
+
+// example release build command
+// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Ddbp="C:\msys64\home\EVAL\annodue\build"
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -80,10 +85,6 @@ pub fn build(b: *std.Build) void {
 
     // STEP - PLUGIN HASHING
 
-    // TODO: direct build step to output file to a directory src can use to
-    // include via @embedFile
-    // https://ziglang.org/learn/build-system/#producing-assets-for-embedfile
-
     const generate_safe_plugin_hash_file = b.addExecutable(.{
         .name = "generate_safe_plugin_hash_file",
         .root_source_file = .{ .path = "src/tools/generate_safe_plugin_hash_file.zig" },
@@ -93,7 +94,9 @@ pub fn build(b: *std.Build) void {
     generate_safe_plugin_hash_file.addModule("zzip", zzip_m);
 
     const generate_safe_plugin_hash_file_plugin = b.addRunArtifact(generate_safe_plugin_hash_file);
-    const arg_pho_path = b.build_root.handle.realpathAlloc(alloc, "./src/patch") catch unreachable;
+    const arg_pho_path = std.fmt.allocPrint(alloc, "{s}", .{b.install_path}) catch unreachable;
+    const arg_pho_fullpath = std.fmt.allocPrint(alloc, "{s}/hashfile.bin", .{arg_pho_path}) catch unreachable;
+    const pho_module_path = b.pathFromRoot(arg_pho_fullpath);
     const arg_pho = std.fmt.allocPrint(alloc, "-O{s}", .{arg_pho_path}) catch unreachable;
     const arg_phi = std.fmt.allocPrint(alloc, "-I{s}", .{b.lib_dir}) catch unreachable;
     generate_safe_plugin_hash_file_plugin.addArg(arg_pho);
@@ -234,6 +237,7 @@ pub fn build(b: *std.Build) void {
     core.addOptions(options_label, options);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);
+    core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
     core.step.dependOn(
         // we skip runtime hash checks in dev builds
         if (DEV_MODE) plugin_step else hash_step,

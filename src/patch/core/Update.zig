@@ -42,9 +42,9 @@ const ANNODUE_PATH = "annodue/tmp/updatetest";
 // NOTE: update this list with each new version
 // TODO: see about auto-generating this list at comptime, and exposing it via build system
 const DELETE_ITEMS = [_][]const u8{
-    "plugin/*",
-    "images/*",
-    "textures/*",
+    "plugin",
+    "images",
+    "textures",
     "annodue.dll",
 };
 
@@ -89,8 +89,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     // checking for update
     {
-        const api_url = "https://api.github.com/repos/ziglang/zig/releases/latest";
-        //const api_url = "https://api.github.com/repos/everalert/annodue/releases/latest";
+        const api_url = "https://api.github.com/repos/everalert/annodue/releases/latest";
         //const api_url = "https://api.github.com/repos/everalert/annodue/releases/tags/{s}"; // for old vers
         const uri = std.Uri.parse(api_url) catch return;
 
@@ -140,11 +139,14 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         if (update_url == null) return;
     }
 
+    ToastUpdateAvailable(alloc, gf, update_tag);
+
+    // FIXME: below should be the last piece before github releases test.
+    // final review and test update process with local file instead of download.
+    // don't forget to update version in global.zig before compiling for github.
+
     // downloading and installing new update
     {
-        ToastUpdateAvailable(alloc, gf, update_tag);
-
-        // -> check settings for AUTO_UPDATE
         if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) return;
 
         // -> download update.zip from the release
@@ -170,29 +172,26 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 defer alloc.free(raw_data);
 
                 // -> verify download succeeded/packed data is valid somehow?
+                // TODO: confirm if anything (else?) even needs to be done at this point to
+                // know that the data was properly received
+                if (update_size != raw_data.len) return;
+
+                // TODO: MINVER.txt validation
                 // TODO: check update dependencies and recursively download until
                 // finding a valid update version (impl after 0.1.0 release)
-
-                // size checking
-                // MINVER.txt validation
 
                 // -> delete relevant files in file system
                 // TODO: maybe don't delete in future; depends on plugin ecosystem
                 for (DELETE_ITEMS) |path| {
-                    std.debug.assert(std.mem.count(u8, path, "/") <= 1);
-                    // TODO: just skip the path check and don't use "/*"?
-                    const p = std.fmt.allocPrintZ(alloc, "{s}/{s}", .{
-                        ANNODUE_PATH,
-                        if (std.mem.endsWith(u8, path, "/*")) path[0 .. path.len - 2] else path,
-                    }) catch return;
+                    const p = std.fmt.allocPrintZ(alloc, "{s}/{s}", .{ ANNODUE_PATH, path }) catch return;
                     defer alloc.free(p);
-                    //std.fs.cwd().deleteTree(p) catch return;
+                    std.fs.cwd().deleteTree(p) catch return;
                     dbg.ConsoleOut("{s}\n", .{p}) catch return;
                     //std.fs.cwd().deleteFile(p) catch return; // TODO: confirm not needed
                 }
 
                 // -> unpack files to file system
-                // TODO: only files with the annodue update tag extended field
+                // TODO: switch to using annodue update tag to tell when to actually unpack/not skip
                 // FIXME: error handling in case writing new files fails; re-download
                 // old version and restore that way? make a copy of the old files in tmp
                 // and track new stuff in order to go backward?
@@ -200,32 +199,31 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 var dir_it = DirHeader.iterator(&eocd);
                 while (dir_it.next()) |df| {
                     const lf = LocHeader.parse(raw_data[df.local_header_offset..], raw_data) catch return;
-                    const filename = std.fmt.allocPrint(alloc, "{s}/{s}", .{
-                        ANNODUE_PATH,
-                        lf.filename,
-                    }) catch return;
-                    defer alloc.free(filename);
+                    // TODO: make some kind of comptime assurance that it will be a particular kind of slash
+                    if (!std.mem.startsWith(u8, lf.filename, "annodue\\")) continue;
 
+                    // TODO: do something in zzig about this crap
                     const data_off: usize = df.local_header_offset + 30 + lf.len_filename + lf.len_extra_field;
                     const data = raw_data[data_off .. data_off + lf.size_compressed];
 
-                    if (std.mem.lastIndexOf(u8, filename, "/")) |end|
-                        std.fs.cwd().makePath(filename[0..end]) catch return;
-                    const out = std.fs.cwd().createFile(filename, .{}) catch return;
-                    defer out.close();
+                    // TODO: make some kind of comptime assurance that it will be a particular kind of slash
+                    if (std.mem.lastIndexOf(u8, lf.filename, "\\")) |end|
+                        std.fs.cwd().makePath(lf.filename[0..end]) catch return;
 
+                    const out = std.fs.cwd().createFile(lf.filename, .{}) catch return;
+                    defer out.close();
                     lf.compression.uncompress(alloc, data, out.writer(), df.crc32) catch return;
                 }
 
                 // -> notify user to restart game
                 _ = gf.ToastNew("Update installed, please restart", rt.ColorRGB.Red.rgba(0));
-                //msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{release_tag});
-                //_ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
+                msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{update_tag});
+                _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
                 return;
             }
 
             if (request.response.status == .found) {
-                // TODO: case checking? github api seems to return lowercase headers
+                // TODO: case checking? tho github api seems to return lowercase headers
                 if (request.response.headers.getFirstValue("location")) |loc| {
                     update_url = loc;
                     continue;

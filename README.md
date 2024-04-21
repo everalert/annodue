@@ -7,7 +7,7 @@ Annodue adds new features, quality of life adjustments and cosmetic changes, as 
 See [MANUAL.md](MANUAL.md) for a complete feature summary and configuration instructions.
 
 
-#####*Disclaimer*
+##### *Disclaimer*
 
 *Annodue is in active development and not yet greenlit for submissions to Speedrun.com at the time of writing. For current information on how this can be used for speedrunning, please contact the speedrun moderators via the [Racer discord server](https://discord.com/servers/star-wars-episode-i-racer-441839750555369474) or [speedrun.com](https://www.speedrun.com/swe1r).*
 
@@ -82,7 +82,7 @@ make
 
 1. The compiled `dinput.dll` can be found in `C:/msys64/home/<user>/annodue/build`.
 
-#####Alternative
+##### Alternative
 
 The above may not work for all users. If so, try the following adjustments:
 

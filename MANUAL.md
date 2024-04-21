@@ -1,10 +1,10 @@
-#User Manual
+# User Manual
 
-#####*Disclaimer*
+##### *Disclaimer*
 
 *Annodue is in early active development. Everything indicated in this document is volatile and subject to change, including overall structure and naming. Several major features are not yet implemented. In future updates, you may be required to redo your configuration if there are breaking changes to the settings format.*
 
-####Key Information & Notes
+#### Key Information & Notes
 
 Hold `Shift` while launching the game to launch it without any modifications.
 
@@ -14,9 +14,9 @@ Control configuration is planned, but currently not possible. Similarly, DirectI
 
 Settings can be changed by editing `annodue/settings.ini`. Changes will be reflected in the game in realtime when you save this file, unless indicated otherwise below. In-game editing of settings is planned, but not yet implemented.
 
-##Features
+## Features
 
-#####Feature Summary
+##### Feature Summary
 
 - Plugin system (custom plugins disabled for now)
 - New game features
@@ -41,11 +41,11 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 	- Triggered race events displayed on UI
 	- Rainbow-colored race UI elements
 
-###Free Camera
+### Free Camera
 
 Usable both in race and in cantina. Controlling the camera will not override game inputs, meaning you can still drive around and navigate menus while in free look.
 
-#####Controls
+##### Controls
 
 |Action|Keyboard|XInput|
 |:---|:---|:---|
@@ -55,7 +55,7 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 |Z-move up  |`Space`             |`L Trigger`
 |Z-move down|`Shift`             |`R Trigger`
 
-#####Settings
+##### Settings
 
 Configured under `[cam7]`
 
@@ -67,7 +67,7 @@ Configured under `[cam7]`
 |`mouse_dpi`  |`u32` |reference for mouse sensitivity calculations; does not change mouse
 |`mouse_cm360`|`f32` |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
 
-###Savestates & Rewind
+### Savestates & Rewind
 
 *Usable in Practice Mode only*
 
@@ -75,7 +75,7 @@ Configured under `[cam7]`
 - Time delay when restoring a state, to help with getting your hand back in position in time
 - Freeze, rewind and scrub to any moment in the run
 
-#####Controls
+##### Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
@@ -85,7 +85,7 @@ Configured under `[cam7]`
 |Scrub Back       |`3`|`D-Left` |Hold to rewind
 |Scrub Forward    |`4`|`D-Right`|Hold to fast-forward
 
-#####Settings
+##### Settings
 
 Configurable under `[savestate]`
 
@@ -96,11 +96,11 @@ Configurable under `[savestate]`
 
 *Setting `load_delay` too low can interfere with ability to enter scrub mode*
 
-###Input Display
+### Input Display
 
 Simple input visualization during races. Shows inputs as they are after the game finishes device read merging and post-processing.
 
-#####Settings
+##### Settings
 
 Configurable under `[inputdisplay]`
 
@@ -112,21 +112,21 @@ Configurable under `[inputdisplay]`
 
 *Game considers screen to be 640x480 regardless of window size*
 
-###Overlay
+### Overlay
 
 *Usable in Practice Mode only*
 
 - Show individual lap times during race
 - Show time to overheat and underheat
 
-#####Settings
+##### Settings
 Configured under `[overlay]`
 
 |Option|Type|
 |:---|:---|
 |`enable`|`bool`|
 
-###Quality of Life
+### Quality of Life
 
 - Fix double mouse cursor
 - Map controller `Start` to `Esc`
@@ -139,7 +139,7 @@ Configured under `[overlay]`
 - Custom default number of racers
 - Custom default number of laps
 
-#####Quick Race Menu Controls
+##### Quick Race Menu Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
@@ -150,7 +150,7 @@ Configured under `[overlay]`
 |Set all upgrades to none|`Home`    |`LB`          |&nbsp;
 |Set all upgrades to max |`End`     |`RB`          |&nbsp;
 
-#####Settings
+##### Settings
 
 Configured under `[qol]`
 
@@ -164,7 +164,7 @@ Configured under `[qol]`
 |`default_racers`        |`u32` |1 to 12
 |`default_laps`          |`u32` |1 to 5
 
-###Cosmetic
+### Cosmetic
 
 - High-resolution fonts
 - Rotating rainbow colors for race UI elements
@@ -172,7 +172,7 @@ Configured under `[qol]`
 - (disabled) High-fidelity audio
 - (disabled) Load sprites from TGA
 
-#####Settings
+##### Settings
 
 Configurable under `[cosmetic]`
 
@@ -187,13 +187,13 @@ Configurable under `[cosmetic]`
 |`patch_audio`          |`bool`|*Disabled*
 |`patch_tga_loader`     |`bool`|*Disabled*
 
-###Multiplayer
+### Multiplayer
 
 - Disable multiplayer collisions
 - Max upgrades in multiplayer
 - Patch GUID to prevent joined players using different multiplayer settings
 
-#####Settings
+##### Settings
 
 Configurable under `[multiplayer]`
 
@@ -205,14 +205,14 @@ Configurable under `[multiplayer]`
 |`patch_guid`|`bool`|&nbsp;
 |`patch_r100`|`bool`|Use R-100 traction in the patched upgrade stack
 
-###Gameplay Tweak
+### Gameplay Tweak
 
 *Disabled in current release*
 
 - Patch DeathSpeedMin (minimum speed required to die from collision)
 - Patch DeathSpeedDrop (minimum speed loss in 1 frame to die from collision)
 
-#####Settings
+##### Settings
 
 Configurable under `[gameplay]`
 
@@ -224,13 +224,13 @@ Configurable under `[gameplay]`
 |`death_speed_min`       |`f32` |
 |`death_speed_drop`      |`f32` |
 
-###Developer Tools
+### Developer Tools
 
 *Disabled in current release*
 
 - Dump font data to file on launch
 
-#####Settings
+##### Settings
 
 Configurable under `[developer]`
 

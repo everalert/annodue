@@ -1,6 +1,6 @@
 #User Manual
 
-######*Disclaimer*
+#####*Disclaimer*
 
 *Annodue is in early active development. Everything indicated in this document is volatile and subject to change, including overall structure and naming. Several major features are not yet implemented. In future updates, you may be required to redo your configuration if there are breaking changes to the settings format.*
 
@@ -15,6 +15,31 @@ Control configuration is planned, but currently not possible. Similarly, DirectI
 Settings can be changed by editing `annodue/settings.ini`. Changes will be reflected in the game in realtime when you save this file, unless indicated otherwise below. In-game editing of settings is planned, but not yet implemented.
 
 ##Features
+
+#####Feature Summary
+
+- Plugin system (custom plugins disabled for now)
+- New game features
+	- Free Camera
+	- Savestates & Rewinding
+	- Quick Race Menu - setup a new race without going back to the cantina
+	- Input display
+	- Extended post-race summary
+	- Extended race UI overlay
+	- Framerate limiter
+- Quality of life
+	- Pause mapped to gamepad
+	- Race restart hotkey
+	- Showing milliseconds digit on all timers
+	- Configurable defaults for free-play racers and laps
+	- Skip planet cutscenes
+	- Double mouse cursor fix
+	- Collisions disabled in multiplayer
+	- Pod upgrades in multiplayer
+- Cosmetic
+	- Hi-res fonts
+	- Triggered race events displayed on UI
+	- Rainbow-colored race UI elements
 
 ###Free Camera
 
@@ -79,11 +104,11 @@ Simple input visualization during races. Shows inputs as they are after the game
 
 Configurable under `[inputdisplay]`
 
-|Option|Type|
-|:---|:---|
-|`enable`|`bool`|
-|`pos_x` |`i32` |
-|`pos_y` |`i32` |
+|Option|Type|Note|
+|:---|:---|:---|
+|`enable`|`bool`|&nbsp;
+|`pos_x` |`i32` |Screen X-position
+|`pos_y` |`i32` |Screen Y-position
 
 *Game considers screen to be 640x480 regardless of window size*
 

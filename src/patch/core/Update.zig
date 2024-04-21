@@ -57,10 +57,10 @@ const Update = struct {
         };
     }
 
-    // TODO: confirm freeing is doing something before 0.2.0 release
+    // FIXME: get this fully deallocating before 0.2.0 release
     fn deinit(self: *Self) void {
-        self.alloc.free(self.tag);
-        self.alloc.free(self.url);
+        //self.alloc.free(self.tag);
+        //self.alloc.free(self.url);
         self.client.deinit();
     }
 };

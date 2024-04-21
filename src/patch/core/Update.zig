@@ -25,19 +25,12 @@ const rt = @import("../util/racer_text.zig");
 
 const msg = @import("../util/message.zig");
 
-// FIXME: remove
-const TestMessage = msg.TestMessage;
-const ErrMessage = msg.ErrMessage;
-const dbg = @import("../util/debug.zig");
-
 // BUSINESS LOGIC
 
 // https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28
 // https://docs.github.com/en/rest/releases/assets?apiVersion=2022-11-28
 
-// FIXME: update
 const ANNODUE_PATH = if (BuildOptions.BUILD_MODE == .Release) "." else "annodue/tmp/updatetest";
-//const ANNODUE_PATH = "annodue/tmp/updatetest";
 
 // NOTE: update this list with each new version
 // TODO: see about auto-generating this list at comptime, and exposing it via build system
@@ -64,7 +57,10 @@ const Update = struct {
         };
     }
 
+    // TODO: confirm freeing is doing something before 0.2.0 release
     fn deinit(self: *Self) void {
+        self.alloc.free(self.tag);
+        self.alloc.free(self.url);
         self.client.deinit();
     }
 };
@@ -96,7 +92,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // the update system is stable
     if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) return;
 
-    if (s.init or gs.timestamp - s.last_try < s.retry_delay) return;
+    if (s.init or gs.timestamp + s.retry_delay < s.last_try) return;
     s.last_try = gs.timestamp;
 
     const alloc = allocator.allocator();
@@ -131,7 +127,8 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         defer parsed.deinit();
 
         // TODO: extra check + setting for opting in to debug releases?
-        update.tag = parsed.value.object.get("tag_name").?.string;
+        const tag = parsed.value.object.get("tag_name").?.string;
+        update.tag = alloc.dupe(u8, tag) catch return;
         const tag_ver = std.SemanticVersion.parse(update.tag.?) catch return;
         if (std.SemanticVersion.order(Version, tag_ver) != .lt) return;
 
@@ -148,7 +145,8 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             const state = asset.object.get("state").?.string;
             if (!std.mem.eql(u8, state, "uploaded")) return; // we know we can't update now
 
-            update.url = asset.object.get("browser_download_url").?.string;
+            const url = asset.object.get("browser_download_url").?.string;
+            update.url = alloc.dupe(u8, url) catch return;
             update.size = asset.object.get("size").?.integer;
             break;
         }
@@ -163,7 +161,6 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     updateApplyFromNetwork(alloc, &update) catch return;
 
     // -> notify user to restart game
-    // _ = gf.ToastNew("Update installed, please restart", rt.ColorRGB.Red.rgba(0));
     msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{update.tag.?});
     _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
 }
@@ -243,8 +240,6 @@ fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
         const p = std.fmt.allocPrintZ(alloc, "{s}/{s}", .{ ANNODUE_PATH, path }) catch |e| return e;
         defer alloc.free(p);
         std.fs.cwd().deleteTree(p) catch |e| return e;
-        dbg.ConsoleOut("{s}\n", .{p}) catch |e| return e;
-        //std.fs.cwd().deleteFile(p) catch return; // TODO: confirm not needed
     }
 
     // -> unpack files to file system
@@ -264,10 +259,10 @@ fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
         const data = raw_data[data_off .. data_off + lf.size_compressed];
 
         // TODO: make some kind of comptime assurance that it will be a particular kind of slash
-        if (std.mem.lastIndexOf(u8, lf.filename, "\\")) |end|
-            std.fs.cwd().makePath(lf.filename[0..end]) catch |e| return e;
-
         const fp = std.fmt.allocPrint(alloc, "{s}/{s}", .{ ANNODUE_PATH, lf.filename }) catch return;
+        if (std.mem.lastIndexOf(u8, fp, "\\")) |end|
+            std.fs.cwd().makePath(fp[0..end]) catch |e| return e;
+
         defer alloc.free(fp);
         const out = std.fs.cwd().createFile(fp, .{}) catch |e| return e;
         defer out.close();

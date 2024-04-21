@@ -126,7 +126,7 @@ pub fn main() !void {
         std.debug.print("[ZIP] WARNING: '-minver' missing or invalid, minver.txt will not be generated\n", .{});
     }
 
-    const readme_data = try std.fmt.allocPrint(alloc, "To install, unzip the contents of this archive to the game directory.\n\nFor more information, go to https://github.com/everalert/annodue/tree/{s}", .{minver.?});
+    const readme_data = try std.fmt.allocPrint(alloc, "To install, unzip the contents of this archive to the game directory.\n\nFor more information, go to https://github.com/everalert/annodue/tree/{s}", .{ver.?});
     try appendDataToFile(alloc, &z, readme_data, "readme.txt");
 
     // write the output to disk

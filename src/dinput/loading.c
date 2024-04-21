@@ -13,8 +13,8 @@ typedef struct Mod {
 	BOOL Initialized;
 	HINSTANCE Handle; // loaded plugin handle
 	FILETIME WriteTime;
-    uint32_t CheckFreq;
-    uint32_t CheckLast;
+	uint32_t CheckFreq;
+	uint32_t CheckLast;
 	void(*Init)();
 	void(*Deinit)();
 } Mod;

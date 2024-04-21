@@ -31,13 +31,12 @@ const KS_PRESSED: i16 = 1; // since last call
 
 // VERSION
 
-// FIXME: update before building github release
 // TODO: include tag when appropriate
 pub const Version = std.SemanticVersion{
     .major = 0,
-    .minor = 0,
-    .patch = 1,
-    .build = "112",
+    .minor = 1,
+    .patch = 0,
+    .build = "240",
 };
 
 // TODO: use SemanticVersion parse fn instead

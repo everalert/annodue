@@ -115,6 +115,7 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 const end_race_timer_offset: u8 = 12;
 
+// TODO: cleanup
 fn PatchHudTimerMs(enable: bool) void {
     if (enable) {
         // hudDrawRaceHud

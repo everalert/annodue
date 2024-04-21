@@ -7,6 +7,8 @@ const GeneralPurposeAllocator = std.heap.GeneralPurposeAllocator;
 // TODO: implement alloc(), free(), etc. and make available to global functions api
 // TODO: need to be able to free main patch alloc (see: patch.zig) when implementing
 // core hot reload
+// TODO: defer free all the allocPrint littered about the codebase
+// also think more carefully about using allocPrint if it's going to cause all these extra lines
 
 const AllocatorState = struct {
     initialized: bool = false,

@@ -28,6 +28,7 @@ const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
 const rf = @import("util/racer_fn.zig");
 
+// TODO: switch to Sha256 for perf?
 const Sha512 = std.crypto.hash.sha2.Sha512;
 const plugin_hashes_data = @embedFile("hashfile");
 const plugin_hashes_len: u32 = (plugin_hashes_data.len - 4) / 64;

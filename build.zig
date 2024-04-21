@@ -167,7 +167,7 @@ pub fn build(b: *std.Build) void {
     const zip_cleanup = b.addRemoveDirTree(arg_z_cleanup_path);
     zip_cleanup.step.dependOn(zip_step);
 
-    const release_zip_files_step = b.step("release", "package built files for release");
+    const release_zip_files_step = b.step("release", "Package built files for release");
     release_zip_files_step.dependOn(&zip_cleanup.step);
 
     // STEP - BUILD PLUGINS

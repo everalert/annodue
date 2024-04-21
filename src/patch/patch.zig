@@ -25,6 +25,7 @@ export fn Init() void {
     global.GLOBAL_STATE.patch_size = patch_size;
     global.GLOBAL_STATE.patch_offset = @intFromPtr(memory.ptr);
 
+    // TODO: reimpl alloc in init fn args
     settings.init();
     hook.init();
 

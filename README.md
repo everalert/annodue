@@ -59,12 +59,13 @@ See the output of `zig build -h` for further build options.
 
 ### dinput.dll (Windows MSYS2)
 
-Run code in this section in a MinGW32 shell.
+Run code in this section in a MSYS2 MINGW32 shell (the one with the grey icon). These instructions are a work in progress, and may require some experimentation.
 
 1. Install build dependencies:
 ```
 pacman -S git mingw32/mingw-w64-i686-cmake mingw32/mingw-w64-i686-gcc
 ```
+If the build fails at step 3, you may need to additionally install `mingw32/mingw-w64-i686-make` with this command.
 
 1. Move the project files to your MinGW32 filesystem, found at `C:/msys64/home/<user>/`. To do this in the shell, run:
 ```
@@ -79,30 +80,13 @@ cd build
 cmake ../src/dinput -G "MSYS Makefiles"
 make
 ```
-
-1. The compiled `dinput.dll` can be found in `C:/msys64/home/<user>/annodue/build`.
-
-##### Alternative
-
-The above may not work for all users. If so, try the following adjustments:
-
-1. Install build dependencies:
+If the build fails, additionally install `make` as described in step 1, then try the following:
 ```
-pacman -S git mingw32/mingw-w64-i686-make mingw32/mingw-w64-i686-gcc
-```
-
-1. Move the project files to your MinGW32 filesystem, found at `C:/msys64/home/<user>/` (as above).
-
-1. Compile `dinput.dll`:
-```
-cd annodue
-mkdir build
-cd build
 cmake ../src/dinput -G "MinGW Makefiles"
 mingw32-make
 ```
 
-1. The compiled `dinput.dll` can be found in `C:/msys64/home/<user>/annodue/build` (as above).
+1. The compiled `dinput.dll` can be found in `C:/msys64/home/<user>/annodue/build`.
 
 <!---
 ### macOS / Linux

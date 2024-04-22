@@ -35,8 +35,8 @@ const KS_PRESSED: i16 = 1; // since last call
 pub const Version = std.SemanticVersion{
     .major = 0,
     .minor = 1,
-    .patch = 0,
-    .build = "240",
+    .patch = 1,
+    .build = "244",
 };
 
 // TODO: use SemanticVersion parse fn instead

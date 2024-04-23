@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const SemVer = std.SemanticVersion;
@@ -71,6 +72,9 @@ pub fn main() !void {
 
     // generate the zip archive
 
+    // FIXME: (ZZIP) impl zip unpacking changes (slash correction) into zzip lib
+    // FIXME: (ZZIP) impl a decent canned way of doing this into zzip lib
+
     const cwd = std.fs.cwd();
 
     var z = Zip.init(alloc);
@@ -99,9 +103,15 @@ pub fn main() !void {
         }
 
         const path = try std.fmt.allocPrint(alloc, "{s}", .{entry.path}); // lifetime
+        if (builtin.os.tag == .windows) { // FIXME: remove hack, fix zzip instead
+            for (0..path.len) |i| {
+                if (path[i] == '\\') path[i] = '/';
+            }
+        }
+
         try appendFileToFile(alloc, &z, &base_dir.dir, path);
 
-        if (std.mem.startsWith(u8, path, "annodue\\"))
+        if (std.mem.startsWith(u8, path, "annodue/"))
             try appendFileToFile(alloc, &z_up, &base_dir.dir, path);
     }
 
@@ -173,8 +183,9 @@ fn appendFileToFile(alloc: Allocator, z: *Zip, dir: *const Dir, path: []const u8
     const file = try dir.openFile(path, .{});
     defer file.close();
     const raw_data = try file.readToEndAlloc(alloc, 1 << 31);
-
     var zipfile = try makeZipFile(alloc, raw_data, path);
+    //var zipfile = try File.init(alloc, path, path); // instead of all of above
+
     var ets = try alloc.create(ExtendedTimestampEF);
     try ets.updateFromFile(&file, false);
     try zipfile.extra_fields.append(ets.extraField());

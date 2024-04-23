@@ -30,6 +30,10 @@ const msg = @import("../util/message.zig");
 // https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28
 // https://docs.github.com/en/rest/releases/assets?apiVersion=2022-11-28
 
+// FIXME: extracting should assume directories are denoted by forward slash in
+// zip files, as per the zipfile spec; meaning this (the extractor), the packager
+// and zzip all need to be updated
+
 const ANNODUE_PATH = if (BuildOptions.BUILD_MODE == .Release) "." else "annodue/tmp/updatetest";
 
 // NOTE: update this list with each new version
@@ -233,6 +237,8 @@ fn updateApplyFromNetwork(alloc: Allocator, update: *Update) !void {
 // TODO: MINVER.txt validation
 // TODO: check update dependencies and recursively download until
 // finding a valid update version (impl after 0.1.0 release)
+// FIXME: (ZZIP) impl zip unpacking changes (slash correction) into zzip lib
+// FIXME: (ZZIP) impl a decent canned way of doing this into zzip lib
 fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
     // -> delete relevant files in file system
     // TODO: maybe don't delete in future; depends on plugin ecosystem
@@ -252,7 +258,7 @@ fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
     while (dir_it.next()) |df| {
         const lf = LocHeader.parse(raw_data[df.local_header_offset..], raw_data) catch |e| return e;
         // TODO: make some kind of comptime assurance that it will be a particular kind of slash
-        if (!std.mem.startsWith(u8, lf.filename, "annodue\\")) continue;
+        if (!std.mem.startsWith(u8, lf.filename, "annodue/")) continue;
 
         // TODO: do something in zzig about this crap
         const data_off: usize = df.local_header_offset + 30 + lf.len_filename + lf.len_extra_field;
@@ -260,7 +266,7 @@ fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
 
         // TODO: make some kind of comptime assurance that it will be a particular kind of slash
         const fp = std.fmt.allocPrint(alloc, "{s}/{s}", .{ ANNODUE_PATH, lf.filename }) catch return;
-        if (std.mem.lastIndexOf(u8, fp, "\\")) |end|
+        if (std.mem.lastIndexOf(u8, fp, "/")) |end|
             std.fs.cwd().makePath(fp[0..end]) catch |e| return e;
 
         defer alloc.free(fp);

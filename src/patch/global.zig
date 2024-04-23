@@ -31,12 +31,13 @@ const KS_PRESSED: i16 = 1; // since last call
 
 // VERSION
 
+// NOTE: current minver for updates: 0.1.2
 // TODO: include tag when appropriate
 pub const Version = std.SemanticVersion{
     .major = 0,
     .minor = 1,
-    .patch = 1,
-    .build = "244",
+    .patch = 2,
+    .build = "248",
 };
 
 // TODO: use SemanticVersion parse fn instead

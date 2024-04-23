@@ -14,6 +14,8 @@ Control configuration is planned, but currently not possible. Similarly, DirectI
 
 Settings can be changed by editing `annodue/settings.ini`. Changes will be reflected in the game in realtime when you save this file, unless indicated otherwise below. In-game editing of settings is planned, but not yet implemented.
 
+If you normally need to run a specific `dinput.dll` to prevent the game from crashing, you can place it in the `annodue` folder and the game use it.
+
 ## Features
 
 ##### Feature Summary

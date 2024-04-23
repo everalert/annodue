@@ -67,6 +67,12 @@ BOOL WINAPI EnsureDirectoryExists(const char* relpath, int len) {
     return FALSE;
 }
 
+void WINAPI ErrorMessage(char* message, DWORD error_code) {
+	char buf[1024];
+	sprintf(buf, "%s failed with error %lu", message, error_code);
+	MessageBoxA(NULL, buf, "dinput.dll", 0);
+}
+
 BOOL WINAPI DllMain(
 	HINSTANCE hinstDLL,
 	DWORD fdwReason,
@@ -84,26 +90,44 @@ HRESULT WINAPI DirectInputCreateA(
 ) {
 	static HRESULT(WINAPI *o_DirectInputCreateA)(HINSTANCE, DWORD, LPDIRECTINPUT*, LPUNKNOWN) = NULL;
 	static void(*Patch)() = NULL;
+	HMODULE patch_dll, dll;
 
 	if (o_DirectInputCreateA == NULL) {
-		if (EnsureDirectoryExists("annodue/tmp", 12) == FALSE) {
-			MessageBoxA(NULL, "Creating temp directory failed.", "dinput.dll", 0);
+		if (FALSE == EnsureDirectoryExists("annodue/tmp", 12)) {
+			ErrorMessage("EnsureDirectoryExists(annodue/tmp)", GetLastError());
 			goto RETURN;
 		}
 		CopyFileA("annodue/annodue.dll", "annodue/tmp/annodue.tmp.dll", FALSE);
-		HMODULE patch_dll = LoadLibrary("annodue/tmp/annodue.tmp.dll");
-		Patch = (void*)GetProcAddress(patch_dll, "Init");
+
+		if (NULL == (patch_dll = LoadLibrary("annodue/tmp/annodue.tmp.dll"))) {
+			ErrorMessage("LoadLibrary(annodue.dll)", GetLastError());
+			goto RETURN;
+		}
+		if (NULL == (Patch = (void*)GetProcAddress(patch_dll, "Init"))) {
+			ErrorMessage("GetProcAddress(Init)", GetLastError());
+			goto RETURN;
+		}
 		Patch();
 
-		HMODULE dll = LoadLibrary("c:/windows/system32/dinput.dll");
-		o_DirectInputCreateA = (void*)GetProcAddress(dll, "DirectInputCreateA");
+		if (NULL == (dll = LoadLibrary("annodue/dinput.dll"))) {
+			DWORD e = GetLastError();
+			if (NULL == (dll = LoadLibrary("c:/windows/system32/dinput.dll"))) {
+				ErrorMessage("LoadLibrary(annodue/dinput.dll)", e);
+				ErrorMessage("LoadLibrary(system32/dinput.dll)", GetLastError());
+				goto RETURN;
+			}
+		}
+		if (NULL == (o_DirectInputCreateA = (void*)GetProcAddress(dll, "DirectInputCreateA"))) {
+			ErrorMessage("GetProcAddress(DirectInputCreateA)", GetLastError());
+			goto RETURN;
+		}
+	}
 
 #if 0
-		char buf[1024];
-		sprintf(buf, "Hooked 0x%X", o_DirectInputCreateA);
-		MessageBoxA(NULL, buf, "annodue dinput.dll", 0);
+	char buf[1024];
+	sprintf(buf, "Hooked 0x%X", o_DirectInputCreateA);
+	MessageBoxA(NULL, buf, "annodue dinput.dll", 0);
 #endif
-	}
 
 RETURN:
 	return o_DirectInputCreateA(hinst, dwVersion, lplpDirectInput, punkOuter);

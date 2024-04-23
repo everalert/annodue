@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] -- 2024-04-23
 
+### Added
+
+- Ability to sideload a secondary `dinput.dll` in place of the one in `system32`
+
 ### Fixed
 
 - Release archives not separating directories with `/` when building on Windows

@@ -47,7 +47,6 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     const options_label = "BuildOptions";
     options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
-    options.addOption(std.builtin.Mode, "OPTIMIZE", optimize);
 
     // STEP - HOTCOPY
 

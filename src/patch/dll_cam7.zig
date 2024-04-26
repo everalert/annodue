@@ -12,6 +12,8 @@ const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const debug = @import("core/Debug.zig");
+
 const r = @import("util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
@@ -23,6 +25,9 @@ const x86 = @import("util/x86.zig");
 const InputMap = @import("util/input.zig").InputMap;
 const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
 const AxisInputMap = @import("util/input.zig").AxisInputMap;
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // Named after Camera 7 in Trackmania
 

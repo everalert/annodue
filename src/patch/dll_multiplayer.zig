@@ -6,11 +6,16 @@ const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const debug = @import("core/Debug.zig");
+
 const r = @import("util/racer.zig");
 const rf = @import("util/racer_fn.zig");
 
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - Disable multiplayer collisions

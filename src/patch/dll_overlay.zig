@@ -6,6 +6,8 @@ const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const debug = @import("core/Debug.zig");
+
 const r = @import("util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
@@ -14,6 +16,9 @@ const rto = rt.TextStyleOpts;
 
 const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // Usable in Practice Mode only
 

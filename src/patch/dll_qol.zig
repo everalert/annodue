@@ -11,6 +11,8 @@ const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const debug = @import("core/Debug.zig");
+
 const timing = @import("util/timing.zig");
 const Menu = @import("util/menu.zig").Menu;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
@@ -28,6 +30,9 @@ const rto = rt.TextStyleOpts;
 const InputMap = @import("util/input.zig").InputMap;
 const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
 const AxisInputMap = @import("util/input.zig").AxisInputMap;
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - fix: remove double mouse cursor

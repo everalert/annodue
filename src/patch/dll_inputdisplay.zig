@@ -7,6 +7,8 @@ const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const debug = @import("core/Debug.zig");
+
 const nt = @import("util/normalized_transform.zig");
 const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
@@ -16,6 +18,9 @@ const rc = r.constants;
 const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - Visualize inputs during race

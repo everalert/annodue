@@ -9,6 +9,8 @@ const GlobalSt = @import("global.zig").GlobalState;
 const GlobalFn = @import("global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
 
+const debug = @import("core/Debug.zig");
+
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const st = @import("util/active_state.zig");
 const scroll = @import("util/scroll_control.zig");
@@ -23,6 +25,9 @@ const rto = rt.TextStyleOpts;
 const InputMap = @import("util/input.zig").InputMap;
 const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
 const AxisInputMap = @import("util/input.zig").AxisInputMap;
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // Usable in Practice Mode only
 

@@ -228,7 +228,7 @@ pub fn build(b: *std.Build) void {
 
     const core = b.addSharedLibrary(.{
         .name = "annodue",
-        .root_source_file = .{ .path = "src/patch/patch.zig" },
+        .root_source_file = .{ .path = "src/patch/main.zig" },
         .target = target,
         .optimize = optimize,
     });

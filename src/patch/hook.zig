@@ -9,6 +9,7 @@ const w32ll = w32.system.library_loader;
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
+const core = @import("core/core.zig");
 const settings = @import("settings.zig");
 const global = @import("global.zig");
 const GlobalSt = global.GlobalState;
@@ -24,6 +25,7 @@ const core_testing = @import("core/testing.zig");
 
 const hook = @import("util/hooking.zig");
 const mem = @import("util/memory.zig");
+const msg = @import("util/message.zig");
 const input = @import("util/input.zig");
 const r = @import("util/racer.zig");
 const rc = @import("util/racer_const.zig");
@@ -336,18 +338,27 @@ pub fn init() void {
     p.MenuRaceResultsB = &global.MenuRaceResultsB;
     p.MenuTrackB = &global.MenuTrackB;
 
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.EarlyEngineUpdateA = &toast.EarlyEngineUpdateA;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.OnInitLate = &update.OnInitLate;
-    p.EarlyEngineUpdateB = &update.EarlyEngineUpdateB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.EarlyEngineUpdateA = &core_testing.EarlyEngineUpdateA;
+    // TODO: move to LoadPlugin equivalent?
+    // TODO: require OnInit, OnLateInit, OnDeinit?
+    // TODO: move above to core
+    const fn_fields = comptime std.enums.values(PluginExportFn);
+    const core_decls = @typeInfo(core).Struct.decls;
+    inline for (core_decls) |cd| {
+        msg.TestMessage(@This(), "loading {s}", .{cd.name});
+        const this_decl = @field(core, cd.name);
+        var this_p: ?*Plugin = null;
+        inline for (fn_fields) |ff| {
+            if (@hasDecl(this_decl, @tagName(ff))) {
+                msg.TestMessage(@This(), "decl found: {s}", .{@tagName(ff)});
+                if (this_p == null) {
+                    p = PluginState.core.addOne() catch unreachable;
+                    p.* = std.mem.zeroInit(Plugin, .{});
+                    this_p = p;
+                }
+                @field(this_p.?, @tagName(ff)) = &@field(this_decl, @tagName(ff));
+            }
+        }
+    }
 
     // loading plugins
 

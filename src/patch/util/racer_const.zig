@@ -85,6 +85,12 @@ pub const RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR: usize = 0x4D78A4;
 pub const ADDR_RACE_DATA: usize = 0x4D78A4; // FIXME: change to RACE_DATA_ARRAY_ADDR = 0xE29BC0; confirm static
 pub const RACE_DATA_SIZE: usize = 0x88;
 
+// Vehicle Metadata
+
+// TODO: vehicle metadata struct def
+pub const VEHICLE_METADATA_ARRAY_ADDR: usize = 0x4C2700;
+pub const VEHICLE_METADATA_ITEM_SIZE: usize = 0x34;
+
 // Input
 
 pub const INPUT_RAW_STATE_TIMESTAMP: usize = 0x50E028;

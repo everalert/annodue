@@ -20,6 +20,7 @@ const practice = @import("patch_practice.zig");
 const toast = @import("core/Toast.zig");
 const allocator = @import("core/Allocator.zig");
 const update = @import("core/Update.zig");
+const core_testing = @import("core/testing.zig");
 
 const hook = @import("util/hooking.zig");
 const mem = @import("util/memory.zig");
@@ -303,6 +304,8 @@ pub fn init() void {
 
     // loading core
     // TODO: system to handle adding these automatically
+    // see @hasDecl usage in std.builtin.panic for an idea
+    // use this in conjunction with iterating over /core ?
     // TODO: hot-reloading core
 
     p = PluginState.core.addOne() catch unreachable;
@@ -341,6 +344,10 @@ pub fn init() void {
     p.* = std.mem.zeroInit(Plugin, .{});
     p.OnInitLate = &update.OnInitLate;
     p.EarlyEngineUpdateB = &update.EarlyEngineUpdateB;
+
+    p = PluginState.core.addOne() catch unreachable;
+    p.* = std.mem.zeroInit(Plugin, .{});
+    p.EarlyEngineUpdateA = &core_testing.EarlyEngineUpdateA;
 
     // loading plugins
 

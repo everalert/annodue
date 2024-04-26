@@ -384,8 +384,7 @@ pub fn init() void {
     global.GLOBAL_STATE.patch_offset = off;
 }
 
-pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
         for (PluginState.plugin.items, 0..) |*p, i| {
             const len = for (p.Filename, 0..) |c, j| {

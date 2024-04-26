@@ -101,8 +101,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: make sure it only dumps once, even when hot reloading
     if (gf.SettingGetB("developer", "fonts_dump").?) {
         // This is a debug feature to dump the original font textures
@@ -114,20 +113,10 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-//export fn EarlyEngineUpdateAfter(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-//    _ = gv;
-//    _ = initialized;
-//    _ = gs;
-//}
+//export fn EarlyEngineUpdateAfter(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

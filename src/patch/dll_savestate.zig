@@ -160,8 +160,7 @@ const state = struct {
     var layer_indexes: [layer_depth + 1]usize = undefined;
     var layer_index_count: usize = undefined;
 
-    fn init(gf: *GlobalFn) void {
-        _ = gf;
+    fn init(_: *GlobalFn) void {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         const alloc = gpa.allocator();
         memory = alloc.alloc(u8, memory_size) catch unreachable;
@@ -329,8 +328,7 @@ fn DoStateRecording(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     return .Recording;
 }
 
-fn DoStateLoading(gs: *GlobalSt, gf: *GlobalFn) LoadState {
-    _ = gf;
+fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
         state.frame_total = state.frame;
@@ -343,8 +341,7 @@ fn DoStateLoading(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     return .Loading;
 }
 
-fn DoStateScrubbing(gs: *GlobalSt, gf: *GlobalFn) LoadState {
-    _ = gf;
+fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.frame - 1;
     }
@@ -364,8 +361,7 @@ fn DoStateScrubbing(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     return .Scrubbing;
 }
 
-fn DoStateScrubExiting(gs: *GlobalSt, gf: *GlobalFn) LoadState {
-    _ = gf;
+fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
 
     if (state.save_input_st.gets() == .JustOn) {
@@ -399,20 +395,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.handle_settings(gf);
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
@@ -420,13 +409,11 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 //    state.reset();
 //}
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.handle_settings(gf);
 }
 
-export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.scrub_input_dec.update(gf);
     state.scrub_input_inc.update(gf);
     state.save_input_st.update(gf);
@@ -446,8 +433,7 @@ export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
     // TODO: experiment with positioning

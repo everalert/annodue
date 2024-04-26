@@ -507,9 +507,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.gf = gf;
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: look into using in-game default setter, see fn_45BD90
 
     if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
@@ -519,28 +517,22 @@ export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
 }
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.close();
 }
 
 // HOOKS
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QolHandleSettings(gf);
 }
 
-export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QolUpdateInput(gf);
     QuickRaceMenu.update_input();
 }
 
-export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
@@ -548,9 +540,7 @@ export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
 
-export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
-    _ = gf;
+export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: move to global state, see also qll_savestate->EarlyEngineUpdateStage20A
     // only not nullptr if in race scene
     const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
@@ -562,9 +552,7 @@ export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // FIXME: settings toggles for both of these
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
-export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-
+export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // Quick Restart
     if (gs.in_race.on() and
         QolState.input_quickstart.gets() == .On and
@@ -581,8 +569,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         QuickRaceMenu.update();
 }
 
-export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (gs.in_race == .JustOn) race.reset();
 

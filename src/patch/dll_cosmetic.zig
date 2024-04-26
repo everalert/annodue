@@ -387,14 +387,9 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     gs.patch_offset = off;
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
     crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
     crot.PatchRgbArgs(0x461045, 0xFFFFFF);
@@ -406,14 +401,11 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleColorSettings(gf);
 }
 
-export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn TextRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (CosmeticState.rb_enable) {
         PatchHudColRotate(
             CosmeticState.rb_value_enable,

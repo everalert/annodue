@@ -69,15 +69,11 @@ const mode_vis = struct {
 
 // HOOK FUNCTIONS
 
-pub fn InitRaceQuadsA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     mode_vis.init();
 }
 
-pub fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-
+pub fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     const f = struct {
         var start_time: ?u32 = null;
         var player_ok: st.ActiveState = .Off;

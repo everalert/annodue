@@ -197,17 +197,14 @@ fn LoadSettings() bool {
     return true;
 }
 
-pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > SettingsState.last_check + SettingsState.check_freq)
         if (LoadSettings())
             SettingsState.load_callback();
     SettingsState.last_check = gs.timestamp;
 }
 
-pub fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     defer SettingsState.manager.deinit();
 
     defer SettingsState.overlay.deinit();

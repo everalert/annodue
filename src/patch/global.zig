@@ -202,8 +202,7 @@ pub fn init() bool {
 
 // HOOK CALLS
 
-pub fn OnInitLate(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
+pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
 
@@ -228,8 +227,7 @@ pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) vo
     }
 }
 
-pub fn TimerUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
+pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
     gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
     const fps_res: f32 = 1 / gs.dt_f * 2;
@@ -238,9 +236,7 @@ pub fn TimerUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
     gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreenB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuTitleScreenB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     // TODO: make text only appear on the actual title screen, i.e. remove from file select etc.
     DrawVersionString();
     DrawMenuPracticeModeLabel();
@@ -270,20 +266,14 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void
     //}
 }
 
-pub fn MenuStartRaceB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuStartRaceB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResultsB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuRaceResultsB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrackB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuTrackB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }

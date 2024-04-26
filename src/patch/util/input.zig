@@ -27,8 +27,7 @@ const InputState = extern struct {
     var mouse_lock: bool = false;
 };
 
-pub fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+pub fn InputUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     update_xinput();
     update_kb();
     //update_mouse();

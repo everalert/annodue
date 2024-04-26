@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const StackTrace = std.builtin.StackTrace;
 
 const global = @import("global.zig");
@@ -60,15 +61,20 @@ pub fn panic(message: []const u8, error_return_trace: ?*StackTrace, ret_addr: ?u
     }) catch unreachable;
     _ = file.write(head) catch unreachable;
 
-    // TODO: manually print stack trace
+    // TODO: get this writing things correctly, not sure if pdb needed
     // see https://andrewkelley.me/post/zig-stack-traces-kernel-panic-bare-bones-os.html
-    _ = file.write("TRACE:\n") catch unreachable;
+    if (comptime builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
+        _ = file.write("\nSTACK TRACE:\n") catch unreachable;
+        var di = std.debug.DebugInfo.init(alloc) catch unreachable;
+        const tty = std.io.tty.detectConfig(file);
+        std.debug.writeCurrentStackTrace(file.writer(), &di, tty, @returnAddress()) catch unreachable;
+    }
 
-    // FIXME: possibly drop this, if it's never going to print anything useful on its own
-    if (error_return_trace) |ert| {
-        ert.format("", .{}, file.writer()) catch unreachable;
-    } else {
-        _ = file.write("No error trace.\n") catch unreachable;
+    _ = file.write("\nRETURN TRACE:\n") catch unreachable;
+    var it = std.debug.StackIterator.init(@returnAddress(), null);
+    while (it.next()) |addr| {
+        const trace_str = std.fmt.allocPrint(alloc, "0x{X:0>8}\n", .{addr}) catch unreachable;
+        _ = file.write(trace_str) catch unreachable;
     }
 
     // TODO: decide if we need to alert user to check crashlog.txt

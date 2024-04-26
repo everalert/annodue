@@ -2,8 +2,14 @@ const std = @import("std");
 const builtin = @import("builtin");
 const StackTrace = std.builtin.StackTrace;
 
+// FIXME: make comptime-generated annodue_panic that takes a string, so that those
+// piggybacking off this def aren't stuck with the annodue version str they happen
+// to compile with
+const ANNODUE_VER = @import("../global.zig").VersionStr;
+
 // FIXME: should there be unreachable in here?
-// TODO: if we normally write to file while logging, do we need to
+// TODO: if we normally write to file while logging, do we need to do anything extra here
+// to make it write during a crash
 pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_addr: ?usize) noreturn {
     @setCold(true);
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -13,7 +19,8 @@ pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_
     const file = std.fs.cwd().createFile("annodue/crashlog.txt", .{}) catch unreachable;
     defer file.close();
 
-    const head = std.fmt.allocPrint(alloc, "{s: <16}{s}\n{s: <16}{d}\n", .{
+    const head = std.fmt.allocPrint(alloc, "{s}\n{s: <16}{s}\n{s: <16}{d}\n", .{
+        ANNODUE_VER,
         "MESSAGE:",
         message,
         "TIMESTAMP:",

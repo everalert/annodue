@@ -4,7 +4,7 @@ const std = @import("std");
 const ini = @import("../import/import.zig").ini;
 
 // TODO: convert hashmaps to ArrayList, so that settings in default file retains
-// order as defined in patch/settings.zig
+// order as defined in patch/core/Settings.zig
 
 pub const IniValue = union(enum) {
     b: bool,

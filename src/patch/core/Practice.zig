@@ -2,14 +2,14 @@ pub const Self = @This();
 
 const std = @import("std");
 
-const s = @import("settings.zig").state;
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
+const s = @import("Settings.zig").state;
+const GlobalSt = @import("Global.zig").GlobalState;
+const GlobalFn = @import("Global.zig").GlobalFunction;
 
-const fl = @import("util/flash.zig");
-const st = @import("util/active_state.zig");
-const mem = @import("util/memory.zig");
-const r = @import("util/racer.zig");
+const fl = @import("../util/flash.zig");
+const st = @import("../util/active_state.zig");
+const mem = @import("../util/memory.zig");
+const r = @import("../util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
 const rt = r.text;

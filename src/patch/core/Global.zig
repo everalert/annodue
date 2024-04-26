@@ -3,18 +3,18 @@ const Self = @This();
 const std = @import("std");
 const win = std.os.windows;
 
-const settings = @import("settings.zig");
+const freeze = @import("Freeze.zig");
+const toast = @import("Toast.zig");
+const input = @import("Input.zig");
+const settings = @import("Settings.zig");
 const s = settings.SettingsState;
 
-const freeze = @import("core/Freeze.zig");
-const toast = @import("core/Toast.zig");
-const st = @import("util/active_state.zig");
-const xinput = @import("util/xinput.zig");
-const dbg = @import("util/debug.zig");
-const msg = @import("util/message.zig");
-const mem = @import("util/memory.zig");
-const input = @import("util/input.zig");
-const r = @import("util/racer.zig");
+const st = @import("../util/active_state.zig");
+const xinput = @import("../util/xinput.zig");
+const dbg = @import("../util/debug.zig");
+const msg = @import("../util/message.zig");
+const mem = @import("../util/memory.zig");
+const r = @import("../util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
 const rt = r.text;
@@ -28,6 +28,7 @@ const KS_DOWN: i16 = -1;
 const KS_PRESSED: i16 = 1; // since last call
 
 // NOTE: may want to figure out all the code caves in .data for potential use
+// TODO: split up the versioning, global structs, etc. from the business logic
 
 // VERSION
 

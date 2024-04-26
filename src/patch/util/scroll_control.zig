@@ -7,7 +7,7 @@ const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const st = @import("active_state.zig");
 const mem = @import("memory.zig");
-const input = @import("input.zig");
+const input = @import("../core/input.zig");
 const r = @import("racer.zig");
 const rc = r.constants;
 const rf = r.functions;

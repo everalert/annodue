@@ -4,9 +4,9 @@ const RingBuffer = @import("../util/ring_buffer.zig").RingBuffer;
 const nxf = @import("../util/normalized_transform.zig");
 const fl = @import("../util/flash.zig");
 
-const GlobalSt = @import("../global.zig").GlobalState;
-const GlobalFn = @import("../global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("../global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("Global.zig").GlobalState;
+const GlobalFn = @import("Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("Global.zig").PLUGIN_VERSION;
 
 const r = @import("../util/racer.zig");
 const rt = r.text;

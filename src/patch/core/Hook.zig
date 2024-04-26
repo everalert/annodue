@@ -9,27 +9,20 @@ const w32ll = w32.system.library_loader;
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
-const core = @import("core/core.zig");
-const settings = @import("settings.zig");
-const global = @import("global.zig");
+const core = @import("core.zig");
+const allocator = core.Allocator;
+const global = core.Global;
 const GlobalSt = global.GlobalState;
 const GLOBAL_STATE = &global.GLOBAL_STATE;
 const GlobalFn = global.GlobalFunction;
 const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
-const practice = @import("patch_practice.zig");
-const toast = @import("core/Toast.zig");
-const allocator = @import("core/Allocator.zig");
-const update = @import("core/Update.zig");
-const core_testing = @import("core/testing.zig");
 
-const hook = @import("util/hooking.zig");
-const mem = @import("util/memory.zig");
-const msg = @import("util/message.zig");
-const input = @import("util/input.zig");
-const r = @import("util/racer.zig");
-const rc = @import("util/racer_const.zig");
-const rf = @import("util/racer_fn.zig");
+const hook = @import("../util/hooking.zig");
+const mem = @import("../util/memory.zig");
+const r = @import("../util/racer.zig");
+const rc = @import("../util/racer_const.zig");
+const rf = @import("../util/racer_fn.zig");
 
 // TODO: switch to Sha256 for perf?
 const Sha512 = std.crypto.hash.sha2.Sha512;
@@ -305,51 +298,17 @@ pub fn init() void {
     var p: *Plugin = undefined;
 
     // loading core
-    // TODO: system to handle adding these automatically
-    // see @hasDecl usage in std.builtin.panic for an idea
-    // use this in conjunction with iterating over /core ?
-    // TODO: hot-reloading core
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.GameLoopB = &GameLoopB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.InputUpdateB = &input.InputUpdateB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.InitRaceQuadsA = &practice.InitRaceQuadsA;
-    p.TextRenderB = &practice.TextRenderB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.GameLoopB = &settings.GameLoopB;
-    p.OnDeinit = &settings.OnDeinit;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.OnInitLate = &global.OnInitLate;
-    p.EarlyEngineUpdateA = &global.EarlyEngineUpdateA;
-    p.TimerUpdateA = &global.TimerUpdateA;
-    p.MenuTitleScreenB = &global.MenuTitleScreenB;
-    p.MenuStartRaceB = &global.MenuStartRaceB;
-    p.MenuRaceResultsB = &global.MenuRaceResultsB;
-    p.MenuTrackB = &global.MenuTrackB;
+    // TODO: hot-reloading core (i.e. all of annodue)
 
     // TODO: move to LoadPlugin equivalent?
     // TODO: require OnInit, OnLateInit, OnDeinit?
-    // TODO: move above to core
     const fn_fields = comptime std.enums.values(PluginExportFn);
     const core_decls = @typeInfo(core).Struct.decls;
     inline for (core_decls) |cd| {
-        msg.TestMessage(@This(), "loading {s}", .{cd.name});
         const this_decl = @field(core, cd.name);
         var this_p: ?*Plugin = null;
         inline for (fn_fields) |ff| {
             if (@hasDecl(this_decl, @tagName(ff))) {
-                msg.TestMessage(@This(), "decl found: {s}", .{@tagName(ff)});
                 if (this_p == null) {
                     p = PluginState.core.addOne() catch unreachable;
                     p.* = std.mem.zeroInit(Plugin, .{});

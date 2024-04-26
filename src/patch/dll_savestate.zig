@@ -5,13 +5,13 @@ const std = @import("std");
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
 
 const debug = @import("core/Debug.zig");
 
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
+const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const st = @import("util/active_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
@@ -22,9 +22,9 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-const InputMap = @import("util/input.zig").InputMap;
-const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
-const AxisInputMap = @import("util/input.zig").AxisInputMap;
+const InputMap = @import("core/Input.zig").InputMap;
+const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
+const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;

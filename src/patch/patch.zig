@@ -2,11 +2,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const StackTrace = std.builtin.StackTrace;
 
-const global = @import("global.zig");
-const hook = @import("hook.zig");
+const global = @import("core/Global.zig");
+const hook = @import("core/Hook.zig");
 const allocator = @import("core/Allocator.zig");
 const debug = @import("core/Debug.zig");
-const settings = @import("settings.zig");
+const settings = @import("core/Settings.zig");
 
 const msg = @import("util/message.zig");
 const r = @import("util/racer.zig");

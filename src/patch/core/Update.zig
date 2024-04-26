@@ -16,10 +16,10 @@ const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 
 const allocator = @import("Allocator.zig");
-const SettingsSt = @import("../settings.zig").SettingsState;
-const GlobalSt = @import("../global.zig").GlobalState;
-const GlobalFn = @import("../global.zig").GlobalFunction;
-const Version = @import("../global.zig").Version;
+const SettingsSt = @import("Settings.zig").SettingsState;
+const GlobalSt = @import("Global.zig").GlobalState;
+const GlobalFn = @import("Global.zig").GlobalFunction;
+const Version = @import("Global.zig").Version;
 
 const r = @import("../util/racer.zig");
 const rt = @import("../util/racer_text.zig");

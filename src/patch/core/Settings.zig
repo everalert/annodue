@@ -5,15 +5,15 @@ const w32 = @import("zigwin32");
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
-const global = @import("global.zig");
+const global = @import("Global.zig");
 const GlobalSt = global.GlobalState;
 const GlobalFn = global.GlobalFunction;
 
-const hook = @import("hook.zig");
-const allocator = @import("core/Allocator.zig");
+const hook = @import("Hook.zig");
+const allocator = @import("Allocator.zig");
 
-const SettingsGroup = @import("util/settings.zig").SettingsGroup;
-const SettingsManager = @import("util/settings.zig").SettingsManager;
+const SettingsGroup = @import("../util/settings.zig").SettingsGroup;
+const SettingsManager = @import("../util/settings.zig").SettingsManager;
 
 const SETTINGS_VERSION: u32 = 1;
 
@@ -196,6 +196,8 @@ fn LoadSettings() bool {
 
     return true;
 }
+
+// HOOK FUNCTIONS
 
 pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > SettingsState.last_check + SettingsState.check_freq)

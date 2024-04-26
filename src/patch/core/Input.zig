@@ -9,15 +9,18 @@ const POINT = w32.foundation.POINT;
 const RECT = w32.foundation.RECT;
 const HWND = w32.foundation.HWND;
 
-const xinput = @import("xinput.zig");
-const st = @import("active_state.zig");
+const xinput = @import("../util/xinput.zig");
+const st = @import("../util/active_state.zig");
 
-const global = @import("../global.zig");
+const global = @import("Global.zig");
 const GlobalSt = global.GlobalState;
 const GlobalFn = global.GlobalFunction;
 
 pub const INPUT_DOWN: u8 = 0b01;
 pub const INPUT_NEW: u8 = 0b10;
+
+// FIXME: some stuff in util is still importing this after moving it to core, split
+// up stuff here so that util doesn't depend on core an../core/more
 
 const InputState = extern struct {
     var kb: [256]st.ActiveState = std.mem.zeroes([256]st.ActiveState);

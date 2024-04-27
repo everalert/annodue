@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Dumping crash info to `crashlog.txt`
+- Quality of Life
+	- Patch Jinn Reeso cheat to also toggle off
+	- Patch Cy Yunga cheat to also toggle off
 
 ## [0.1.2] -- 2024-04-23
 

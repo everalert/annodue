@@ -36,6 +36,7 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Configurable defaults for free-play racers and laps
 	- Skip planet cutscenes
 	- Double mouse cursor fix
+	- Jinn Reeso and Cy Yunga cheat toggling
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer
 - Cosmetic
@@ -131,6 +132,7 @@ Configured under `[overlay]`
 ### Quality of Life
 
 - Fix double mouse cursor
+- Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Map controller `Start` to `Esc`
 - Race restart hotkey -- `F1 + Esc` or `Back + Start`
 - Quick Race Menu

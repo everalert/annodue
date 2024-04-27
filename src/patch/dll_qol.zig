@@ -37,6 +37,8 @@ pub const panic = debug.annodue_panic;
 // FEATURES
 // - fix: remove double mouse cursor
 // - fix: pause game with xinput controller (maps Start -> Esc)
+// - fix: toggle Jinn Reeso with cheat, instead of only enabling
+// - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - feat: quick restart
 //     - CONTROLS:          F1+Esc          Back+Start
 // - feat: quick race menu
@@ -74,9 +76,11 @@ pub const panic = debug.annodue_panic;
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
-// TODO: global fps limiter
+// TODO: global fps limiter (i.e. not only in race)
 // TODO: figure out wtf to do to manage state through hot-reload etc.
 // FIXME: quick race menu stops working after hot reload??
+// TODO: split this because it's getting unruly
+//   maybe -- quality of life + game bugfixes + non-gameplay extra features
 
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -159,6 +163,100 @@ fn PatchPlanetCutscenes(enable: bool) void {
     } else {
         _ = x86.call(0x45753D, @intFromPtr(rf.swrVideo_PlayVideoFile));
     }
+}
+
+// GAME CHEATS
+
+// TODO: add quick toggle to menus
+// TODO: fix sound bug when activating cy yunga cheat (use sound 45)
+// TODO: setting to actually enable the jinn/cy patches?
+
+const JINN_REESO_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 8;
+const JINN_REESO_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 8;
+
+fn PatchJinnReesoCheat(enable: bool) void {
+    _ = x86.call(0x4105DD, @intFromPtr(if (enable) &ToggleJinnReeso else rf.Vehicle_EnableJinnReeso));
+}
+
+fn ToggleJinnReeso() callconv(.C) void {
+    const state = struct {
+        var initialized: bool = false;
+        var on: bool = false;
+    };
+    if (!state.initialized) {
+        state.on = mem.read(JINN_REESO_METADATA_ADDR + 4, u32) == 299;
+        state.initialized = true;
+    }
+
+    state.on = !state.on;
+    if (state.on) {
+        rf.Vehicle_EnableJinnReeso();
+    } else {
+        DisableJinnReeso();
+    }
+}
+
+fn DisableJinnReeso() callconv(.C) void {
+    //VehicleMetadata = 0x4C28A0
+    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
+    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
+    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
+    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
+    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
+    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
+    //MysteryStruct = 0x4C73E8
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
+    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
+}
+
+const CY_YUNGA_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 22;
+const CY_YUNGA_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 22;
+
+fn PatchCyYungaCheat(enable: bool) void {
+    _ = x86.call(0x410578, @intFromPtr(if (enable) &ToggleCyYunga else rf.Vehicle_EnableCyYunga));
+}
+
+fn ToggleCyYunga() callconv(.C) void {
+    const state = struct {
+        var initialized: bool = false;
+        var on: bool = false;
+    };
+    if (!state.initialized) {
+        state.on = mem.read(CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
+        state.initialized = true;
+    }
+
+    state.on = !state.on;
+    if (state.on) {
+        rf.Vehicle_EnableCyYunga();
+    } else {
+        DisableCyYunga();
+    }
+}
+
+fn DisableCyYunga() callconv(.C) void {
+    //VehicleMetadata = 0x4C2B78
+    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
+    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
+    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
+    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
+    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
+    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
+    //MysteryStruct = 0x4C79D0
+    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
+    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
+    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
+    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
+    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
+    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
 }
 
 // PRACTICE/STATISTICAL DATA
@@ -505,6 +603,9 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
+
+    PatchJinnReesoCheat(true);
+    PatchCyYungaCheat(true);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -519,6 +620,9 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.close();
+
+    PatchJinnReesoCheat(false);
+    PatchCyYungaCheat(false);
 }
 
 // HOOKS

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quality of Life
 	- Patch Jinn Reeso cheat to also toggle off
 	- Patch Cy Yunga cheat to also toggle off
+	- Fix Cy Yunga cheat audio
 
 ## [0.1.2] -- 2024-04-23
 

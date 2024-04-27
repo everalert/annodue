@@ -39,6 +39,7 @@ pub const panic = debug.annodue_panic;
 // - fix: pause game with xinput controller (maps Start -> Esc)
 // - fix: toggle Jinn Reeso with cheat, instead of only enabling
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
+// - fix: bugfix Cy Yunga cheat having no audio
 // - feat: quick restart
 //     - CONTROLS:          F1+Esc          Back+Start
 // - feat: quick race menu
@@ -198,23 +199,23 @@ fn ToggleJinnReeso() callconv(.C) void {
 
 fn DisableJinnReeso() callconv(.C) void {
     //VehicleMetadata = 0x4C28A0
-    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
-    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
-    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
-    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
-    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
-    _ = mem.write(JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
     //MysteryStruct = 0x4C73E8
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
-    _ = mem.write(JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
 }
 
 const CY_YUNGA_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 22;
@@ -244,19 +245,24 @@ fn ToggleCyYunga() callconv(.C) void {
 
 fn DisableCyYunga() callconv(.C) void {
     //VehicleMetadata = 0x4C2B78
-    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
-    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
-    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
-    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
-    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
-    _ = mem.write(CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
     //MysteryStruct = 0x4C79D0
-    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
-    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
-    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
-    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
-    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
-    _ = mem.write(CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
+}
+
+fn PatchCyYungaCheatAudio(enable: bool) void {
+    const id: u8 = if (enable) 0x2D else 0xFF;
+    _ = mem.write(comptime 0x41057D + 0x01, u8, id);
 }
 
 // PRACTICE/STATISTICAL DATA
@@ -606,6 +612,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
+    PatchCyYungaCheatAudio(true);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -623,6 +630,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);
+    PatchCyYungaCheatAudio(false);
 }
 
 // HOOKS

@@ -57,6 +57,8 @@ pub const ADDR_PAUSE_SCROLLINOUT: usize = 0xE9824C; // f32
 
 pub const ADDR_TIME_TIMESTAMP: usize = 0x50CB60; // u32
 pub const ADDR_TIME_FRAMETIME: usize = 0xE22A50; // f32
+pub const ADDR_TIME_FRAMETIME_64: usize = 0xE22A40; // f64
+pub const TIME_FRAMETIME_64: *f64 = @ptrFromInt(0xE22A40);
 pub const ADDR_TIME_FRAMECOUNT: usize = 0xE22A30;
 pub const ADDR_TIME_FPS: usize = 0x4C8174; // sithControl_secFPS
 

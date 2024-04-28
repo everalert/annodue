@@ -265,6 +265,32 @@ fn PatchCyYungaCheatAudio(enable: bool) void {
     _ = mem.write(comptime 0x41057D + 0x01, u8, id);
 }
 
+// FAST COUNTDOWN
+
+// TODO: settings for count length, enable
+
+const FastCountdown = struct {
+    const CountLength: f32 = 1.0;
+    const CountRatio: f32 = 3 / CountLength;
+    const CountDif: f32 = 3 - CountLength;
+    var CurrentFrametime: f64 = 1 / 24;
+
+    fn update() void {
+        CurrentFrametime = CountRatio * rc.TIME_FRAMETIME_64.*;
+    }
+
+    fn patch(enable: bool) void {
+        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rc.ADDR_TIME_FRAMETIME_64;
+        const prerace_max_time: u32 = if (enable) @bitCast(9.10 + CountDif) else 0x4111999A; // 9.10
+        const boost_window_min: u32 = if (enable) @bitCast(0.05 * CountRatio) else 0x3D4CCCCD; // 0.05
+        const boost_window_max: u32 = if (enable) @bitCast(0.30 * CountRatio) else 0x3E99999A; // 0.30
+        _ = mem.write(0x45E628, usize, addr);
+        _ = mem.write(0x45E2D5, u32, prerace_max_time);
+        _ = mem.write(0x4AD254, u32, boost_window_min);
+        _ = mem.write(0x4AD258, u32, boost_window_max);
+    }
+};
+
 // PRACTICE/STATISTICAL DATA
 
 const race = struct {
@@ -613,6 +639,8 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
+
+    FastCountdown.patch(true);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -631,6 +659,8 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);
     PatchCyYungaCheatAudio(false);
+
+    FastCountdown.patch(false);
 }
 
 // HOOKS
@@ -660,6 +690,10 @@ export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
     if (player_ok and gui_on and QolState.fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
+}
+
+export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    FastCountdown.update();
 }
 
 // FIXME: settings toggles for both of these

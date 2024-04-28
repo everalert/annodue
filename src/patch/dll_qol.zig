@@ -270,13 +270,19 @@ fn PatchCyYungaCheatAudio(enable: bool) void {
 // TODO: settings for count length, enable
 
 const FastCountdown = struct {
-    const CountLength: f32 = 1.0;
-    const CountRatio: f32 = 3 / CountLength;
-    const CountDif: f32 = 3 - CountLength;
+    var CountDuration: f32 = 1.0;
+    var CountRatio: f32 = 3 / 1.0;
+    var CountDif: f32 = 3 - 1.0;
     var CurrentFrametime: f64 = 1 / 24;
 
     fn update() void {
         CurrentFrametime = CountRatio * rc.TIME_FRAMETIME_64.*;
+    }
+
+    fn init(duration: f32) void {
+        CountDuration = std.math.clamp(duration, 0.05, 3.00);
+        CountRatio = 3 / CountDuration;
+        CountDif = 3 - CountDuration;
     }
 
     fn patch(enable: bool) void {
@@ -288,6 +294,13 @@ const FastCountdown = struct {
         _ = mem.write(0x45E2D5, u32, prerace_max_time);
         _ = mem.write(0x4AD254, u32, boost_window_min);
         _ = mem.write(0x4AD258, u32, boost_window_max);
+    }
+
+    fn settingsLoad(gf: *GlobalFn) void {
+        const enable = gf.SettingGetB("qol", "fast_countdown_enable") orelse false;
+        const duration = gf.SettingGetF("qol", "fast_countdown_duration") orelse 1.0;
+        if (enable) init(duration);
+        patch(enable);
     }
 };
 
@@ -640,7 +653,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
 
-    FastCountdown.patch(true);
+    FastCountdown.settingsLoad(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -667,6 +680,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QolHandleSettings(gf);
+    FastCountdown.settingsLoad(gf);
 }
 
 export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {

@@ -67,6 +67,7 @@ pub const panic = debug.annodue_panic;
 // - feat: skip planet cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
+// - feat: fast countdown timer
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -74,6 +75,8 @@ pub const panic = debug.annodue_panic;
 //   fps_limiter_enable         bool
 //   default_racers             u32     max 12
 //   default_laps               u32     max 5
+//   fast_countdown_enable      bool
+//   fast_countdown_duration    f32     min 0.05, max 3.00
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value

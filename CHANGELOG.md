@@ -9,17 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Dumping crash info to `crashlog.txt`
-- Quality of Life
-	- Patch Jinn Reeso cheat to also toggle off
-	- Patch Cy Yunga cheat to also toggle off
-	- Fix Cy Yunga cheat audio
+- Feature: Dumping crash info to `crashlog.txt`
+- Feature: Fast countdown timer
+- Feature: Patch Jinn Reeso cheat to also toggle off
+- Feature: Patch Cy Yunga cheat to also toggle off
+- Feature: Fix Cy Yunga cheat audio
+- Setting: `[qol] fast_countdown_enable`
+- Setting: `[qol] fast_countdown_duration`
 
 ## [0.1.2] -- 2024-04-23
 
 ### Added
 
-- Ability to sideload a secondary `dinput.dll` in place of the one in `system32`
+- Feature: Sideload user-provided `dinput.dll` instead of the one in `system32`
 
 ### Fixed
 
@@ -39,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update system
 - Free Camera
 - Savestates & Rewinding
-- Quick Race Menu - setup a new race without going back to the cantina
+- Quick Race Menu
 - Input display
 - Extended post-race summary
 - Extended race UI overlay

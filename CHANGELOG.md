@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved framerate limiter pacing and CPU impact
 
+### Fixed
+
+- Wrong position of lap times on race end screen with milliseconds timer off
+
 ## [0.1.2] -- 2024-04-23
 
 ### Added

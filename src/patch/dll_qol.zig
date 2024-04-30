@@ -126,37 +126,22 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 // HUD TIMER MS
 
-const end_race_timer_offset: u8 = 12;
-
 // TODO: cleanup
 fn PatchHudTimerMs(enable: bool) void {
-    if (enable) {
-        // hudDrawRaceHud
-        _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime3));
-        _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime3));
-        _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime3));
-        // hudDrawRaceResults
-        _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime3));
-        _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime3));
-        _ = mem.write(0x4623D7, u8, comptime end_race_timer_offset + 91); // 91
-        _ = mem.write(0x4623F1, u8, comptime end_race_timer_offset + 105); // 105
-        _ = mem.write(0x46240B, u8, comptime end_race_timer_offset + 115); // 115
-        _ = mem.write(0x46241E, u8, comptime end_race_timer_offset + 125); // 125
-        _ = mem.write(0x46242D, u8, comptime end_race_timer_offset + 135); // 135
-    } else {
-        // hudDrawRaceHud
-        _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime2));
-        _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime2));
-        _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime2));
-        // hudDrawRaceResults
-        _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime2));
-        _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime2));
-        _ = mem.write(0x4623D7, u8, end_race_timer_offset);
-        _ = mem.write(0x4623F1, u8, end_race_timer_offset);
-        _ = mem.write(0x46240B, u8, end_race_timer_offset);
-        _ = mem.write(0x46241E, u8, end_race_timer_offset);
-        _ = mem.write(0x46242D, u8, end_race_timer_offset);
-    }
+    const draw_fn = if (enable) rf.swrText_DrawTime3 else rf.swrText_DrawTime2;
+    const end_race_timer_offset: u8 = if (enable) 12 else 0;
+    // hudDrawRaceHud
+    _ = x86.call(0x460BD3, @intFromPtr(draw_fn));
+    _ = x86.call(0x460E6B, @intFromPtr(draw_fn));
+    _ = x86.call(0x460ED9, @intFromPtr(draw_fn));
+    // hudDrawRaceResults
+    _ = x86.call(0x46252F, @intFromPtr(draw_fn));
+    _ = x86.call(0x462660, @intFromPtr(draw_fn));
+    _ = mem.write(0x4623D7, u8, end_race_timer_offset + 91);
+    _ = mem.write(0x4623F1, u8, end_race_timer_offset + 105);
+    _ = mem.write(0x46240B, u8, end_race_timer_offset + 115);
+    _ = mem.write(0x46241E, u8, end_race_timer_offset + 125);
+    _ = mem.write(0x46242D, u8, end_race_timer_offset + 135);
 }
 
 // PLANET CUTSCENES

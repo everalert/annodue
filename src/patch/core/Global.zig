@@ -49,7 +49,7 @@ pub const VersionStr: [:0]u8 = s: {
         Version.minor,
         Version.patch,
         Version.build.?,
-    }) catch unreachable;
+    }) catch unreachable; // comptime
 };
 
 pub const PLUGIN_VERSION = 17;

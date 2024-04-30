@@ -464,6 +464,7 @@ fn save_file() void {
 }
 
 // FIXME: dumped from patch.zig; need to rework into a generalized function
+// TODO: cleanup unreachable after migrating to lib
 fn check_compression_potential() void {
     const savestate_size: usize = 0x2428 / 4;
     const savestate_count: usize = 128;

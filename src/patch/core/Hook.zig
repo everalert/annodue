@@ -302,6 +302,9 @@ pub fn init() void {
 
     // TODO: move to LoadPlugin equivalent?
     // TODO: require OnInit, OnLateInit, OnDeinit?
+    // TODO: run OnInit immediately like plugins
+    // TODO: (after hot-reloading core) run OnLateInit immediately on hot-reload like plugins
+    // TODO: filtering/error-checking the fields to make sure they're actually objects, not functions etc.
     const fn_fields = comptime std.enums.values(PluginExportFn);
     const core_decls = @typeInfo(core).Struct.decls;
     inline for (core_decls) |cd| {

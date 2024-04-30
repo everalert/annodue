@@ -9,6 +9,7 @@ pub extern "ntdll" fn NtSetTimerResolution(
     SetResolution: bool,
     CurrentResolution: ?*u32,
 ) callconv(w.WINAPI) w32f.NTSTATUS;
+
 // TIME-BASED SPINLOCK
 
 // FIXME: check for HRT compatibility instead of trying to assign timer repeatedly
@@ -19,12 +20,9 @@ pub const TimeSpinlock = struct {
     period: u64 = 1_000_000_000 / 24,
     timer: ?std.time.Timer = null,
     timer_res: u32 = 0,
-    //timer_res_src: u32 = 0,
     timer_step: u64 = 0,
     timer_step_cmp: u64 = 0,
     step_excess: u64 = 0,
-    sleep_loop_count: u32 = 0,
-    sleep_sleep_loop_count: u32 = 0,
 
     pub fn SetPeriod(self: *TimeSpinlock, fps: u32) void {
         self.period = std.math.clamp(1_000_000_000 / fps, self.min_period, self.max_period);
@@ -41,27 +39,22 @@ pub const TimeSpinlock = struct {
                 // https://forum.lazarus.freepascal.org/index.php?topic=60029.0
                 _ = NtSetTimerResolution(timer_res_min, true, &self.timer_res);
 
-            //self.timer_res = self.timer_res_src * 100; // convert to ns
+            // FIXME: need to set cmp to like 2ms? for it to be stable, why?
+            // just need to add one tick worth of leeway on the value we intend to tick by?
             self.timer_step = @max(self.timer_res * 100, std.time.ns_per_ms); // convert to ns
-            // FIXME: need to set this to like 2ms? for it to be stable, why?
-            self.timer_step_cmp = @max(self.timer_res * 400, self.timer_step); // add wiggle room
+            self.timer_step_cmp = self.timer_step * 2; // add wiggle room
             self.timer = std.time.Timer.start() catch return;
         }
 
-        self.sleep_loop_count = 0;
-        self.sleep_sleep_loop_count = 0;
+        const this_period: u64 = self.period - self.step_excess;
         var timer_cur: u64 = self.timer.?.read();
-        while (timer_cur < self.period) : (timer_cur = self.timer.?.read()) {
-            self.sleep_loop_count += 1;
-            if (self.period - timer_cur < self.timer_step_cmp) continue;
-
-            self.sleep_sleep_loop_count += 1;
-            //w.kernel32.Sleep(1);
+        while (timer_cur < this_period) : (timer_cur = self.timer.?.read()) {
+            if (this_period - timer_cur < self.timer_step_cmp) continue;
             std.time.sleep(self.timer_step);
         }
 
-        // TODO: accumulate and account for excess between frames
-        _ = self.timer.?.lap();
+        timer_cur = self.timer.?.lap();
+        self.step_excess = @min(timer_cur - this_period, self.period);
     }
 };
 

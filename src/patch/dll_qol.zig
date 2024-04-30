@@ -705,14 +705,8 @@ export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
         r.ReadRaceDataValue(0x84, u32) != 0;
     const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
-    if (player_ok and gui_on and QolState.fps_limiter) {
-        // FIXME: a small amount of time is added to the timer the first time this
-        // function triggers, due to lazy loading timer
+    if (player_ok and gui_on and QolState.fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
-        rt.DrawText(16, 16, "{d}", .{QuickRaceMenu.FpsTimer.timer_res}, null, null) catch unreachable;
-        rt.DrawText(16, 24, "{d:0>6}", .{QuickRaceMenu.FpsTimer.sleep_loop_count}, null, null) catch unreachable;
-        rt.DrawText(16, 32, "{d:0>3}", .{QuickRaceMenu.FpsTimer.sleep_sleep_loop_count}, null, null) catch unreachable;
-    }
 }
 
 export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {

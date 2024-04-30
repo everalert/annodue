@@ -42,15 +42,15 @@ fn DumpTexture(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, widt
     var buf: [255:0]u8 = undefined;
 
     // initial file setup
-    const out = std.fs.cwd().createFile(filename, .{}) catch unreachable; // FIXME: switch to exclusive mode and handle FileAlreadyExists
+    const out = std.fs.cwd().createFile(filename, .{}) catch @panic("failed to create texture dump output file"); // FIXME: switch to exclusive mode and handle FileAlreadyExists
     defer out.close();
     var out_pos: usize = 0;
-    const out_head = std.fmt.bufPrintZ(&buf, "P3\n{d} {d}\n15\n", .{ width, height }) catch unreachable; // FIXME: error handling
-    out_pos += out.pwrite(out_head, out_pos) catch unreachable; // FIXME: error handling
+    const out_head = std.fmt.bufPrintZ(&buf, "P3\n{d} {d}\n15\n", .{ width, height }) catch @panic("failed to format texture header for dump"); // FIXME: error handling
+    out_pos += out.pwrite(out_head, out_pos) catch @panic("failed to write texture header to dump output file"); // FIXME: error handling
 
     // Copy the pixel data
     const texture_size = width * height; // WARNING: w*h*4/8 in original patcher, but crashes here
-    var texture = alloc.alloc(u8, texture_size) catch unreachable;
+    var texture = alloc.alloc(u8, texture_size) catch @panic("failed to allocate texture dump memory");
     defer alloc.free(texture);
     const texture_slice = @as([*]u8, @ptrCast(texture))[0..texture_size];
     mem.read_bytes(offset + 4, &texture[0], texture_size);
@@ -60,8 +60,8 @@ fn DumpTexture(alloc: std.mem.Allocator, offset: usize, unk0: u8, unk1: u8, widt
     var i: usize = 0;
     while (i < len) : (i += 1) {
         const v: u8 = ((texture_slice[i / 2] << @as(u3, @truncate((i % 2) * 4))) & 0xF0) >> 4;
-        const out_frag = std.fmt.bufPrintZ(&buf, "{d} {d} {d}\n", .{ v, v, v }) catch unreachable;
-        out_pos += out.pwrite(out_frag, out_pos) catch unreachable;
+        const out_frag = std.fmt.bufPrintZ(&buf, "{d} {d} {d}\n", .{ v, v, v }) catch @panic("failed to format texture segment for dump");
+        out_pos += out.pwrite(out_frag, out_pos) catch @panic("failed to write texture segment to dump output file");
     }
 }
 
@@ -75,13 +75,13 @@ fn DumpTextureTable(offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, 
     const count: u32 = mem.read(offset + 0, u32); // NOTE: exe unnecessary, just read ram
 
     // Loop over elements and dump each
-    var offsets = alloc.alloc(u8, count * 4) catch unreachable;
+    var offsets = alloc.alloc(u8, count * 4) catch @panic("failed to allocate memory for texture dump table");
     defer alloc.free(offsets);
     const offsets_slice = @as([*]align(1) u32, @ptrCast(offsets))[0..count];
     mem.read_bytes(offset + 4, &offsets[0], count * 4);
     var i: usize = 0;
     while (i < count) : (i += 1) {
-        const filename_i = std.fmt.bufPrintZ(&buf, "annodue/developer/{s}_{d}.ppm", .{ filename, i }) catch unreachable; // FIXME: error handling
+        const filename_i = std.fmt.bufPrintZ(&buf, "annodue/developer/{s}_{d}.ppm", .{ filename, i }) catch @panic("failed to format output path for texture dump table"); // FIXME: error handling
         DumpTexture(alloc, offsets_slice[i], unk0, unk1, width, height, filename_i);
     }
     return count;

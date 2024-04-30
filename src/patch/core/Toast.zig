@@ -91,6 +91,6 @@ pub fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         }
         const color: u32 = fl.flash_color(item.color, item.timer, ToastSystem.dur_flash) | a;
 
-        rt.DrawText(16, 8 + y_off + ToastSystem.row_h * i, "{s}", .{item.text}, color, null) catch unreachable;
+        rt.DrawText(16, 8 + y_off + ToastSystem.row_h * i, "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text");
     }
 }

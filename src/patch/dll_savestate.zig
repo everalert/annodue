@@ -96,7 +96,7 @@ const state = struct {
 
     const frames: usize = 60 * 60 * 8; // 8min @ 60fps
     //const frame_size: usize = off_cman + rc.EntitySize(.cMan);
-    const header_size: usize = std.math.divCeil(usize, off_END, 4 * 8) catch unreachable;
+    const header_size: usize = std.math.divCeil(usize, off_END, 4 * 8) catch unreachable; // comptime
     const header_type: type = std.packed_int_array.PackedIntArray(u1, header_bits);
     const header_bits: usize = off_END / 4;
     const offsets_off: usize = 0;
@@ -163,7 +163,7 @@ const state = struct {
     fn init(_: *GlobalFn) void {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         const alloc = gpa.allocator();
-        memory = alloc.alloc(u8, memory_size) catch unreachable;
+        memory = alloc.alloc(u8, memory_size) catch @panic("failed to allocate memory for savestate/rewind");
         @memset(memory[0..memory_size], 0x00);
 
         memory_addr = @intFromPtr(memory.ptr);

@@ -224,7 +224,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     var buf1: [2047:0]u8 = undefined;
     var filepath = std.fmt.bufPrintZ(&buf1, "annodue/plugin/{s}", .{
         filename,
-    }) catch unreachable;
+    }) catch @panic("failed to format path to plugin");
 
     // do we even need to do anything
     var fd1: w32fs.WIN32_FIND_DATAA = undefined;
@@ -242,11 +242,11 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     // separated from buf1 to minimize work on the hot path
     var buf0: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf0, "{s}", .{filename}) catch unreachable;
+    _ = std.fmt.bufPrintZ(&buf0, "{s}", .{filename}) catch @panic("failed to format plugin filename");
     var buf2: [2047:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf2, "annodue/tmp/plugin/{s}.tmp.dll", .{
         filename[0..i_ext],
-    }) catch unreachable;
+    }) catch @panic("failed to format path to plugin tmp file");
 
     // do we need to unload anything
     if (p.Handle) |h| {
@@ -310,7 +310,7 @@ pub fn init() void {
         inline for (fn_fields) |ff| {
             if (@hasDecl(this_decl, @tagName(ff))) {
                 if (this_p == null) {
-                    p = PluginState.core.addOne() catch unreachable;
+                    p = PluginState.core.addOne() catch @panic("failed to add core plugin to arraylist");
                     p.* = std.mem.zeroInit(Plugin, .{});
                     this_p = p;
                 }
@@ -323,16 +323,16 @@ pub fn init() void {
 
     const cwd = std.fs.cwd();
     var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
-        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
+        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch @panic("failed to open plugin directory");
     defer dir.close();
 
     var it_dir = dir.iterate();
-    while (it_dir.next() catch unreachable) |file| {
+    while (it_dir.next() catch @panic("failed to fetch next plugin")) |file| {
         if (file.kind != .file) continue;
         if (!std.mem.eql(u8, ".DLL", file.name[file.name.len - 4 ..]) and
             !std.mem.eql(u8, ".dll", file.name[file.name.len - 4 ..])) continue;
 
-        p = PluginState.plugin.addOne() catch unreachable;
+        p = PluginState.plugin.addOne() catch @panic("failed to add user plugin to arraylist");
         p.* = std.mem.zeroInit(Plugin, .{});
         if (!LoadPlugin(p, file.name))
             _ = PluginState.plugin.pop();

@@ -25,7 +25,7 @@ export fn Init() void {
     // init
 
     const alloc = allocator.allocator();
-    const memory = alloc.alloc(u8, patch_size) catch unreachable;
+    const memory = alloc.alloc(u8, patch_size) catch @panic("failed to allocate main patch memory");
     global.GLOBAL_STATE.patch_memory = @ptrCast(memory.ptr);
     global.GLOBAL_STATE.patch_size = patch_size;
     global.GLOBAL_STATE.patch_offset = @intFromPtr(memory.ptr);

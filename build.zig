@@ -8,7 +8,7 @@ const std = @import("std");
 // TODO: get up to date on tooling error and success messaging
 
 // example release build command
-// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Ddbp="C:\msys64\home\EVAL\annodue\build"
+// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0"
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -115,11 +115,21 @@ pub fn build(b: *std.Build) void {
     // TODO: update once script is actually written
     // TODO: automate version input somehow?
 
-    const dinputpath = b.option(
-        []const u8,
-        "dbp",
-        "Path to dinput.dll build directory; used to locate dinput.dll when packaging a release build",
-    ) orelse null;
+    const dinput_dll = b.addSharedLibrary(.{
+        .name = "dinput",
+        .target = target,
+        .optimize = optimize,
+    });
+    dinput_dll.linkLibC();
+    dinput_dll.addCSourceFiles(&.{
+        "src/dinput/dinput.c",
+    }, &.{});
+
+    var dinput_dll_release = b.addInstallArtifact(dinput_dll, .{
+        .dest_dir = .{ .override = .{ .custom = "release" } },
+        .pdb_dir = .disabled,
+        .implib_dir = .disabled,
+    });
 
     // NOTE: minver checks fail if not specified
     const release_ver = b.option([]const u8, "ver", "release version") orelse "0.0.0";
@@ -138,10 +148,8 @@ pub fn build(b: *std.Build) void {
         const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
         generate_release_zip_files_run.addArg(arg_z_ip);
 
-        if (dinputpath) |path| {
-            const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{path}) catch unreachable;
-            generate_release_zip_files_run.addArg(arg_z_dp);
-        }
+        const arg_z_dp = std.fmt.allocPrint(alloc, "-D{s}", .{dinput_dll.out_filename}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_dp);
 
         const arg_z_op_path = b.build_root.handle.realpathAlloc(alloc, "./.release") catch unreachable;
         const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{arg_z_op_path}) catch unreachable;
@@ -162,6 +170,7 @@ pub fn build(b: *std.Build) void {
         .install_subdir = "annodue",
     });
     zip_step.dependOn(&asset_install.step);
+    zip_step.dependOn(&dinput_dll_release.step);
 
     const arg_z_cleanup_path = std.fmt.allocPrint(alloc, "{s}/release", .{b.install_path}) catch unreachable;
     const zip_cleanup = b.addRemoveDirTree(arg_z_cleanup_path);
@@ -204,11 +213,9 @@ pub fn build(b: *std.Build) void {
         "src/collision_viewer/detours-master/src/image.cpp",
         "src/collision_viewer/detours-master/src/creatwth.cpp",
         "src/collision_viewer/detours-master/src/disolx86.cpp",
-    }, &.{
-        "-std=c++20"
-    });
-    collision_viewer.addIncludePath(.{.path = "src/collision_viewer/imgui-d3d3/" });
-    collision_viewer.addIncludePath(.{.path = "src/collision_viewer/detours-master/include" });
+    }, &.{"-std=c++20"});
+    collision_viewer.addIncludePath(.{ .path = "src/collision_viewer/imgui-d3d3/" });
+    collision_viewer.addIncludePath(.{ .path = "src/collision_viewer/detours-master/include" });
     collision_viewer.linkSystemLibrary("Dwmapi");
     collision_viewer.linkSystemLibrary("gdi32");
 
@@ -240,7 +247,7 @@ pub fn build(b: *std.Build) void {
         dll.addOptions(options_label, options);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
-        if (std.mem.eql(u8, plugin.name,"collision_viewer"))
+        if (std.mem.eql(u8, plugin.name, "collision_viewer"))
             dll.linkLibrary(collision_viewer);
 
         // TODO: investigate options arg

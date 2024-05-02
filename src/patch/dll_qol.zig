@@ -631,11 +631,12 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = w32wm.ShowCursor(0);
+    _ = w32wm.ShowCursor(0); // cursor fix
     QolHandleSettings(gf);
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
+    QuickRaceMenu.FpsTimer.Start();
 
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
@@ -655,6 +656,7 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    QuickRaceMenu.FpsTimer.End();
     QuickRaceMenu.close();
 
     PatchJinnReesoCheat(false);
@@ -690,8 +692,18 @@ export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
         r.ReadRaceDataValue(0x84, u32) != 0;
     const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
-    if (player_ok and gui_on and QolState.fps_limiter)
+    if (player_ok and gui_on and QolState.fps_limiter) {
         QuickRaceMenu.FpsTimer.Sleep();
+        // FIXME: remove, just for debugging droopy lag; or, convert to 'debug view' idea
+        rt.DrawText(4, 120 + 8 * 0, "exc: {d}", .{QuickRaceMenu.FpsTimer.step_excess}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 1, "per: {d}", .{QuickRaceMenu.FpsTimer.period}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 2, "stp: {d}", .{QuickRaceMenu.FpsTimer.timer_step}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 3, "sns: {d}", .{QuickRaceMenu.FpsTimer.timer_step_ns}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 4, "scp: {d}", .{QuickRaceMenu.FpsTimer.timer_step_cmp}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 5, "tst: {d}", .{QuickRaceMenu.FpsTimer.test_tstart}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 6, "tsl: {d}", .{QuickRaceMenu.FpsTimer.test_tsleep}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 7, "tsp: {d}", .{QuickRaceMenu.FpsTimer.test_tspin}, null, null) catch {};
+    }
 }
 
 export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {

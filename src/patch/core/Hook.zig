@@ -164,6 +164,8 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     return &c.callback;
 }
 
+fn PluginFnCallback1_stub(_: u32) void {}
+
 // MISC
 
 // w32fs.CompareFileTime is slow as balls for some reason???
@@ -354,6 +356,7 @@ pub fn init() void {
     //off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+    //off = HookLoadSprite(off);
     global.GLOBAL_STATE.patch_offset = off;
 }
 
@@ -475,6 +478,13 @@ fn HookInitHangQuads(memory: usize) usize {
     const len: usize = 0x454DD8 - addr;
     const off_call: usize = 0x454DD0 - addr;
     return hook.detour_call(memory, addr, off_call, len, null, PluginFnCallback(.InitHangQuadsA));
+}
+
+// SPRITES
+
+// FIXME: remove stub and integrate one-param hooks with PluginFnCallback
+fn HookLoadSprite(memory: usize) usize {
+    return hook.intercept_call_one_u32_param(memory, 0x446FB5, &PluginFnCallback1_stub);
 }
 
 // RACE SETUP

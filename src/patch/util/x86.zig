@@ -11,6 +11,15 @@ pub fn add_rm32_imm8(memory_offset: usize, rm32: u8, imm8: u8) usize {
     return offset;
 }
 
+pub fn sub_rm32_imm8(memory_offset: usize, rm32: u8, imm8: i8) usize {
+    const imm8_u8: u8 = @bitCast(imm8);
+    var offset = memory_offset;
+    offset = mem.write(offset, u8, 0x83);
+    offset = mem.write(offset, u8, rm32);
+    offset = mem.write(offset, u8, imm8_u8);
+    return offset;
+}
+
 pub fn add_esp8(memory_offset: usize, value: u8) usize {
     return add_rm32_imm8(memory_offset, 0xC4, value);
 }
@@ -73,6 +82,10 @@ pub fn mov_r32_rm32(memory_offset: usize, r32: u8, comptime T: type, rm32: T) us
     return offset;
 }
 
+pub fn mov_eax_esp(memory_offset: usize) usize {
+    return mov_rm32_r32(memory_offset, 0xC4);
+}
+
 // actually, register + u32 offset
 pub fn mov_ecx_u32(memory: usize, u: u32) usize {
     return mov_r32_rm32(memory, 0x8E, u32, u);
@@ -85,6 +98,34 @@ pub fn mov_ecx_b(memory: usize, b: u8) usize {
 
 pub fn mov_edx(memory_offset: usize, value: u32) usize {
     return mov_r32_rm32(memory_offset, 0x15, u32, value);
+}
+
+// mov r32, [esp+<delta>]
+pub fn mov_r32_esp_add(memory_offset: usize, r32: u8, delta: i8) usize {
+    // values less than zero have the upper bit set
+    var delta_u8: u8 = @bitCast(delta);
+    var offset = memory_offset;
+    offset = mem.write(offset, u8, 0x8B);
+    offset = mem.write(offset, u8, r32);
+    offset = mem.write(offset, u8, 0x24);
+    offset = mem.write(offset, u8, delta_u8);
+    return offset;
+}
+
+pub fn mov_eax_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x44, delta);
+}
+
+pub fn mov_ebx_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x5C, delta);
+}
+
+pub fn mov_ecx_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x4C, delta);
+}
+
+pub fn mov_edx_esp_add(memory_offset: usize, delta: i8) usize {
+    return mov_r32_esp_add(memory_offset, 0x54, delta);
 }
 
 // mov r/m32 imm32
@@ -160,6 +201,24 @@ pub fn push_u32(memory_offset: usize, value: usize) usize {
     return offset;
 }
 
+pub fn save_esp(memory_offset: usize) usize {
+    var offset: usize = memory_offset;
+    // ; push ebp
+    // ; mov ebp, esp
+    offset = push_ebp(offset);
+    offset = mov_rm32_r32(offset, 0xE5);
+    return offset;
+}
+
+pub fn restore_esp(memory_offset: usize) usize {
+    var offset: usize = memory_offset;
+    // ; mov esp, ebp
+    // ; pop ebp
+    offset = mov_rm32_r32(offset, 0xEC);
+    offset = pop_ebp(offset);
+    return offset;
+}
+
 // WARN: could underflow, but not likely for our use case i guess
 // call_rel32
 pub fn call(memory_offset: usize, address: usize) usize {
@@ -173,6 +232,16 @@ pub fn call_rm32(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = mem.write(offset, u8, 0xFF);
     offset = mem.write(offset, u32, address);
+    return offset;
+}
+
+pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
+    var offset = memory_offset;
+    offset = save_esp(offset);
+    offset = mov_eax_esp_add(offset, 0x08);
+    offset = push_eax(offset);
+    offset = call(offset, address);
+    offset = restore_esp(offset);
     return offset;
 }
 

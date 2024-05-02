@@ -354,6 +354,7 @@ pub fn init() void {
     //off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+    off = HookLoadSprite(off);
     global.GLOBAL_STATE.patch_offset = off;
 }
 
@@ -475,6 +476,19 @@ fn HookInitHangQuads(memory: usize) usize {
     const len: usize = 0x454DD8 - addr;
     const off_call: usize = 0x454DD0 - addr;
     return hook.detour_call(memory, addr, off_call, len, null, PluginFnCallback(.InitHangQuadsA));
+}
+
+// SPRITES
+
+// FIXME: remove and integrate with PluginFnCallback
+fn LoadSpriteB(sprite: u32) void {
+    var buf: [127:0]u8 = undefined;
+    _ = std.fmt.bufPrintZ(&buf, "Sprite {d} loaded", .{sprite}) catch return;
+    _ = GLOBAL_FUNCTION.ToastNew(&buf, 0xA080A0FF);
+}
+
+fn HookLoadSprite(memory: usize) usize {
+    return hook.intercept_call_one_u32_param(memory, 0x446FB5, &LoadSpriteB);
 }
 
 // RACE SETUP

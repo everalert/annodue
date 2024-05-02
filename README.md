@@ -24,7 +24,7 @@ See [MANUAL.md](MANUAL.md) for a complete feature summary and configuration inst
 1. Build `dinput.dll` as described below.
 1. Generate the release files with the following command in a terminal in the project directory. You must have `zig 0.11.0` installed.
 ```zig
-zig build release -Dver="0.1.3" -Dminver="0.1.2" -Ddbp="<path_to_dinput_build_directory>"
+zig build release -Dver="0.1.3" -Dminver="0.1.2" -Ddbp="<dinput_build_path>" -Drop="<release_output_path>"
 ```
 1. Find `annodue-0.1.2.zip` in `./release/0.1.1/` and extract it to the game directory.
 
@@ -50,7 +50,8 @@ The build process can be customized with the following options.
 |`release`     |Build entire project and package for release. Currently requires `-Dver` and `-Dminver`, and using `-Ddbp` and `-Doptimize` is also recommended. Output can be found under `./release`.
 |`-Dver=<version>`|Release version. See [Semantic Version](https://semver.org/) for format.
 |`-Dminver=<version>`|Minimum version for auto-update compatibility. See [Semantic Version](https://semver.org/) for format.
-|`-Ddbp=<path>`|`dinput.dll` build path, excluding the filename.
+|`-Ddbp=<path>`|`dinput.dll` build path, excluding the filename; use with `release`.
+|`-Drop=<path>`|Output base path of release build; files will be placed in `<path>/<ver>`. Required for `release`.
 |`-Ddev`|Build with developer options. Skips applying the core plugin hash check to the main DLL, etc.
 |`-Dcopypath=<path>`|Path to the game directory, for hot-reloading DLLs during development. Only available when using `-Ddev`.
 |`-Doptimize=<build_mode>`|Build mode; see [Zig documentation](https://ziglang.org/documentation/0.11.0/#Build-Mode) for options. Currently requires `Debug` to NOT be set to enable network updating, due to a standard library bug.

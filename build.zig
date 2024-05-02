@@ -8,7 +8,7 @@ const std = @import("std");
 // TODO: get up to date on tooling error and success messaging
 
 // example release build command
-// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Ddbp="C:\msys64\home\EVAL\annodue\build"
+// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Ddbp="C:\msys64\home\EVAL\annodue\build" -Drop="F:\Projects\swe1r\annodue\.release"
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -125,7 +125,7 @@ pub fn build(b: *std.Build) void {
     const releasepath = b.option(
         []const u8,
         "rop",
-        "Path to output directory for release builds; required for 'release' step",
+        "Path to base output directory for release builds; required for 'release' step",
     ) orelse null;
 
     // NOTE: minver checks fail if not specified

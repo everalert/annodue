@@ -181,6 +181,37 @@ pub fn build(b: *std.Build) void {
     );
     hash_step.dependOn(plugin_step);
 
+    // STEP - build collision viewer c/c++ part
+
+    const collision_viewer = b.addStaticLibrary(.{
+        .name = "collision_viewer",
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    collision_viewer.linkLibC();
+    collision_viewer.linkLibCpp();
+    collision_viewer.addCSourceFiles(&.{
+        "src/collision_viewer/main.cpp",
+        "src/collision_viewer/imgui-d3d3/imgui.cpp",
+        "src/collision_viewer/imgui-d3d3/imgui_draw.cpp",
+        "src/collision_viewer/imgui-d3d3/imgui_tables.cpp",
+        "src/collision_viewer/imgui-d3d3/imgui_widgets.cpp",
+        "src/collision_viewer/imgui-d3d3/backends/imgui_impl_d3d.cpp",
+        "src/collision_viewer/imgui-d3d3/backends/imgui_impl_win32.cpp",
+        "src/collision_viewer/detours-master/src/detours.cpp",
+        "src/collision_viewer/detours-master/src/modules.cpp",
+        "src/collision_viewer/detours-master/src/disasm.cpp",
+        "src/collision_viewer/detours-master/src/image.cpp",
+        "src/collision_viewer/detours-master/src/creatwth.cpp",
+        "src/collision_viewer/detours-master/src/disolx86.cpp",
+    }, &.{
+        "-std=c++20"
+    });
+    collision_viewer.addIncludePath(.{.path = "src/collision_viewer/imgui-d3d3/" });
+    collision_viewer.addIncludePath(.{.path = "src/collision_viewer/detours-master/include" });
+    collision_viewer.linkSystemLibrary("Dwmapi");
+    collision_viewer.linkSystemLibrary("gdi32");
+
     const PluginDef = struct { name: []const u8, to_hash: bool = true };
     const plugins = [_]PluginDef{
         .{ .name = "test", .to_hash = false },
@@ -193,6 +224,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "developer", .to_hash = false },
         .{ .name = "inputdisplay" },
         .{ .name = "cam7" },
+        .{ .name = "collision_viewer" },
     };
 
     for (plugins) |plugin| {
@@ -208,6 +240,8 @@ pub fn build(b: *std.Build) void {
         dll.addOptions(options_label, options);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
+        if (std.mem.eql(u8, plugin.name,"collision_viewer"))
+            dll.linkLibrary(collision_viewer);
 
         // TODO: investigate options arg
         var dll_install = b.addInstallArtifact(dll, .{});

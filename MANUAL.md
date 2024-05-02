@@ -35,7 +35,10 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Showing milliseconds digit on all timers
 	- Configurable defaults for free-play racers and laps
 	- Skip planet cutscenes
+	- Fast countdown timer
 	- Double mouse cursor fix
+	- Jinn Reeso and Cy Yunga cheat toggling
+	- Cy Yunga cheat audio fix
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer
 - Cosmetic
@@ -131,6 +134,8 @@ Configured under `[overlay]`
 ### Quality of Life
 
 - Fix double mouse cursor
+- Patch Jinn Reeso and Cy Yunga cheats to also toggle off
+- Fix Cy Yunga cheat audio
 - Map controller `Start` to `Esc`
 - Race restart hotkey -- `F1 + Esc` or `Back + Start`
 - Quick Race Menu
@@ -140,6 +145,7 @@ Configured under `[overlay]`
 - Skip planet cutscenes
 - Custom default number of racers
 - Custom default number of laps
+- Fast countdown timer
 
 ##### Quick Race Menu Controls
 
@@ -158,13 +164,15 @@ Configured under `[qol]`
 
 |Option|Type|Note|
 |:---|:---|:---|
-|`quick_restart_enable`  |`bool`|&nbsp;
-|`quick_race_menu_enable`|`bool`|&nbsp;
-|`ms_timer_enable`       |`bool`|&nbsp;
-|`fps_limiter_enable`    |`bool`|&nbsp;
-|`skip_planet_cutscenes` |`bool`|&nbsp;
-|`default_racers`        |`u32` |1 to 12
-|`default_laps`          |`u32` |1 to 5
+|`quick_restart_enable`   |`bool`|&nbsp;
+|`quick_race_menu_enable` |`bool`|&nbsp;
+|`ms_timer_enable`        |`bool`|&nbsp;
+|`fps_limiter_enable`     |`bool`|&nbsp;
+|`skip_planet_cutscenes`  |`bool`|&nbsp;
+|`default_racers`         |`u32` |1 to 12
+|`default_laps`           |`u32` |1 to 5
+|`fast_countdown_enable`  |`bool`|&nbsp;
+|`fast_countdown_duration`|`f32` |0.05 to 3.00
 
 ### Cosmetic
 

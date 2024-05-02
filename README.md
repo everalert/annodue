@@ -24,7 +24,7 @@ See [MANUAL.md](MANUAL.md) for a complete feature summary and configuration inst
 1. Build `dinput.dll` as described below.
 1. Generate the release files with the following command in a terminal in the project directory. You must have `zig 0.11.0` installed.
 ```zig
-zig build release -Dver="0.1.2" -Dminver="0.0.0" -Ddbp="<path_to_dinput_build_directory>"
+zig build release -Dver="0.1.3" -Dminver="0.1.2" -Ddbp="<path_to_dinput_build_directory>"
 ```
 1. Find `annodue-0.1.2.zip` in `./release/0.1.1/` and extract it to the game directory.
 

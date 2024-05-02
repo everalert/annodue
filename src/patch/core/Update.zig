@@ -1,3 +1,10 @@
+const std = @import("std");
+const builtin = @import("builtin");
+const http = std.http;
+const json = std.json;
+const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
+
 const BuildOptions = @import("BuildOptions");
 
 const zzip = @import("zzip");
@@ -5,20 +12,14 @@ const EOCDRecord = zzip.EndOfCentralDirectoryRecord.EndOfCentralDirectoryRecord;
 const DirHeader = zzip.CentralDirectoryFileHeader.Header;
 const LocHeader = zzip.LocalFileHeader.Header;
 
-const std = @import("std");
-const http = std.http;
-const json = std.json;
-const ArrayList = std.ArrayList;
-const Allocator = std.mem.Allocator;
-
 const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 
 const allocator = @import("Allocator.zig");
-const SettingsSt = @import("../settings.zig").SettingsState;
-const GlobalSt = @import("../global.zig").GlobalState;
-const GlobalFn = @import("../global.zig").GlobalFunction;
-const Version = @import("../global.zig").Version;
+const SettingsSt = @import("Settings.zig").SettingsState;
+const GlobalSt = @import("Global.zig").GlobalState;
+const GlobalFn = @import("Global.zig").GlobalFunction;
+const Version = @import("Global.zig").Version;
 
 const r = @import("../util/racer.zig");
 const rt = @import("../util/racer_text.zig");
@@ -90,7 +91,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: http requests crashing in debug builds only; extra option for auto
     // checking for updates at runtime, or just always do it in release and disable
     // entirely for debug builds? doing latter for now..
-    if (comptime BuildOptions.OPTIMIZE == .Debug) return;
+    if (comptime builtin.mode == .Debug) return;
 
     // FIXME: remove early AUTO_UPDATE check in future version, once we verify
     // the update system is stable

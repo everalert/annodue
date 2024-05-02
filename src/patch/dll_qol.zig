@@ -5,11 +5,13 @@ const win = std.os.windows;
 const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
+const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+
+const debug = @import("core/Debug.zig");
 
 const timing = @import("util/timing.zig");
 const Menu = @import("util/menu.zig").Menu;
@@ -25,13 +27,19 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-const InputMap = @import("util/input.zig").InputMap;
-const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
-const AxisInputMap = @import("util/input.zig").AxisInputMap;
+const InputMap = @import("core/Input.zig").InputMap;
+const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
+const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - fix: remove double mouse cursor
 // - fix: pause game with xinput controller (maps Start -> Esc)
+// - fix: toggle Jinn Reeso with cheat, instead of only enabling
+// - fix: toggle Cy Yunga with cheat, instead of only enabling
+// - fix: bugfix Cy Yunga cheat having no audio
 // - feat: quick restart
 //     - CONTROLS:          F1+Esc          Back+Start
 // - feat: quick race menu
@@ -59,6 +67,7 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 // - feat: skip planet cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
+// - feat: fast countdown timer
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -66,12 +75,16 @@ const AxisInputMap = @import("util/input.zig").AxisInputMap;
 //   fps_limiter_enable         bool
 //   default_racers             u32     max 12
 //   default_laps               u32     max 5
+//   fast_countdown_enable      bool
+//   fast_countdown_duration    f32     min 0.05, max 3.00
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
-// TODO: global fps limiter
+// TODO: global fps limiter (i.e. not only in race)
 // TODO: figure out wtf to do to manage state through hot-reload etc.
 // FIXME: quick race menu stops working after hot reload??
+// TODO: split this because it's getting unruly
+//   maybe -- quality of life + game bugfixes + non-gameplay extra features
 
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -113,37 +126,22 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 // HUD TIMER MS
 
-const end_race_timer_offset: u8 = 12;
-
 // TODO: cleanup
 fn PatchHudTimerMs(enable: bool) void {
-    if (enable) {
-        // hudDrawRaceHud
-        _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime3));
-        _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime3));
-        _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime3));
-        // hudDrawRaceResults
-        _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime3));
-        _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime3));
-        _ = mem.write(0x4623D7, u8, comptime end_race_timer_offset + 91); // 91
-        _ = mem.write(0x4623F1, u8, comptime end_race_timer_offset + 105); // 105
-        _ = mem.write(0x46240B, u8, comptime end_race_timer_offset + 115); // 115
-        _ = mem.write(0x46241E, u8, comptime end_race_timer_offset + 125); // 125
-        _ = mem.write(0x46242D, u8, comptime end_race_timer_offset + 135); // 135
-    } else {
-        // hudDrawRaceHud
-        _ = x86.call(0x460BD3, @intFromPtr(rf.swrText_DrawTime2));
-        _ = x86.call(0x460E6B, @intFromPtr(rf.swrText_DrawTime2));
-        _ = x86.call(0x460ED9, @intFromPtr(rf.swrText_DrawTime2));
-        // hudDrawRaceResults
-        _ = x86.call(0x46252F, @intFromPtr(rf.swrText_DrawTime2));
-        _ = x86.call(0x462660, @intFromPtr(rf.swrText_DrawTime2));
-        _ = mem.write(0x4623D7, u8, end_race_timer_offset);
-        _ = mem.write(0x4623F1, u8, end_race_timer_offset);
-        _ = mem.write(0x46240B, u8, end_race_timer_offset);
-        _ = mem.write(0x46241E, u8, end_race_timer_offset);
-        _ = mem.write(0x46242D, u8, end_race_timer_offset);
-    }
+    const draw_fn = if (enable) rf.swrText_DrawTime3 else rf.swrText_DrawTime2;
+    const end_race_timer_offset: u8 = if (enable) 12 else 0;
+    // hudDrawRaceHud
+    _ = x86.call(0x460BD3, @intFromPtr(draw_fn));
+    _ = x86.call(0x460E6B, @intFromPtr(draw_fn));
+    _ = x86.call(0x460ED9, @intFromPtr(draw_fn));
+    // hudDrawRaceResults
+    _ = x86.call(0x46252F, @intFromPtr(draw_fn));
+    _ = x86.call(0x462660, @intFromPtr(draw_fn));
+    _ = mem.write(0x4623D7, u8, end_race_timer_offset + 91);
+    _ = mem.write(0x4623F1, u8, end_race_timer_offset + 105);
+    _ = mem.write(0x46240B, u8, end_race_timer_offset + 115);
+    _ = mem.write(0x46241E, u8, end_race_timer_offset + 125);
+    _ = mem.write(0x46242D, u8, end_race_timer_offset + 135);
 }
 
 // PLANET CUTSCENES
@@ -155,6 +153,144 @@ fn PatchPlanetCutscenes(enable: bool) void {
         _ = x86.call(0x45753D, @intFromPtr(rf.swrVideo_PlayVideoFile));
     }
 }
+
+// GAME CHEATS
+
+// TODO: add quick toggle to menus
+// TODO: fix sound bug when activating cy yunga cheat (use sound 45)
+// TODO: setting to actually enable the jinn/cy patches?
+
+const JINN_REESO_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 8;
+const JINN_REESO_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 8;
+
+fn PatchJinnReesoCheat(enable: bool) void {
+    _ = x86.call(0x4105DD, @intFromPtr(if (enable) &ToggleJinnReeso else rf.Vehicle_EnableJinnReeso));
+}
+
+fn ToggleJinnReeso() callconv(.C) void {
+    const state = struct {
+        var initialized: bool = false;
+        var on: bool = false;
+    };
+    if (!state.initialized) {
+        state.on = mem.read(JINN_REESO_METADATA_ADDR + 4, u32) == 299;
+        state.initialized = true;
+    }
+
+    state.on = !state.on;
+    if (state.on) {
+        rf.Vehicle_EnableJinnReeso();
+    } else {
+        DisableJinnReeso();
+    }
+}
+
+fn DisableJinnReeso() callconv(.C) void {
+    //VehicleMetadata = 0x4C28A0
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
+    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
+    //MysteryStruct = 0x4C73E8
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
+    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
+}
+
+const CY_YUNGA_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 22;
+const CY_YUNGA_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 22;
+
+fn PatchCyYungaCheat(enable: bool) void {
+    _ = x86.call(0x410578, @intFromPtr(if (enable) &ToggleCyYunga else rf.Vehicle_EnableCyYunga));
+}
+
+fn ToggleCyYunga() callconv(.C) void {
+    const state = struct {
+        var initialized: bool = false;
+        var on: bool = false;
+    };
+    if (!state.initialized) {
+        state.on = mem.read(CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
+        state.initialized = true;
+    }
+
+    state.on = !state.on;
+    if (state.on) {
+        rf.Vehicle_EnableCyYunga();
+    } else {
+        DisableCyYunga();
+    }
+}
+
+fn DisableCyYunga() callconv(.C) void {
+    //VehicleMetadata = 0x4C2B78
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
+    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
+    //MysteryStruct = 0x4C79D0
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
+    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
+}
+
+fn PatchCyYungaCheatAudio(enable: bool) void {
+    const id: u8 = if (enable) 0x2D else 0xFF;
+    _ = mem.write(comptime 0x41057D + 0x01, u8, id);
+}
+
+// FAST COUNTDOWN
+
+// TODO: settings for count length, enable
+
+const FastCountdown = struct {
+    var CountDuration: f32 = 1.0;
+    var CountRatio: f32 = 3 / 1.0;
+    var CountDif: f32 = 3 - 1.0;
+    var CurrentFrametime: f64 = 1 / 24;
+
+    fn update() void {
+        CurrentFrametime = CountRatio * rc.TIME_FRAMETIME_64.*;
+    }
+
+    fn init(duration: f32) void {
+        CountDuration = std.math.clamp(duration, 0.05, 3.00);
+        CountRatio = 3 / CountDuration;
+        CountDif = 3 - CountDuration;
+    }
+
+    fn patch(enable: bool) void {
+        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rc.ADDR_TIME_FRAMETIME_64;
+        const prerace_max_time: u32 = if (enable) @bitCast(9.10 + CountDif) else 0x4111999A; // 9.10
+        const boost_window_min: u32 = if (enable) @bitCast(0.05 * CountRatio) else 0x3D4CCCCD; // 0.05
+        const boost_window_max: u32 = if (enable) @bitCast(0.30 * CountRatio) else 0x3E99999A; // 0.30
+        _ = mem.write(0x45E628, usize, addr);
+        _ = mem.write(0x45E2D5, u32, prerace_max_time);
+        _ = mem.write(0x4AD254, u32, boost_window_min);
+        _ = mem.write(0x4AD258, u32, boost_window_max);
+    }
+
+    fn settingsLoad(gf: *GlobalFn) void {
+        const enable = gf.SettingGetB("qol", "fast_countdown_enable") orelse false;
+        const duration = gf.SettingGetF("qol", "fast_countdown_duration") orelse 1.0;
+        if (enable) init(duration);
+        patch(enable);
+    }
+};
 
 // PRACTICE/STATISTICAL DATA
 
@@ -495,16 +631,21 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = w32wm.ShowCursor(0);
+    _ = w32wm.ShowCursor(0); // cursor fix
     QolHandleSettings(gf);
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
+    QuickRaceMenu.FpsTimer.Start();
+
+    PatchJinnReesoCheat(true);
+    PatchCyYungaCheat(true);
+    PatchCyYungaCheatAudio(true);
+
+    FastCountdown.settingsLoad(gf);
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: look into using in-game default setter, see fn_45BD90
 
     if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
@@ -514,28 +655,30 @@ export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
 }
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    QuickRaceMenu.FpsTimer.End();
     QuickRaceMenu.close();
+
+    PatchJinnReesoCheat(false);
+    PatchCyYungaCheat(false);
+    PatchCyYungaCheatAudio(false);
+
+    FastCountdown.patch(false);
 }
 
 // HOOKS
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QolHandleSettings(gf);
+    FastCountdown.settingsLoad(gf);
 }
 
-export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QolUpdateInput(gf);
     QuickRaceMenu.update_input();
 }
 
-export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
@@ -543,23 +686,33 @@ export fn InputUpdateKeyboardA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
 
-export fn TimerUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
-    _ = gf;
+export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: move to global state, see also qll_savestate->EarlyEngineUpdateStage20A
     // only not nullptr if in race scene
     const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
         r.ReadRaceDataValue(0x84, u32) != 0;
     const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
-    if (player_ok and gui_on and QolState.fps_limiter)
+    if (player_ok and gui_on and QolState.fps_limiter) {
         QuickRaceMenu.FpsTimer.Sleep();
+        // FIXME: remove, just for debugging droopy lag; or, convert to 'debug view' idea
+        rt.DrawText(4, 120 + 8 * 0, "exc: {d}", .{QuickRaceMenu.FpsTimer.step_excess}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 1, "per: {d}", .{QuickRaceMenu.FpsTimer.period}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 2, "stp: {d}", .{QuickRaceMenu.FpsTimer.timer_step}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 3, "sns: {d}", .{QuickRaceMenu.FpsTimer.timer_step_ns}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 4, "scp: {d}", .{QuickRaceMenu.FpsTimer.timer_step_cmp}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 5, "tst: {d}", .{QuickRaceMenu.FpsTimer.test_tstart}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 6, "tsl: {d}", .{QuickRaceMenu.FpsTimer.test_tsleep}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 7, "tsp: {d}", .{QuickRaceMenu.FpsTimer.test_tspin}, null, null) catch {};
+    }
+}
+
+export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    FastCountdown.update();
 }
 
 // FIXME: settings toggles for both of these
 // FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
-export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-
+export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // Quick Restart
     if (gs.in_race.on() and
         QolState.input_quickstart.gets() == .On and
@@ -576,8 +729,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         QuickRaceMenu.update();
 }
 
-export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (gs.in_race == .JustOn) race.reset();
 

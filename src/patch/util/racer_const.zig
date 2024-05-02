@@ -57,6 +57,8 @@ pub const ADDR_PAUSE_SCROLLINOUT: usize = 0xE9824C; // f32
 
 pub const ADDR_TIME_TIMESTAMP: usize = 0x50CB60; // u32
 pub const ADDR_TIME_FRAMETIME: usize = 0xE22A50; // f32
+pub const ADDR_TIME_FRAMETIME_64: usize = 0xE22A40; // f64
+pub const TIME_FRAMETIME_64: *f64 = @ptrFromInt(0xE22A40);
 pub const ADDR_TIME_FRAMECOUNT: usize = 0xE22A30;
 pub const ADDR_TIME_FPS: usize = 0x4C8174; // sithControl_secFPS
 
@@ -84,6 +86,12 @@ pub const ADDR_DRAW_MENU_JUMPTABLE_SCENE_3: usize = 0x457AD4;
 pub const RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR: usize = 0x4D78A4;
 pub const ADDR_RACE_DATA: usize = 0x4D78A4; // FIXME: change to RACE_DATA_ARRAY_ADDR = 0xE29BC0; confirm static
 pub const RACE_DATA_SIZE: usize = 0x88;
+
+// Vehicle Metadata
+
+// TODO: vehicle metadata struct def
+pub const VEHICLE_METADATA_ARRAY_ADDR: usize = 0x4C2700;
+pub const VEHICLE_METADATA_ITEM_SIZE: usize = 0x34;
 
 // Input
 

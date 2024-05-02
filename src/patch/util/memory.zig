@@ -24,9 +24,9 @@ pub fn write(offset: usize, comptime T: type, value: T) usize {
     const addr: [*]align(1) T = @ptrFromInt(offset);
     const data: [1]T = [1]T{value};
     var protect: win.DWORD = undefined;
-    _ = win.VirtualProtect(addr, @sizeOf(T), win.PAGE_EXECUTE_READWRITE, &protect) catch unreachable;
+    _ = win.VirtualProtect(addr, @sizeOf(T), win.PAGE_EXECUTE_READWRITE, &protect) catch @panic("failed to set PAGE_EXECUTE_READWRITE for memory write operation");
     @memcpy(addr, &data);
-    _ = win.VirtualProtect(addr, @sizeOf(T), protect, &protect) catch unreachable;
+    _ = win.VirtualProtect(addr, @sizeOf(T), protect, &protect) catch @panic("failed to restore previous protection after memory write operation");
     return offset + @sizeOf(T);
 }
 
@@ -34,9 +34,9 @@ pub fn write_bytes(offset: usize, ptr_in: ?*anyopaque, len: usize) usize {
     const addr: [*]align(1) u8 = @ptrFromInt(offset);
     const data: []u8 = @as([*]u8, @ptrCast(ptr_in))[0..len];
     var protect: win.DWORD = undefined;
-    _ = win.VirtualProtect(addr, len, win.PAGE_EXECUTE_READWRITE, &protect) catch unreachable;
+    _ = win.VirtualProtect(addr, len, win.PAGE_EXECUTE_READWRITE, &protect) catch @panic("failed to set PAGE_EXECUTE_READWRITE for memory write_bytes operation");
     @memcpy(addr, data);
-    _ = win.VirtualProtect(addr, len, protect, &protect) catch unreachable;
+    _ = win.VirtualProtect(addr, len, protect, &protect) catch @panic("failed to restore previous protection after memory write_bytes operation");
     return offset + len;
 }
 

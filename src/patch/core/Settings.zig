@@ -5,15 +5,15 @@ const w32 = @import("zigwin32");
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
-const global = @import("global.zig");
+const global = @import("Global.zig");
 const GlobalSt = global.GlobalState;
 const GlobalFn = global.GlobalFunction;
 
-const hook = @import("hook.zig");
-const allocator = @import("core/Allocator.zig");
+const hook = @import("Hook.zig");
+const allocator = @import("Allocator.zig");
 
-const SettingsGroup = @import("util/settings.zig").SettingsGroup;
-const SettingsManager = @import("util/settings.zig").SettingsManager;
+const SettingsGroup = @import("../util/settings.zig").SettingsGroup;
+const SettingsManager = @import("../util/settings.zig").SettingsManager;
 
 const SETTINGS_VERSION: u32 = 1;
 
@@ -83,6 +83,8 @@ pub fn init() void {
     SettingsState.qol.add("skip_planet_cutscenes", bool, true);
     SettingsState.qol.add("default_laps", u32, 3);
     SettingsState.qol.add("default_racers", u32, 1);
+    SettingsState.qol.add("fast_countdown_enable", bool, false);
+    SettingsState.qol.add("fast_countdown_duration", f32, 1.0);
     SettingsState.manager.add(&SettingsState.qol);
 
     SettingsState.cosmetic = SettingsGroup.init(alloc, "cosmetic");
@@ -197,17 +199,16 @@ fn LoadSettings() bool {
     return true;
 }
 
-pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+// HOOK FUNCTIONS
+
+pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > SettingsState.last_check + SettingsState.check_freq)
         if (LoadSettings())
             SettingsState.load_callback();
     SettingsState.last_check = gs.timestamp;
 }
 
-pub fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     defer SettingsState.manager.deinit();
 
     defer SettingsState.overlay.deinit();

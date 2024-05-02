@@ -3,18 +3,18 @@ const Self = @This();
 const std = @import("std");
 const win = std.os.windows;
 
-const settings = @import("settings.zig");
+const freeze = @import("Freeze.zig");
+const toast = @import("Toast.zig");
+const input = @import("Input.zig");
+const settings = @import("Settings.zig");
 const s = settings.SettingsState;
 
-const freeze = @import("core/Freeze.zig");
-const toast = @import("core/Toast.zig");
-const st = @import("util/active_state.zig");
-const xinput = @import("util/xinput.zig");
-const dbg = @import("util/debug.zig");
-const msg = @import("util/message.zig");
-const mem = @import("util/memory.zig");
-const input = @import("util/input.zig");
-const r = @import("util/racer.zig");
+const st = @import("../util/active_state.zig");
+const xinput = @import("../util/xinput.zig");
+const dbg = @import("../util/debug.zig");
+const msg = @import("../util/message.zig");
+const mem = @import("../util/memory.zig");
+const r = @import("../util/racer.zig");
 const rf = r.functions;
 const rc = r.constants;
 const rt = r.text;
@@ -28,6 +28,7 @@ const KS_DOWN: i16 = -1;
 const KS_PRESSED: i16 = 1; // since last call
 
 // NOTE: may want to figure out all the code caves in .data for potential use
+// TODO: split up the versioning, global structs, etc. from the business logic
 
 // VERSION
 
@@ -36,8 +37,9 @@ const KS_PRESSED: i16 = 1; // since last call
 pub const Version = std.SemanticVersion{
     .major = 0,
     .minor = 1,
-    .patch = 2,
-    .build = "248",
+    .patch = 4,
+    .pre = "alpha",
+    .build = "270",
 };
 
 // TODO: use SemanticVersion parse fn instead
@@ -48,7 +50,7 @@ pub const VersionStr: [:0]u8 = s: {
         Version.minor,
         Version.patch,
         Version.build.?,
-    }) catch unreachable;
+    }) catch unreachable; // comptime
 };
 
 pub const PLUGIN_VERSION = 17;
@@ -202,8 +204,7 @@ pub fn init() bool {
 
 // HOOK CALLS
 
-pub fn OnInitLate(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
+pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
 
@@ -228,8 +229,7 @@ pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) vo
     }
 }
 
-pub fn TimerUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
+pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
     gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
     const fps_res: f32 = 1 / gs.dt_f * 2;
@@ -238,9 +238,7 @@ pub fn TimerUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
     gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
 }
 
-pub fn MenuTitleScreenB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuTitleScreenB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     // TODO: make text only appear on the actual title screen, i.e. remove from file select etc.
     DrawVersionString();
     DrawMenuPracticeModeLabel();
@@ -270,20 +268,14 @@ pub fn MenuTitleScreenB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void
     //}
 }
 
-pub fn MenuStartRaceB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuStartRaceB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResultsB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuRaceResultsB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrackB(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+pub fn MenuTrackB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }

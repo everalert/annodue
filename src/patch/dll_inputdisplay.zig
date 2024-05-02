@@ -3,9 +3,11 @@ pub const Self = @This();
 const std = @import("std");
 const m = std.math;
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+
+const debug = @import("core/Debug.zig");
 
 const nt = @import("util/normalized_transform.zig");
 const dbg = @import("util/debug.zig");
@@ -16,6 +18,9 @@ const rc = r.constants;
 const rf = r.functions;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - Visualize inputs during race
@@ -356,34 +361,25 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     InputDisplay.Deinit();
 }
 
 // HOOK FUNCTIONS
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     InputDisplay.HandleSettings(gf);
 }
 
-export fn InitRaceQuadsA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (InputDisplay.enable)
         InputDisplay.Init();
 }
 
 // TODO: probably cleaner with a state machine
-export fn InputUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (InputDisplay.enable and !InputDisplay.initialized)
             InputDisplay.Init();

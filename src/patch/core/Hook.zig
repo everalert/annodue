@@ -9,24 +9,20 @@ const w32ll = w32.system.library_loader;
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
-const settings = @import("settings.zig");
-const global = @import("global.zig");
+const core = @import("core.zig");
+const allocator = core.Allocator;
+const global = core.Global;
 const GlobalSt = global.GlobalState;
 const GLOBAL_STATE = &global.GLOBAL_STATE;
 const GlobalFn = global.GlobalFunction;
 const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
 const PLUGIN_VERSION = global.PLUGIN_VERSION;
-const practice = @import("patch_practice.zig");
-const toast = @import("core/Toast.zig");
-const allocator = @import("core/Allocator.zig");
-const update = @import("core/Update.zig");
 
-const hook = @import("util/hooking.zig");
-const mem = @import("util/memory.zig");
-const input = @import("util/input.zig");
-const r = @import("util/racer.zig");
-const rc = @import("util/racer_const.zig");
-const rf = @import("util/racer_fn.zig");
+const hook = @import("../util/hooking.zig");
+const mem = @import("../util/memory.zig");
+const r = @import("../util/racer.zig");
+const rc = @import("../util/racer_const.zig");
+const rf = @import("../util/racer_fn.zig");
 
 // TODO: switch to Sha256 for perf?
 const Sha512 = std.crypto.hash.sha2.Sha512;
@@ -228,7 +224,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     var buf1: [2047:0]u8 = undefined;
     var filepath = std.fmt.bufPrintZ(&buf1, "annodue/plugin/{s}", .{
         filename,
-    }) catch unreachable;
+    }) catch @panic("failed to format path to plugin");
 
     // do we even need to do anything
     var fd1: w32fs.WIN32_FIND_DATAA = undefined;
@@ -246,11 +242,11 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     // separated from buf1 to minimize work on the hot path
     var buf0: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf0, "{s}", .{filename}) catch unreachable;
+    _ = std.fmt.bufPrintZ(&buf0, "{s}", .{filename}) catch @panic("failed to format plugin filename");
     var buf2: [2047:0]u8 = undefined;
     _ = std.fmt.bufPrintZ(&buf2, "annodue/tmp/plugin/{s}.tmp.dll", .{
         filename[0..i_ext],
-    }) catch unreachable;
+    }) catch @panic("failed to format path to plugin tmp file");
 
     // do we need to unload anything
     if (p.Handle) |h| {
@@ -302,60 +298,44 @@ pub fn init() void {
     var p: *Plugin = undefined;
 
     // loading core
-    // TODO: system to handle adding these automatically
-    // TODO: hot-reloading core
+    // TODO: hot-reloading core (i.e. all of annodue)
 
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.GameLoopB = &GameLoopB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.InputUpdateB = &input.InputUpdateB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.InitRaceQuadsA = &practice.InitRaceQuadsA;
-    p.TextRenderB = &practice.TextRenderB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.GameLoopB = &settings.GameLoopB;
-    p.OnDeinit = &settings.OnDeinit;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.OnInitLate = &global.OnInitLate;
-    p.EarlyEngineUpdateA = &global.EarlyEngineUpdateA;
-    p.TimerUpdateA = &global.TimerUpdateA;
-    p.MenuTitleScreenB = &global.MenuTitleScreenB;
-    p.MenuStartRaceB = &global.MenuStartRaceB;
-    p.MenuRaceResultsB = &global.MenuRaceResultsB;
-    p.MenuTrackB = &global.MenuTrackB;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.EarlyEngineUpdateA = &toast.EarlyEngineUpdateA;
-
-    p = PluginState.core.addOne() catch unreachable;
-    p.* = std.mem.zeroInit(Plugin, .{});
-    p.OnInitLate = &update.OnInitLate;
-    p.EarlyEngineUpdateB = &update.EarlyEngineUpdateB;
+    // TODO: move to LoadPlugin equivalent?
+    // TODO: require OnInit, OnLateInit, OnDeinit?
+    // TODO: run OnInit immediately like plugins
+    // TODO: (after hot-reloading core) run OnLateInit immediately on hot-reload like plugins
+    // TODO: filtering/error-checking the fields to make sure they're actually objects, not functions etc.
+    const fn_fields = comptime std.enums.values(PluginExportFn);
+    const core_decls = @typeInfo(core).Struct.decls;
+    inline for (core_decls) |cd| {
+        const this_decl = @field(core, cd.name);
+        var this_p: ?*Plugin = null;
+        inline for (fn_fields) |ff| {
+            if (@hasDecl(this_decl, @tagName(ff))) {
+                if (this_p == null) {
+                    p = PluginState.core.addOne() catch @panic("failed to add core plugin to arraylist");
+                    p.* = std.mem.zeroInit(Plugin, .{});
+                    this_p = p;
+                }
+                @field(this_p.?, @tagName(ff)) = &@field(this_decl, @tagName(ff));
+            }
+        }
+    }
 
     // loading plugins
 
     const cwd = std.fs.cwd();
     var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
-        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch unreachable;
+        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch @panic("failed to open plugin directory");
     defer dir.close();
 
     var it_dir = dir.iterate();
-    while (it_dir.next() catch unreachable) |file| {
+    while (it_dir.next() catch @panic("failed to fetch next plugin")) |file| {
         if (file.kind != .file) continue;
         if (!std.mem.eql(u8, ".DLL", file.name[file.name.len - 4 ..]) and
             !std.mem.eql(u8, ".dll", file.name[file.name.len - 4 ..])) continue;
 
-        p = PluginState.plugin.addOne() catch unreachable;
+        p = PluginState.plugin.addOne() catch @panic("failed to add user plugin to arraylist");
         p.* = std.mem.zeroInit(Plugin, .{});
         if (!LoadPlugin(p, file.name))
             _ = PluginState.plugin.pop();
@@ -377,8 +357,7 @@ pub fn init() void {
     global.GLOBAL_STATE.patch_offset = off;
 }
 
-pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
         for (PluginState.plugin.items, 0..) |*p, i| {
             const len = for (p.Filename, 0..) |c, j| {

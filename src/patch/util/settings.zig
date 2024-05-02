@@ -4,7 +4,7 @@ const std = @import("std");
 const ini = @import("../import/import.zig").ini;
 
 // TODO: convert hashmaps to ArrayList, so that settings in default file retains
-// order as defined in patch/settings.zig
+// order as defined in patch/core/Settings.zig
 
 pub const IniValue = union(enum) {
     b: bool,
@@ -55,10 +55,14 @@ pub const SettingsGroup = struct {
 
     pub fn add(self: *SettingsGroup, key: []const u8, comptime T: type, value: T) void {
         switch (T) {
-            bool => self.values.put(key, .{ .b = value }) catch unreachable,
-            i32 => self.values.put(key, .{ .i = value }) catch unreachable,
-            u32 => self.values.put(key, .{ .u = value }) catch unreachable,
-            f32 => self.values.put(key, .{ .f = value }) catch unreachable,
+            bool => self.values.put(key, .{ .b = value }) catch
+                @panic("failed to add bool setting to settings group"),
+            i32 => self.values.put(key, .{ .i = value }) catch
+                @panic("failed to add i32 setting to settings group"),
+            u32 => self.values.put(key, .{ .u = value }) catch
+                @panic("failed to add u32 setting to settings group"),
+            f32 => self.values.put(key, .{ .f = value }) catch
+                @panic("failed to add f32 setting to settings group"),
             else => return,
         }
     }
@@ -149,7 +153,7 @@ pub const SettingsManager = struct {
     }
 
     pub fn add(self: *SettingsManager, group: *SettingsGroup) void {
-        self.groups.put(group.name, group) catch unreachable;
+        self.groups.put(group.name, group) catch @panic("failed to add settings group to manager");
     }
 
     pub fn read_ini(self: *SettingsManager, alloc: std.mem.Allocator, filename: []const u8) !void {

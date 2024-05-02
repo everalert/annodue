@@ -2,9 +2,11 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+
+const debug = @import("core/Debug.zig");
 
 const r = @import("util/racer.zig");
 const rf = @import("util/racer_fn.zig");
@@ -12,6 +14,9 @@ const rf = @import("util/racer_fn.zig");
 const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - High-resolution fonts
@@ -123,7 +128,7 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
 
     // Have a buffer for pixeldata
     const texture_size: u32 = width * height * 4 / 8;
-    var buffer = alloc.alloc(u8, texture_size) catch unreachable;
+    var buffer = alloc.alloc(u8, texture_size) catch @panic("failed to allocate memory for texture table patch");
     defer alloc.free(buffer);
     const buffer_slice = @as([*]u8, @ptrCast(buffer))[0..texture_size];
 
@@ -131,16 +136,16 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
     var i: usize = 0;
     while (i < count) : (i += 1) {
         // Load input texture to buffer
-        var path = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch unreachable; // FIXME: error handling
+        var path = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch @panic("failed to format path for texture table patch"); // FIXME: error handling
 
-        const file = std.fs.cwd().openFile(path, .{}) catch unreachable; // FIXME: error handling
+        const file = std.fs.cwd().openFile(path, .{}) catch @panic("failed to open texture table patch file"); // FIXME: error handling
         defer file.close();
         var file_pos: usize = 0;
         @memset(buffer_slice, 0x00);
         var j: u32 = 0;
         while (j < texture_size * 2) : (j += 1) {
             var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
-            file_pos += file.pread(&pixel, file_pos) catch unreachable; // FIXME: error handling
+            file_pos += file.pread(&pixel, file_pos) catch @panic("failed to read segment of texture table patch file"); // FIXME: error handling
             buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
         }
 
@@ -382,14 +387,9 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     gs.patch_offset = off;
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
     crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
     crot.PatchRgbArgs(0x461045, 0xFFFFFF);
@@ -401,14 +401,11 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleColorSettings(gf);
 }
 
-export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn TextRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (CosmeticState.rb_enable) {
         PatchHudColRotate(
             CosmeticState.rb_value_enable,

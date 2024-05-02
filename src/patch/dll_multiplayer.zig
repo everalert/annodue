@@ -2,15 +2,20 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+
+const debug = @import("core/Debug.zig");
 
 const r = @import("util/racer.zig");
 const rf = @import("util/racer_fn.zig");
 
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - Disable multiplayer collisions
@@ -185,19 +190,12 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     gs.patch_offset = off;
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleSettings(gf);
 }

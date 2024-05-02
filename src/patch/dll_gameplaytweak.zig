@@ -2,15 +2,20 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+
+const debug = @import("core/Debug.zig");
 
 const r = @import("util/racer.zig");
 const rf = @import("util/racer_fn.zig");
 const rc = @import("util/racer_const.zig");
 
 const mem = @import("util/memory.zig");
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - Patch DeathSpeedMin (minimum speed required to die from collision)
@@ -48,8 +53,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: add conditional thing for practice mode toggling
     if (gf.SettingGetB("gameplay", "death_speed_mod_enable").?) {
         const dsm: f32 = gf.SettingGetF("gameplay", "death_speed_min") orelse 325;
@@ -58,13 +62,8 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchDeathSpeed(325, 140);
 }

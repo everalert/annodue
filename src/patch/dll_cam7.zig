@@ -8,9 +8,15 @@ const deg2rad = m.degreesToRadians;
 const w32 = @import("zigwin32");
 const POINT = w32.foundation.POINT;
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+
+const debug = @import("core/Debug.zig");
+
+const InputMap = @import("core/Input.zig").InputMap;
+const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
+const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
 const r = @import("util/racer.zig");
 const rf = r.functions;
@@ -20,9 +26,8 @@ const st = @import("util/active_state.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-const InputMap = @import("util/input.zig").InputMap;
-const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
-const AxisInputMap = @import("util/input.zig").AxisInputMap;
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // Named after Camera 7 in Trackmania
 
@@ -219,9 +224,7 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 // STATE MACHINE
 
-fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
-    _ = gf;
-    _ = gs;
+fn DoStateNone(_: *GlobalSt, _: *GlobalFn) CamState {
     if (Cam7.input_toggle.gets() == .JustOn and Cam7.enable) {
         SaveSavedCam();
         return .FreeCam;
@@ -229,8 +232,7 @@ fn DoStateNone(gs: *GlobalSt, gf: *GlobalFn) CamState {
     return .None;
 }
 
-fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
-    _ = gf;
+fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     if (Cam7.input_toggle.gets() == .JustOn or !Cam7.enable) {
         RestoreSavedCam();
         return .None;
@@ -388,33 +390,26 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleSettings(gf);
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     rf.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
 }
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     RestoreSavedCam();
     rf.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
 }
 
 // HOOKS
 
-export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     Cam7.update_input(gf);
 }
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleSettings(gf);
 }
 

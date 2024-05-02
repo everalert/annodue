@@ -5,11 +5,13 @@ const std = @import("std");
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
-const GlobalSt = @import("global.zig").GlobalState;
-const GlobalFn = @import("global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("core/Global.zig").GlobalState;
+const GlobalFn = @import("core/Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
 
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("util/input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
+const debug = @import("core/Debug.zig");
+
+const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const st = @import("util/active_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
@@ -20,9 +22,12 @@ const rc = r.constants;
 const rt = r.text;
 const rto = rt.TextStyleOpts;
 
-const InputMap = @import("util/input.zig").InputMap;
-const ButtonInputMap = @import("util/input.zig").ButtonInputMap;
-const AxisInputMap = @import("util/input.zig").AxisInputMap;
+const InputMap = @import("core/Input.zig").InputMap;
+const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
+const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+
+// TODO: passthrough to annodue's panic via global function vtable; same for logging
+pub const panic = debug.annodue_panic;
 
 // Usable in Practice Mode only
 
@@ -91,7 +96,7 @@ const state = struct {
 
     const frames: usize = 60 * 60 * 8; // 8min @ 60fps
     //const frame_size: usize = off_cman + rc.EntitySize(.cMan);
-    const header_size: usize = std.math.divCeil(usize, off_END, 4 * 8) catch unreachable;
+    const header_size: usize = std.math.divCeil(usize, off_END, 4 * 8) catch unreachable; // comptime
     const header_type: type = std.packed_int_array.PackedIntArray(u1, header_bits);
     const header_bits: usize = off_END / 4;
     const offsets_off: usize = 0;
@@ -155,11 +160,10 @@ const state = struct {
     var layer_indexes: [layer_depth + 1]usize = undefined;
     var layer_index_count: usize = undefined;
 
-    fn init(gf: *GlobalFn) void {
-        _ = gf;
+    fn init(_: *GlobalFn) void {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         const alloc = gpa.allocator();
-        memory = alloc.alloc(u8, memory_size) catch unreachable;
+        memory = alloc.alloc(u8, memory_size) catch @panic("failed to allocate memory for savestate/rewind");
         @memset(memory[0..memory_size], 0x00);
 
         memory_addr = @intFromPtr(memory.ptr);
@@ -324,8 +328,7 @@ fn DoStateRecording(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     return .Recording;
 }
 
-fn DoStateLoading(gs: *GlobalSt, gf: *GlobalFn) LoadState {
-    _ = gf;
+fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.frame).? - 1;
         state.frame_total = state.frame;
@@ -338,8 +341,7 @@ fn DoStateLoading(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     return .Loading;
 }
 
-fn DoStateScrubbing(gs: *GlobalSt, gf: *GlobalFn) LoadState {
-    _ = gf;
+fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.frame - 1;
     }
@@ -359,8 +361,7 @@ fn DoStateScrubbing(gs: *GlobalSt, gf: *GlobalFn) LoadState {
     return .Scrubbing;
 }
 
-fn DoStateScrubExiting(gs: *GlobalSt, gf: *GlobalFn) LoadState {
-    _ = gf;
+fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
     state.load_compressed(std.math.cast(u32, state.scrub_frame).?, gs);
 
     if (state.save_input_st.gets() == .JustOn) {
@@ -394,20 +395,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.handle_settings(gf);
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
@@ -415,13 +409,11 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 //    state.reset();
 //}
 
-export fn OnSettingsLoad(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.handle_settings(gf);
 }
 
-export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.scrub_input_dec.update(gf);
     state.scrub_input_inc.update(gf);
     state.save_input_st.update(gf);
@@ -441,8 +433,7 @@ export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
     // TODO: experiment with positioning
@@ -473,6 +464,7 @@ fn save_file() void {
 }
 
 // FIXME: dumped from patch.zig; need to rework into a generalized function
+// TODO: cleanup unreachable after migrating to lib
 fn check_compression_potential() void {
     const savestate_size: usize = 0x2428 / 4;
     const savestate_count: usize = 128;

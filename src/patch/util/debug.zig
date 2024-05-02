@@ -6,7 +6,7 @@ const w32f = w32.foundation;
 const w32c = w32.system.console;
 const w32wm = w32.ui.windows_and_messaging;
 
-const global = @import("../global.zig");
+const global = @import("../core/Global.zig");
 const mem = @import("memory.zig");
 const rc = @import("racer.zig").constants;
 

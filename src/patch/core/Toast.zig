@@ -4,9 +4,9 @@ const RingBuffer = @import("../util/ring_buffer.zig").RingBuffer;
 const nxf = @import("../util/normalized_transform.zig");
 const fl = @import("../util/flash.zig");
 
-const GlobalSt = @import("../global.zig").GlobalState;
-const GlobalFn = @import("../global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("../global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("Global.zig").GlobalState;
+const GlobalFn = @import("Global.zig").GlobalFunction;
+const COMPATIBILITY_VERSION = @import("Global.zig").PLUGIN_VERSION;
 
 const r = @import("../util/racer.zig");
 const rt = r.text;
@@ -48,8 +48,7 @@ pub const ToastSystem = extern struct {
 
 // HOOK FUNCTIONS
 
-pub fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
+pub fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     const r_start: u32 = @intCast(ToastSystem.buffer.b);
     const r_end: u32 = r_start + ToastSystem.buffer.len;
     const len: u32 = ToastSystem.buffer.len;
@@ -92,6 +91,6 @@ pub fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         }
         const color: u32 = fl.flash_color(item.color, item.timer, ToastSystem.dur_flash) | a;
 
-        rt.DrawText(16, 8 + y_off + ToastSystem.row_h * i, "{s}", .{item.text}, color, null) catch unreachable;
+        rt.DrawText(16, 8 + y_off + ToastSystem.row_h * i, "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text");
     }
 }

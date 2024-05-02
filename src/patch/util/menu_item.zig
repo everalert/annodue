@@ -8,7 +8,7 @@ const w32kb = w32.ui.input.keyboard_and_mouse;
 const Menu = @import("menu.zig").Menu;
 const ScrollControl = @import("scroll_control.zig").ScrollControl;
 const st = @import("active_state.zig");
-const input = @import("input.zig");
+const input = @import("../core/input.zig");
 
 const r = @import("racer.zig");
 const rc = r.constants;

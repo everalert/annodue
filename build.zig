@@ -200,12 +200,6 @@ pub fn build(b: *std.Build) void {
     collision_viewer.linkLibCpp();
     collision_viewer.addCSourceFiles(&.{
         "src/collision_viewer/main.cpp",
-        "src/collision_viewer/imgui-d3d3/imgui.cpp",
-        "src/collision_viewer/imgui-d3d3/imgui_draw.cpp",
-        "src/collision_viewer/imgui-d3d3/imgui_tables.cpp",
-        "src/collision_viewer/imgui-d3d3/imgui_widgets.cpp",
-        "src/collision_viewer/imgui-d3d3/backends/imgui_impl_d3d.cpp",
-        "src/collision_viewer/imgui-d3d3/backends/imgui_impl_win32.cpp",
         "src/collision_viewer/detours-master/src/detours.cpp",
         "src/collision_viewer/detours-master/src/modules.cpp",
         "src/collision_viewer/detours-master/src/disasm.cpp",
@@ -247,7 +241,10 @@ pub fn build(b: *std.Build) void {
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
         if (std.mem.eql(u8, plugin.name, "collision_viewer"))
+        {
             dll.linkLibrary(collision_viewer);
+            dll.addIncludePath(.{ .path = "src/collision_viewer" });
+        }
 
         // TODO: investigate options arg
         var dll_install = b.addInstallArtifact(dll, .{});

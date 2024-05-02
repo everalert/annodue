@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <d3d.h>
 #include <ddraw.h>
-#include <shellscalingapi.h>
 
 // headers are from https://github.com/tim-tim707/SW_RACER_RE
 #define INCLUDE_DX_HEADERS
@@ -36,207 +35,13 @@ const auto rdVector_Cross3 = (void (*)(rdVector3* v1, const rdVector3* v2, const
 const auto rdMatrix_Copy44_34 = (void (*)(rdMatrix44* dest, const rdMatrix34* src))0x0044bad0;
 const auto rdMatrix_SetIdentity44 = (void (*)(rdMatrix44* mat))0x004313d0;
 
-#include "backends/imgui_impl_d3d.h"
-#include "backends/imgui_impl_win32.h"
-#include "imgui.h"
 #include "detours.h"
 #include "annodue_interface.h"
+#include "collision_viewer.h"
 
-static WNDPROC WndProcOrig;
-
-LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-LRESULT CALLBACK WndProc(HWND wnd, UINT code, WPARAM wparam, LPARAM lparam)
-{
-    if (ImGui_ImplWin32_WndProcHandler(wnd, code, wparam, lparam))
-        return 1;
-
-    return WndProcOrig(wnd, code, wparam, lparam);
-}
-
-static GlobalState* global_state = nullptr;
-static bool imgui_initialized = false;
-static bool show_imgui = false;
-
-struct CollisionViewerSettings
-{
-    bool show_visual_mesh = true;
-    float collision_mesh_opacity = 0.3;
-    float collision_mesh_brightness = 1.0;
-    float collision_line_opacity = 1.0;
-    float collision_line_brightness = 1.0;
-    bool depth_test = true;
-    bool cull_backfaces = true;
-
-    constexpr auto operator<=>(const CollisionViewerSettings&) const = default;
-};
-
-const static std::pair<const char*, CollisionViewerSettings> presets[]{
-    {
-        "transparent overlay",
-        CollisionViewerSettings{
-            .show_visual_mesh = true,
-            .collision_mesh_opacity = 0.3,
-            .collision_mesh_brightness = 1.0,
-            .collision_line_opacity = 1.0,
-            .collision_line_brightness = 1.0,
-            .depth_test = true,
-            .cull_backfaces = true,
-        },
-    },
-    {
-        "wireframe overlay",
-        CollisionViewerSettings{
-            .show_visual_mesh = true,
-            .collision_mesh_opacity = 0.0,
-            .collision_mesh_brightness = 1.0,
-            .collision_line_opacity = 1.0,
-            .collision_line_brightness = 1.0,
-            .depth_test = true,
-            .cull_backfaces = true,
-        },
-    },
-    {
-        "collision mesh only",
-        CollisionViewerSettings{
-            .show_visual_mesh = false,
-            .collision_mesh_opacity = 1.0,
-            .collision_mesh_brightness = 0.5,
-            .collision_line_opacity = 1.0,
-            .collision_line_brightness = 1.0,
-            .depth_test = true,
-            .cull_backfaces = true,
-        },
-    },
-    {
-        "transparent collision mesh only",
-        CollisionViewerSettings{
-            .show_visual_mesh = false,
-            .collision_mesh_opacity = 0.4,
-            .collision_mesh_brightness = 1.0,
-            .collision_line_opacity = 1.0,
-            .collision_line_brightness = 1.0,
-            .depth_test = false,
-            .cull_backfaces = false,
-        },
-    },
-};
-
-static bool enable_collision_viewer = false;
-static CollisionViewerSettings settings = presets[0].second;
-static float depth_bias = 0.1;
+static CollisionViewerState* global_state = nullptr;
 
 void render_collision_meshes();
-
-int stdDisplay_Update_Hook()
-{
-    if (!imgui_initialized && std3D_pD3Device)
-    {
-        imgui_initialized = true;
-        // Setup Dear ImGui context
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGuiIO& io = ImGui::GetIO();
-        (void)io;
-        // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-        // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-        // Setup Dear ImGui style
-        // ImGui::StyleColorsClassic();
-        ImGui::StyleColorsDark();
-
-        // Setup Platform/Renderer backends
-        const auto wnd = GetActiveWindow();
-        ImGui_ImplWin32_Init(wnd);
-        ImGui_ImplD3D_Init(std3D_pD3Device, (IDirectDrawSurface4*)stdDisplay_g_backBuffer.ddraw_surface);
-
-        const float scale = 1.0; // TODO
-
-        ImGui::GetIO().FontGlobalScale = scale;
-        ImGui::GetStyle().ScaleAllSizes(scale);
-
-        WndProcOrig = (WNDPROC)SetWindowLongA(wnd, GWL_WNDPROC, (LONG)WndProc);
-    }
-
-    if (imgui_initialized)
-    {
-        ImGui_ImplD3D_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
-
-        if (global_state && global_state->practice_mode)
-        {
-            if (global_state->in_race == GlobalState::ON)
-            {
-                if (ImGui::IsKeyPressed('7'))
-                    enable_collision_viewer ^= 1;
-
-                if (ImGui::IsKeyPressed('8'))
-                    settings.show_visual_mesh ^= 1;
-
-                if (ImGui::IsKeyPressed('9'))
-                    show_imgui ^= 1;
-            }
-
-            if (show_imgui)
-            {
-                while (ShowCursor(true) <= 0)
-                    ;
-
-                ImGui::Begin("Collision viewer");
-                ImGui::Checkbox("show collisions", &enable_collision_viewer);
-
-                auto it = std::find_if(std::begin(presets), std::end(presets), [&](const auto& preset) { return preset.second == settings; });
-                int current_preset = it - std::begin(presets);
-                int new_preset = current_preset;
-                bool preset_changed = ImGui::Combo(
-                    "Presets", &new_preset,
-                    [](void*, int index, const char** out) -> bool {
-                        *out = index == std::size(presets) ? "[modified preset]" : presets[index].first;
-                        return true;
-                    },
-                    nullptr, int(current_preset == std::size(presets) ? std::size(presets) + 1 : std::size(presets)));
-                if (new_preset != current_preset)
-                    settings = presets[new_preset].second;
-
-                ImGui::Checkbox("show visual mesh", &settings.show_visual_mesh);
-                ImGui::SliderFloat("collision mesh opacity", &settings.collision_mesh_opacity, 0, 1);
-                ImGui::SliderFloat("collision mesh brightness", &settings.collision_mesh_brightness, 0, 1);
-                ImGui::SliderFloat("collision line opacity", &settings.collision_line_opacity, 0, 1);
-                ImGui::SliderFloat("collision line brightness", &settings.collision_line_brightness, 0, 1);
-                ImGui::Checkbox("depth test", &settings.depth_test);
-                ImGui::Checkbox("cull backfaces", &settings.cull_backfaces);
-                ImGui::InputFloat("depth bias", &depth_bias);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Increase if collision mesh is hidden by visual mesh. Default is 0.1");
-                ImGui::End();
-            }
-        }
-        else
-        {
-            show_imgui = false;
-            enable_collision_viewer = false;
-        }
-
-        if (!show_imgui)
-        {
-            while (ShowCursor(false) > 0)
-                ;
-        }
-
-        // Rendering
-        ImGui::EndFrame();
-
-        if (std3D_pD3Device->BeginScene() >= 0)
-        {
-            ImGui::Render();
-            ImGui_ImplD3D_RenderDrawData(ImGui::GetDrawData());
-            std3D_pD3Device->EndScene();
-        }
-    }
-
-    return stdDisplay_Update();
-}
 
 void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat, const rdMatrix44& model_matrix)
 {
@@ -285,6 +90,8 @@ void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix4
 
     static std::vector<uint16_t> indices;
     indices.clear();
+
+    const auto& settings = global_state->settings;
 
     const Color line_color{
         uint8_t(color.b * settings.collision_line_brightness),
@@ -517,6 +324,7 @@ void render_collision_meshes()
     if (!root_node)
         return;
 
+    const auto& settings = global_state->settings;
     auto hang = (const swrObjHang*)swrEvent_GetItem('Hang', 0);
     const auto& track_info = g_aTrackInfos[hang->track_index];
     const uint32_t col_flags = 0x2 | (1 << (4 + track_info.PlanetTrackNumber));
@@ -582,7 +390,7 @@ void render_collision_meshes()
             { mirrored ? -t : t, 0, 0, 0 },
             { 0, t / a, 0, 0 },
             { 0, 0, -1, -1 },
-            { 0, 0, -1 - depth_bias, 0 },
+            { 0, 0, -1 - global_state->depth_bias, 0 },
         };
 
         std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_VIEW, (D3DMATRIX*)&view_mat_corrected.vA.x);
@@ -604,7 +412,7 @@ void render_collision_meshes()
 
 void swrModel_UnkDraw_Hook(int x)
 {
-    if (!enable_collision_viewer)
+    if (!global_state || !global_state->enabled)
     {
         swrModel_UnkDraw(x);
         return;
@@ -614,7 +422,7 @@ void swrModel_UnkDraw_Hook(int x)
     std::vector<swrModel_Node*> temp_children(root_node->child_nodes, root_node->child_nodes + root_node->num_children);
 
     // first render the terrain...
-    if (settings.show_visual_mesh)
+    if (global_state->settings.show_visual_mesh)
     {
         for (int i = 4; i < root_node->num_children; i++)
             root_node->child_nodes[i] = NULL;
@@ -639,11 +447,10 @@ void swrModel_UnkDraw_Hook(int x)
     std::copy(temp_children.begin(), temp_children.end(), root_node->child_nodes);
 }
 
-extern "C" void init_collision_viewer(GlobalState* global_state)
+extern "C" void init_collision_viewer(CollisionViewerState* global_state)
 {
     ::global_state = global_state;
     DetourTransactionBegin();
-    DetourAttach(&stdDisplay_Update, stdDisplay_Update_Hook);
     DetourAttach(&swrModel_UnkDraw, swrModel_UnkDraw_Hook);
     DetourTransactionCommit();
 }
@@ -651,7 +458,6 @@ extern "C" void init_collision_viewer(GlobalState* global_state)
 extern "C" void deinit_collision_viewer()
 {
     DetourTransactionBegin();
-    DetourDetach(&stdDisplay_Update, stdDisplay_Update_Hook);
     DetourDetach(&swrModel_UnkDraw, swrModel_UnkDraw_Hook);
     DetourTransactionCommit();
 }

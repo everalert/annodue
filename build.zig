@@ -88,7 +88,7 @@ pub fn build(b: *std.Build) void {
     const generate_safe_plugin_hash_file = b.addExecutable(.{
         .name = "generate_safe_plugin_hash_file",
         .root_source_file = .{ .path = "src/tools/generate_safe_plugin_hash_file.zig" },
-        .target = target,
+        .target = .{},
     });
     generate_safe_plugin_hash_file.addModule("zigwin32", zigwin32_m);
     generate_safe_plugin_hash_file.addModule("zzip", zzip_m);
@@ -128,7 +128,7 @@ pub fn build(b: *std.Build) void {
     const generate_release_zip_files = b.addExecutable(.{
         .name = "generate_release_zip_files",
         .root_source_file = .{ .path = "src/tools/generate_release_zip_files.zig" },
-        .target = target,
+        .target = .{},
     });
     generate_release_zip_files.addModule("zigwin32", zigwin32_m);
     generate_release_zip_files.addModule("zzip", zzip_m);

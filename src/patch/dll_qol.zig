@@ -703,6 +703,9 @@ export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         rt.DrawText(4, 120 + 8 * 5, "tst: {d}", .{QuickRaceMenu.FpsTimer.test_tstart}, null, null) catch {};
         rt.DrawText(4, 120 + 8 * 6, "tsl: {d}", .{QuickRaceMenu.FpsTimer.test_tsleep}, null, null) catch {};
         rt.DrawText(4, 120 + 8 * 7, "tsp: {d}", .{QuickRaceMenu.FpsTimer.test_tspin}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 9, "ast: {d}", .{QuickRaceMenu.FpsTimer.ts_start}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 10, "anw: {d}", .{QuickRaceMenu.FpsTimer.ts_now}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 8, "age: {d:0>6.1}", .{QuickRaceMenu.FpsTimer.ts_dur}, null, null) catch {};
     }
 }
 

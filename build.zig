@@ -200,15 +200,7 @@ pub fn build(b: *std.Build) void {
     collision_viewer.linkLibCpp();
     collision_viewer.addCSourceFiles(&.{
         "src/collision_viewer/main.cpp",
-        "src/collision_viewer/detours-master/src/detours.cpp",
-        "src/collision_viewer/detours-master/src/modules.cpp",
-        "src/collision_viewer/detours-master/src/disasm.cpp",
-        "src/collision_viewer/detours-master/src/image.cpp",
-        "src/collision_viewer/detours-master/src/creatwth.cpp",
-        "src/collision_viewer/detours-master/src/disolx86.cpp",
     }, &.{"-std=c++20"});
-    collision_viewer.addIncludePath(.{ .path = "src/collision_viewer/imgui-d3d3/" });
-    collision_viewer.addIncludePath(.{ .path = "src/collision_viewer/detours-master/include" });
     collision_viewer.linkSystemLibrary("Dwmapi");
     collision_viewer.linkSystemLibrary("gdi32");
 

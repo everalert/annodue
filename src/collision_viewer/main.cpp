@@ -35,8 +35,6 @@ const auto rdVector_Cross3 = (void (*)(rdVector3* v1, const rdVector3* v2, const
 const auto rdMatrix_Copy44_34 = (void (*)(rdMatrix44* dest, const rdMatrix34* src))0x0044bad0;
 const auto rdMatrix_SetIdentity44 = (void (*)(rdMatrix44* mat))0x004313d0;
 
-#include "detours.h"
-#include "annodue_interface.h"
 #include "collision_viewer.h"
 
 static CollisionViewerState* global_state = nullptr;
@@ -447,17 +445,59 @@ void swrModel_UnkDraw_Hook(int x)
     std::copy(temp_children.begin(), temp_children.end(), root_node->child_nodes);
 }
 
+void detour_attach(void** pPointer, void* pDetour, int num_bytes_to_copy)
+{
+    if (num_bytes_to_copy < 5)
+        abort();
+
+    uint8_t* original_address = (uint8_t*)*pPointer;
+    uint8_t* new_address = (uint8_t*)pDetour;
+    DWORD old_protect;
+    VirtualProtect(original_address, num_bytes_to_copy, PAGE_EXECUTE_READWRITE, &old_protect);
+
+    int32_t offset = new_address - (original_address + 5);
+
+    uint8_t* patch_memory = (uint8_t*)VirtualAlloc(nullptr, num_bytes_to_copy + 5, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    memcpy(patch_memory, original_address, num_bytes_to_copy);
+
+    original_address[0] = 0xe9;
+    memcpy(original_address+1, &offset, 4);
+
+    int32_t patch_offset = (original_address+num_bytes_to_copy) - (patch_memory+num_bytes_to_copy+5);
+
+    patch_memory[num_bytes_to_copy] = 0xe9;
+    memcpy(patch_memory+num_bytes_to_copy+1, &patch_offset, 4);
+
+    *pPointer = patch_memory;
+}
+
+void detour_detach(void** pPointer, void* pDetour, int num_bytes_to_copy)
+{
+    if (num_bytes_to_copy < 5)
+        abort();
+
+    uint8_t* patch_memory = (uint8_t*)*pPointer;
+
+    uint32_t patch_offset;
+    memcpy(&patch_offset, patch_memory + num_bytes_to_copy + 1, 4);
+    uint8_t* original_address = patch_offset + (patch_memory+num_bytes_to_copy+5) - num_bytes_to_copy;
+
+    memcpy(original_address, patch_memory, num_bytes_to_copy);
+    VirtualFree(patch_memory, num_bytes_to_copy + 5, MEM_RELEASE);
+
+    DWORD old_protect;
+    VirtualProtect(original_address, num_bytes_to_copy, PAGE_EXECUTE_READ, &old_protect);
+
+    *pPointer = original_address;
+}
+
 extern "C" void init_collision_viewer(CollisionViewerState* global_state)
 {
     ::global_state = global_state;
-    DetourTransactionBegin();
-    DetourAttach(&swrModel_UnkDraw, swrModel_UnkDraw_Hook);
-    DetourTransactionCommit();
+    detour_attach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
 }
 
 extern "C" void deinit_collision_viewer()
 {
-    DetourTransactionBegin();
-    DetourDetach(&swrModel_UnkDraw, swrModel_UnkDraw_Hook);
-    DetourTransactionCommit();
+    detour_detach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
 }

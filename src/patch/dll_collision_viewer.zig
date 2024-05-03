@@ -42,11 +42,8 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
-var input_enable_data = ButtonInputMap{ .kb = .@"7", .xi = null };
+var input_enable_data = ButtonInputMap{ .kb = .@"8", .xi = null };
 var input_enable = input_enable_data.inputMap();
-
-var input_show_visual_mesh_data = ButtonInputMap{ .kb = .@"8", .xi = null };
-var input_show_visual_mesh = input_show_visual_mesh_data.inputMap();
 
 var input_pause_data = ButtonInputMap{ .kb = .@"9", .xi = null };
 var input_pause = input_pause_data.inputMap();
@@ -105,8 +102,10 @@ const preset_names = [_][*:0]const u8{
 
 var state: CollisionViewerState = .{
     .enabled = false,
+    .show_collision_mesh = true,
     .settings = presets[0],
     .depth_bias = 0.1,
+    .show_spline = false,
 };
 var preset_index : i32 = 0;
 
@@ -197,8 +196,10 @@ const QuickRaceMenu = extern struct {
     };
 
     var QuickRaceMenuItems = [_]mi.MenuItem{
-        mi.MenuItemToggle(&QuickRaceMenu.item_enabled.input_converted, "Enable collision viewer"),
+        mi.MenuItemToggle(&QuickRaceMenu.item_enabled.input_converted, "Enable viewer"),
+        mi.MenuItemToggle(&QuickRaceMenu.item_show_collision_mesh.input_converted, "Show collision mesh"),
         mi.MenuItemToggle(&QuickRaceMenu.item_show_visual_mesh.input_converted, "Show visual mesh"),
+        mi.MenuItemToggle(&QuickRaceMenu.item_show_spline.input_converted, "Show spline"),
         mi.MenuItemList(&preset_index, "Preset", &preset_names, false),
         mi.MenuItemSpacer(),
         mi.MenuItemRange(&QuickRaceMenu.item_mesh_opacity.input_converted, "Collision mesh opacity", 0, 100, false),
@@ -213,6 +214,7 @@ const QuickRaceMenu = extern struct {
     };
 
     var item_enabled = ConvertedMenuItem{ .input_bool = &state.enabled };
+    var item_show_collision_mesh = ConvertedMenuItem{ .input_bool = &state.show_collision_mesh };
     var item_show_visual_mesh = ConvertedMenuItem{ .input_bool = &state.settings.show_visual_mesh };
     var item_mesh_opacity = ConvertedMenuItem{ .input_float = &state.settings.collision_mesh_opacity };
     var item_mesh_brightness = ConvertedMenuItem{ .input_float = &state.settings.collision_mesh_brightness };
@@ -221,9 +223,11 @@ const QuickRaceMenu = extern struct {
     var item_depth_test = ConvertedMenuItem{ .input_bool = &state.settings.depth_test };
     var item_cull_backfaces = ConvertedMenuItem{ .input_bool = &state.settings.cull_backfaces };
     var item_depth_bias = ConvertedMenuItem{ .input_float = &state.depth_bias };
+    var item_show_spline = ConvertedMenuItem{ .input_bool = &state.show_spline };
 
     var all_items = [_]*ConvertedMenuItem{
         &item_enabled,
+        &item_show_collision_mesh,
         &item_show_visual_mesh,
         &item_mesh_opacity,
         &item_mesh_brightness,
@@ -232,6 +236,7 @@ const QuickRaceMenu = extern struct {
         &item_depth_test,
         &item_cull_backfaces,
         &item_depth_bias,
+        &item_show_spline,
     };
 
     fn init() void {
@@ -263,9 +268,6 @@ const QuickRaceMenu = extern struct {
 
         if (input_enable.gets() == .JustOn)
             state.enabled = !state.enabled;
-
-        if (input_show_visual_mesh.gets() == .JustOn)
-            state.settings.show_visual_mesh = !state.settings.show_visual_mesh;
 
         if (input_pause.gets() == .JustOn) {
             if (menu_active) close() else open();
@@ -340,7 +342,6 @@ export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     input_enable.update(gf);
-    input_show_visual_mesh.update(gf);
     input_pause.update(gf);
     QuickRaceMenu.update_input();
 }

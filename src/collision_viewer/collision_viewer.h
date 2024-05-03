@@ -16,6 +16,8 @@ typedef struct CollisionViewerSettings
 typedef struct CollisionViewerState
 {
     bool enabled;
+    bool show_collision_mesh;
     CollisionViewerSettings settings;
     float depth_bias;
+    bool show_spline;
 } CollisionViewerState;

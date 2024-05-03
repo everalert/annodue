@@ -731,7 +731,7 @@ extern "C"
         void* unk20;
         void* unk24;
         struct swrModel_unk* unk28_model;
-        int unk2c_spline;
+        struct swrSpline* spline;
         int unk30;
         int unk34;
         float unk38;
@@ -3113,6 +3113,33 @@ extern "C"
         uint8_t unkb;
     } TrackInfo; // sizeof(0xc)
 
+    typedef struct swrSplineControlPoint
+    {
+        uint16_t next_count;
+        uint16_t prev_count;
+        uint16_t next1;
+        uint16_t next2;
+        uint16_t prev1;
+        uint16_t prev2;
+        uint16_t prev3;
+        uint16_t prev4;
+        rdVector3 position;
+        rdVector3 rotation;
+        rdVector3 handle1;
+        rdVector3 handle2;
+        uint16_t progress;
+        uint16_t unk_set[8];
+        uint16_t unk;
+    } swrSplineControlPoint;
+
+    typedef struct swrSpline
+    {
+        uint16_t unk0;
+        uint16_t unk1;
+        uint32_t num_control_points;
+        uint32_t num_segments;
+        swrSplineControlPoint* contrl_points;
+    } swrSpline;
 #ifdef __cplusplus
 }
 #endif

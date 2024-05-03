@@ -5,6 +5,7 @@
 #include <cmath>
 #include <format>
 #include <bit>
+#include <map>
 #include <optional>
 #include <algorithm>
 #include <d3d.h>
@@ -12,6 +13,7 @@
 
 // headers are from https://github.com/tim-tim707/SW_RACER_RE
 #define INCLUDE_DX_HEADERS
+
 #include "types.h"
 #include "globals.h"
 
@@ -22,8 +24,8 @@ auto swrModel_UnkDraw = (void (*)(int x))0x00483A90; // <-- will be hooked
 const auto swrModel_NodeGetTransform = (void (*)(const swrModel_NodeTransformed* node, rdMatrix44* matrix))0x004316A0;
 const auto swrEvent_GetItem = (void* (*)(int event, int index))0x00450b30;
 const auto std3D_SetRenderState = (void (*)(Std3DRenderState rdflags))0x0048a450;
-const auto stdDisplay_BackBufferFill = (void(*)(unsigned int r, unsigned int b, unsigned int g, LECRECT* lpRect))0x00489cd0;
-const auto rdCache_Flush = (void(*)(void))0x0048dce0;
+const auto stdDisplay_BackBufferFill = (void (*)(unsigned int r, unsigned int b, unsigned int g, LECRECT* lpRect))0x00489cd0;
+const auto rdCache_Flush = (void (*)(void))0x0048dce0;
 
 // math functions, not strictly needed, it would be better to reimplement them for performance reasons.
 const auto rdMatrix_Multiply44 = (void (*)(rdMatrix44* out, const rdMatrix44* mat1, const rdMatrix44* mat2))0x0042fb70;
@@ -41,20 +43,20 @@ static CollisionViewerState* global_state = nullptr;
 
 void render_collision_meshes();
 
+struct Color
+{
+    uint8_t b, g, r, a = 255;
+};
+struct D3DVertex
+{
+    float x, y, z;
+    Color c;
+};
+
 void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat, const rdMatrix44& model_matrix)
 {
     if (!mesh->collision_vertices)
         return;
-
-    struct Color
-    {
-        uint8_t b, g, r, a = 255;
-    };
-    struct D3DVertex
-    {
-        float x, y, z;
-        Color c;
-    };
 
     uint32_t vehicle_reaction_bitset = mesh->mapping ? mesh->mapping->vehicle_reaction : 0;
 
@@ -313,6 +315,86 @@ void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, b
     }
 }
 
+void render_spline()
+{
+    auto hang = (const swrObjHang*)swrEvent_GetItem('Hang', 0);
+    if (!hang)
+        return;
+
+    auto judge = (const swrObjJdge*)swrEvent_GetItem('Jdge', 0);
+    if (!judge)
+        return;
+
+    const swrSpline* spline = judge->spline;
+    if (!spline)
+        return;
+
+    int track_index = hang->track_index;
+
+    struct PrecomputedSpline
+    {
+        std::vector<std::vector<D3DVertex>> segments;
+    };
+    static std::map<int, PrecomputedSpline> precomputed_splines;
+    if (!precomputed_splines.contains(track_index))
+    {
+        PrecomputedSpline precomputed_spline;
+        auto draw_cubic_bezier = [&](const rdVector3& p0, const rdVector3& p1, const rdVector3& p2, const rdVector3& p3) {
+            const rdMatrix44 P{ p0.x, p1.x, p2.x, p3.x, p0.y, p1.y, p2.y, p3.y, p0.z, p1.z, p2.z, p3.z, 0, 0, 0, 0 };
+            const rdMatrix44 bezier_matrix{ 1, -3, 3, -1, 0, 3, -6, 3, 0, 0, 3, -3, 0, 0, 0, 1 };
+
+            rdMatrix44 r;
+            rdMatrix_Multiply44(&r, &P, &bezier_matrix);
+
+            const int BEZIER_RESOLUTION = 50;
+            std::vector<D3DVertex> vertices(BEZIER_RESOLUTION);
+            for (int k = 0; k < BEZIER_RESOLUTION; k++)
+            {
+                float t = k / float(BEZIER_RESOLUTION - 1);
+                const rdVector3 p{
+                    r.vA.x * 1 + r.vA.y * t + r.vA.z * t * t + r.vA.w * t * t * t,
+                    r.vB.x * 1 + r.vB.y * t + r.vB.z * t * t + r.vB.w * t * t * t,
+                    r.vC.x * 1 + r.vC.y * t + r.vC.z * t * t + r.vC.w * t * t * t,
+                };
+                vertices[k] = {
+                    p.x,
+                    p.y,
+                    p.z,
+                    Color{ 255, 255, 255, 255 },
+                };
+            }
+
+            precomputed_spline.segments.emplace_back(std::move(vertices));
+        };
+
+        for (int i = 0; i < spline->num_control_points; i++)
+        {
+            const auto& point = spline->contrl_points[i];
+            for (int j = 0; j < point.next_count; j++)
+            {
+                const auto& next = spline->contrl_points[(&point.next1)[j]];
+
+                const auto& p0 = point.position;
+                const auto& p1 = point.handle2;
+                const auto& p2 = next.handle1;
+                const auto& p3 = next.position;
+                draw_cubic_bezier(p0, p1, p2, p3);
+            }
+        }
+
+        precomputed_splines.emplace(track_index, std::move(precomputed_spline));
+    }
+
+    const auto& segments = precomputed_splines.at(track_index).segments;
+
+    rdMatrix44 model_mat;
+    rdMatrix_SetIdentity44(&model_mat);
+    std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_mat.vA.x);
+
+    for (const auto& vertices : segments)
+        std3D_pD3Device->DrawPrimitive(D3DPT_LINESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, (void*)vertices.data(), vertices.size(), 0);
+}
+
 void render_collision_meshes()
 {
     if (!std3D_pD3Device || !rdCamera_pCurCamera)
@@ -394,7 +476,12 @@ void render_collision_meshes()
         std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_VIEW, (D3DMATRIX*)&view_mat_corrected.vA.x);
         std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_PROJECTION, (D3DMATRIX*)&proj_mat.vA.x);
 
-        debug_render_node(swrModel_unk_array[0], root_node->child_nodes[3], mirrored, proj_mat, view_mat_corrected, model_mat, col_flags);
+        if (global_state->show_collision_mesh)
+            debug_render_node(swrModel_unk_array[0], root_node->child_nodes[3], mirrored, proj_mat, view_mat_corrected, model_mat, col_flags);
+
+        if (global_state->show_spline)
+            render_spline();
+
         std3D_pD3Device->EndScene();
     }
     std3D_pD3Device->SetCurrentViewport(backup_viewport);
@@ -461,12 +548,12 @@ void detour_attach(void** pPointer, void* pDetour, int num_bytes_to_copy)
     memcpy(patch_memory, original_address, num_bytes_to_copy);
 
     original_address[0] = 0xe9;
-    memcpy(original_address+1, &offset, 4);
+    memcpy(original_address + 1, &offset, 4);
 
-    int32_t patch_offset = (original_address+num_bytes_to_copy) - (patch_memory+num_bytes_to_copy+5);
+    int32_t patch_offset = (original_address + num_bytes_to_copy) - (patch_memory + num_bytes_to_copy + 5);
 
     patch_memory[num_bytes_to_copy] = 0xe9;
-    memcpy(patch_memory+num_bytes_to_copy+1, &patch_offset, 4);
+    memcpy(patch_memory + num_bytes_to_copy + 1, &patch_offset, 4);
 
     *pPointer = patch_memory;
 }
@@ -480,7 +567,7 @@ void detour_detach(void** pPointer, void* pDetour, int num_bytes_to_copy)
 
     uint32_t patch_offset;
     memcpy(&patch_offset, patch_memory + num_bytes_to_copy + 1, 4);
-    uint8_t* original_address = patch_offset + (patch_memory+num_bytes_to_copy+5) - num_bytes_to_copy;
+    uint8_t* original_address = patch_offset + (patch_memory + num_bytes_to_copy + 5) - num_bytes_to_copy;
 
     memcpy(original_address, patch_memory, num_bytes_to_copy);
     VirtualFree(patch_memory, num_bytes_to_copy + 5, MEM_RELEASE);

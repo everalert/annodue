@@ -695,17 +695,17 @@ export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (player_ok and gui_on and QolState.fps_limiter) {
         QuickRaceMenu.FpsTimer.Sleep();
         // FIXME: remove, just for debugging droopy lag; or, convert to 'debug view' idea
-        rt.DrawText(4, 120 + 8 * 0, "exc: {d}", .{QuickRaceMenu.FpsTimer.step_excess}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 1, "per: {d}", .{QuickRaceMenu.FpsTimer.period}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 2, "stp: {d}", .{QuickRaceMenu.FpsTimer.timer_step}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 3, "sns: {d}", .{QuickRaceMenu.FpsTimer.timer_step_ns}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 4, "scp: {d}", .{QuickRaceMenu.FpsTimer.timer_step_cmp}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 5, "tst: {d}", .{QuickRaceMenu.FpsTimer.test_tstart}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 6, "tsl: {d}", .{QuickRaceMenu.FpsTimer.test_tsleep}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 7, "tsp: {d}", .{QuickRaceMenu.FpsTimer.test_tspin}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 9, "ast: {d}", .{QuickRaceMenu.FpsTimer.ts_start}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 10, "anw: {d}", .{QuickRaceMenu.FpsTimer.ts_now}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 8, "age: {d:0>6.1}", .{QuickRaceMenu.FpsTimer.ts_dur}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 0, "stp: {d}", .{QuickRaceMenu.FpsTimer.timer_step}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 1, "sns: {d}", .{QuickRaceMenu.FpsTimer.timer_step_ns}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 2, "scp: {d}", .{QuickRaceMenu.FpsTimer.timer_step_cmp}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 3, "tst: {d}", .{QuickRaceMenu.FpsTimer.test_tstart}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 4, "tsl: {d}", .{QuickRaceMenu.FpsTimer.test_tsleep}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 5, "tsp: {d}", .{QuickRaceMenu.FpsTimer.test_tspin}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 6, "per: {d}", .{QuickRaceMenu.FpsTimer.period}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 7, "exc: {d}", .{QuickRaceMenu.FpsTimer.step_excess}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 8, "ast: {d}", .{QuickRaceMenu.FpsTimer.ts_start}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 9, "anw: {d}", .{QuickRaceMenu.FpsTimer.ts_now}, null, null) catch {};
+        rt.DrawText(4, 120 + 8 * 10, "age: {d:0>6.1}", .{QuickRaceMenu.FpsTimer.ts_dur}, null, null) catch {};
     }
 }
 

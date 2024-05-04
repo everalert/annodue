@@ -42,7 +42,6 @@ pub const TimeSpinlock = struct {
         self.timer_step_ns = self.timer_step * std.time.ns_per_ms; // convert to ns
         self.timer_step_cmp = self.timer_step_ns * 2; // add wiggle room
         self.timer = std.time.Timer.start() catch return;
-        self.ts_start = @import("racer_const.zig").TIME_TIMESTAMP.*;
 
         self.initialized = true;
     }
@@ -59,6 +58,7 @@ pub const TimeSpinlock = struct {
     // TODO: still need to figure out why the f this runs even in menus for droopy
     pub fn Sleep(self: *TimeSpinlock) void {
         self.Start();
+        if (self.ts_start == 0) self.ts_start = @import("racer_const.zig").TIME_TIMESTAMP.*;
 
         self.ts_now = @import("racer_const.zig").TIME_TIMESTAMP.*;
         self.ts_dur = @as(f32, @floatFromInt(self.ts_now - self.ts_start)) / 1000;

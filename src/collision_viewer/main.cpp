@@ -413,22 +413,21 @@ void render_collision_meshes()
     IDirect3DViewport3* backup_viewport;
     std3D_pD3Device->GetCurrentViewport(&backup_viewport);
 
-    IDirect3DViewport3* viewport;
-    std3D_pDirect3D->CreateViewport(&viewport, nullptr);
-
-    // Setup viewport
+    // Setup viewport, copy the current viewport to retrieve the correct resolution from it
     D3DVIEWPORT2 vp{};
     vp.dwSize = sizeof(D3DVIEWPORT2);
-    vp.dwX = 0;
-    vp.dwY = 0;
-    vp.dwWidth = screen_width;
-    vp.dwHeight = screen_height;
+    backup_viewport->GetViewport2(&vp);
+
+    // fix clip space
     vp.dvMinZ = -1.0f;
     vp.dvMaxZ = 1.0f;
     vp.dvClipX = -1;
     vp.dvClipY = 1;
     vp.dvClipWidth = 2;
     vp.dvClipHeight = 2;
+
+    IDirect3DViewport3* viewport;
+    std3D_pDirect3D->CreateViewport(&viewport, nullptr);
 
     std3D_pD3Device->AddViewport(viewport);
     viewport->SetViewport2(&vp);

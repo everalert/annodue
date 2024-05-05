@@ -782,3 +782,7 @@ export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         }
     }
 }
+
+export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    rc.TEXT_HIRES_FLAG.* = 0;
+}

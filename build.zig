@@ -124,11 +124,7 @@ pub fn build(b: *std.Build) void {
         "src/dinput/dinput.c",
     }, &.{});
 
-    var dinput_dll_release = b.addInstallArtifact(dinput_dll, .{
-        .dest_dir = .{ .override = .{ .custom = "release" } },
-        .pdb_dir = .disabled,
-        .implib_dir = .disabled,
-    });
+    var dinput_dll_release = b.addInstallArtifact(dinput_dll, .{});
 
     // NOTE: minver checks fail if not specified
     const release_ver = b.option([]const u8, "ver", "release version") orelse "0.0.0";
@@ -147,7 +143,7 @@ pub fn build(b: *std.Build) void {
         const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
         generate_release_zip_files_run.addArg(arg_z_ip);
 
-        const arg_z_dp = std.fmt.allocPrint(alloc, "-D{s}", .{dinput_dll.out_filename}) catch unreachable;
+        const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{b.lib_dir}) catch unreachable;
         generate_release_zip_files_run.addArg(arg_z_dp);
 
         const arg_z_op_path = b.build_root.handle.realpathAlloc(alloc, "./.release") catch unreachable;

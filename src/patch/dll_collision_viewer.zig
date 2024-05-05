@@ -54,7 +54,7 @@ const c = @cImport({
 const CollisionViewerSettings = c.CollisionViewerSettings;
 const CollisionViewerState = c.CollisionViewerState;
 
-const presets: [4]CollisionViewerSettings = .{
+var presets: [5]CollisionViewerSettings = .{
     .{
         .show_visual_mesh = true,
         .collision_mesh_opacity = 0.3,
@@ -91,23 +91,40 @@ const presets: [4]CollisionViewerSettings = .{
         .depth_test = false,
         .cull_backfaces = false,
     },
+    .{
+        .show_visual_mesh = false,
+        .collision_mesh_opacity = 0.2,
+        .collision_mesh_brightness = 1.0,
+        .collision_line_opacity = 1.0,
+        .collision_line_brightness = 1.0,
+        .depth_test = false,
+        .cull_backfaces = false,
+    },
 };
 const preset_names = [_][*:0]const u8{
     "transparent overlay",
     "wireframe overlay",
     "collision mesh only",
     "transparent collision mesh only",
-    "[modified]",
+    "[custom]",
 };
 
 var state: CollisionViewerState = .{
     .enabled = false,
     .show_collision_mesh = true,
-    .settings = presets[0],
+    .settings = .{
+        .show_visual_mesh = true,
+        .collision_mesh_opacity = 0.3,
+        .collision_mesh_brightness = 1.0,
+        .collision_line_opacity = 1.0,
+        .collision_line_brightness = 1.0,
+        .depth_test = true,
+        .cull_backfaces = true,
+    },
     .depth_bias = 0.1,
     .show_spline = false,
 };
-var preset_index : i32 = 0;
+var preset_index: i32 = 0;
 
 // QUICK RACE MENU
 
@@ -209,7 +226,6 @@ const QuickRaceMenu = extern struct {
         mi.MenuItemSpacer(),
         mi.MenuItemToggle(&QuickRaceMenu.item_depth_test.input_converted, "Depth test"),
         mi.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces"),
-        mi.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces"),
         mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", 0, 100, false),
     };
 
@@ -274,12 +290,16 @@ const QuickRaceMenu = extern struct {
         }
 
         if (menu_active) {
-            var current_preset : i32 = @intCast(presets.len);
-            for (presets, 0..) |preset, index| {
-                if (std.meta.eql(preset,state.settings))
+            var current_preset: i32 = -1;
+
+            for (presets[0..presets.len-1], 0..) |preset, index| {
+                if (std.meta.eql(preset, state.settings))
                     current_preset = @intCast(index);
             }
-            // QuickRaceMenuItems[2].max = 1; // if (current_preset == presets.len) presets.len+1 else presets.len;
+            if (current_preset == -1) {
+                presets[presets.len-1] = state.settings;
+                current_preset = @intCast(presets.len-1);
+            }
 
             preset_index = current_preset;
 

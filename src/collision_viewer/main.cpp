@@ -360,7 +360,7 @@ void render_spline()
                     p.x,
                     p.y,
                     p.z,
-                    Color{ 255, 255, 255, 255 },
+                    Color{ 0, 255, 0, 255 },
                 };
             }
 

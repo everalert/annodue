@@ -143,6 +143,9 @@ const PluginExportFn = enum(u32) {
     MenuTrackB,
     MenuCantinaEntryB,
     TextRenderB,
+    TextRenderA,
+    MapRenderB,
+    MapRenderA,
 };
 
 const PluginState = struct {
@@ -542,5 +545,21 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn HookTextRender(memory: usize) usize {
-    return hook.intercept_call(memory, 0x483F8B, null, PluginFnCallback(.TextRenderB));
+    // NOTE: 0x483F8B calls ProcessQueue1, only usable with after-fn when using intercept_call()
+    var off = memory;
+    // FlushQueue1
+    off = hook.intercept_call(
+        off,
+        0x450297,
+        PluginFnCallback(.TextRenderB),
+        PluginFnCallback(.TextRenderA),
+    );
+    // FlushMapQueue
+    off = hook.intercept_call(
+        off,
+        0x45029C,
+        PluginFnCallback(.MapRenderB),
+        PluginFnCallback(.MapRenderA),
+    );
+    return off;
 }

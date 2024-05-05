@@ -542,5 +542,8 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn HookTextRender(memory: usize) usize {
-    return hook.intercept_call(memory, 0x483F8B, null, PluginFnCallback(.TextRenderB));
+    // NOTE: 0x483F8B calls ProcessQueue1, only usable with after-fn when using intercept_call()
+    var off = memory;
+    off = hook.intercept_call(off, 0x450297, PluginFnCallback(.TextRenderB), null); // FlushQueue1
+    return off;
 }

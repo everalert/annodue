@@ -166,6 +166,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     updateApplyFromNetwork(alloc, &update) catch return;
 
     // -> notify user to restart game
+    _ = w32wm.ShowCursor(1); // cursor fix
     msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{update.tag.?});
     _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
 }

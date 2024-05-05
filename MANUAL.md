@@ -39,6 +39,7 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Double mouse cursor fix
 	- Jinn Reeso and Cy Yunga cheat toggling
 	- Cy Yunga cheat audio fix
+	- Map rendering hi-res text fix
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer
 - Cosmetic
@@ -136,6 +137,7 @@ Configured under `[overlay]`
 - Fix double mouse cursor
 - Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Fix Cy Yunga cheat audio
+- Fix map rendering hi-res text
 - Map controller `Start` to `Esc`
 - Race restart hotkey -- `F1 + Esc` or `Back + Start`
 - Quick Race Menu

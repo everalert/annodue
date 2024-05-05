@@ -40,6 +40,7 @@ pub const panic = debug.annodue_panic;
 // - fix: toggle Jinn Reeso with cheat, instead of only enabling
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - fix: bugfix Cy Yunga cheat having no audio
+// - fix: bugfix map rendering not accounting for hi-res flag
 // - feat: quick restart
 //     - CONTROLS:          F1+Esc          Back+Start
 // - feat: quick race menu

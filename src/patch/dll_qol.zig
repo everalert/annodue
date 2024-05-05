@@ -497,7 +497,8 @@ const QuickRaceMenu = extern struct {
         r.WriteEntityValue(.Hang, 0, 0x5E, u8, rc.TrackCircuitIdMap[@intCast(values.track)]);
         r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
         r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps)));
-        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // also: 0x50C558
+        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // for race reset
+        _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
         r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
         //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
         const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });

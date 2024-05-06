@@ -69,7 +69,7 @@ export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
         const lap_times: []const f32 = race_times[0..5];
 
-        if (gs.player.in_race_racing.on()) {
+        if (gs.race_state == .Racing) {
             // draw heat timer
             const heat_s: f32 = gs.player.heat / gs.player.heat_rate;
             const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;

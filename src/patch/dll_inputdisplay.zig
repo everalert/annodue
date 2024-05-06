@@ -353,12 +353,9 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     InputDisplay.HandleSettings(gf);
-    if (gs.in_race.on() and
-        !gs.player.in_race_results.on() and
-        InputDisplay.enable)
-    {
+
+    if ((gs.race_state == .Countdown or gs.race_state == .Racing) and InputDisplay.enable)
         InputDisplay.Init();
-    }
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
@@ -387,7 +384,7 @@ export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         if (InputDisplay.enable and
             InputDisplay.initialized and
             mem.read(rc.ADDR_PAUSE_STATE, u8) != 1 and
-            !gs.player.in_race_results.on())
+            (gs.race_state == .Countdown or gs.race_state == .Racing))
         {
             const a: f32 = 1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
             InputDisplay.ReadInputs();

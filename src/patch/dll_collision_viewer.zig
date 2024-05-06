@@ -269,7 +269,6 @@ const QuickRaceMenu = extern struct {
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
         menu_active = false;
     }
 

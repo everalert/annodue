@@ -102,3 +102,25 @@ pub fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         mode_vis.update(true, @truncate(color >> 16), @truncate(color >> 8), @truncate(color >> 0));
     }
 }
+
+//if (!s.prac.get("practice_tool_enable", bool)) return;
+// FIXME: investigate past usage of practice tool ini setting; may need to adjust
+// some things, primarily to do with lifecycle, because the past setting assumed
+// it would be on permanently. also, do a pass on everything to integrate/migrate
+// to global practice_mode.
+pub fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    //const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
+    const toggle_input: bool = gf.InputGetKb(.P, .JustOn);
+
+    // TODO: convert gs.practice_mode to ActiveState
+    // TODO: queue toggling off for next reset from in race
+    // TODO: disable toggling in race results screen
+    if (toggle_input and
+        ((gs.in_race_state == .None or gs.in_race_state == .PreRace) or
+        !gs.practice_mode))
+    {
+        gs.practice_mode = !gs.practice_mode;
+        const text: [:0]const u8 = if (gs.practice_mode) "Practice Mode Enabled" else "Practice Mode Disabled";
+        _ = gf.ToastNew(text, rt.ColorRGB.Yellow.rgba(0));
+    }
+}

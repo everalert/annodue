@@ -53,11 +53,13 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable; // comptime
 };
 
-pub const PLUGIN_VERSION = 17;
+pub const PLUGIN_VERSION = 18;
 
 // STATE
 
-const GLOBAL_STATE_VERSION = 3;
+const InRaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, LoadingCantina };
+
+const GLOBAL_STATE_VERSION = 4;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -85,6 +87,9 @@ pub const GlobalState = extern struct {
     framecount: u32 = 0,
 
     in_race: st.ActiveState = .Off,
+    in_race_state: InRaceState = .None,
+    in_race_state_prev: InRaceState = .None,
+    in_race_state_new: bool = false,
     player: extern struct {
         upgrades: bool = false,
         upgrades_lv: [7]u8 = undefined,
@@ -208,25 +213,30 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
 
-pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    // TODO: move to identifying in-race mode via player Test entity ptr being set; get rid of gs.in_race.on()s
-    // TODO: enum indicating state of in-race mode (none, pre-race, countdown, racing, post-race)
-    gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
+pub fn EarlyEngineUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    // TODO: update all the plugins etc. doing extra checks for this
+    const player_test_set: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
+        r.ReadRaceDataValue(0x84, u32) != 0;
+    gs.in_race.update(player_test_set);
+
+    // TODO: remove gs.player.in_race_count etc. and cleanup aftermath
+    gs.in_race_state_prev = gs.in_race_state;
+    gs.in_race_state = blk: {
+        if (!gs.in_race.on()) break :blk .None;
+        if (mem.read(rc.ADDR_IN_RACE, u8) == 0) break :blk .PreRace;
+        const flags = r.ReadPlayerValue(0x60, u32);
+        const countdown: bool = flags & (1 << 0) != 0;
+        if (countdown) break :blk .Countdown;
+        const postrace: bool = flags & (1 << 5) == 0;
+        const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
+        if (postrace and show_stats) break :blk .PostRace;
+        if (postrace) break :blk .LoadingCantina;
+        break :blk .Racing;
+    };
+    gs.in_race_state_new = gs.in_race_state == gs.in_race_state_prev;
+
     if (gs.in_race == .JustOn) gs.player_reset();
     if (gs.in_race.on()) gs.player_update();
-
-    //if (!s.prac.get("practice_tool_enable", bool)) return;
-    // FIXME: investigate past usage of practice tool ini setting; may need to adjust
-    // some things, primarily to do with lifecycle, because the past setting assumed
-    // it would be on permanently. also, do a pass on everything to integrate/migrate
-    // to global practice_mode.
-    // FIXME: move to Practice when practice stuff moved to core
-    // TODO: ability to toggle off practice mode if still in pre-countdown
-    if (input.get_kb_pressed(.P) and (!(gs.in_race.on() and gs.practice_mode))) {
-        gs.practice_mode = !gs.practice_mode;
-        const text: [:0]const u8 = if (gs.practice_mode) "Practice Mode Enabled" else "Practice Mode Disabled";
-        _ = gf.ToastNew(text, rt.ColorRGB.Yellow.rgba(0));
-    }
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {

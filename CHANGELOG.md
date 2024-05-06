@@ -5,13 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] -- 0000-00-00
+## [Unreleased]
 
 ### Added
 
 - Bugfix: Map text rendering not accounting for hi-res flag
 - Hook: TextRenderA
 - Hook: MapRenderB, MapRenderA
+- Core: Global State `in_race_state` `in_race_state_prev` `in_race_state_new`
+- Core: Ability to toggle Practice Mode OFF in race scene before countdown
+
+### Changed
+
+- Core: `PLUGIN_VERSION` - `17`→`18`
 
 ### Fixed
 

@@ -168,6 +168,8 @@ pub const TEXT_COLOR_PRESET = [10]u32{
     0x985EFF, // (purple)
 };
 
+pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(0x50C0AC);
+
 // Quad (screenspace drawing)
 
 pub const ADDR_QUAD_INITIALIZED_INDEX: usize = 0x4B91B8;

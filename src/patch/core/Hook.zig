@@ -143,6 +143,9 @@ const PluginExportFn = enum(u32) {
     MenuTrackB,
     MenuCantinaEntryB,
     TextRenderB,
+    TextRenderA,
+    MapRenderB,
+    MapRenderA,
 };
 
 const PluginState = struct {
@@ -163,6 +166,8 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     };
     return &c.callback;
 }
+
+fn PluginFnCallback1_stub(_: u32) void {}
 
 // MISC
 
@@ -354,6 +359,7 @@ pub fn init() void {
     //off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+    //off = HookLoadSprite(off);
     global.GLOBAL_STATE.patch_offset = off;
 }
 
@@ -477,6 +483,13 @@ fn HookInitHangQuads(memory: usize) usize {
     return hook.detour_call(memory, addr, off_call, len, null, PluginFnCallback(.InitHangQuadsA));
 }
 
+// SPRITES
+
+// FIXME: remove stub and integrate one-param hooks with PluginFnCallback
+fn HookLoadSprite(memory: usize) usize {
+    return hook.intercept_call_one_u32_param(memory, 0x446FB5, &PluginFnCallback1_stub);
+}
+
 // RACE SETUP
 
 // FIXME: before fn crashes when hooked with any function contents; disabling for now
@@ -532,5 +545,21 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn HookTextRender(memory: usize) usize {
-    return hook.intercept_call(memory, 0x483F8B, null, PluginFnCallback(.TextRenderB));
+    // NOTE: 0x483F8B calls ProcessQueue1, only usable with after-fn when using intercept_call()
+    var off = memory;
+    // FlushQueue1
+    off = hook.intercept_call(
+        off,
+        0x450297,
+        PluginFnCallback(.TextRenderB),
+        PluginFnCallback(.TextRenderA),
+    );
+    // FlushMapQueue
+    off = hook.intercept_call(
+        off,
+        0x45029C,
+        PluginFnCallback(.MapRenderB),
+        PluginFnCallback(.MapRenderA),
+    );
+    return off;
 }

@@ -100,6 +100,7 @@ pub inline fn MenuItemRange(
     min: i32,
     max: i32,
     wrap: bool,
+    callback: ?MenuItemCallbackType,
 ) MenuItem {
     return .{
         .value = value,
@@ -107,6 +108,7 @@ pub inline fn MenuItemRange(
         .min = min,
         .max = max,
         .wrap = wrap,
+        .callback = callback,
     };
 }
 

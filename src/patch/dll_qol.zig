@@ -564,7 +564,7 @@ const QuickRaceMenu = extern struct {
 };
 
 const QuickRaceMenuItems = [_]mi.MenuItem{
-    mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
+    mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCb),
     mi.MenuItemSpacer(),
     mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true),
     // FIXME: maybe change to menu order?
@@ -579,8 +579,8 @@ const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false),
     mi.MenuItemSpacer(),
     mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
-    mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
-    mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),
+    mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true, null),
+    mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true, null),
     mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true),
     //mi.MenuItemList(&QuickRaceMenu.values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
     mi.MenuItemSpacer(),
@@ -607,6 +607,16 @@ fn QuickRaceCallback(m: *Menu) callconv(.C) bool {
         }
     }
     return result;
+}
+
+fn QuickRaceFpsCb(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
+            QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
+            rf.swrSound_PlaySoundMacro(0x2D);
+        }
+    }
+    return false;
 }
 
 fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {

@@ -636,7 +636,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
-    QuickRaceMenu.FpsTimer.Start();
+    //QuickRaceMenu.FpsTimer.Start();
 
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);

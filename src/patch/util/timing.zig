@@ -33,6 +33,7 @@ pub const TimeSpinlock = struct {
 
     pub fn Start(self: *TimeSpinlock) void {
         if (self.initialized) return;
+        defer self.initialized = true;
 
         var caps: w.winmm.TIMECAPS = undefined;
         if (w.winmm.timeGetDevCaps(&caps, 8) != w.winmm.TIMERR_NOERROR) return; // FIXME: error handling
@@ -42,15 +43,13 @@ pub const TimeSpinlock = struct {
         self.timer_step_ns = self.timer_step * std.time.ns_per_ms; // convert to ns
         self.timer_step_cmp = self.timer_step_ns * 2; // add wiggle room
         self.timer = std.time.Timer.start() catch return;
-
-        self.initialized = true;
     }
 
     // FIXME: probably want to integrate timeBeginPeriod etc. with annodue instead of letting
     // individual plugins handle it; need to actually set that up tho, just doing this for now
     pub fn End(self: *TimeSpinlock) void {
         if (!self.initialized) return;
-        self.initialized = false;
+        defer self.initialized = false;
 
         if (self.timer_step > 0) _ = w.winmm.timeEndPeriod(self.timer_step); // FIXME: error handling
     }

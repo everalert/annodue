@@ -688,14 +688,10 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
 
-export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    // TODO: move to global state, see also qll_savestate->EarlyEngineUpdateStage20A
-    // only not nullptr if in race scene
-    const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
-        r.ReadRaceDataValue(0x84, u32) != 0;
-    const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
-
-    if (player_ok and gui_on and QolState.fps_limiter)
+export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // TODO: confirm tabbed_in is actually needed here, possibly move to global state
+    const tabbed_in: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
+    if (gs.in_race.on() and tabbed_in and QolState.fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
@@ -729,9 +725,9 @@ export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const total_time: f32 = race_times[5];
 
-        //if (gs.player.in_race_count.on()) {}
+        //if (gs.race_state == .Countdown) {}
 
-        if (!gs.player.in_race_count.on()) {
+        if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
             if (gs.player.dead == .JustOn) race.total_deaths += 1;
 
             if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
@@ -748,8 +744,7 @@ export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
         }
 
-        const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
-        if (gs.player.in_race_results.on() and show_stats) {
+        if (gs.race_state == .PostRace) {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,

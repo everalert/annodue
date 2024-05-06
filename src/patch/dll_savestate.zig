@@ -424,26 +424,24 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
+    // TODO: confirm tabbed_out is actually needed here
     const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
-    const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
-    const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
-        r.ReadRaceDataValue(0x84, u32) != 0;
-    if (!paused and !tabbed_out and gs.practice_mode and player_ok) {
-        if (gs.player.in_race_racing.on()) UpdateState(gs, gf) else state.reset();
+    if (!tabbed_out and gs.practice_mode and gs.in_race.on()) {
+        if (gs.race_state == .Racing) UpdateState(gs, gf) else state.reset();
     }
 }
 
+// TODO: merge with EngineUpdateStage20A?
 export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
+    // TODO: show during whole race scene? esp. if recording from count
     // TODO: experiment with positioning
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
-    if (gs.practice_mode and gs.in_race.on()) {
-        if (gs.player.in_race_racing.on()) {
-            rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};
-            rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
-        }
+    if (gs.practice_mode and gs.race_state == .Racing) {
+        rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};
+        rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
     }
 }
 

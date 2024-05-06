@@ -57,7 +57,7 @@ pub const PLUGIN_VERSION = 18;
 
 // STATE
 
-const InRaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, LoadingCantina };
+const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
 const GLOBAL_STATE_VERSION = 4;
 
@@ -87,18 +87,15 @@ pub const GlobalState = extern struct {
     framecount: u32 = 0,
 
     in_race: st.ActiveState = .Off,
-    in_race_state: InRaceState = .None,
-    in_race_state_prev: InRaceState = .None,
-    in_race_state_new: bool = false,
+    race_state: RaceState = .None,
+    race_state_prev: RaceState = .None,
+    race_state_new: bool = false,
     player: extern struct {
         upgrades: bool = false,
         upgrades_lv: [7]u8 = undefined,
         upgrades_hp: [7]u8 = undefined,
 
         flags1: u32 = 0,
-        in_race_count: st.ActiveState = .Off,
-        in_race_results: st.ActiveState = .Off,
-        in_race_racing: st.ActiveState = .Off,
         boosting: st.ActiveState = .Off,
         underheating: st.ActiveState = .On,
         overheating: st.ActiveState = .Off,
@@ -119,9 +116,6 @@ pub const GlobalState = extern struct {
         } else false;
 
         p.flags1 = 0;
-        p.in_race_count = .Off;
-        p.in_race_results = .Off;
-        p.in_race_racing = .Off;
         p.boosting = .Off;
         p.underheating = .On; // you start the race underheating
         p.overheating = .Off;
@@ -144,9 +138,6 @@ pub const GlobalState = extern struct {
             if (engine[i] & (1 << 3) > 0) break true;
         } else false);
         p.dead.update((p.flags1 & (1 << 14)) > 0);
-        p.in_race_count.update((p.flags1 & (1 << 0)) > 0);
-        p.in_race_results.update((p.flags1 & (1 << 5)) == 0);
-        p.in_race_racing.update(!(p.in_race_count.on() or p.in_race_results.on()));
     }
 };
 
@@ -214,29 +205,26 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn EarlyEngineUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
-    // TODO: update all the plugins etc. doing extra checks for this
-    const player_test_set: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
+    const player_ready: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
         r.ReadRaceDataValue(0x84, u32) != 0;
-    gs.in_race.update(player_test_set);
-
-    // TODO: remove gs.player.in_race_count etc. and cleanup aftermath
-    gs.in_race_state_prev = gs.in_race_state;
-    gs.in_race_state = blk: {
-        if (!gs.in_race.on()) break :blk .None;
-        if (mem.read(rc.ADDR_IN_RACE, u8) == 0) break :blk .PreRace;
-        const flags = r.ReadPlayerValue(0x60, u32);
-        const countdown: bool = flags & (1 << 0) != 0;
-        if (countdown) break :blk .Countdown;
-        const postrace: bool = flags & (1 << 5) == 0;
-        const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
-        if (postrace and show_stats) break :blk .PostRace;
-        if (postrace) break :blk .LoadingCantina;
-        break :blk .Racing;
-    };
-    gs.in_race_state_new = gs.in_race_state == gs.in_race_state_prev;
+    gs.in_race.update(player_ready);
 
     if (gs.in_race == .JustOn) gs.player_reset();
     if (gs.in_race.on()) gs.player_update();
+
+    gs.race_state_prev = gs.race_state;
+    gs.race_state = blk: {
+        if (!gs.in_race.on()) break :blk .None;
+        if (mem.read(rc.ADDR_IN_RACE, u8) == 0) break :blk .PreRace;
+        const countdown: bool = gs.player.flags1 & (1 << 0) != 0;
+        if (countdown) break :blk .Countdown;
+        const postrace: bool = gs.player.flags1 & (1 << 5) == 0;
+        const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
+        if (postrace and show_stats) break :blk .PostRace;
+        if (postrace) break :blk .PostRaceExiting;
+        break :blk .Racing;
+    };
+    gs.race_state_new = gs.race_state == gs.race_state_prev;
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {

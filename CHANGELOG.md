@@ -12,12 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bugfix: Map text rendering not accounting for hi-res flag
 - Hook: TextRenderA
 - Hook: MapRenderB, MapRenderA
-- Core: Global State `in_race_state` `in_race_state_prev` `in_race_state_new`
+- Core: Global State `race_state` `race_state_prev` `race_state_new`
 - Core: Ability to toggle Practice Mode OFF in race scene before countdown
 
 ### Changed
 
 - Core: `PLUGIN_VERSION` - `17`→`18`
+
+### Removed
+
+- Core: Global State `player.in_race_count` `player.in_race_results` `player.in_race_racing`
 
 ### Fixed
 

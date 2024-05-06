@@ -79,6 +79,7 @@ pub fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     mode_vis.init();
 }
 
+// FIXME: corners not rendering in pre-race unless manually toggling practice mode
 pub fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     const f = struct {
         const vis_time: f32 = 0.15;
@@ -124,8 +125,7 @@ pub fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: queue toggling off for next reset from in race
     // TODO: disable toggling in race results screen
     if (toggle_input and
-        ((gs.in_race_state == .None or gs.in_race_state == .PreRace) or
-        !gs.practice_mode))
+        (!gs.practice_mode or gs.race_state == .None or gs.race_state == .PreRace))
     {
         gs.practice_mode = !gs.practice_mode;
         const text: [:0]const u8 = if (gs.practice_mode) "Practice Mode Enabled" else "Practice Mode Disabled";

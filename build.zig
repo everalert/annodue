@@ -8,7 +8,7 @@ const std = @import("std");
 // TODO: get up to date on tooling error and success messaging
 
 // example release build command
-// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0"
+// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Drop="F:\Projects\swe1r\annodue\.release"
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -55,9 +55,9 @@ pub fn build(b: *std.Build) void {
     // TODO: look into ObjCopy build system stuff
 
     const copypath = b.option(
-        []const u8,
-        "copypath",
-        "Path to game directory for hot-reloading in DEV_MODE; will not copy files if not specified",
+            []const u8,
+            "copypath",
+            "Path to game directory for hot-reloading in DEV_MODE; will not copy files if not specified",
     ) orelse null;
 
     const hotcopy_move_files = b.addExecutable(.{
@@ -104,8 +104,8 @@ pub fn build(b: *std.Build) void {
     var hash_step = &generate_safe_plugin_hash_file_plugin.step;
 
     const hash_plugins_step = b.step(
-        "hashfile",
-        "Generate valid plugin hashfile",
+            "hashfile",
+            "Generate valid plugin hashfile",
     );
     hash_plugins_step.dependOn(hash_step);
 
@@ -113,6 +113,8 @@ pub fn build(b: *std.Build) void {
 
     // TODO: update once script is actually written
     // TODO: automate version input somehow?
+
+    const release_zip_files_step = b.step("release", "Package built files for release");
 
     const dinput_dll = b.addSharedLibrary(.{
         .name = "dinput",
@@ -126,53 +128,64 @@ pub fn build(b: *std.Build) void {
 
     var dinput_dll_release = b.addInstallArtifact(dinput_dll, .{});
 
+    const releasepath = b.option(
+            []const u8,
+            "rop",
+            "Path to base output directory for release builds; required for 'release' step",
+    ) orelse null;
+
     // NOTE: minver checks fail if not specified
     const release_ver = b.option([]const u8, "ver", "release version") orelse "0.0.0";
-    const release_minver = b.option([]const u8, "minver", "minimum version needed to auto-update to this release") orelse release_ver;
+    const release_minver = b.option(
+            []const u8,
+            "minver",
+            "minimum version needed to auto-update to this release",
+    ) orelse release_ver;
 
-    const generate_release_zip_files = b.addExecutable(.{
-        .name = "generate_release_zip_files",
-        .root_source_file = .{ .path = "src/tools/generate_release_zip_files.zig" },
-        .target = .{},
-    });
-    generate_release_zip_files.addModule("zigwin32", zigwin32_m);
-    generate_release_zip_files.addModule("zzip", zzip_m);
+    var zip_step: ?*std.build.Step = null;
+    if (releasepath) |rp| {
+        const generate_release_zip_files = b.addExecutable(.{
+            .name = "generate_release_zip_files",
+            .root_source_file = .{ .path = "src/tools/generate_release_zip_files.zig" },
+            .target = .{},
+        });
+        generate_release_zip_files.addModule("zigwin32", zigwin32_m);
+        generate_release_zip_files.addModule("zzip", zzip_m);
 
-    const generate_release_zip_files_run = b.addRunArtifact(generate_release_zip_files);
-    {
-        const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
-        generate_release_zip_files_run.addArg(arg_z_ip);
+        const generate_release_zip_files_run = b.addRunArtifact(generate_release_zip_files);
+        {
+            const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
+            generate_release_zip_files_run.addArg(arg_z_ip);
 
-        const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{b.lib_dir}) catch unreachable;
-        generate_release_zip_files_run.addArg(arg_z_dp);
+            const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{b.lib_dir}) catch unreachable;
+            generate_release_zip_files_run.addArg(arg_z_dp);
 
-        const arg_z_op_path = b.build_root.handle.realpathAlloc(alloc, "./.release") catch unreachable;
-        const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{arg_z_op_path}) catch unreachable;
-        generate_release_zip_files_run.addArg(arg_z_op);
+            const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{rp}) catch unreachable;
+            generate_release_zip_files_run.addArg(arg_z_op);
 
-        const arg_z_ver = std.fmt.allocPrint(alloc, "-ver {s}", .{release_ver}) catch unreachable;
-        generate_release_zip_files_run.addArg(arg_z_ver);
+            const arg_z_ver = std.fmt.allocPrint(alloc, "-ver {s}", .{release_ver}) catch unreachable;
+            generate_release_zip_files_run.addArg(arg_z_ver);
 
-        const arg_z_minver = std.fmt.allocPrint(alloc, "-minver {s}", .{release_minver}) catch unreachable;
-        generate_release_zip_files_run.addArg(arg_z_minver);
+            const arg_z_minver = std.fmt.allocPrint(alloc, "-minver {s}", .{release_minver}) catch unreachable;
+            generate_release_zip_files_run.addArg(arg_z_minver);
+        }
+
+        zip_step = &generate_release_zip_files_run.step;
+
+        const asset_install = b.addInstallDirectory(.{
+            .source_dir = .{ .path = "assets" },
+            .install_dir = .{ .custom = "release" },
+            .install_subdir = "annodue",
+        });
+        zip_step.?.dependOn(&asset_install.step);
+        zip_step.?.dependOn(&dinput_dll_release.step);
+
+        const arg_z_cleanup_path = std.fmt.allocPrint(alloc, "{s}/release", .{b.install_path}) catch unreachable;
+        const zip_cleanup = b.addRemoveDirTree(arg_z_cleanup_path);
+        zip_cleanup.step.dependOn(zip_step.?);
+
+        release_zip_files_step.dependOn(&zip_cleanup.step);
     }
-
-    var zip_step = &generate_release_zip_files_run.step;
-
-    const asset_install = b.addInstallDirectory(.{
-        .source_dir = .{ .path = "assets" },
-        .install_dir = .{ .custom = "release" },
-        .install_subdir = "annodue",
-    });
-    zip_step.dependOn(&asset_install.step);
-    zip_step.dependOn(&dinput_dll_release.step);
-
-    const arg_z_cleanup_path = std.fmt.allocPrint(alloc, "{s}/release", .{b.install_path}) catch unreachable;
-    const zip_cleanup = b.addRemoveDirTree(arg_z_cleanup_path);
-    zip_cleanup.step.dependOn(zip_step);
-
-    const release_zip_files_step = b.step("release", "Package built files for release");
-    release_zip_files_step.dependOn(&zip_cleanup.step);
 
     // STEP - BUILD PLUGINS
 
@@ -180,8 +193,8 @@ pub fn build(b: *std.Build) void {
     // TODO: reorganize build script to make this more convenient to edit
 
     var plugin_step = b.step(
-        "plugins",
-        "Build plugin DLLs",
+            "plugins",
+            "Build plugin DLLs",
     );
     hash_step.dependOn(plugin_step);
 
@@ -228,8 +241,7 @@ pub fn build(b: *std.Build) void {
         dll.addOptions(options_label, options);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
-        if (std.mem.eql(u8, plugin.name, "collision_viewer"))
-        {
+        if (std.mem.eql(u8, plugin.name, "collision_viewer")) {
             dll.linkLibrary(collision_viewer);
             dll.addIncludePath(.{ .path = "src/collision_viewer" });
         }
@@ -247,7 +259,7 @@ pub fn build(b: *std.Build) void {
             .pdb_dir = .disabled,
             .implib_dir = .disabled,
         });
-        if (plugin.to_hash) zip_step.dependOn(&dll_release.step);
+        if (plugin.to_hash and zip_step != null) zip_step.?.dependOn(&dll_release.step);
     }
 
     // STEP - BUILD MAIN DLL
@@ -265,7 +277,7 @@ pub fn build(b: *std.Build) void {
     core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
     core.step.dependOn(
         // we skip runtime hash checks in dev builds
-        if (DEV_MODE) plugin_step else hash_step,
+            if (DEV_MODE) plugin_step else hash_step,
     );
 
     // TODO: investigate options arg
@@ -279,7 +291,7 @@ pub fn build(b: *std.Build) void {
         .pdb_dir = .disabled,
         .implib_dir = .disabled,
     });
-    zip_step.dependOn(&core_release.step);
+    if (zip_step != null) zip_step.?.dependOn(&core_release.step);
 
     // DEFAULT STEP
 

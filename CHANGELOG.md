@@ -10,14 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Bugfix: Map text rendering not accounting for hi-res flag
-- Hook: TextRenderA
-- Hook: MapRenderB, MapRenderA
 - Core: Global State `race_state` `race_state_prev` `race_state_new`
 - Core: Ability to toggle Practice Mode OFF in race scene before countdown
+- Hook: `TextRenderA`
+- Hook: `MapRenderB` `MapRenderA`
+- Setting: `qol` `fps_limiter_default` `u32`
+- Quick Race: Apply FPS without restart in practice mode
+- Quick Race: Can now hold button to open instead of double-tap
+- Quick Race: Scroll through FPS presets with hotkey
+- Quick Race: Scroll through tracks by planet with hotkey
+
 
 ### Changed
 
 - Core: `PLUGIN_VERSION` - `17`→`18`
+- Quick Race: Upgrade presets now require highlighting any upgrade first
+- Quick Race: XInput Quick Confirm - `B`→`Start`
+- Quick Race: XInput Close - `Start`→`B`
+- Quick Race: Keyboard Quick Confirm - `Enter`→`Space`
+- Quick Race: Keyboard Interact - `Space`→`Enter`
+- Quick Reset: Input combination more lenient
+- Quick Reset: Keyboard - `Esc+F1`→`Esc+Tab`
 
 ### Removed
 
@@ -25,9 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- QuickRace: Cantina not synced when setting number of racers
-- Updater: Mouse cursor not visible when showing restart message
 - Hook: TextRenderB insertion point after text render
+- Quick Race: Cantina not synced when setting number of racers
+- Updater: Mouse cursor not visible when showing restart message
 
 ## [0.1.3] -- 2024-04-30
 

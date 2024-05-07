@@ -42,17 +42,22 @@ pub const panic = debug.annodue_panic;
 // - fix: bugfix Cy Yunga cheat having no audio
 // - fix: bugfix map rendering not accounting for hi-res flag
 // - feat: quick restart
-//     - CONTROLS:          F1+Esc          Back+Start
+//     - CONTROLS:          Tab+Esc          Back+Start
 // - feat: quick race menu
 //     - create a new race from inside a race
 //     - select pod, track, upgrade stack and other race settings
 //     - CONTROLS:          keyboard        xinput
-//       Open/Close         Esc             Start           Press during normal pause delay (i.e. double-tap)
-//       Navigate           ↑↓→←            D-Pad
-//       Interact           Space           A
-//       Quick Confirm      Enter           B
-//       All Upgrades MIN   Home            LB
-//       All Upgrades MAX   End             RB
+//       Open                       Esc             Start           Hold or double-tap while unpaused
+//       Close                      Esc             B
+//       Navigate                   ↑↓→←            D-Pad
+//       Interact                   Enter           A
+//       Quick Confirm              Space           Start
+//       All Upgrades MIN           Home            LB              While highlighting any upgrade
+//       All Upgrades MAX           End             RB              While highlighting any upgrade
+//       Scroll prev FPS preset     Home            LB
+//       Scroll next FPS preset     End             RB
+//       Scroll prev planet         Home            LB              While highlighting TRACK
+//       Scroll next planet         End             RB              While highlighting TRACK
 // - feat: end-race stats readout
 //     - tfps
 //     - full upgrade stack with healths

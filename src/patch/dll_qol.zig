@@ -419,6 +419,7 @@ const QuickRaceMenuInput = extern struct {
 
 const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
+    const open_threshold: f32 = 0.75;
     var menu_active: bool = false;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
@@ -533,6 +534,7 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
+        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, open_threshold);
         if (!gf.GameFreezeEnable(menu_key)) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
@@ -552,14 +554,17 @@ const QuickRaceMenu = extern struct {
 
         if (!gs.in_race.on() or !initialized) return;
 
-        const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (menu_active and QolState.input_pause.gets() == .JustOn) {
-            close();
-        } else if (pausestate == 2 and QolState.input_pause.gets() == .JustOn) {
-            open();
-        }
+        defer if (menu_active) data.UpdateAndDraw();
+        const pi = QolState.input_pause.gets();
 
-        if (menu_active) data.UpdateAndDraw();
+        if (menu_active and pi == .JustOn)
+            return close();
+
+        if (rc.PAUSE_STATE.* == 2 and pi == .JustOn)
+            return open();
+
+        if (rc.PAUSE_STATE.* == 2 and rc.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
+            return open();
     }
 };
 

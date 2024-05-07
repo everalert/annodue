@@ -204,7 +204,7 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
 
-pub fn EarlyEngineUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     const player_ready: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
         r.ReadRaceDataValue(0x84, u32) != 0;
     gs.in_race.update(player_ready);

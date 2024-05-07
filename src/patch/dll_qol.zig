@@ -101,7 +101,7 @@ const QolState = struct {
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
-    var input_quickstart_data = ButtonInputMap{ .kb = .F1, .xi = .BACK };
+    var input_quickstart_data = ButtonInputMap{ .kb = .TAB, .xi = .BACK };
     var input_pause = input_pause_data.inputMap();
     var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
@@ -721,17 +721,20 @@ export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 // FIXME: settings toggles for both of these
-// FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
+// FIXME: probably want this mid-engine update, immediately before Jdge gets
+// processed? (a fn in EngineUpdateStage14 iirc)
 export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // Quick Restart
     if (gs.in_race.on() and
-        QolState.input_quickstart.gets() == .On and
-        QolState.input_pause.gets() == .JustOn and
-        QolState.quickstart)
+        QolState.quickstart and
+        !QuickRaceMenu.menu_active.on() and
+        ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
+        (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
     {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
+        return; // skip quick race menu
     }
 
     // Quick Race Menu

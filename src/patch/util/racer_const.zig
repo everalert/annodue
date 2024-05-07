@@ -54,6 +54,9 @@ pub const ADDR_IN_TOURNAMENT: usize = 0x50C450; // u8
 pub const ADDR_PAUSE_STATE: usize = 0x50C5F0; // u8
 pub const ADDR_PAUSE_PAGE: usize = 0x50C07C; // u8
 pub const ADDR_PAUSE_SCROLLINOUT: usize = 0xE9824C; // f32
+pub const PAUSE_STATE: *u8 = @ptrFromInt(0x50C5F0);
+pub const PAUSE_PAGE: *u8 = @ptrFromInt(0x50C07C);
+pub const PAUSE_SCROLLINOUT: *f32 = @ptrFromInt(0xE9824C);
 
 pub const ADDR_TIME_TIMESTAMP: usize = 0x50CB60; // u32
 pub const ADDR_TIME_FRAMETIME: usize = 0xE22A50; // f32

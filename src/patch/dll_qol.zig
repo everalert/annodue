@@ -100,13 +100,16 @@ const QolState = struct {
     var skip_planet_cutscenes: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
+    var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
     var input_quickstart_data = ButtonInputMap{ .kb = .F1, .xi = .BACK };
     var input_pause = input_pause_data.inputMap();
+    var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
 };
 
 fn QolUpdateInput(gf: *GlobalFn) callconv(.C) void {
     QolState.input_pause.update(gf);
+    QolState.input_unpause.update(gf);
     QolState.input_quickstart.update(gf);
 }
 
@@ -420,7 +423,7 @@ const QuickRaceMenuInput = extern struct {
 const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
     const open_threshold: f32 = 0.75;
-    var menu_active: bool = false;
+    var menu_active: st.ActiveState = .Off;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
     var gs: *GlobalSt = undefined;
@@ -446,8 +449,8 @@ const QuickRaceMenu = extern struct {
         .{ .kb = .DOWN, .xi = .DPAD_DOWN },
         .{ .kb = .LEFT, .xi = .DPAD_LEFT },
         .{ .kb = .RIGHT, .xi = .DPAD_RIGHT },
-        .{ .kb = .SPACE, .xi = .A }, // confirm
-        .{ .kb = .RETURN, .xi = .B }, // quick confirm
+        .{ .kb = .RETURN, .xi = .A }, // confirm/activate
+        .{ .kb = .SPACE, .xi = .START }, // quick confirm
         .{ .kb = .HOME, .xi = .LEFT_SHOULDER }, // NU
         .{ .kb = .END, .xi = .RIGHT_SHOULDER }, // MU
     };
@@ -538,14 +541,14 @@ const QuickRaceMenu = extern struct {
         if (!gf.GameFreezeEnable(menu_key)) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
-        menu_active = true;
+        menu_active.update(true);
     }
 
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
-        menu_active = false;
+        menu_active.update(false);
     }
 
     fn update() void {
@@ -554,15 +557,18 @@ const QuickRaceMenu = extern struct {
 
         if (!gs.in_race.on() or !initialized) return;
 
-        defer if (menu_active) data.UpdateAndDraw();
-        const pi = QolState.input_pause.gets();
+        defer {
+            if (menu_active.on()) data.UpdateAndDraw();
+            menu_active.update(menu_active.on());
+        }
 
-        if (menu_active and pi == .JustOn)
+        const upi = QolState.input_unpause.gets();
+        if (menu_active.on() and upi == .JustOn)
             return close();
 
+        const pi = QolState.input_pause.gets();
         if (rc.PAUSE_STATE.* == 2 and pi == .JustOn)
             return open();
-
         if (rc.PAUSE_STATE.* == 2 and rc.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
             return open();
     }
@@ -606,7 +612,7 @@ fn QuickRaceCallback(m: *Menu) callconv(.C) bool {
             result = true;
         }
         // confirm from anywhere
-        if (cb[1](.JustOn)) {
+        if (cb[1](.JustOn) and QuickRaceMenu.menu_active == .On) {
             QuickRaceMenu.load_race();
             return false;
         }

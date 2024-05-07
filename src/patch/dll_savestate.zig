@@ -424,9 +424,12 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
-    // TODO: confirm tabbed_out is actually needed here
+    rt.DrawText(2, 2, "{s}", .{@tagName(gs.race_state)}, null, null) catch return;
+
+    // TODO: build tabbed_out and paused into UpdateState?
     const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
-    if (!tabbed_out and gs.practice_mode and gs.in_race.on()) {
+    const paused = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
+    if (gs.in_race.on() and gs.practice_mode and !tabbed_out and !paused) {
         if (gs.race_state == .Racing) UpdateState(gs, gf) else state.reset();
     }
 }

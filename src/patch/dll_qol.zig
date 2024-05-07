@@ -572,6 +572,12 @@ const QuickRaceMenu = extern struct {
         if (rc.PAUSE_STATE.* == 2 and rc.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
             return open();
     }
+
+    fn settingsLoad(v: *GlobalFn) void {
+        const fps_default = v.SettingGetU("qol", "fps_limiter_default").?;
+        QuickRaceMenu.FpsTimer.SetPeriod(fps_default);
+        QuickRaceMenu.values.fps = @intCast(fps_default);
+    }
 };
 
 const QuickRaceMenuItems = [_]mi.MenuItem{
@@ -719,6 +725,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
+    QuickRaceMenu.settingsLoad(gf);
     QuickRaceMenu.FpsTimer.Start();
 
     PatchJinnReesoCheat(true);

@@ -575,24 +575,24 @@ const QuickRaceMenu = extern struct {
 };
 
 const QuickRaceMenuItems = [_]mi.MenuItem{
-    mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCb),
+    mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true),
+    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true, null),
     // FIXME: maybe change to menu order?
-    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true),
+    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true, &QuickRaceTrackCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
     mi.MenuItemSpacer(),
     mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
     mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true, null),
     mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true, null),
-    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true),
+    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true, null),
     //mi.MenuItemList(&QuickRaceMenu.values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
     mi.MenuItemSpacer(),
     mi.MenuItemButton("Race!", &QuickRaceConfirm),
@@ -601,16 +601,6 @@ const QuickRaceMenuItems = [_]mi.MenuItem{
 fn QuickRaceCallback(m: *Menu) callconv(.C) bool {
     var result = false;
     if (m.inputs.cb) |cb| {
-        // set all to NU
-        if (cb[2](.JustOn)) {
-            QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
-            result = true;
-        }
-        // set all to MU
-        if (cb[3](.JustOn)) {
-            QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
-            result = true;
-        }
         // confirm from anywhere
         if (cb[1](.JustOn) and QuickRaceMenu.menu_active == .On) {
             QuickRaceMenu.load_race();
@@ -620,11 +610,81 @@ fn QuickRaceCallback(m: *Menu) callconv(.C) bool {
     return result;
 }
 
-fn QuickRaceFpsCb(m: *Menu) callconv(.C) bool {
+fn QuickRaceUpgradeCallback(m: *Menu) callconv(.C) bool {
     if (m.inputs.cb) |cb| {
+        // set all to NU
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
+            return true;
+        }
+        // set all to MU
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
+            return true;
+        }
+    }
+    return false;
+}
+
+// TODO: higher options if moving cap to 1000fps later
+// TODO: user-defined preset, maybe
+const QuickRaceFpsPresets = [_]i32{ 24, 30, 48, 60, 120, 144, 165, 240, 360, 480 };
+
+fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        // scroll presets
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.fps = blk: {
+                for (0..QuickRaceFpsPresets.len) |i| {
+                    const val = QuickRaceFpsPresets[QuickRaceFpsPresets.len - i - 1];
+                    if (val < QuickRaceMenu.values.fps) break :blk val;
+                }
+                break :blk QuickRaceMenuItems[0].min;
+            };
+            return true;
+        }
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.fps = blk: {
+                for (QuickRaceFpsPresets) |val|
+                    if (val > QuickRaceMenu.values.fps) break :blk val;
+                break :blk QuickRaceMenuItems[0].max;
+            };
+            return true;
+        }
+
+        // save without restarting
         if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
             QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
             rf.swrSound_PlaySoundMacro(0x2D);
+        }
+    }
+    return false;
+}
+
+// TODO: circuit-based presets, if/when circuit order added
+// TODO: highlight color changing depending on planet?
+const QuickRaceTrackPresets = [_]i32{ 0, 2, 6, 9, 12, 16, 19, 22 };
+
+fn QuickRaceTrackCallback(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        // scroll presets
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.track = blk: {
+                for (0..QuickRaceTrackPresets.len) |i| {
+                    const val = QuickRaceTrackPresets[QuickRaceTrackPresets.len - i - 1];
+                    if (val < QuickRaceMenu.values.track) break :blk val;
+                }
+                break :blk comptime QuickRaceTrackPresets[QuickRaceTrackPresets.len - 1];
+            };
+            return true;
+        }
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.track = blk: {
+                for (QuickRaceTrackPresets) |val|
+                    if (val > QuickRaceMenu.values.track) break :blk val;
+                break :blk comptime QuickRaceTrackPresets[0];
+            };
+            return true;
         }
     }
     return false;

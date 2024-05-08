@@ -24,12 +24,6 @@ pub const TimeSpinlock = struct {
     timer_step_ns: u64 = 0,
     timer_step_cmp: u64 = 0,
     step_excess: u64 = 0,
-    test_tstart: u64 = 0,
-    test_tsleep: u64 = 0,
-    test_tspin: u64 = 0,
-    ts_start: u32 = 0,
-    ts_now: u32 = 0,
-    ts_dur: f32 = 0,
 
     pub fn Start(self: *TimeSpinlock) void {
         if (self.initialized) return;
@@ -54,25 +48,17 @@ pub const TimeSpinlock = struct {
         if (self.timer_step > 0) _ = w.winmm.timeEndPeriod(self.timer_step); // FIXME: error handling
     }
 
-    // TODO: still need to figure out why the f this runs even in menus for droopy
     pub fn Sleep(self: *TimeSpinlock) void {
         self.Start();
-        if (self.ts_start == 0) self.ts_start = @import("racer_const.zig").TIME_TIMESTAMP.*;
-
-        self.ts_now = @import("racer_const.zig").TIME_TIMESTAMP.*;
-        self.ts_dur = @as(f32, @floatFromInt(self.ts_now - self.ts_start)) / 1000;
 
         var period: u64 = if (self.period > self.step_excess) self.period - self.step_excess else self.period;
         var timer_cur: u64 = self.timer.?.read();
-        self.test_tstart = timer_cur;
 
         while (timer_cur + self.timer_step_cmp < period) : (timer_cur = self.timer.?.read())
             std.time.sleep(self.timer_step);
-        self.test_tsleep = timer_cur;
 
         while (timer_cur < period) : (timer_cur = self.timer.?.read())
             continue;
-        self.test_tspin = timer_cur;
 
         timer_cur = self.timer.?.lap();
         self.step_excess = timer_cur - period;

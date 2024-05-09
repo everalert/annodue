@@ -53,13 +53,13 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable; // comptime
 };
 
-pub const PLUGIN_VERSION = 18;
+pub const PLUGIN_VERSION = 19;
 
 // STATE
 
 const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
-const GLOBAL_STATE_VERSION = 4;
+const GLOBAL_STATE_VERSION = 5;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -100,6 +100,7 @@ pub const GlobalState = extern struct {
         underheating: st.ActiveState = .On,
         overheating: st.ActiveState = .Off,
         dead: st.ActiveState = .Off,
+        deaths: u32 = 0,
 
         heat_rate: f32 = 0,
         cool_rate: f32 = 0,
@@ -120,6 +121,7 @@ pub const GlobalState = extern struct {
         p.underheating = .On; // you start the race underheating
         p.overheating = .Off;
         p.dead = .Off;
+        p.deaths = 0;
 
         p.heat_rate = r.ReadPlayerValue(0x8C, f32);
         p.cool_rate = r.ReadPlayerValue(0x90, f32);
@@ -138,6 +140,7 @@ pub const GlobalState = extern struct {
             if (engine[i] & (1 << 3) > 0) break true;
         } else false);
         p.dead.update((p.flags1 & (1 << 14)) > 0);
+        if (p.dead == .JustOn) p.deaths += 1;
     }
 };
 
@@ -209,22 +212,24 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
         r.ReadRaceDataValue(0x84, u32) != 0;
     gs.in_race.update(player_ready);
 
-    if (gs.in_race == .JustOn) gs.player_reset();
-    if (gs.in_race.on()) gs.player_update();
-
     gs.race_state_prev = gs.race_state;
     gs.race_state = blk: {
         if (!gs.in_race.on()) break :blk .None;
         if (mem.read(rc.ADDR_IN_RACE, u8) == 0) break :blk .PreRace;
-        const countdown: bool = gs.player.flags1 & (1 << 0) != 0;
+        // TODO: figure out how the engine knows to set these and use those instead
+        const flags1 = r.ReadPlayerValue(0x60, u32);
+        const countdown: bool = flags1 & (1 << 0) != 0;
         if (countdown) break :blk .Countdown;
-        const postrace: bool = gs.player.flags1 & (1 << 5) == 0;
+        const postrace: bool = flags1 & (1 << 5) == 0;
         const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
         if (postrace and show_stats) break :blk .PostRace;
         if (postrace) break :blk .PostRaceExiting;
         break :blk .Racing;
     };
     gs.race_state_new = gs.race_state != gs.race_state_prev;
+
+    if (gs.race_state_new and gs.race_state == .PreRace) gs.player_reset();
+    if (gs.in_race.on()) gs.player_update();
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {

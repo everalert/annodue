@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Core: `PLUGIN_VERSION` - `17`→`18`
+- Core: `PLUGIN_VERSION` - `17`→`19`
 - Core: Show Practice Mode label the whole way through race end to start race in cantina
 - Quick Race: Upgrade presets now require highlighting any upgrade first
 - Quick Race: XInput Quick Confirm - `B`→`Start`

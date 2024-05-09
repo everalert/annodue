@@ -121,6 +121,7 @@ const state = struct {
     var load_delay: usize = 500; // ms
     var load_time: usize = 0;
     var load_frame: usize = 0;
+    var load_count: usize = 0;
 
     // TODO: some kind of unified mapping thing, once dinput is implemented
     var save_input_st_data = ButtonInputMap{ .kb = .@"1", .xi = .DPAD_DOWN };
@@ -184,6 +185,7 @@ const state = struct {
         frame = 0;
         frame_total = 0;
         load_frame = 0;
+        load_count = 0;
         scrub_frame = 0;
         rec_state = .Recording;
     }
@@ -336,6 +338,7 @@ fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
     }
     if (gs.timestamp >= state.load_time) {
         state.load_compressed(state.load_frame, gs);
+        state.load_count += 1;
         return .Recording;
     }
     return .Loading;
@@ -369,6 +372,8 @@ fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
     }
 
     if (gs.timestamp < state.load_time) return .ScrubExiting;
+
+    state.load_count += 1;
     return .Recording;
 }
 
@@ -443,6 +448,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.practice_mode and gs.race_state == .Racing) {
         rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};
         rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
+        if (state.load_count > 0)
+            rt.DrawText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch {};
     }
 }
 

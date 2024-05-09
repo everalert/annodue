@@ -61,15 +61,15 @@ const style_heat_up = rt.MakeTextHeadStyle(.Small, false, .Red, .Right, .{rto.To
 const style_heat_dn = rt.MakeTextHeadStyle(.Small, false, .Blue, .Right, .{rto.ToggleShadow}) catch "";
 const style_laptime = rt.MakeTextHeadStyle(.Unk2, true, null, null, .{rto.ToggleShadow}) catch "";
 
-export fn TextRenderB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
     if (gs.in_race.on()) {
-        const lap: u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x78 }, u8);
-        const race_times: [6]f32 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x60 }, [6]f32);
+        const lap: u8 = r.ReadRaceDataValue(0x78, u8);
+        const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const lap_times: []const f32 = race_times[0..5];
 
-        if (gs.race_state == .Racing) {
+        if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
             // draw heat timer
             const heat_s: f32 = gs.player.heat / gs.player.heat_rate;
             const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;

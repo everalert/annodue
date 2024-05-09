@@ -101,6 +101,22 @@ pub fn intercept_call(memory: usize, off_call: usize, dest_before: ?*const fn ()
     return off;
 }
 
+pub fn intercept_call_one_u32_param(memory: usize, off_call: usize, dest_before: ?*const fn (u32) void) usize {
+    const call_target: usize = addr_from_call(off_call);
+    var off: usize = memory;
+
+    // redirect to this function entry
+    _ = x86.call(off_call, off);
+
+    if (dest_before) |dest| off = x86.call_one_u32_param(off, @intFromPtr(dest));
+    off = x86.call_one_u32_param(off, call_target);
+
+    // exit this embedded function
+    off = x86.retn(off);
+    off = x86.nop_align(off, ALIGN_SIZE);
+    return off;
+}
+
 pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
     const item_addr: usize = jt_addr + 4 * jt_idx;
     const item_target: usize = mem.read(item_addr, u32);

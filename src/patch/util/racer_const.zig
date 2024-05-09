@@ -54,13 +54,19 @@ pub const ADDR_IN_TOURNAMENT: usize = 0x50C450; // u8
 pub const ADDR_PAUSE_STATE: usize = 0x50C5F0; // u8
 pub const ADDR_PAUSE_PAGE: usize = 0x50C07C; // u8
 pub const ADDR_PAUSE_SCROLLINOUT: usize = 0xE9824C; // f32
+pub const PAUSE_STATE: *u8 = @ptrFromInt(0x50C5F0);
+pub const PAUSE_PAGE: *u8 = @ptrFromInt(0x50C07C);
+pub const PAUSE_SCROLLINOUT: *f32 = @ptrFromInt(0xE9824C);
 
 pub const ADDR_TIME_TIMESTAMP: usize = 0x50CB60; // u32
 pub const ADDR_TIME_FRAMETIME: usize = 0xE22A50; // f32
 pub const ADDR_TIME_FRAMETIME_64: usize = 0xE22A40; // f64
-pub const TIME_FRAMETIME_64: *f64 = @ptrFromInt(0xE22A40);
 pub const ADDR_TIME_FRAMECOUNT: usize = 0xE22A30;
 pub const ADDR_TIME_FPS: usize = 0x4C8174; // sithControl_secFPS
+pub const TIME_TIMESTAMP: *u32 = @ptrFromInt(0x50CB60);
+pub const TIME_FRAMETIME: *f32 = @ptrFromInt(0xE22A50);
+pub const TIME_FRAMETIME_64: *f64 = @ptrFromInt(0xE22A40);
+pub const TIME_FRAMECOUNT: *u32 = @ptrFromInt(0xE22A30);
 
 pub const ADDR_GUI_STOPPED: usize = 0x50CB64; // u32
 
@@ -167,6 +173,8 @@ pub const TEXT_COLOR_PRESET = [10]u32{
     0xFFA7D1, // (pink)
     0x985EFF, // (purple)
 };
+
+pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(0x50C0AC);
 
 // Quad (screenspace drawing)
 

@@ -39,6 +39,7 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Double mouse cursor fix
 	- Jinn Reeso and Cy Yunga cheat toggling
 	- Cy Yunga cheat audio fix
+	- Map rendering hi-res text fix
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer
 - Cosmetic
@@ -86,7 +87,7 @@ Configured under `[cam7]`
 |:---|:---|:---|:---|
 |Save State       |`1`|`D-Down` |&nbsp;
 |Reload State     |`2`|`D-Up`   |Will load beginning of race if no state saved
-|Toggle Scrub Mode|`2`|`D-Up`   |Press during reload delay when toggling on (i.e. double-tap reload)
+|Toggle Scrub Mode|`2`|`D-Up`   |Double-tap `Reload State`
 |Scrub Back       |`3`|`D-Left` |Hold to rewind
 |Scrub Forward    |`4`|`D-Right`|Hold to fast-forward
 
@@ -136,8 +137,9 @@ Configured under `[overlay]`
 - Fix double mouse cursor
 - Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Fix Cy Yunga cheat audio
+- Fix map rendering hi-res text
 - Map controller `Start` to `Esc`
-- Race restart hotkey -- `F1 + Esc` or `Back + Start`
+- Race restart hotkey -- `Esc + Tab` or `Back + Start`
 - Quick Race Menu
 - End-race stats readout
 - Show milliseconds on all timers
@@ -151,12 +153,17 @@ Configured under `[overlay]`
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
-|Open/Close              |`Esc`     |`Start`       |Press during normal pause delay (i.e. double-tap pause)
-|Navigate                |`↑ ↓ ← →` |`D-Pad`       |&nbsp;
-|Interact                |`Space`   |`A`           |&nbsp;
-|Quick Confirm           |`Enter`   |`B`           |&nbsp;
-|Set all upgrades to none|`Home`    |`LB`          |&nbsp;
-|Set all upgrades to max |`End`     |`RB`          |&nbsp;
+|Open                   |`Esc`     |`Start` |Hold or double-tap while unpaused
+|Close                  |`Esc`     |`B`     |&nbsp;
+|Navigate               |`↑ ↓ ← →` |`D-Pad` |&nbsp;
+|Interact               |`Enter`   |`A`     |&nbsp;
+|Quick Confirm          |`Space`   |`Start` |&nbsp;
+|All Upgrades OFF       |`Home`    |`LB`    |While highlighing any upgrade
+|All Upgrades MAX       |`End`     |`RB`    |While highlighing any upgrade
+|Scroll prev FPS preset |`Home`    |`LB`    |&nbsp;
+|Scroll next FPS preset |`End`     |`RB`    |&nbsp;
+|Scroll prev planet     |`Home`    |`LB`    |While highlighting `TRACK`
+|Scroll next planet     |`End`     |`RB`    |While highlighting `TRACK`
 
 ##### Settings
 
@@ -168,6 +175,7 @@ Configured under `[qol]`
 |`quick_race_menu_enable` |`bool`|&nbsp;
 |`ms_timer_enable`        |`bool`|&nbsp;
 |`fps_limiter_enable`     |`bool`|&nbsp;
+|`fps_limiter_default`    |`u32` |&nbsp;
 |`skip_planet_cutscenes`  |`bool`|&nbsp;
 |`default_racers`         |`u32` |1 to 12
 |`default_laps`           |`u32` |1 to 5

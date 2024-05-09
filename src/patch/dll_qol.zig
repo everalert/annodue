@@ -14,6 +14,7 @@ const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
 const debug = @import("core/Debug.zig");
 
 const timing = @import("util/timing.zig");
+const spatial = @import("util/spatial.zig");
 const Menu = @import("util/menu.zig").Menu;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const mi = @import("util/menu_item.zig");
@@ -40,18 +41,24 @@ pub const panic = debug.annodue_panic;
 // - fix: toggle Jinn Reeso with cheat, instead of only enabling
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - fix: bugfix Cy Yunga cheat having no audio
+// - fix: bugfix map rendering not accounting for hi-res flag
 // - feat: quick restart
-//     - CONTROLS:          F1+Esc          Back+Start
+//     - CONTROLS:          Tab+Esc          Back+Start
 // - feat: quick race menu
 //     - create a new race from inside a race
 //     - select pod, track, upgrade stack and other race settings
 //     - CONTROLS:          keyboard        xinput
-//       Open/Close         Esc             Start           Press during normal pause delay (i.e. double-tap)
-//       Navigate           ↑↓→←            D-Pad
-//       Interact           Space           A
-//       Quick Confirm      Enter           B
-//       All Upgrades MIN   Home            LB
-//       All Upgrades MAX   End             RB
+//       Open                       Esc             Start           Hold or double-tap while unpaused
+//       Close                      Esc             B
+//       Navigate                   ↑↓→←            D-Pad
+//       Interact                   Enter           A
+//       Quick Confirm              Space           Start
+//       All Upgrades MIN           Home            LB              While highlighting any upgrade
+//       All Upgrades MAX           End             RB              While highlighting any upgrade
+//       Scroll prev FPS preset     Home            LB
+//       Scroll next FPS preset     End             RB
+//       Scroll prev planet         Home            LB              While highlighting TRACK
+//       Scroll next planet         End             RB              While highlighting TRACK
 // - feat: end-race stats readout
 //     - tfps
 //     - full upgrade stack with healths
@@ -99,13 +106,16 @@ const QolState = struct {
     var skip_planet_cutscenes: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
-    var input_quickstart_data = ButtonInputMap{ .kb = .F1, .xi = .BACK };
+    var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
+    var input_quickstart_data = ButtonInputMap{ .kb = .TAB, .xi = .BACK };
     var input_pause = input_pause_data.inputMap();
+    var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
 };
 
 fn QolUpdateInput(gf: *GlobalFn) callconv(.C) void {
     QolState.input_pause.update(gf);
+    QolState.input_unpause.update(gf);
     QolState.input_quickstart.update(gf);
 }
 
@@ -297,10 +307,15 @@ const FastCountdown = struct {
 const race = struct {
     const stat_x: i16 = 192;
     const stat_y: i16 = 48;
-    const stat_h: u8 = 12;
+    const stat_h: i16 = 12;
     const stat_col: ?u32 = 0xFFFFFFFF;
-    var total_deaths: u32 = 0;
+    var this_position: spatial.Pos3D = .{};
+    var prev_position: spatial.Pos3D = .{};
+    var top_speed: f32 = 0;
+    var total_distance: f32 = 0;
+    var total_boosts: u32 = 0;
     var total_boost_duration: f32 = 0;
+    var total_boost_distance: f32 = 0;
     var total_boost_ratio: f32 = 0;
     var total_underheat: f32 = 0;
     var total_overheat: f32 = 0;
@@ -312,10 +327,18 @@ const race = struct {
     var last_underheat_started_total: f32 = 0;
     var last_overheat_started: f32 = 0;
     var last_overheat_started_total: f32 = 0;
+    var avg_boost_duration: f32 = 0;
+    var avg_boost_distance: f32 = 0;
+    var avg_speed: f32 = 0;
 
     fn reset() void {
-        total_deaths = 0;
+        this_position = .{};
+        prev_position = .{};
+        top_speed = 0;
+        total_distance = 0;
+        total_boosts = 0;
         total_boost_duration = 0;
+        total_boost_distance = 0;
         total_boost_ratio = 0;
         total_underheat = 0;
         total_overheat = 0;
@@ -327,17 +350,32 @@ const race = struct {
         last_underheat_started_total = 0;
         last_overheat_started = 0;
         last_overheat_started_total = 0;
+        avg_boost_duration = 0;
+        avg_boost_distance = 0;
+        avg_speed = 0;
+    }
+
+    fn set_motion(time: f32, speed: f32, distance: f32) void {
+        total_distance += distance;
+        if (time > 0) avg_speed = total_distance / time;
+        if (speed > top_speed) top_speed = speed;
     }
 
     fn set_last_boost_start(time: f32) void {
+        total_boosts += 1;
         last_boost_started_total = total_boost_duration;
         last_boost_started = time;
         if (first_boost_time == 0) first_boost_time = time;
     }
 
-    fn set_total_boost(time: f32) void {
+    fn set_total_boost(time: f32, distance: f32) void {
         total_boost_duration = last_boost_started_total + time - last_boost_started;
-        total_boost_ratio = total_boost_duration / time;
+        if (time > 0) total_boost_ratio = total_boost_duration / time;
+        total_boost_distance += distance;
+        if (total_boosts > 0) {
+            avg_boost_duration = total_boost_duration / @as(f32, @floatFromInt(total_boosts));
+            avg_boost_distance = total_boost_distance / @as(f32, @floatFromInt(total_boosts));
+        }
     }
 
     fn set_last_underheat_start(time: f32) void {
@@ -361,30 +399,35 @@ const race = struct {
     fn set_fire_finish_duration(time: f32) void {
         fire_finish_duration = time - last_overheat_started;
     }
+
+    fn update_position() void {
+        prev_position = this_position;
+        this_position = r.ReadPlayerValue(0x50, spatial.Pos3D);
+    }
 };
 
 const s_head = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultHeader(i: u8, comptime fmt: []const u8, args: anytype) void {
+fn RenderRaceResultHeader(i: i16, comptime fmt: []const u8, args: anytype) void {
     rt.DrawText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch {};
 }
 
 const s_stat = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultStat(i: u8, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
+fn RenderRaceResultStat(i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
     rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch {};
     rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch {};
 }
 
-fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
+fn RenderRaceResultStatU(i: i16, label: [*:0]const u8, value: u32) void {
     RenderRaceResultStat(i, label, "{d: <7}", .{value});
 }
 
-fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
+fn RenderRaceResultStatF(i: i16, label: [*:0]const u8, value: f32) void {
     RenderRaceResultStat(i, label, "{d:4.3}", .{value});
 }
 
-fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
+fn RenderRaceResultStatTime(i: i16, label: [*:0]const u8, time: f32) void {
     const t = timing.RaceTimeFromFloat(time);
     RenderRaceResultStat(i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
@@ -392,7 +435,7 @@ fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
 const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
 const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
 
-fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
+fn RenderRaceResultStatUpgrade(i: i16, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat(i, rc.UpgradeCategories[cat], "{s}{d:0>3} ~1{s}", .{
         if (hp < 255) s_upg_dmg else s_upg_full,
         hp,
@@ -418,7 +461,8 @@ const QuickRaceMenuInput = extern struct {
 
 const QuickRaceMenu = extern struct {
     const menu_key: [*:0]const u8 = "QuickRaceMenu";
-    var menu_active: bool = false;
+    const open_threshold: f32 = 0.75;
+    var menu_active: st.ActiveState = .Off;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
     var gs: *GlobalSt = undefined;
@@ -444,8 +488,8 @@ const QuickRaceMenu = extern struct {
         .{ .kb = .DOWN, .xi = .DPAD_DOWN },
         .{ .kb = .LEFT, .xi = .DPAD_LEFT },
         .{ .kb = .RIGHT, .xi = .DPAD_RIGHT },
-        .{ .kb = .SPACE, .xi = .A }, // confirm
-        .{ .kb = .RETURN, .xi = .B }, // quick confirm
+        .{ .kb = .RETURN, .xi = .A }, // confirm/activate
+        .{ .kb = .SPACE, .xi = .START }, // quick confirm
         .{ .kb = .HOME, .xi = .LEFT_SHOULDER }, // NU
         .{ .kb = .END, .xi = .RIGHT_SHOULDER }, // MU
     };
@@ -497,7 +541,8 @@ const QuickRaceMenu = extern struct {
         r.WriteEntityValue(.Hang, 0, 0x5E, u8, rc.TrackCircuitIdMap[@intCast(values.track)]);
         r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
         r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps)));
-        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // also: 0x50C558
+        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // for race reset
+        _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
         r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
         //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
         const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });
@@ -531,17 +576,18 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
+        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, open_threshold);
         if (!gf.GameFreezeEnable(menu_key)) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
-        menu_active = true;
+        menu_active.update(true);
     }
 
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
-        menu_active = false;
+        menu_active.update(false);
     }
 
     fn update() void {
@@ -550,36 +596,48 @@ const QuickRaceMenu = extern struct {
 
         if (!gs.in_race.on() or !initialized) return;
 
-        const pausestate: u8 = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        if (menu_active and QolState.input_pause.gets() == .JustOn) {
-            close();
-        } else if (pausestate == 2 and QolState.input_pause.gets() == .JustOn) {
-            open();
+        defer {
+            if (menu_active.on()) data.UpdateAndDraw();
+            menu_active.update(menu_active.on());
         }
 
-        if (menu_active) data.UpdateAndDraw();
+        const upi = QolState.input_unpause.gets();
+        if (menu_active.on() and upi == .JustOn)
+            return close();
+
+        const pi = QolState.input_pause.gets();
+        if (rc.PAUSE_STATE.* == 2 and pi == .JustOn)
+            return open();
+        if (rc.PAUSE_STATE.* == 2 and rc.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
+            return open();
+    }
+
+    fn settingsLoad(v: *GlobalFn) void {
+        const fps_default = v.SettingGetU("qol", "fps_limiter_default").?;
+        QuickRaceMenu.FpsTimer.SetPeriod(fps_default);
+        QuickRaceMenu.values.fps = @intCast(fps_default);
     }
 };
 
 const QuickRaceMenuItems = [_]mi.MenuItem{
-    mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true),
+    mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true),
+    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true, null),
     // FIXME: maybe change to menu order?
-    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true),
+    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true, &QuickRaceTrackCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
     mi.MenuItemSpacer(),
     mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
-    mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true),
-    mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true),
-    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true),
+    mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true, null),
+    mi.MenuItemRange(&QuickRaceMenu.values.racers, "Racers", 1, 12, true, null),
+    mi.MenuItemList(&QuickRaceMenu.values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true, null),
     //mi.MenuItemList(&QuickRaceMenu.values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
     mi.MenuItemSpacer(),
     mi.MenuItemButton("Race!", &QuickRaceConfirm),
@@ -588,23 +646,93 @@ const QuickRaceMenuItems = [_]mi.MenuItem{
 fn QuickRaceCallback(m: *Menu) callconv(.C) bool {
     var result = false;
     if (m.inputs.cb) |cb| {
-        // set all to NU
-        if (cb[2](.JustOn)) {
-            QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
-            result = true;
-        }
-        // set all to MU
-        if (cb[3](.JustOn)) {
-            QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
-            result = true;
-        }
         // confirm from anywhere
-        if (cb[1](.JustOn)) {
+        if (cb[1](.JustOn) and QuickRaceMenu.menu_active == .On) {
             QuickRaceMenu.load_race();
             return false;
         }
     }
     return result;
+}
+
+fn QuickRaceUpgradeCallback(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        // set all to NU
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.up_lv = comptime [_]i32{0} ** 7;
+            return true;
+        }
+        // set all to MU
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.up_lv = comptime [_]i32{5} ** 7;
+            return true;
+        }
+    }
+    return false;
+}
+
+// TODO: higher options if moving cap to 1000fps later
+// TODO: user-defined preset, maybe
+const QuickRaceFpsPresets = [_]i32{ 24, 30, 48, 60, 120, 144, 165, 240, 360, 480 };
+
+fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        // scroll presets
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.fps = blk: {
+                for (0..QuickRaceFpsPresets.len) |i| {
+                    const val = QuickRaceFpsPresets[QuickRaceFpsPresets.len - i - 1];
+                    if (val < QuickRaceMenu.values.fps) break :blk val;
+                }
+                break :blk QuickRaceMenuItems[0].min;
+            };
+            return true;
+        }
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.fps = blk: {
+                for (QuickRaceFpsPresets) |val|
+                    if (val > QuickRaceMenu.values.fps) break :blk val;
+                break :blk QuickRaceMenuItems[0].max;
+            };
+            return true;
+        }
+
+        // save without restarting
+        if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
+            QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
+            rf.swrSound_PlaySoundMacro(0x2D);
+        }
+    }
+    return false;
+}
+
+// TODO: circuit-based presets, if/when circuit order added
+// TODO: highlight color changing depending on planet?
+const QuickRaceTrackPresets = [_]i32{ 0, 2, 6, 9, 12, 16, 19, 22 };
+
+fn QuickRaceTrackCallback(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        // scroll presets
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.track = blk: {
+                for (0..QuickRaceTrackPresets.len) |i| {
+                    const val = QuickRaceTrackPresets[QuickRaceTrackPresets.len - i - 1];
+                    if (val < QuickRaceMenu.values.track) break :blk val;
+                }
+                break :blk comptime QuickRaceTrackPresets[QuickRaceTrackPresets.len - 1];
+            };
+            return true;
+        }
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.track = blk: {
+                for (QuickRaceTrackPresets) |val|
+                    if (val > QuickRaceMenu.values.track) break :blk val;
+                break :blk comptime QuickRaceTrackPresets[0];
+            };
+            return true;
+        }
+    }
+    return false;
 }
 
 fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
@@ -636,7 +764,8 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
-    QuickRaceMenu.FpsTimer.Start();
+    QuickRaceMenu.settingsLoad(gf);
+    //QuickRaceMenu.FpsTimer.Start();
 
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
@@ -686,24 +815,11 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
 
-export fn TimerUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    // TODO: move to global state, see also qll_savestate->EarlyEngineUpdateStage20A
-    // only not nullptr if in race scene
-    const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
-        r.ReadRaceDataValue(0x84, u32) != 0;
-    const gui_on: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
-    if (player_ok and gui_on and QolState.fps_limiter) {
+export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // TODO: confirm tabbed_in is actually needed here, possibly move to global state
+    const tabbed_in: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
+    if (gs.in_race.on() and tabbed_in and QolState.fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
-        // FIXME: remove, just for debugging droopy lag; or, convert to 'debug view' idea
-        rt.DrawText(4, 120 + 8 * 0, "exc: {d}", .{QuickRaceMenu.FpsTimer.step_excess}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 1, "per: {d}", .{QuickRaceMenu.FpsTimer.period}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 2, "stp: {d}", .{QuickRaceMenu.FpsTimer.timer_step}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 3, "sns: {d}", .{QuickRaceMenu.FpsTimer.timer_step_ns}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 4, "scp: {d}", .{QuickRaceMenu.FpsTimer.timer_step_cmp}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 5, "tst: {d}", .{QuickRaceMenu.FpsTimer.test_tstart}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 6, "tsl: {d}", .{QuickRaceMenu.FpsTimer.test_tsleep}, null, null) catch {};
-        rt.DrawText(4, 120 + 8 * 7, "tsp: {d}", .{QuickRaceMenu.FpsTimer.test_tspin}, null, null) catch {};
-    }
 }
 
 export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -711,17 +827,20 @@ export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 // FIXME: settings toggles for both of these
-// FIXME: probably want this mid-engine update, immediately before Jdge gets processed?
+// FIXME: probably want this mid-engine update, immediately before Jdge gets
+// processed? (a fn in EngineUpdateStage14 iirc)
 export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // Quick Restart
     if (gs.in_race.on() and
-        QolState.input_quickstart.gets() == .On and
-        QolState.input_pause.gets() == .JustOn and
-        QolState.quickstart)
+        QolState.quickstart and
+        !QuickRaceMenu.menu_active.on() and
+        ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
+        (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
     {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
+        return; // skip quick race menu
     }
 
     // Quick Race Menu
@@ -729,21 +848,28 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         QuickRaceMenu.update();
 }
 
-export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+// FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
+// however, the text flushing DOES run on those frames, apparently from a different callsite
+export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
-        if (gs.in_race == .JustOn) race.reset();
+        if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
 
         const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const total_time: f32 = race_times[5];
 
-        //if (gs.player.in_race_count.on()) {}
+        if (gs.race_state == .Countdown) {
+            race.update_position();
+        }
 
-        if (!gs.player.in_race_count.on()) {
-            if (gs.player.dead == .JustOn) race.total_deaths += 1;
+        if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
+            const speed: f32 = r.ReadPlayerValue(0x1A0, f32);
+            race.update_position();
+            const this_distance = race.this_position.distance(&race.prev_position);
+            race.set_motion(total_time, speed, this_distance);
 
             if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
-            if (gs.player.boosting.on()) race.set_total_boost(total_time);
-            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
+            if (gs.player.boosting.on()) race.set_total_boost(total_time, this_distance);
+            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time, this_distance);
 
             if (gs.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
             if (gs.player.underheating.on()) race.set_total_underheat(total_time);
@@ -755,8 +881,7 @@ export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
         }
 
-        const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
-        if (gs.player.in_race_results.on() and show_stats) {
+        if (gs.race_state == .PostRace) {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
@@ -771,13 +896,24 @@ export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
                 gs.player.upgrades_hp[i],
             );
 
-            RenderRaceResultStatU(10, "Deaths", race.total_deaths);
-            RenderRaceResultStatTime(11, "Boost Time", race.total_boost_duration);
-            RenderRaceResultStatF(12, "Boost Ratio", race.total_boost_ratio);
-            RenderRaceResultStatTime(13, "First Boost", race.first_boost_time);
-            RenderRaceResultStatTime(14, "Underheat Time", race.total_underheat);
-            RenderRaceResultStatTime(15, "Fire Finish", race.fire_finish_duration);
-            RenderRaceResultStatTime(16, "Overheat Time", race.total_overheat);
+            RenderRaceResultStatF(10, "Top Speed", race.top_speed);
+            RenderRaceResultStatF(11, "Avg. Speed", race.avg_speed);
+            RenderRaceResultStatF(12, "Distance", race.total_distance);
+            RenderRaceResultStatU(13, "Deaths", gs.player.deaths);
+            RenderRaceResultStatTime(20, "First Boost", race.first_boost_time);
+            RenderRaceResultStatTime(21, "Underheat Time", race.total_underheat);
+            RenderRaceResultStatTime(22, "Fire Finish", race.fire_finish_duration);
+            RenderRaceResultStatTime(23, "Overheat Time", race.total_overheat);
+            RenderRaceResultStatU(14, "Boosts", race.total_boosts);
+            RenderRaceResultStatTime(15, "Boost Time", race.total_boost_duration);
+            RenderRaceResultStatTime(16, "Avg. Boost Time", race.avg_boost_duration);
+            RenderRaceResultStatF(17, "Boost Distance", race.total_boost_distance);
+            RenderRaceResultStatF(18, "Avg. Boost Distance", race.avg_boost_distance);
+            RenderRaceResultStatF(19, "Boost Ratio", race.total_boost_ratio);
         }
     }
+}
+
+export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    rc.TEXT_HIRES_FLAG.* = 0;
 }

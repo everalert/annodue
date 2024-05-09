@@ -224,7 +224,7 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
         if (postrace) break :blk .PostRaceExiting;
         break :blk .Racing;
     };
-    gs.race_state_new = gs.race_state == gs.race_state_prev;
+    gs.race_state_new = gs.race_state != gs.race_state_prev;
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {

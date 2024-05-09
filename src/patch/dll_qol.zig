@@ -14,6 +14,7 @@ const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
 const debug = @import("core/Debug.zig");
 
 const timing = @import("util/timing.zig");
+const spatial = @import("util/spatial.zig");
 const Menu = @import("util/menu.zig").Menu;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const mi = @import("util/menu_item.zig");
@@ -306,10 +307,16 @@ const FastCountdown = struct {
 const race = struct {
     const stat_x: i16 = 192;
     const stat_y: i16 = 48;
-    const stat_h: u8 = 12;
+    const stat_h: i16 = 12;
     const stat_col: ?u32 = 0xFFFFFFFF;
+    var this_position: spatial.Pos3D = .{};
+    var prev_position: spatial.Pos3D = .{};
+    var top_speed: f32 = 0;
+    var total_distance: f32 = 0;
     var total_deaths: u32 = 0;
+    var total_boosts: u32 = 0;
     var total_boost_duration: f32 = 0;
+    var total_boost_distance: f32 = 0;
     var total_boost_ratio: f32 = 0;
     var total_underheat: f32 = 0;
     var total_overheat: f32 = 0;
@@ -321,10 +328,19 @@ const race = struct {
     var last_underheat_started_total: f32 = 0;
     var last_overheat_started: f32 = 0;
     var last_overheat_started_total: f32 = 0;
+    var avg_boost_duration: f32 = 0;
+    var avg_boost_distance: f32 = 0;
+    var avg_speed: f32 = 0;
 
     fn reset() void {
+        this_position = .{};
+        prev_position = .{};
+        top_speed = 0;
+        total_distance = 0;
         total_deaths = 0;
+        total_boosts = 0;
         total_boost_duration = 0;
+        total_boost_distance = 0;
         total_boost_ratio = 0;
         total_underheat = 0;
         total_overheat = 0;
@@ -336,17 +352,32 @@ const race = struct {
         last_underheat_started_total = 0;
         last_overheat_started = 0;
         last_overheat_started_total = 0;
+        avg_boost_duration = 0;
+        avg_boost_distance = 0;
+        avg_speed = 0;
+    }
+
+    fn set_motion(time: f32, speed: f32, distance: f32) void {
+        total_distance += distance;
+        if (time > 0) avg_speed = total_distance / time;
+        if (speed > top_speed) top_speed = speed;
     }
 
     fn set_last_boost_start(time: f32) void {
+        total_boosts += 1;
         last_boost_started_total = total_boost_duration;
         last_boost_started = time;
         if (first_boost_time == 0) first_boost_time = time;
     }
 
-    fn set_total_boost(time: f32) void {
+    fn set_total_boost(time: f32, distance: f32) void {
         total_boost_duration = last_boost_started_total + time - last_boost_started;
-        total_boost_ratio = total_boost_duration / time;
+        if (time > 0) total_boost_ratio = total_boost_duration / time;
+        total_boost_distance += distance;
+        if (total_boosts > 0) {
+            avg_boost_duration = total_boost_duration / @as(f32, @floatFromInt(total_boosts));
+            avg_boost_distance = total_boost_distance / @as(f32, @floatFromInt(total_boosts));
+        }
     }
 
     fn set_last_underheat_start(time: f32) void {
@@ -370,30 +401,35 @@ const race = struct {
     fn set_fire_finish_duration(time: f32) void {
         fire_finish_duration = time - last_overheat_started;
     }
+
+    fn update_position() void {
+        prev_position = this_position;
+        this_position = r.ReadPlayerValue(0x50, spatial.Pos3D);
+    }
 };
 
 const s_head = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultHeader(i: u8, comptime fmt: []const u8, args: anytype) void {
+fn RenderRaceResultHeader(i: i16, comptime fmt: []const u8, args: anytype) void {
     rt.DrawText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch {};
 }
 
 const s_stat = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultStat(i: u8, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
+fn RenderRaceResultStat(i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
     rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch {};
     rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch {};
 }
 
-fn RenderRaceResultStatU(i: u8, label: [*:0]const u8, value: u32) void {
+fn RenderRaceResultStatU(i: i16, label: [*:0]const u8, value: u32) void {
     RenderRaceResultStat(i, label, "{d: <7}", .{value});
 }
 
-fn RenderRaceResultStatF(i: u8, label: [*:0]const u8, value: f32) void {
+fn RenderRaceResultStatF(i: i16, label: [*:0]const u8, value: f32) void {
     RenderRaceResultStat(i, label, "{d:4.3}", .{value});
 }
 
-fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
+fn RenderRaceResultStatTime(i: i16, label: [*:0]const u8, time: f32) void {
     const t = timing.RaceTimeFromFloat(time);
     RenderRaceResultStat(i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
@@ -401,7 +437,7 @@ fn RenderRaceResultStatTime(i: u8, label: [*:0]const u8, time: f32) void {
 const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
 const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
 
-fn RenderRaceResultStatUpgrade(i: u8, cat: u8, lv: u8, hp: u8) void {
+fn RenderRaceResultStatUpgrade(i: i16, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat(i, rc.UpgradeCategories[cat], "{s}{d:0>3} ~1{s}", .{
         if (hp < 255) s_upg_dmg else s_upg_full,
         hp,
@@ -814,21 +850,30 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         QuickRaceMenu.update();
 }
 
-export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+// FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
+// however, the text flushing DOES run on those frames, apparently from a different callsite
+export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
-        if (gs.in_race == .JustOn) race.reset();
+        if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
 
         const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
         const total_time: f32 = race_times[5];
 
-        //if (gs.race_state == .Countdown) {}
+        if (gs.race_state == .Countdown) {
+            race.update_position();
+        }
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
             if (gs.player.dead == .JustOn) race.total_deaths += 1;
 
+            const speed: f32 = r.ReadPlayerValue(0x1A0, f32);
+            race.update_position();
+            const this_distance = race.this_position.distance(&race.prev_position);
+            race.set_motion(total_time, speed, this_distance);
+
             if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
-            if (gs.player.boosting.on()) race.set_total_boost(total_time);
-            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time);
+            if (gs.player.boosting.on()) race.set_total_boost(total_time, this_distance);
+            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time, this_distance);
 
             if (gs.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
             if (gs.player.underheating.on()) race.set_total_underheat(total_time);
@@ -855,13 +900,20 @@ export fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
                 gs.player.upgrades_hp[i],
             );
 
-            RenderRaceResultStatU(10, "Deaths", race.total_deaths);
-            RenderRaceResultStatTime(11, "Boost Time", race.total_boost_duration);
-            RenderRaceResultStatF(12, "Boost Ratio", race.total_boost_ratio);
-            RenderRaceResultStatTime(13, "First Boost", race.first_boost_time);
-            RenderRaceResultStatTime(14, "Underheat Time", race.total_underheat);
-            RenderRaceResultStatTime(15, "Fire Finish", race.fire_finish_duration);
-            RenderRaceResultStatTime(16, "Overheat Time", race.total_overheat);
+            RenderRaceResultStatF(10, "Top Speed", race.top_speed);
+            RenderRaceResultStatF(11, "Avg. Speed", race.avg_speed);
+            RenderRaceResultStatF(12, "Distance", race.total_distance);
+            RenderRaceResultStatU(13, "Deaths", race.total_deaths);
+            RenderRaceResultStatTime(20, "First Boost", race.first_boost_time);
+            RenderRaceResultStatTime(21, "Underheat Time", race.total_underheat);
+            RenderRaceResultStatTime(22, "Fire Finish", race.fire_finish_duration);
+            RenderRaceResultStatTime(23, "Overheat Time", race.total_overheat);
+            RenderRaceResultStatU(14, "Boosts", race.total_boosts);
+            RenderRaceResultStatTime(15, "Boost Time", race.total_boost_duration);
+            RenderRaceResultStatTime(16, "Avg. Boost Time", race.avg_boost_duration);
+            RenderRaceResultStatF(17, "Boost Distance", race.total_boost_distance);
+            RenderRaceResultStatF(18, "Avg. Boost Distance", race.avg_boost_distance);
+            RenderRaceResultStatF(19, "Boost Ratio", race.total_boost_ratio);
         }
     }
 }

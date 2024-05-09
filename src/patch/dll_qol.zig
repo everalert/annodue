@@ -313,7 +313,6 @@ const race = struct {
     var prev_position: spatial.Pos3D = .{};
     var top_speed: f32 = 0;
     var total_distance: f32 = 0;
-    var total_deaths: u32 = 0;
     var total_boosts: u32 = 0;
     var total_boost_duration: f32 = 0;
     var total_boost_distance: f32 = 0;
@@ -337,7 +336,6 @@ const race = struct {
         prev_position = .{};
         top_speed = 0;
         total_distance = 0;
-        total_deaths = 0;
         total_boosts = 0;
         total_boost_duration = 0;
         total_boost_distance = 0;
@@ -864,8 +862,6 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         }
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
-            if (gs.player.dead == .JustOn) race.total_deaths += 1;
-
             const speed: f32 = r.ReadPlayerValue(0x1A0, f32);
             race.update_position();
             const this_distance = race.this_position.distance(&race.prev_position);
@@ -903,7 +899,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             RenderRaceResultStatF(10, "Top Speed", race.top_speed);
             RenderRaceResultStatF(11, "Avg. Speed", race.avg_speed);
             RenderRaceResultStatF(12, "Distance", race.total_distance);
-            RenderRaceResultStatU(13, "Deaths", race.total_deaths);
+            RenderRaceResultStatU(13, "Deaths", gs.player.deaths);
             RenderRaceResultStatTime(20, "First Boost", race.first_boost_time);
             RenderRaceResultStatTime(21, "Underheat Time", race.total_underheat);
             RenderRaceResultStatTime(22, "Fire Finish", race.fire_finish_duration);

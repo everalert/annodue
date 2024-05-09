@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core: Ability to toggle Practice Mode OFF in race scene before countdown
 - Hook: `TextRenderA`
 - Hook: `MapRenderB` `MapRenderA`
+- Overlay: FPS readout, death count, fall timer
 - Post-Race Stats: `Distance` `Top Speed` `Avg. Speed` `Boost Duration` `Avg. Boost Duration` `Boost Distance` `Avg. Boost Distance`
 - Setting: `qol` `fps_limiter_default` `u32`
 - Setting: Allow `on` `off` for `bool` settings
@@ -25,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Core: `PLUGIN_VERSION` - `17`→`18`
+- Core: `PLUGIN_VERSION` - `17`→`19`
 - Core: Show Practice Mode label the whole way through race end to start race in cantina
 - Quick Race: Upgrade presets now require highlighting any upgrade first
 - Quick Race: XInput Quick Confirm - `B`→`Start`

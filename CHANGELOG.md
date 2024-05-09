@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Hook: TextRenderB insertion point after text render
+- Savestates: Loading state overriding settings when game is loading new scene
 - Quick Race: Cantina not synced when setting number of racers
 - Updater: Mouse cursor not visible when showing restart message
 

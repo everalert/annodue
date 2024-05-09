@@ -201,7 +201,21 @@ const state = struct {
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
     fn loadable(gs: *GlobalSt) bool {
-        return gs.in_race.on();
+        const race_ok = gs.in_race.on();
+        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
+        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        return race_ok and loading_ok;
+    }
+
+    // FIXME: check if you're actually in the racing part, also integrate with global
+    // apis like Freeze (same for saveable())
+    fn updateable(gs: *GlobalSt) bool {
+        const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
+        const paused = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
+        const race_ok = gs.in_race.on();
+        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
+        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        return race_ok and !tabbed_out and !paused and loading_ok;
     }
 
     fn get_depth(index: usize) usize {
@@ -378,6 +392,11 @@ fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
 }
 
 fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
+    if (!state.updateable(gs)) return;
+
+    if (gs.race_state != .Racing)
+        return state.reset();
+
     state.rec_state = switch (state.rec_state) {
         .Recording => DoStateRecording(gs, gv),
         .Loading => DoStateLoading(gs, gv),
@@ -428,13 +447,7 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 // TODO: maybe reset state/recording if savestates or practice mode disabled?
 export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
-
-    // TODO: build tabbed_out and paused into UpdateState?
-    const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
-    const paused = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
-    if (gs.in_race.on() and gs.practice_mode and !tabbed_out and !paused) {
-        if (gs.race_state == .Racing) UpdateState(gs, gf) else state.reset();
-    }
+    UpdateState(gs, gf);
 }
 
 // TODO: merge with EngineUpdateStage20A?

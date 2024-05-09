@@ -274,6 +274,10 @@ pub fn MenuRaceResultsB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
+pub fn MenuTrackSelectB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    DrawMenuPracticeModeLabel();
+}
+
 pub fn MenuTrackB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hook: `TextRenderA`
 - Hook: `MapRenderB` `MapRenderA`
 - Setting: `qol` `fps_limiter_default` `u32`
+- Setting: Allow `on` `off` for `bool` settings
 - Quick Race: Apply FPS without restart in practice mode
 - Quick Race: Can now hold button to open instead of double-tap
 - Quick Race: Scroll through FPS presets with hotkey
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Core: `PLUGIN_VERSION` - `17`→`18`
+- Core: Show Practice Mode label the whole way through race end to start race in cantina
 - Quick Race: Upgrade presets now require highlighting any upgrade first
 - Quick Race: XInput Quick Confirm - `B`→`Start`
 - Quick Race: XInput Close - `Start`→`B`

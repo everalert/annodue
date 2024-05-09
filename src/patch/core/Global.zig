@@ -38,8 +38,8 @@ pub const Version = std.SemanticVersion{
     .major = 0,
     .minor = 1,
     .patch = 4,
-    .pre = "alpha",
-    .build = "270",
+    //.pre = "alpha",
+    .build = "346",
 };
 
 // TODO: use SemanticVersion parse fn instead

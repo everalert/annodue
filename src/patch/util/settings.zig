@@ -14,7 +14,7 @@ pub const IniValue = union(enum) {
 
     pub fn allocFmt(self: *IniValue, alloc: std.mem.Allocator) ![]u8 {
         return switch (self.*) {
-            .b => |val| std.fmt.allocPrint(alloc, "{s}", .{if (val) "true" else "false"}),
+            .b => |val| std.fmt.allocPrint(alloc, "{s}", .{if (val) "on" else "off"}),
             .i => |val| std.fmt.allocPrint(alloc, "{d}", .{val}),
             .u => |val| std.fmt.allocPrint(alloc, "{d}", .{val}),
             .f => |val| std.fmt.allocPrint(alloc, "{d:4.2}", .{val}),
@@ -83,11 +83,11 @@ pub const SettingsGroup = struct {
         if (kv) |item| {
             return switch (item.value_ptr.*) {
                 .b => {
-                    if (std.mem.eql(u8, "true", value) or value[0] == '1') {
+                    if (std.mem.eql(u8, "on", value) or std.mem.eql(u8, "true", value) or value[0] == '1') {
                         item.value_ptr.*.b = true;
                         return;
                     }
-                    if (std.mem.eql(u8, "false", value) or value[0] == '0') {
+                    if (std.mem.eql(u8, "off", value) or std.mem.eql(u8, "false", value) or value[0] == '0') {
                         item.value_ptr.*.b = false;
                         return;
                     }

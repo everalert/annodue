@@ -9,48 +9,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Bugfix: Map text rendering not accounting for hi-res flag
-- Core: Global State `race_state` `race_state_prev` `race_state_new`
-- Core: Ability to toggle Practice Mode OFF in race scene before countdown
-- Core: Added hooking single-param functions to util library ([#1](https://github.com/everalert/annodue/pull/1))
-- Hook: `TextRenderA`
-- Hook: `MapRenderB` `MapRenderA`
-- Overlay: FPS readout, death count, fall timer
-- Post-Race Stats: `Distance` `Top Speed` `Avg. Speed` `Boost Duration` `Avg. Boost Duration` `Boost Distance` `Avg. Boost Distance`
-- Savestates: Load counter
-- Setting: `qol` `fps_limiter_default` `u32`
-- Setting: Allow `on` `off` for `bool` settings
-- Quick Race: Apply FPS without restart in practice mode
-- Quick Race: Can now hold button to open instead of double-tap
-- Quick Race: Scroll through FPS presets with hotkey
-- Quick Race: Scroll through tracks by planet with hotkey
+- Bugfix:
+	- Map text rendering not accounting for hi-res flag
+- Core: Global State
+	- `race_state`
+	- `race_state_prev`
+	- `race_state_new`
+- Core:
+	- Ability to toggle Practice Mode OFF in race scene before countdown
+	- Added hooking single-param functions to util library ([#1](https://github.com/everalert/annodue/pull/1))
+- Hook:
+	- `TextRenderA`
+	- `MapRenderB`
+	- `MapRenderA`
+- Overlay:
+	- FPS readout
+	- death count tracker
+	- fall timer
+- Post-Race Stats:
+	- `Distance`
+	- `Top Speed`
+	- `Avg. Speed`
+	- `Boost Duration`
+	- `Avg. Boost Duration`
+	- `Boost Distance`
+	- `Avg. Boost Distance`
+- Savestates:
+	- Load count tracker
+- Setting:
+	- `qol -> fps_limiter_default (u32)`
+	- Allow `on` and `off` for `bool` settings
+- Quick Race:
+	- Apply FPS without restart in practice mode
+	- Can now hold button to open instead of double-tap
+	- Scroll through FPS presets with hotkey
+	- Scroll through tracks by planet with hotkey
 
 
 ### Changed
 
-- Core: `PLUGIN_VERSION` - `17`→`19`
-- Core: Show Practice Mode label the whole way through race end to start race in cantina
-- Core: Moved zig-ini dependency to package manager
-- Quick Race: Upgrade presets now require highlighting any upgrade first
-- Quick Race: XInput Quick Confirm - `B`→`Start`
-- Quick Race: XInput Close - `Start`→`B`
-- Quick Race: Keyboard Quick Confirm - `Enter`→`Space`
-- Quick Race: Keyboard Interact - `Space`→`Enter`
-- Quick Reset: Input combination more lenient
-- Quick Reset: Keyboard - `Esc+F1`→`Esc+Tab`
+- Core:
+	- `PLUGIN_VERSION` - `17`→`19`
+	- Show Practice Mode label the whole way through race end to start race in cantina
+	- Moved zig-ini dependency to package manager
+- Quick Race:
+	- Upgrade presets now require highlighting any upgrade first
+	- XInput Quick Confirm - `B`→`Start`
+	- XInput Close - `Start`→`B`
+	- Keyboard Quick Confirm - `Enter`→`Space`
+	- Keyboard Interact - `Space`→`Enter`
+- Quick Reset:
+	- Input combination more lenient
+	- Keyboard - `Esc+F1`→`Esc+Tab`
 
 ### Removed
 
-- Core: Global State `player.in_race_count` `player.in_race_results` `player.in_race_racing`
+- Core: Global State
+	- `player -> in_race_count`
+	- `player -> in_race_results`
+	- `player -> in_race_racing`
 
 ### Fixed
 
-- Build: Release directory enforced and impacting graph even when not building release step
-- Hook: TextRenderB insertion point after text render
-- Quick Race: Cantina not synced when setting number of racers
-- Savestates: Loading state overriding settings when game is loading new scene
-- Savestates: Memory leak when hot-reloading plugin
-- Updater: Mouse cursor not visible when showing restart message
+- Build:
+	- Release directory enforced and impacting graph even when not building release step
+- Hook:
+	- `TextRenderB` insertion point after text render
+- Quick Race:
+	- Cantina not synced when setting number of racers
+- Savestates:
+	- Loading state overriding settings when game is loading new scene
+	- Memory leak when hot-reloading plugin
+- Updater:
+	- Mouse cursor not visible when showing restart message
 
 ## [0.1.3] - 2024-04-30
 

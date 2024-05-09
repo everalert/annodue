@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bugfix: Map text rendering not accounting for hi-res flag
 - Core: Global State `race_state` `race_state_prev` `race_state_new`
 - Core: Ability to toggle Practice Mode OFF in race scene before countdown
+- Core: Added hooking single-param functions to util library ([#1](https://github.com/everalert/annodue/pull/1))
 - Hook: `TextRenderA`
 - Hook: `MapRenderB` `MapRenderA`
 - Overlay: FPS readout, death count, fall timer
@@ -44,10 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Build: Release directory enforced and impacting graph even when not building release step
 - Hook: TextRenderB insertion point after text render
+- Quick Race: Cantina not synced when setting number of racers
 - Savestates: Loading state overriding settings when game is loading new scene
 - Savestates: Memory leak when hot-reloading plugin
-- Quick Race: Cantina not synced when setting number of racers
 - Updater: Mouse cursor not visible when showing restart message
 
 ## [0.1.3] - 2024-04-30

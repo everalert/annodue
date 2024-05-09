@@ -106,6 +106,9 @@ const state = struct {
     const stage_off: usize = headers_off + headers_size;
     const data_off: usize = stage_off + off_END * 2;
 
+    // FIXME: remove gpa/alloc, do some kind of core integration instead
+    var gpa: ?std.heap.GeneralPurposeAllocator(.{}) = null;
+    var alloc: ?std.mem.Allocator = null;
     const memory_size: usize = 1024 * 1024 * 64; // 64MB
     var memory: []u8 = undefined;
     var memory_addr: usize = undefined;
@@ -162,9 +165,12 @@ const state = struct {
     var layer_index_count: usize = undefined;
 
     fn init(_: *GlobalFn) void {
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        const alloc = gpa.allocator();
-        memory = alloc.alloc(u8, memory_size) catch @panic("failed to allocate memory for savestate/rewind");
+        if (initialized) return;
+        defer initialized = true;
+
+        gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        alloc = gpa.?.allocator();
+        memory = alloc.?.alloc(u8, memory_size) catch @panic("failed to allocate memory for savestate/rewind");
         @memset(memory[0..memory_size], 0x00);
 
         memory_addr = @intFromPtr(memory.ptr);
@@ -176,8 +182,19 @@ const state = struct {
         offsets = @as(@TypeOf(offsets), @ptrFromInt(memory_addr + offsets_off));
         headers = @as(@TypeOf(headers), @ptrFromInt(memory_addr + headers_off));
         stage = @as(@TypeOf(stage), @ptrFromInt(memory_addr + stage_off));
+    }
 
-        initialized = true;
+    fn deinit(_: *GlobalFn) void {
+        if (!initialized) return;
+        defer initialized = false;
+
+        if (alloc) |a| a.free(memory);
+        if (gpa) |_| switch (gpa.?.deinit()) {
+            .leak => @panic("leak detected when deinitializing savestate/rewind"),
+            else => {},
+        };
+
+        reset();
     }
 
     fn reset() void {
@@ -425,7 +442,9 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    state.deinit(gf);
+}
 
 // HOOKS
 

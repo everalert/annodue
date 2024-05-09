@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Core: `PLUGIN_VERSION` - `17`→`19`
 - Core: Show Practice Mode label the whole way through race end to start race in cantina
+- Core: Moved zig-ini dependency to package manager
 - Quick Race: Upgrade presets now require highlighting any upgrade first
 - Quick Race: XInput Quick Confirm - `B`→`Start`
 - Quick Race: XInput Close - `Start`→`B`

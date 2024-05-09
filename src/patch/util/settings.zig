@@ -1,7 +1,7 @@
 const settings = @This();
 
 const std = @import("std");
-const ini = @import("../import/import.zig").ini;
+const ini = @import("zigini");
 
 // TODO: convert hashmaps to ArrayList, so that settings in default file retains
 // order as defined in patch/core/Settings.zig

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hook: `MapRenderB` `MapRenderA`
 - Overlay: FPS readout, death count, fall timer
 - Post-Race Stats: `Distance` `Top Speed` `Avg. Speed` `Boost Duration` `Avg. Boost Duration` `Boost Distance` `Avg. Boost Distance`
+- Savestates: Load counter
 - Setting: `qol` `fps_limiter_default` `u32`
 - Setting: Allow `on` `off` for `bool` settings
 - Quick Race: Apply FPS without restart in practice mode
@@ -43,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Hook: TextRenderB insertion point after text render
+- Savestates: Loading state overriding settings when game is loading new scene
+- Savestates: Memory leak when hot-reloading plugin
 - Quick Race: Cantina not synced when setting number of racers
 - Updater: Mouse cursor not visible when showing restart message
 

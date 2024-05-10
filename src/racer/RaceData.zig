@@ -1,5 +1,6 @@
 const std = @import("std");
 const f = @import("File.zig");
+const Stats = @import("Stats.zig").Stats;
 
 pub const SIZE: usize = 0x88;
 
@@ -22,7 +23,7 @@ pub const RaceData = extern struct {
     unk10: u32,
     unk14: u32,
     pVehicleMetadata: u32,
-    stats: [15]f32, // TODO: stats struct
+    stats: Stats,
     unk58: u32,
     pos: u32,
     time: extern struct {

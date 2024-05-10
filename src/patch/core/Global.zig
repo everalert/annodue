@@ -20,6 +20,7 @@ const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
 const rrd = @import("racer").RaceData;
+const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
 
 const w32 = @import("zigwin32");
@@ -124,16 +125,16 @@ pub const GlobalState = extern struct {
         p.dead = .Off;
         p.deaths = 0;
 
-        p.heat_rate = r.ReadPlayerValue(0x8C, f32);
-        p.cool_rate = r.ReadPlayerValue(0x90, f32);
+        p.heat_rate = re.Test.PLAYER.*.stats.HeatRate; // TODO: remove from gs, now that it's easy?
+        p.cool_rate = re.Test.PLAYER.*.stats.CoolRate; // TODO: remove from gs, now that it's easy?
         p.heat = 0;
     }
 
     fn player_update(self: *GlobalState) void {
         const p = &self.player;
-        p.flags1 = r.ReadPlayerValue(0x60, u32);
-        p.heat = r.ReadPlayerValue(0x218, f32);
-        const engine: [6]u32 = r.ReadPlayerValue(0x2A0, [6]u32);
+        p.flags1 = re.Test.PLAYER.*.flags1; // TODO: remove from gs, now that it's easy?
+        p.heat = re.Test.PLAYER.*.temperature; // TODO: remove from gs, now that it's easy?
+        const engine = re.Test.PLAYER.*.engineStatus; // TODO: remove from gs, now that it's easy?
 
         p.boosting.update((p.flags1 & (1 << 23)) > 0);
         p.underheating.update(p.heat >= 100);
@@ -217,7 +218,7 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
         if (!gs.in_race.on()) break :blk .None;
         if (mem.read(rc.ADDR_IN_RACE, u8) == 0) break :blk .PreRace;
         // TODO: figure out how the engine knows to set these and use those instead
-        const flags1 = r.ReadPlayerValue(0x60, u32);
+        const flags1 = re.Test.PLAYER.*.flags1;
         const countdown: bool = flags1 & (1 << 0) != 0;
         if (countdown) break :blk .Countdown;
         const postrace: bool = flags1 & (1 << 5) == 0;

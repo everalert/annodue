@@ -404,7 +404,7 @@ const race = struct {
 
     fn update_position() void {
         prev_position = this_position;
-        this_position = r.ReadPlayerValue(0x50, spatial.Pos3D);
+        this_position = @bitCast(re.Test.PLAYER.*.transform[12..15].*); // FIXME: ???
     }
 };
 
@@ -861,7 +861,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         }
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
-            const speed: f32 = r.ReadPlayerValue(0x1A0, f32);
+            const speed = re.Test.PLAYER.*.speed;
             race.update_position();
             const this_distance = race.this_position.distance(&race.prev_position);
             race.set_motion(total_time, speed, this_distance);

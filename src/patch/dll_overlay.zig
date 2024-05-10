@@ -13,6 +13,7 @@ const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
 const rrd = @import("racer").RaceData;
+const rete = @import("racer").Entity.Test;
 const rto = rt.TextStyleOpts;
 
 const mem = @import("util/memory.zig");
@@ -105,7 +106,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 rt.DrawText(lbx, lby + sty * 1, "{d}~rDETH  ", .{gs.player.deaths}, null, null) catch {};
 
             // FALL timer
-            const oob_timer = r.ReadPlayerValue(0x2C8, f32);
+            //const oob_timer = r.ReadPlayerValue(0x2C8, f32);
+            const oob_timer = rete.PLAYER.*.fallTimer;
             if (oob_timer > 0)
                 rt.DrawText(lbx, lby + sty * 2, "{d:0>5.3}~rFall  ", .{oob_timer}, null, null) catch {};
         }

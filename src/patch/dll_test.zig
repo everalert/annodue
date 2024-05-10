@@ -10,10 +10,11 @@ const VERSION_STR = @import("core/Global.zig").VersionStr;
 const debug = @import("core/Debug.zig");
 
 const msg = @import("util/message.zig");
+
 const r = @import("util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
+const rf = @import("racer").functions;
+const rc = @import("racer").constants;
+const rt = @import("racer").text;
 const rto = rt.TextStyleOpts;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging

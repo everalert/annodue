@@ -13,10 +13,11 @@ const nt = @import("util/normalized_transform.zig");
 const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
+
 const r = @import("util/racer.zig");
-const rc = r.constants;
-const rf = r.functions;
-const rt = r.text;
+const rc = @import("racer").constants;
+const rf = @import("racer").functions;
+const rt = @import("racer").text;
 const rto = rt.TextStyleOpts;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging

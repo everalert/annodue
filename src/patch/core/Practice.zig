@@ -10,10 +10,11 @@ const fl = @import("../util/flash.zig");
 const st = @import("../util/active_state.zig");
 const nt = @import("../util/normalized_transform.zig");
 const mem = @import("../util/memory.zig");
+
 const r = @import("../util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
+const rf = @import("racer").functions;
+const rc = @import("racer").constants;
+const rt = @import("racer").text;
 const rto = rt.TextStyleOpts;
 
 // FIXME: refactor and merge with core

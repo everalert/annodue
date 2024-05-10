@@ -23,9 +23,9 @@ const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
 
 const r = @import("util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
+const rf = @import("racer").functions;
+const rc = @import("racer").constants;
+const rt = @import("racer").text;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;

@@ -14,10 +14,11 @@ const xinput = @import("../util/xinput.zig");
 const dbg = @import("../util/debug.zig");
 const msg = @import("../util/message.zig");
 const mem = @import("../util/memory.zig");
+
 const r = @import("../util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
+const rf = @import("racer").functions;
+const rc = @import("racer").constants;
+const rt = @import("racer").text;
 const rto = rt.TextStyleOpts;
 
 const w32 = @import("zigwin32");

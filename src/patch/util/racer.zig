@@ -1,12 +1,10 @@
 const std = @import("std");
 const mem = @import("memory.zig");
 
-pub const constants = @import("racer_const.zig");
-pub const functions = @import("racer_fn.zig");
-pub const text = @import("racer_text.zig");
-const c = constants;
-const f = functions;
-const t = text;
+const racer = @import("racer");
+const c = racer.constants;
+const f = racer.functions;
+const t = racer.text;
 
 // RACE DATA STRUCT
 // FIXME: differentiate between player RaceData and RaceData array indexed reads

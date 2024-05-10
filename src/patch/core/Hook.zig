@@ -20,9 +20,9 @@ const PLUGIN_VERSION = global.PLUGIN_VERSION;
 
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
-const r = @import("../util/racer.zig");
-const rc = @import("../util/racer_const.zig");
-const rf = @import("../util/racer_fn.zig");
+const r = @import("racer");
+const rc = r.constants;
+const rf = r.functions;
 
 // TODO: switch to Sha256 for perf?
 const Sha512 = std.crypto.hash.sha2.Sha512;

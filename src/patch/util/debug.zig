@@ -8,7 +8,7 @@ const w32wm = w32.ui.windows_and_messaging;
 
 const global = @import("../core/Global.zig");
 const mem = @import("memory.zig");
-const rc = @import("racer.zig").constants;
+const rc = @import("racer").constants;
 
 const DebugConsole = struct {
     var initialized: bool = false;

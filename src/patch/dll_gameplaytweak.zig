@@ -8,9 +8,9 @@ const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
 
 const debug = @import("core/Debug.zig");
 
-const r = @import("util/racer.zig");
-const rf = @import("util/racer_fn.zig");
-const rc = @import("util/racer_const.zig");
+const r = @import("racer");
+const rc = r.constants;
+const rf = r.functions;
 
 const mem = @import("util/memory.zig");
 

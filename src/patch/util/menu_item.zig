@@ -11,9 +11,9 @@ const st = @import("active_state.zig");
 const input = @import("../core/input.zig");
 
 const r = @import("racer.zig");
-const rc = r.constants;
-const rf = r.functions;
-const rt = r.text;
+const rc = @import("racer").constants;
+const rf = @import("racer").functions;
+const rt = @import("racer").text;
 const rto = rt.TextStyleOpts;
 
 pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) bool;

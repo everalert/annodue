@@ -8,7 +8,7 @@ const GlobalSt = @import("Global.zig").GlobalState;
 const GlobalFn = @import("Global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("Global.zig").PLUGIN_VERSION;
 
-const r = @import("../util/racer.zig");
+const r = @import("racer");
 const rt = r.text;
 
 // TODO: post-toast callback functions

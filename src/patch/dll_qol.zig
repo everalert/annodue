@@ -26,6 +26,7 @@ const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
+const rrd = @import("racer").RaceData;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;
@@ -545,7 +546,8 @@ const QuickRaceMenu = extern struct {
         _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
         r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
         //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
-        const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });
+        // TODO: add file defs to racerlib, then: &rrd.PLAYER.*.pFile.upgrades or w/e
+        const u = mem.deref(&.{ rrd.PLAYER_PTR_ADDR, rrd.RaceDataOffset.pFile.v(), 0x41 });
         for (values.up_lv, values.up_hp, 0..) |lv, hp, i| {
             _ = mem.write(u + 0 + i, u8, @as(u8, @intCast(lv)));
             _ = mem.write(u + 7 + i, u8, @as(u8, @intCast(hp)));
@@ -566,7 +568,8 @@ const QuickRaceMenu = extern struct {
         values.racers = r.ReadEntityValue(.Hang, 0, 0x72, u8); // also: 0x50C558
         values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8) - 1;
         //values.winnings_split = r.ReadEntityValue(.Hang, 0, 0x91, u8);
-        const u: [14]u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 }, [14]u8);
+        // TODO: add file defs to racerlib, then: rrd.PLAYER.*.pFile.upgrades or w/e
+        const u: [14]u8 = mem.deref_read(&.{ rrd.PLAYER_PTR_ADDR, rrd.RaceDataOffset.pFile.v(), 0x41 }, [14]u8);
         for (u[0..7], u[7..14], 0..) |lv, hp, i| {
             values.up_lv[i] = lv;
             values.up_hp[i] = hp;
@@ -854,8 +857,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
 
-        const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
-        const total_time: f32 = race_times[5];
+        const total_time: f32 = rrd.PLAYER.*.time.total;
 
         if (gs.race_state == .Countdown) {
             race.update_position();

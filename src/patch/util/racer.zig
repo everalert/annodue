@@ -2,48 +2,15 @@ const std = @import("std");
 const mem = @import("memory.zig");
 
 const racer = @import("racer");
+const rd = racer.RaceData;
 const c = racer.constants;
 const f = racer.functions;
 const t = racer.text;
 
-// RACE DATA STRUCT
-// FIXME: differentiate between player RaceData and RaceData array indexed reads
-
-pub fn DerefRaceData(offset: usize) usize {
-    return mem.deref(&.{
-        c.ADDR_RACE_DATA,
-        offset,
-    });
-}
-
-pub fn ReadRaceDataValue(offset: usize, comptime T: type) T {
-    const address = DerefRaceData(offset);
-    return mem.read(address, T);
-}
-
-pub fn ReadRaceDataValueBytes(offset: usize, out: ?*anyopaque, len: usize) void {
-    const address = DerefRaceData(offset);
-    mem.read_bytes(address, out, len);
-}
-
-pub fn WriteRaceDataValue(offset: usize, comptime T: type, value: T) void {
-    const address = DerefRaceData(offset);
-    _ = mem.write(address, T, value);
-}
-
-pub fn WriteRaceDataValueBytes(offset: usize, in: ?*anyopaque, len: usize) void {
-    const address = DerefRaceData(offset);
-    _ = mem.write_bytes(address, in, len);
-}
-
 // PLAYER TEST ENTITY
 
 pub fn DerefPlayer(offset: usize) usize {
-    return mem.deref(&.{
-        c.ADDR_RACE_DATA,
-        0x84,
-        offset,
-    });
+    return mem.deref(&.{ rd.PLAYER_PTR_ADDR, rd.RaceDataOffset.pTestEntity.v(), offset });
 }
 
 pub fn ReadPlayerValue(offset: usize, comptime T: type) T {

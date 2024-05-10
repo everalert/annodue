@@ -19,6 +19,7 @@ const r = @import("../util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
+const rrd = @import("racer").RaceData;
 const rto = rt.TextStyleOpts;
 
 const w32 = @import("zigwin32");
@@ -209,8 +210,7 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
-    const player_ready: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
-        r.ReadRaceDataValue(0x84, u32) != 0;
+    const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;
     gs.in_race.update(player_ready);
 
     gs.race_state_prev = gs.race_state;

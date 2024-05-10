@@ -12,6 +12,7 @@ const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
+const rrd = @import("racer").RaceData;
 const rto = rt.TextStyleOpts;
 
 const mem = @import("util/memory.zig");
@@ -69,9 +70,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
     if (gs.in_race.on()) {
-        const lap: u8 = r.ReadRaceDataValue(0x78, u8);
-        const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
-        const lap_times: []const f32 = race_times[0..5];
+        const lap: u32 = rrd.PLAYER.*.lap;
+        const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
             // draw heat timer

@@ -3,6 +3,7 @@ const mem = @import("memory.zig");
 
 const racer = @import("racer");
 const rd = racer.RaceData;
+const e = racer.Entity;
 const c = racer.constants;
 const f = racer.functions;
 const t = racer.text;
@@ -35,31 +36,31 @@ pub fn WritePlayerValueBytes(offset: usize, in: ?*anyopaque, len: usize) void {
 
 // ENTITY SYSTEM
 
-pub fn DerefEntity(entity: c.ENTITY, index: u32, offset: usize) usize {
+pub fn DerefEntity(entity: e.ENTITY, index: u32, offset: usize) usize {
     return mem.deref(&.{
-        c.ADDR_ENTITY_MANAGER_JUMPTABLE,
+        e.MANAGER_JUMPTABLE_ADDR,
         @intFromEnum(entity) * 4,
         0x10,
-        c.EntitySize(entity) * index + offset,
+        e.EntitySize(entity) * index + offset,
     });
 }
 
-pub fn ReadEntityValue(entity: c.ENTITY, index: u32, offset: usize, comptime T: type) T {
+pub fn ReadEntityValue(entity: e.ENTITY, index: u32, offset: usize, comptime T: type) T {
     const address = DerefEntity(entity, index, offset);
     return mem.read(address, T);
 }
 
-pub fn ReadEntityValueBytes(entity: c.ENTITY, index: u32, offset: usize, out: ?*anyopaque, len: usize) void {
+pub fn ReadEntityValueBytes(entity: e.ENTITY, index: u32, offset: usize, out: ?*anyopaque, len: usize) void {
     const address = DerefEntity(entity, index, offset);
     mem.read_bytes(address, out, len);
 }
 
-pub fn WriteEntityValue(entity: c.ENTITY, index: u32, offset: usize, comptime T: type, value: T) void {
+pub fn WriteEntityValue(entity: e.ENTITY, index: u32, offset: usize, comptime T: type, value: T) void {
     const address = DerefEntity(entity, index, offset);
     _ = mem.write(address, T, value);
 }
 
-pub fn WriteEntityValueBytes(entity: c.ENTITY, index: u32, offset: usize, in: ?*anyopaque, len: usize) void {
+pub fn WriteEntityValueBytes(entity: e.ENTITY, index: u32, offset: usize, in: ?*anyopaque, len: usize) void {
     const address = DerefEntity(entity, index, offset);
     _ = mem.write_bytes(address, in, len);
 }

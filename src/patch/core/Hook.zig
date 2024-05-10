@@ -24,6 +24,7 @@ const mem = @import("../util/memory.zig");
 const r = @import("racer");
 const rc = r.constants;
 const rf = r.functions;
+const reh = r.Entity.Hang;
 
 // TODO: switch to Sha256 for perf?
 const Sha512 = std.crypto.hash.sha2.Sha512;
@@ -529,16 +530,16 @@ fn HookMenuDrawing(memory: usize) usize {
     var off: usize = memory;
 
     // see fn_457620 @ 0x45777F
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 1, PluginFnCallback(.MenuTitleScreenB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 3, PluginFnCallback(.MenuStartRaceB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 4, PluginFnCallback(.MenuJunkyardB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 5, PluginFnCallback(.MenuRaceResultsB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 7, PluginFnCallback(.MenuWattosShopB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 8, PluginFnCallback(.MenuHangarB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 9, PluginFnCallback(.MenuVehicleSelectB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 12, PluginFnCallback(.MenuTrackSelectB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 13, PluginFnCallback(.MenuTrackB));
-    off = hook.intercept_jumptable(off, rc.ADDR_DRAW_MENU_JUMPTABLE, 18, PluginFnCallback(.MenuCantinaEntryB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 1, PluginFnCallback(.MenuTitleScreenB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 3, PluginFnCallback(.MenuStartRaceB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 4, PluginFnCallback(.MenuJunkyardB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 5, PluginFnCallback(.MenuRaceResultsB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 7, PluginFnCallback(.MenuWattosShopB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 8, PluginFnCallback(.MenuHangarB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 9, PluginFnCallback(.MenuVehicleSelectB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 12, PluginFnCallback(.MenuTrackSelectB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 13, PluginFnCallback(.MenuTrackB));
+    off = hook.intercept_jumptable(off, reh.DRAW_MENU_JUMPTABLE_ADDR, 18, PluginFnCallback(.MenuCantinaEntryB));
 
     return off;
 }

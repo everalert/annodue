@@ -27,6 +27,7 @@ const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
 const rrd = @import("racer").RaceData;
+const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;
@@ -552,7 +553,7 @@ const QuickRaceMenu = extern struct {
         }
 
         const jdge = r.DerefEntity(.Jdge, 0, 0);
-        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
+        rf.TriggerLoad_InRace(jdge, re.M_RSTR);
         close();
     }
 
@@ -838,7 +839,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     {
         const jdge = r.DerefEntity(.Jdge, 0, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
+        rf.TriggerLoad_InRace(jdge, re.M_RSTR);
         return; // skip quick race menu
     }
 

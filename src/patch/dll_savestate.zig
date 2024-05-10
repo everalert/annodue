@@ -22,6 +22,7 @@ const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
 const rrd = @import("racer").RaceData;
+const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;
@@ -92,12 +93,12 @@ const state = struct {
     const off_input: usize = 0;
     const off_race: usize = rc.INPUT_COMBINED_SIZE;
     const off_test: usize = off_race + rrd.SIZE;
-    const off_hang: usize = off_test + rc.EntitySize(.Test);
-    const off_cman: usize = off_hang + rc.EntitySize(.Hang);
-    const off_END: usize = off_cman + rc.EntitySize(.cMan);
+    const off_hang: usize = off_test + re.Test.SIZE;
+    const off_cman: usize = off_hang + re.Hang.SIZE;
+    const off_END: usize = off_cman + re.cMan.SIZE;
 
     const frames: usize = 60 * 60 * 8; // 8min @ 60fps
-    //const frame_size: usize = off_cman + rc.EntitySize(.cMan);
+    //const frame_size: usize = off_cman + rc.cMan.SIZE;
     const header_size: usize = std.math.divCeil(usize, off_END, 4 * 8) catch unreachable; // comptime
     const header_type: type = std.packed_int_array.PackedIntArray(u1, header_bits);
     const header_bits: usize = off_END / 4;
@@ -301,9 +302,9 @@ const state = struct {
             const s1_base = raw_stage + off_END;
             mem.read_bytes(rc.INPUT_COMBINED_ADDR, s1_base + off_input, rc.INPUT_COMBINED_SIZE);
             @memcpy(s1_base + off_race, rrd.PLAYER_SLICE.*);
-            r.ReadPlayerValueBytes(0, s1_base + off_test, rc.EntitySize(.Test));
-            r.ReadEntityValueBytes(.Hang, 0, 0, s1_base + off_hang, rc.EntitySize(.Hang));
-            r.ReadEntityValueBytes(.cMan, 0, 0, s1_base + off_cman, rc.EntitySize(.cMan));
+            r.ReadPlayerValueBytes(0, s1_base + off_test, re.Test.SIZE);
+            r.ReadEntityValueBytes(.Hang, 0, 0, s1_base + off_hang, re.Hang.SIZE);
+            r.ReadEntityValueBytes(.cMan, 0, 0, s1_base + off_cman, re.cMan.SIZE);
 
             var header = &headers[frame];
             header.setAll(0);
@@ -321,9 +322,9 @@ const state = struct {
             data_size = off_END;
             mem.read_bytes(rc.INPUT_COMBINED_ADDR, data + off_input, rc.INPUT_COMBINED_SIZE);
             @memcpy(data + off_race, rrd.PLAYER_SLICE.*);
-            r.ReadPlayerValueBytes(0, data + off_test, rc.EntitySize(.Test));
-            r.ReadEntityValueBytes(.Hang, 0, 0, data + off_hang, rc.EntitySize(.Hang));
-            r.ReadEntityValueBytes(.cMan, 0, 0, data + off_cman, rc.EntitySize(.cMan));
+            r.ReadPlayerValueBytes(0, data + off_test, re.Test.SIZE);
+            r.ReadEntityValueBytes(.Hang, 0, 0, data + off_hang, re.Hang.SIZE);
+            r.ReadEntityValueBytes(.cMan, 0, 0, data + off_cman, re.cMan.SIZE);
         }
         frame += 1;
         offsets[frame] = offsets[frame - 1] + data_size;
@@ -335,9 +336,9 @@ const state = struct {
         uncompress_frame(index, false);
         _ = mem.write_bytes(rc.INPUT_COMBINED_ADDR, &raw_stage[off_input], rc.INPUT_COMBINED_SIZE);
         @memcpy(rrd.PLAYER_SLICE.*, raw_stage[off_race .. off_race + rrd.SIZE]); // WARN: maybe perm issues
-        r.WritePlayerValueBytes(0, &raw_stage[off_test], rc.EntitySize(.Test));
-        r.WriteEntityValueBytes(.Hang, 0, 0, &raw_stage[off_hang], rc.EntitySize(.Hang));
-        r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], rc.EntitySize(.cMan));
+        r.WritePlayerValueBytes(0, &raw_stage[off_test], re.Test.SIZE);
+        r.WriteEntityValueBytes(.Hang, 0, 0, &raw_stage[off_hang], re.Hang.SIZE);
+        r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], re.cMan.SIZE);
         frame = index + 1;
     }
 

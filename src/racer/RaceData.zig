@@ -12,7 +12,7 @@ pub const PLAYER_SLICE: **[SIZE]u8 = @ptrFromInt(PLAYER_PTR_ADDR);
 // TODO: confirm static
 pub const ARRAY_ADDR: usize = 0xE29BC0;
 pub const ARRAY: *[12]RaceData = @ptrFromInt(ARRAY_ADDR);
-pub const SLICE_ARRAY: *[12][SIZE]u8 = @ptrFromInt(ARRAY_ADDR);
+pub const SLICE_ARRAY: *[12][SIZE]u8 = @ptrFromInt(ARRAY_ADDR); // TODO: convert to many-item pointer
 
 pub const RaceData = extern struct {
     index: u32,

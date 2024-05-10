@@ -1,4 +1,5 @@
 const std = @import("std");
+const f = @import("File.zig");
 
 pub const SIZE: usize = 0x88;
 
@@ -17,7 +18,7 @@ pub const RaceData = extern struct {
     index: u32,
     control: u32,
     flags: u32, // TODO: enum
-    pFile: u32, // ptr to profile? file data in memory
+    pFile: *f.Profile, // ptr to profile? file data in memory
     unk10: u32,
     unk14: u32,
     pVehicleMetadata: u32,

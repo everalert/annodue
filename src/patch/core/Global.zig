@@ -111,11 +111,10 @@ pub const GlobalState = extern struct {
 
     fn player_reset(self: *GlobalState) void {
         const p = &self.player;
-        const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
-        p.upgrades_lv = u[0..7].*;
-        p.upgrades_hp = u[7..14].*;
+        p.upgrades_lv = rrd.PLAYER.*.pFile.upgrade_lv; // TODO: remove from gs, now that it's easy?
+        p.upgrades_hp = rrd.PLAYER.*.pFile.upgrade_hp; // TODO: remove from gs, now that it's easy?
         p.upgrades = for (0..7) |i| {
-            if (u[i] > 0 and u[7 + i] > 0) break true;
+            if (p.upgrades_lv[i] > 0 and p.upgrades_hp[i] > 0) break true;
         } else false;
 
         p.flags1 = 0;

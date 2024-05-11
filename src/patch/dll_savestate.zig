@@ -230,11 +230,14 @@ const state = struct {
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
     fn updateable(gs: *GlobalSt) bool {
+        if (!gs.practice_mode) return false;
+
         const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
         const paused = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
         const race_ok = gs.in_race.on();
         // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
         const loading_ok = mem.read(0x50CA34, u32) == 0;
+
         return race_ok and !tabbed_out and !paused and loading_ok;
     }
 

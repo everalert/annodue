@@ -306,8 +306,8 @@ const state = struct {
             mem.read_bytes(rc.INPUT_COMBINED_ADDR, s1_base + off_input, rc.INPUT_COMBINED_SIZE);
             @memcpy(s1_base + off_race, rrd.PLAYER_SLICE.*);
             @memcpy(s1_base + off_test, re.Test.PLAYER_SLICE.*);
-            r.ReadEntityValueBytes(.Hang, 0, 0, s1_base + off_hang, re.Hang.SIZE);
-            r.ReadEntityValueBytes(.cMan, 0, 0, s1_base + off_cman, re.cMan.SIZE);
+            @memcpy(s1_base + off_hang, re.Manager.entitySlice(.Hang, 0));
+            @memcpy(s1_base + off_cman, re.Manager.entitySlice(.cMan, 0));
 
             var header = &headers[frame];
             header.setAll(0);
@@ -326,8 +326,8 @@ const state = struct {
             mem.read_bytes(rc.INPUT_COMBINED_ADDR, data + off_input, rc.INPUT_COMBINED_SIZE);
             @memcpy(data + off_race, rrd.PLAYER_SLICE.*);
             @memcpy(data + off_test, re.Test.PLAYER_SLICE.*);
-            r.ReadEntityValueBytes(.Hang, 0, 0, data + off_hang, re.Hang.SIZE);
-            r.ReadEntityValueBytes(.cMan, 0, 0, data + off_cman, re.cMan.SIZE);
+            @memcpy(data + off_hang, re.Manager.entitySlice(.Hang, 0));
+            @memcpy(data + off_cman, re.Manager.entitySlice(.cMan, 0));
         }
         frame += 1;
         offsets[frame] = offsets[frame - 1] + data_size;
@@ -340,8 +340,8 @@ const state = struct {
         _ = mem.write_bytes(rc.INPUT_COMBINED_ADDR, &raw_stage[off_input], rc.INPUT_COMBINED_SIZE);
         @memcpy(rrd.PLAYER_SLICE.*, raw_stage[off_race..off_test]); // WARN: maybe perm issues
         @memcpy(re.Test.PLAYER_SLICE.*, raw_stage[off_test..off_hang]); // WARN: maybe perm issues
-        r.WriteEntityValueBytes(.Hang, 0, 0, &raw_stage[off_hang], re.Hang.SIZE);
-        r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], re.cMan.SIZE);
+        @memcpy(re.Manager.entitySlice(.Hang, 0).ptr, raw_stage[off_hang..off_cman]);
+        @memcpy(re.Manager.entitySlice(.cMan, 0).ptr, raw_stage[off_cman..off_END]);
         frame = index + 1;
     }
 

@@ -44,7 +44,7 @@ pub const swrInput_ReadMouse: *fn () callconv(.C) void = @ptrFromInt(0x486710);
 
 // Loading
 
-pub const TriggerLoad_InRace: *fn (jdge: usize, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
+pub const TriggerLoad_InRace: *fn (jdge: *anyopaque, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
 
 // Camera
 

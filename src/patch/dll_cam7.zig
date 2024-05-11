@@ -21,6 +21,7 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
+const re = @import("racer").Entity;
 
 const st = @import("util/active_state.zig");
 const mem = @import("util/memory.zig");
@@ -168,7 +169,7 @@ fn CheckAndResetSavedCam() void {
     if (Cam7.saved_camstate_index == null) return;
     if (mem.read(camstate_ref_addr, u32) == 31) return;
 
-    r.WriteEntityValue(.cMan, 0, 0x78, u32, 7);
+    re.Manager.entity(.cMan, 0).CamStateIndex = 7;
     _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
     _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
@@ -182,7 +183,7 @@ fn CheckAndResetSavedCam() void {
 fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
         _ = mem.write(camstate_ref_addr, u32, i);
-        r.WriteEntityValue(.cMan, 0, 0x78, u32, i);
+        re.Manager.entity(.cMan, 0).CamStateIndex = i;
 
         _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
         _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
@@ -209,7 +210,7 @@ fn SaveSavedCam() void {
     _ = x86.nop_until(o, 0x4539A6);
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, flags @0=1 case
 
-    r.WriteEntityValue(.cMan, 0, 0x78, u32, 31);
+    re.Manager.entity(.cMan, 0).CamStateIndex = 31;
     _ = mem.write(camstate_ref_addr, u32, 31);
 }
 

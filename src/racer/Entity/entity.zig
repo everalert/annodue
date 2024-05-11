@@ -1,26 +1,42 @@
 pub const Test = @import("Test.zig");
+pub const Toss = @import("Toss.zig");
+pub const Trig = @import("Trig.zig");
 pub const Hang = @import("Hang.zig");
+pub const Jdge = @import("Jdge.zig");
+pub const Scen = @import("Scen.zig");
+pub const Elmo = @import("Elmo.zig");
+pub const Smok = @import("Smok.zig");
 pub const cMan = @import("cMan.zig");
 
 // MANAGER
 
-pub const MANAGER_JUMPTABLE_ADDR: usize = 0x4BFEC0;
-pub const MANAGER_JUMPTABLE: [*]Manager = @ptrFromInt(MANAGER_JUMPTABLE_ADDR);
+pub const MANAGER_JUMPTABLE_PTR_ADDR: usize = 0x4BFEC0;
+pub const MANAGER_JUMPTABLE: *[*]*Manager = @ptrFromInt(MANAGER_JUMPTABLE_PTR_ADDR);
 pub const MANAGER_SIZE: usize = 0x28;
 
 // TODO: comptime generic that takes an actual entity id or something
 // TODO: testing to assert the shape of the manager
 pub const Manager = extern struct {
     magic: MAGIC_ENTITY,
-    _unk_04_07: u32, // some kind of flags, maybe 2x u16
+    _unk_04: u32, // some kind of flags, maybe 2x u16
     count: u32,
     stride: u32,
-    array: *anyopaque,
-    fnStage14: *fn (entity: *anyopaque) callconv(.C) void,
-    fnStage18: *fn (entity: *anyopaque) callconv(.C) void,
-    fnStage1C: *fn (entity: *anyopaque) callconv(.C) void,
-    fnStage20: *fn (entity: *anyopaque) callconv(.C) void,
-    fnEvent: *fn (entity: *anyopaque, magic: [*]anyopaque, payload: anyopaque) callconv(.C) void,
+    array: *align(4) anyopaque,
+    fnStage14: *fn (entity: *align(4) anyopaque) callconv(.C) void,
+    fnStage18: *fn (entity: *align(4) anyopaque) callconv(.C) void,
+    fnStage1C: *fn (entity: *align(4) anyopaque) callconv(.C) void,
+    fnStage20: *fn (entity: *align(4) anyopaque) callconv(.C) void,
+    fnEvent: *fn (entity: *align(4) anyopaque, magic: [*]u32, payload: u32) callconv(.C) void,
+
+    pub fn entity(comptime E: ENTITY, i: usize) *ENTITY.t(E) {
+        const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
+        return &@as([*]ENTITY.t(E), @ptrCast(manager.array))[i];
+    }
+
+    pub fn entitySlice(comptime E: ENTITY, i: usize) []u8 {
+        const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
+        return &@as([*][@sizeOf(ENTITY.t(E))]u8, @ptrCast(manager.array))[i];
+    }
 };
 
 // ENTITY TYPES
@@ -35,6 +51,20 @@ pub const ENTITY = enum(u32) {
     Elmo = 6,
     Smok = 7,
     cMan = 8,
+
+    pub inline fn t(comptime E: ENTITY) type {
+        return switch (E) {
+            .Test => Test.Test,
+            .Toss => Toss.Toss,
+            .Trig => Trig.Trig,
+            .Hang => Hang.Hang,
+            .Jdge => Jdge.Jdge,
+            .Scen => Scen.Scen,
+            .Elmo => Elmo.Elmo,
+            .Smok => Smok.Smok,
+            .cMan => cMan.cMan,
+        };
+    }
 };
 
 pub const ENTITY_SIZE = [_]usize{

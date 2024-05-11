@@ -538,21 +538,21 @@ const QuickRaceMenu = extern struct {
     fn load_race() void {
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
-        r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
-        r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
-        r.WriteEntityValue(.Hang, 0, 0x5E, u8, rc.TrackCircuitIdMap[@intCast(values.track)]);
-        r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
-        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps)));
-        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // for race reset
+        var hang = re.Manager.entity(.Hang, 0);
+        hang.vehicle = @intCast(values.vehicle);
+        hang.track = @intCast(values.track);
+        hang.circuit = rc.TrackCircuitIdMap[@intCast(values.track)];
+        hang.mirror = @intCast(values.mirror);
+        hang.laps = @intCast(values.laps);
+        hang.aiSpeed = @intCast(values.ai_speed + 1);
+        hang.racers = @intCast(values.racers);
         _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
-        r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
-        //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
         for (0..7) |i| {
             rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
             rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
         }
 
-        const jdge = r.DerefEntity(.Jdge, 0, 0);
+        const jdge = re.Manager.entity(.Jdge, 0);
         rf.TriggerLoad_InRace(jdge, re.M_RSTR);
         close();
     }
@@ -560,13 +560,14 @@ const QuickRaceMenu = extern struct {
     // TODO: repurpose to run every EventJdgeBegn, maybe add different init if
     // that introduces issues with state loop
     fn init() void {
-        values.vehicle = r.ReadEntityValue(.Hang, 0, 0x73, u8);
-        values.track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
-        values.mirror = r.ReadEntityValue(.Hang, 0, 0x6E, u8);
-        values.laps = r.ReadEntityValue(.Hang, 0, 0x8F, u8);
-        values.racers = r.ReadEntityValue(.Hang, 0, 0x72, u8); // also: 0x50C558
-        values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8) - 1;
-        //values.winnings_split = r.ReadEntityValue(.Hang, 0, 0x91, u8);
+        const hang = re.Manager.entity(.Hang, 0);
+        values.vehicle = hang.vehicle;
+        values.track = hang.track;
+        values.mirror = hang.mirror;
+        values.laps = hang.laps;
+        values.racers = hang.racers;
+        values.ai_speed = hang.aiSpeed - 1;
+        //values.ai_speed = hang.winnings;
         for (0..7) |i| {
             values.up_lv[i] = rrd.PLAYER.*.pFile.upgrade_lv[i];
             values.up_hp[i] = rrd.PLAYER.*.pFile.upgrade_hp[i];
@@ -778,7 +779,7 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: look into using in-game default setter, see fn_45BD90
 
     if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
-        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @truncate(QolState.default_laps)));
+        re.Manager.entity(.Hang, 0).laps = @truncate(QolState.default_laps);
 
     if (QolState.default_racers >= 1 and QolState.default_racers <= 12)
         _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
@@ -837,7 +838,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
         (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
     {
-        const jdge = r.DerefEntity(.Jdge, 0, 0);
+        const jdge = re.Manager.entity(.Jdge, 0);
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rf.TriggerLoad_InRace(jdge, re.M_RSTR);
         return; // skip quick race menu

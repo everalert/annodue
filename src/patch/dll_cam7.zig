@@ -18,9 +18,9 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
-const r = @import("util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
+const rc = @import("racer").Camera;
+const re = @import("racer").Entity;
+const rg = @import("racer").Global;
 
 const st = @import("util/active_state.zig");
 const mem = @import("util/memory.zig");
@@ -121,7 +121,7 @@ const Cam7 = extern struct {
         input_move_x.update(gf);
         input_move_y.update(gf);
         input_move_z.update(gf);
-        if (cam_state == .FreeCam and mem.read(rc.ADDR_PAUSE_STATE, u8) == 0) {
+        if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
             const mouse_d: POINT = gf.InputGetMouseDelta();
@@ -162,13 +162,13 @@ fn mat4x4_get_rotation(mat: *const [4][4]f32, euler: *Vec3) void {
     euler.z = t1;
 }
 
-const camstate_ref_addr: u32 = rc.CAM_METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
+const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
 
 fn CheckAndResetSavedCam() void {
     if (Cam7.saved_camstate_index == null) return;
     if (mem.read(camstate_ref_addr, u32) == 31) return;
 
-    r.WriteEntityValue(.cMan, 0, 0x78, u32, 7);
+    re.Manager.entity(.cMan, 0).CamStateIndex = 7;
     _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
     _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
@@ -182,7 +182,7 @@ fn CheckAndResetSavedCam() void {
 fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
         _ = mem.write(camstate_ref_addr, u32, i);
-        r.WriteEntityValue(.cMan, 0, 0x78, u32, i);
+        re.Manager.entity(.cMan, 0).CamStateIndex = i;
 
         _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
         _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
@@ -198,8 +198,8 @@ fn SaveSavedCam() void {
     if (Cam7.saved_camstate_index != null) return;
     Cam7.saved_camstate_index = mem.read(camstate_ref_addr, u32);
 
-    const mat4_addr: u32 = rc.CAM_CAMSTATE_ARRAY_ADDR +
-        Cam7.saved_camstate_index.? * rc.CAM_CAMSTATE_ITEM_SIZE + 0x14;
+    const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
+        Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
     @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4[0])), @as([*]f32, @ptrFromInt(mat4_addr)));
     mat4x4_get_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
@@ -209,7 +209,7 @@ fn SaveSavedCam() void {
     _ = x86.nop_until(o, 0x4539A6);
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, flags @0=1 case
 
-    r.WriteEntityValue(.cMan, 0, 0x78, u32, 31);
+    re.Manager.entity(.cMan, 0).CamStateIndex = 31;
     _ = mem.write(camstate_ref_addr, u32, 31);
 }
 
@@ -395,12 +395,12 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    rf.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
+    rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     RestoreSavedCam();
-    rf.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
+    rc.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
 }
 
 // HOOKS

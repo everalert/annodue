@@ -21,8 +21,8 @@ const GlobalSt = @import("Global.zig").GlobalState;
 const GlobalFn = @import("Global.zig").GlobalFunction;
 const Version = @import("Global.zig").Version;
 
-const r = @import("../util/racer.zig");
-const rt = @import("../util/racer_text.zig");
+const r = @import("racer");
+const rt = r.Text;
 
 const msg = @import("../util/message.zig");
 

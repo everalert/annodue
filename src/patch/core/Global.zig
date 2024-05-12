@@ -18,6 +18,8 @@ const mem = @import("../util/memory.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").Text;
+const rti = @import("racer").Time;
+const rg = @import("racer").Global;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
@@ -196,8 +198,9 @@ pub fn init() bool {
     if (kb_shift_dn)
         return false;
 
-    GLOBAL_STATE.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
-    GLOBAL_STATE.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
+    // TODO: remove? probably don't need these anymore lol
+    GLOBAL_STATE.hwnd = rg.HWND.*;
+    GLOBAL_STATE.hinstance = rg.HINSTANCE.*;
 
     return true;
 }
@@ -215,7 +218,7 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
     gs.race_state_prev = gs.race_state;
     gs.race_state = blk: {
         if (!gs.in_race.on()) break :blk .None;
-        if (mem.read(rc.ADDR_IN_RACE, u8) == 0) break :blk .PreRace;
+        if (rg.IN_RACE.* == 0) break :blk .PreRace;
         // TODO: figure out how the engine knows to set these and use those instead
         const flags1 = re.Test.PLAYER.*.flags1;
         const countdown: bool = flags1 & (1 << 0) != 0;
@@ -233,12 +236,12 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
-    gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
-    gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
+    gs.dt_f = rti.FRAMETIME.*;
+    gs.fps = rti.FPS.*;
     const fps_res: f32 = 1 / gs.dt_f * 2;
     gs.fps_avg = (gs.fps_avg * (fps_res - 1) + (1 / gs.dt_f)) / fps_res;
-    gs.timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
-    gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
+    gs.timestamp = rti.TIMESTAMP.*;
+    gs.framecount = rti.FRAMECOUNT.*;
 }
 
 pub fn MenuTitleScreenB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {

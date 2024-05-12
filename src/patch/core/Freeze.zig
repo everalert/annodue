@@ -1,10 +1,8 @@
 const std = @import("std");
 
 const rf = @import("racer").functions;
-const rc = @import("racer").constants;
-const rt = @import("racer").text;
+const rg = @import("racer").Global;
 const re = @import("racer").Entity;
-const rto = rt.TextStyleOpts;
 
 const mem = @import("../util/memory.zig");
 
@@ -26,13 +24,13 @@ pub const Freeze = extern struct {
         var jdge = re.Manager.entity(.Jdge, 0);
 
         saved_pausebit = jdge.entity_flags & pausebit;
-        saved_pausepage = mem.read(rc.ADDR_PAUSE_PAGE, u8);
-        saved_pausestate = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        saved_pausescroll = mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
+        saved_pausepage = rg.PAUSE_PAGE.*;
+        saved_pausestate = rg.PAUSE_STATE.*;
+        saved_pausescroll = rg.PAUSE_SCROLLINOUT.*;
 
-        _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, 2);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 1);
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, 0);
+        rg.PAUSE_PAGE.* = 2;
+        rg.PAUSE_STATE.* = 1;
+        rg.PAUSE_SCROLLINOUT.* = 0;
         jdge.entity_flags &= ~pausebit;
 
         owner = o;
@@ -47,9 +45,9 @@ pub const Freeze = extern struct {
         var jdge = re.Manager.entity(.Jdge, 0);
 
         jdge.entity_flags |= saved_pausebit;
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, saved_pausescroll);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, saved_pausestate);
-        _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, saved_pausepage);
+        rg.PAUSE_SCROLLINOUT.* = saved_pausescroll;
+        rg.PAUSE_STATE.* = saved_pausestate;
+        rg.PAUSE_PAGE.* = saved_pausepage;
 
         owner = null;
         frozen = false;

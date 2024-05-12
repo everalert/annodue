@@ -21,6 +21,7 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const re = @import("racer").Entity;
+const rg = @import("racer").Global;
 
 const st = @import("util/active_state.zig");
 const mem = @import("util/memory.zig");
@@ -121,7 +122,7 @@ const Cam7 = extern struct {
         input_move_x.update(gf);
         input_move_y.update(gf);
         input_move_z.update(gf);
-        if (cam_state == .FreeCam and mem.read(rc.ADDR_PAUSE_STATE, u8) == 0) {
+        if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
             const mouse_d: POINT = gf.InputGetMouseDelta();

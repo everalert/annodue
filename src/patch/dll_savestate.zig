@@ -19,6 +19,7 @@ const mem = @import("util/memory.zig");
 
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
+const rg = @import("racer").Global;
 const ri = @import("racer").Input;
 const rt = @import("racer").Text;
 const rrd = @import("racer").RaceData;
@@ -232,8 +233,8 @@ const state = struct {
     fn updateable(gs: *GlobalSt) bool {
         if (!gs.practice_mode) return false;
 
-        const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
-        const paused = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
+        const tabbed_out = rg.GUI_STOPPED.* > 0;
+        const paused = rg.PAUSE_STATE.* > 0;
         const race_ok = gs.in_race.on();
         // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
         const loading_ok = mem.read(0x50CA34, u32) == 0;

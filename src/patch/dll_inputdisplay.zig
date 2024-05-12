@@ -14,7 +14,7 @@ const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 
-const rc = @import("racer").constants;
+const rg = @import("racer").Global;
 const rq = @import("racer").Quad;
 const rt = @import("racer").Text;
 const ri = @import("racer").Input;
@@ -247,7 +247,7 @@ const InputDisplay = struct {
             std.debug.assert(@divFloor(s.w, 2) >= text_xoff);
             const txo: i16 = @divFloor(s.w, 2) - @as(i16, @intFromFloat(m.sign(axis) * text_xoff));
             const col: u32 = 0xFFFFFF00 |
-                @as(u32, @intFromFloat(nt.pow2(1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32)) * 255));
+                @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
             rt.DrawText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
                 std.math.fabs(axis * 100),
             }, col, style_center) catch {};
@@ -277,7 +277,7 @@ const InputDisplay = struct {
             std.debug.assert(s.h >= text_yoff);
             const tyo: i16 = (if (axis < 0) s.h - text_yoff else text_yoff) - 3;
             const col: u32 = 0xFFFFFF00 |
-                @as(u32, @intFromFloat(nt.pow2(1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32)) * 255));
+                @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
             rt.DrawText(s.x + 2, s.y + tyo, "{d:1.0}", .{
                 std.math.fabs(axis * 100),
             }, col, style_left) catch {};
@@ -311,7 +311,7 @@ const InputDisplay = struct {
             rq.swrQuad_SetPosition(top.fg_idx.?, top.x, top.y + off);
             if (thrust < 1) {
                 const col: u32 = 0xFFFFFF00 |
-                    @as(u32, @intFromFloat(nt.pow2(1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32)) * 255));
+                    @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
                 rt.DrawText(top.x + 8, top.y - 8, "{d:1.0}", .{
                     std.math.fabs(thrust * 100),
                 }, col, style_center) catch {};
@@ -384,10 +384,10 @@ export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
         if (InputDisplay.enable and
             InputDisplay.initialized and
-            mem.read(rc.ADDR_PAUSE_STATE, u8) != 1 and
+            rg.PAUSE_STATE.* != 1 and
             (gs.race_state == .Countdown or gs.race_state == .Racing))
         {
-            const a: f32 = 1 - mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
+            const a: f32 = 1 - rg.PAUSE_SCROLLINOUT.*;
             InputDisplay.ReadInputs();
             InputDisplay.UpdateIcons();
             InputDisplay.SetOpacityAll(a);

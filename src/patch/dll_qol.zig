@@ -24,6 +24,8 @@ const st = @import("util/active_state.zig");
 
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
+const rg = @import("racer").Global;
+const rti = @import("racer").Time;
 const rt = @import("racer").Text;
 const ri = @import("racer").Input;
 const rv = @import("racer").Vehicle;
@@ -271,7 +273,7 @@ const FastCountdown = struct {
     var CurrentFrametime: f64 = 1 / 24;
 
     fn update() void {
-        CurrentFrametime = CountRatio * rc.TIME_FRAMETIME_64.*;
+        CurrentFrametime = CountRatio * rti.FRAMETIME_64.*;
     }
 
     fn init(duration: f32) void {
@@ -281,7 +283,7 @@ const FastCountdown = struct {
     }
 
     fn patch(enable: bool) void {
-        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rc.ADDR_TIME_FRAMETIME_64;
+        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rti.FRAMETIME_64_ADDR;
         const prerace_max_time: u32 = if (enable) @bitCast(9.10 + CountDif) else 0x4111999A; // 9.10
         const boost_window_min: u32 = if (enable) @bitCast(0.05 * CountRatio) else 0x3D4CCCCD; // 0.05
         const boost_window_max: u32 = if (enable) @bitCast(0.30 * CountRatio) else 0x3E99999A; // 0.30
@@ -434,9 +436,7 @@ const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
 
 fn RenderRaceResultStatUpgrade(i: i16, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat(i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
-        if (hp < 255) s_upg_dmg else s_upg_full,
-        hp,
-        rv.UpgradeNames[cat * 6 + lv],
+        if (hp < 255) s_upg_dmg else s_upg_full, hp, rv.PartNameS(cat)[lv],
     });
 }
 
@@ -572,7 +572,7 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, open_threshold);
+        rg.PAUSE_SCROLLINOUT.* = open_threshold;
         if (!gf.GameFreezeEnable(menu_key)) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
@@ -582,7 +582,7 @@ const QuickRaceMenu = extern struct {
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
         rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
+        rg.PAUSE_STATE.* = 3;
         menu_active.update(false);
     }
 
@@ -602,9 +602,9 @@ const QuickRaceMenu = extern struct {
             return close();
 
         const pi = QolState.input_pause.gets();
-        if (rc.PAUSE_STATE.* == 2 and pi == .JustOn)
+        if (rg.PAUSE_STATE.* == 2 and pi == .JustOn)
             return open();
-        if (rc.PAUSE_STATE.* == 2 and rc.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
+        if (rg.PAUSE_STATE.* == 2 and rg.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
             return open();
     }
 
@@ -813,7 +813,7 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: confirm tabbed_in is actually needed here, possibly move to global state
-    const tabbed_in: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
+    const tabbed_in: bool = rg.GUI_STOPPED.* == 0;
     if (gs.in_race.on() and tabbed_in and QolState.fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
 }

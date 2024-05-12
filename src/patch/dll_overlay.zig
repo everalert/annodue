@@ -97,7 +97,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
             // FPS
             rt.DrawText(lbx, lby + sty * 0, "{d:>2.0}  {d:>5.2}  {d:>5.3}~rFPS  ", .{
-                gs.fps_avg, gs.fps * 1000, gs.dt_f,
+                gs.fps_avg, gs.fps, gs.dt_f,
             }, null, null) catch {};
 
             // DEATH counter

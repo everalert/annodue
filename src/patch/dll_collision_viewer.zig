@@ -6,11 +6,7 @@ const GlobalSt = @import("core/Global.zig").GlobalState;
 const GlobalFn = @import("core/Global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("core/global.zig").PLUGIN_VERSION;
 
-const r = @import("util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
-const rto = rt.TextStyleOpts;
+const rs = @import("racer").Sound;
 
 // FEATURES
 // -
@@ -261,14 +257,14 @@ const QuickRaceMenu = extern struct {
 
     fn open() void {
         if (!gf.GameFreezeEnable(menu_key)) return;
-        //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
+        rs.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
-        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+        rs.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         menu_active = false;
     }
 
@@ -291,13 +287,13 @@ const QuickRaceMenu = extern struct {
         if (menu_active) {
             var current_preset: i32 = -1;
 
-            for (presets[0..presets.len-1], 0..) |preset, index| {
+            for (presets[0 .. presets.len - 1], 0..) |preset, index| {
                 if (std.meta.eql(preset, state.settings))
                     current_preset = @intCast(index);
             }
             if (current_preset == -1) {
-                presets[presets.len-1] = state.settings;
-                current_preset = @intCast(presets.len-1);
+                presets[presets.len - 1] = state.settings;
+                current_preset = @intCast(presets.len - 1);
             }
 
             preset_index = current_preset;

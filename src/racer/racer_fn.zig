@@ -20,8 +20,3 @@ pub const TriggerLoad_InRace: *fn (jdge: *anyopaque, magic: u32) callconv(.C) vo
 // Camera
 
 pub const swrCam_CamState_InitMainMat4: *fn (i: u16, val1: u16, mat4_ptr: usize, val2: u16) callconv(.C) void = @ptrFromInt(0x428A60);
-
-// Vehicle Metadata
-
-pub const Vehicle_EnableJinnReeso: *fn () callconv(.C) void = @ptrFromInt(0x44B530);
-pub const Vehicle_EnableCyYunga: *fn () callconv(.C) void = @ptrFromInt(0x44B5E0);

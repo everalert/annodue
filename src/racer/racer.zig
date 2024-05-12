@@ -9,4 +9,5 @@ pub const RaceData = @import("RaceData.zig");
 pub const File = @import("File.zig");
 pub const Quad = @import("Quad.zig");
 pub const Input = @import("Input.zig");
+pub const Vehicle = @import("Vehicle.zig");
 pub const Entity = @import("Entity/entity.zig");

@@ -32,12 +32,6 @@ pub const TIME_FRAMECOUNT: *u32 = @ptrFromInt(0xE22A30);
 
 pub const ADDR_GUI_STOPPED: usize = 0x50CB64; // u32
 
-// Vehicle Metadata
-
-// TODO: vehicle metadata struct def
-pub const VEHICLE_METADATA_ARRAY_ADDR: usize = 0x4C2700;
-pub const VEHICLE_METADATA_ITEM_SIZE: usize = 0x34;
-
 // Camera
 
 pub const CAM_METACAM_ARRAY_ADDR: usize = 0xDFB040; // NOTE: need a better name for this
@@ -50,8 +44,6 @@ pub const CAM_CAMSTATE_ITEM_SIZE: usize = 0x7C;
 
 // Helper String Arrays
 
-pub const Vehicles = [_][*:0]const u8{ "Anakin Skywalker", "Teemto Pagalies", "Sebulba", "Ratts Tyerell", "Aldar Beedo", "Mawhonic", "Ark 'Bumpy' Roose", "Wan Sandage", "Mars Guo", "Ebe Endocott", "Dud Bolt", "Gasgano", "Clegg Holdfast", "Elan Mak", "Neva Kee", "Bozzie Baranta", "Boles Roor", "Ody Mandrell", "Fud Sang", "Ben Quadinaros", "Slide Paramita", "Toy Dampner", "Bullseye 'Navior'" };
-
 pub const TracksByMenu = [_][*:0]const u8{ "The Boonta Training Course", "Mon Gazza Speedway", "Beedo's Wild Ride", "Aquilaris Classic", "Malastare 100", "Vengeance", "Spice Mine Run", "Sunken City", "Howler Gorge", "Dug Derby", "Scrapper's Run", "Zugga Challenge", "Baroo Coast", "Bumpy's Breakers", "Executioner", "Sebulba's Legacy", "Grabvine Gateway", "Andobi Mountain Run", "Dethro's Revenge", "Fire Mountain Rally", "The Boonta Classic", "Ando Prime Centrum", "Abyss", "The Gauntlet", "Inferno" };
 
 pub const TracksById = [_][*:0]const u8{ "The Boonta Training Course", "The Boonta Classic", "Beedo's Wild Ride", "Howler Gorge", "Andobi Mountain Run", "Ando Prime Centrum", "Aquilaris Classic", "Sunken City", "Bumpy's Breakers", "Scrapper's Run", "Dethro's Revenge", "Abyss", "Baroo Coast", "Grabvine Gateway", "Fire Mountain Rally", "Inferno", "Mon Gazza Speedway", "Spice Mine Run", "Zugga Challenge", "Vengeance", "Executioner", "The Gauntlet", "Malastare 100", "Dug Derby", "Sebulba's Legacy" };
@@ -61,7 +53,3 @@ pub const TrackMenuIdMap = [_]u8{ 0x00, 0x10, 0x02, 0x06, 0x16, 0x13, 0x11, 0x07
 
 // track id -> circuit id
 pub const TrackCircuitIdMap = [_]u8{ 0, 2, 0, 1, 2, 3, 0, 1, 1, 1, 2, 3, 1, 2, 2, 3, 0, 0, 1, 0, 2, 3, 0, 1, 2 };
-
-pub const UpgradeCategories = [_][*:0]const u8{ "Traction", "Turning", "Acceleration", "Top Speed", "Air Brake", "Cooling", "Repair" };
-
-pub const UpgradeNames = [_][*:0]const u8{ "R-20", "R-60", "R-80", "R-100", "R-300", "R-600", "Linkage", "Shift Plate", "Vectro-Jet", "Coupling", "Nozzle", "Stablizer", "Dual 20 PCX", "44 PCX", "Dual 32 PCX", "Quad 32 PCX", "Quad 44", "Mag 6", "Plug 2", "Plug 3", "Plug 5", "Plug 8", "Block 5", "Block 6", "Mark II", "Mark III", "Mark IV", "Mark V", "Tri-Jet", "Quadrijet", "Coolant", "Stack-3", "Stack-6", "Rod", "Dual", "Turbo", "Single", "Dual2", "Quad", "Cluster", "Rotary", "Cluster 2" };

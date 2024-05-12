@@ -26,6 +26,7 @@ const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").Text;
 const ri = @import("racer").Input;
+const rv = @import("racer").Vehicle;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
@@ -172,11 +173,8 @@ fn PatchPlanetCutscenes(enable: bool) void {
 // TODO: fix sound bug when activating cy yunga cheat (use sound 45)
 // TODO: setting to actually enable the jinn/cy patches?
 
-const JINN_REESO_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 8;
-const JINN_REESO_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 8;
-
 fn PatchJinnReesoCheat(enable: bool) void {
-    _ = x86.call(0x4105DD, @intFromPtr(if (enable) &ToggleJinnReeso else rf.Vehicle_EnableJinnReeso));
+    _ = x86.call(0x4105DD, @intFromPtr(if (enable) &ToggleJinnReeso else rv.Vehicle_EnableJinnReeso));
 }
 
 fn ToggleJinnReeso() callconv(.C) void {
@@ -185,13 +183,13 @@ fn ToggleJinnReeso() callconv(.C) void {
         var on: bool = false;
     };
     if (!state.initialized) {
-        state.on = mem.read(JINN_REESO_METADATA_ADDR + 4, u32) == 299;
+        state.on = mem.read(rv.JINN_REESO_METADATA_ADDR + 4, u32) == 299;
         state.initialized = true;
     }
 
     state.on = !state.on;
     if (state.on) {
-        rf.Vehicle_EnableJinnReeso();
+        rv.Vehicle_EnableJinnReeso();
     } else {
         DisableJinnReeso();
     }
@@ -199,30 +197,27 @@ fn ToggleJinnReeso() callconv(.C) void {
 
 fn DisableJinnReeso() callconv(.C) void {
     //VehicleMetadata = 0x4C28A0
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
     //MysteryStruct = 0x4C73E8
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
 }
 
-const CY_YUNGA_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 22;
-const CY_YUNGA_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 22;
-
 fn PatchCyYungaCheat(enable: bool) void {
-    _ = x86.call(0x410578, @intFromPtr(if (enable) &ToggleCyYunga else rf.Vehicle_EnableCyYunga));
+    _ = x86.call(0x410578, @intFromPtr(if (enable) &ToggleCyYunga else rv.Vehicle_EnableCyYunga));
 }
 
 fn ToggleCyYunga() callconv(.C) void {
@@ -231,13 +226,13 @@ fn ToggleCyYunga() callconv(.C) void {
         var on: bool = false;
     };
     if (!state.initialized) {
-        state.on = mem.read(CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
+        state.on = mem.read(rv.CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
         state.initialized = true;
     }
 
     state.on = !state.on;
     if (state.on) {
-        rf.Vehicle_EnableCyYunga();
+        rv.Vehicle_EnableCyYunga();
     } else {
         DisableCyYunga();
     }
@@ -245,19 +240,19 @@ fn ToggleCyYunga() callconv(.C) void {
 
 fn DisableCyYunga() callconv(.C) void {
     //VehicleMetadata = 0x4C2B78
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
     //MysteryStruct = 0x4C79D0
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
 }
 
 fn PatchCyYungaCheatAudio(enable: bool) void {
@@ -438,10 +433,10 @@ const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
 const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
 
 fn RenderRaceResultStatUpgrade(i: i16, cat: u8, lv: u8, hp: u8) void {
-    RenderRaceResultStat(i, rc.UpgradeCategories[cat], "{s}{d:0>3} ~1{s}", .{
+    RenderRaceResultStat(i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
         if (hp < 255) s_upg_dmg else s_upg_full,
         hp,
-        rc.UpgradeNames[cat * 6 + lv],
+        rv.UpgradeNames[cat * 6 + lv],
     });
 }
 
@@ -623,17 +618,17 @@ const QuickRaceMenu = extern struct {
 const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true, null),
+    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, null),
     // FIXME: maybe change to menu order?
     mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true, &QuickRaceTrackCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rv.UpgradeNames[0], rv.PartNameS(0), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rv.UpgradeNames[1], rv.PartNameS(1), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rv.UpgradeNames[2], rv.PartNameS(2), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rv.UpgradeNames[3], rv.PartNameS(3), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rv.UpgradeNames[4], rv.PartNameS(4), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rv.UpgradeNames[5], rv.PartNameS(5), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rv.UpgradeNames[6], rv.PartNameS(6), false, &QuickRaceUpgradeCallback),
     mi.MenuItemSpacer(),
     mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
     mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true, null),
@@ -885,7 +880,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
-                rc.UpgradeNames[gs.player.upgrades_lv[0]],
+                rv.PartNamesShort[gs.player.upgrades_lv[0]],
                 upg_postfix,
             });
 

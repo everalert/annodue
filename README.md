@@ -18,17 +18,17 @@ See [CHANGELOG](CHANGELOG.md) for a complete version history.
 ### From release
 
 1. Download `annodue-<version>.zip` from the [latest Release](https://github.com/everalert/annodue/releases/latest).
-1. Extract `dinput.dll` and the `annodue` folder into the game directory.
-1. (Optional) If you normally need to run a specific `dinput.dll` to prevent the game from crashing, place it in the `annodue` folder.
+2. Extract `dinput.dll` and the `annodue` folder into the game directory.
+3. (Optional) If you normally need to run a specific `dinput.dll` to prevent the game from crashing, place it in the `annodue` folder.
 
 ### From build
 
 1. Build `dinput.dll` as described below.
-1. Generate the release files with the following command in a terminal in the project directory. You must have `zig 0.11.0` installed.
+2. Generate the release files with the following command in a terminal in the project directory. You must have `zig 0.11.0` installed.
 ```zig
 zig build release -Dver="0.1.4" -Dminver="0.1.2" -Ddbp="<dinput_build_path>" -Drop="<release_output_path>"
 ```
-1. Find `annodue-0.1.4.zip` in `<release_output_path>/0.1.4/` and extract it to the game directory.
+3. Find `annodue-0.1.4.zip` in `<release_output_path>/0.1.4/` and extract it to the game directory.
 
 ## Building from source
 
@@ -71,12 +71,12 @@ pacman -S git mingw32/mingw-w64-i686-cmake mingw32/mingw-w64-i686-gcc
 ```
 If the build fails at step 3, you may need to additionally install `mingw32/mingw-w64-i686-make` with this command.
 
-1. Move the project files to your MinGW32 filesystem, found at `C:/msys64/home/<user>/`. To do this in the shell, run:
+2. Move the project files to your MinGW32 filesystem, found at `C:/msys64/home/<user>/`. To do this in the shell, run:
 ```
 git clone https://github.com/everalert/annodue.git
 ```
 
-1. Compile `dinput.dll`:
+3. Compile `dinput.dll`:
 ```
 cd annodue
 mkdir build
@@ -90,7 +90,7 @@ cmake ../src/dinput -G "MinGW Makefiles"
 mingw32-make
 ```
 
-1. The compiled `dinput.dll` can be found in `C:/msys64/home/<user>/annodue/build`.
+4. The compiled `dinput.dll` can be found in `C:/msys64/home/<user>/annodue/build`.
 
 <!---
 ### macOS / Linux
@@ -115,15 +115,15 @@ This project follows the classic [git-flow](https://nvie.com/posts/a-successful-
 ### Initial Setup
 
 1. Fork this repository on GitHub
-1. Clone your fork
+2. Clone your fork
 ```
 git clone https://github.com/USERNAME/annodue
 ```
-1. Move into the new `annodue` directory
+3. Move into the new `annodue` directory
 ```
 cd annodue
 ```
-1. Configure upstream
+4. Configure upstream
 ```
 git remote add upstream https://github.com/everalert/annodue
 git fetch upstream
@@ -136,19 +136,19 @@ git fetch upstream
 git checkout develop
 git pull --rebase upstream develop
 ```
-1. Create a feature branch, typically following the pattern `ft/<feature_name>`.
+2. Create a feature branch, typically following the pattern `ft/<feature_name>`.
 ```
 git checkout -b ft/supremo-featrino
 ```
-1. Do yo thang baby.
-1. Once you're done, push the branch to your fork.
+3. Do yo thang baby.
+4. Once you're done, push the branch to your fork.
 ```
 git push origin ft/supremo-featrino
 ```
-1. Submit a pull request from your feature branch to the `develop` branch in `everalert/annodue`.
-1. Party. Woo!
-1. Don't forget to do step 1 again if you want to work on another feature.
-1. If you would like to merge to or from the `develop` branch for whatever reason, default to using the `--no-ff` flag. But it would totally make both our lives easier if you just stuck to feature branches man.
+5. Submit a pull request from your feature branch to the `develop` branch in `everalert/annodue`.
+6. Party. Woo!
+7. Don't forget to do step 1 again if you want to work on another feature.
+8. If you would like to merge to or from the `develop` branch for whatever reason, default to using the `--no-ff` flag. But it would totally make both our lives easier if you just stuck to feature branches man.
 
 
 ## License

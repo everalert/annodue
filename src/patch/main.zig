@@ -9,9 +9,6 @@ const debug = @import("core/Debug.zig");
 const settings = @import("core/Settings.zig");
 
 const msg = @import("util/message.zig");
-const r = @import("util/racer.zig");
-const rc = @import("util/racer_const.zig");
-const rf = @import("util/racer_fn.zig");
 
 const patch_size: u32 = 4 * 1024 * 1024; // 4MB
 

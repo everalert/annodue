@@ -44,6 +44,10 @@ pub fn build(b: *std.Build) void {
     const zzip = b.dependency("zzip", .{});
     const zzip_m = zzip.module("zzip");
 
+    const racerlib = b.createModule(.{
+        .source_file = .{ .path = "src/racer/racer.zig" },
+    });
+
     const options = b.addOptions();
     const options_label = "BuildOptions";
     options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
@@ -239,6 +243,7 @@ pub fn build(b: *std.Build) void {
         });
         dll.linkLibC();
         dll.addOptions(options_label, options);
+        dll.addModule("racer", racerlib);
         dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
@@ -273,6 +278,7 @@ pub fn build(b: *std.Build) void {
     });
     core.linkLibC();
     core.addOptions(options_label, options);
+    core.addModule("racer", racerlib);
     core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);

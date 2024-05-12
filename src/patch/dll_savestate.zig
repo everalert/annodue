@@ -16,10 +16,12 @@ const st = @import("util/active_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
-const r = @import("util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
+
+const rg = @import("racer").Global;
+const ri = @import("racer").Input;
+const rrd = @import("racer").RaceData;
+const re = @import("racer").Entity;
+const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;
@@ -88,14 +90,14 @@ const state = struct {
     var last_framecount: u32 = 0;
 
     const off_input: usize = 0;
-    const off_race: usize = rc.INPUT_COMBINED_SIZE;
-    const off_test: usize = off_race + rc.RACE_DATA_SIZE;
-    const off_hang: usize = off_test + rc.EntitySize(.Test);
-    const off_cman: usize = off_hang + rc.EntitySize(.Hang);
-    const off_END: usize = off_cman + rc.EntitySize(.cMan);
+    const off_race: usize = ri.COMBINED_SIZE;
+    const off_test: usize = off_race + rrd.SIZE;
+    const off_hang: usize = off_test + re.Test.SIZE;
+    const off_cman: usize = off_hang + re.Hang.SIZE;
+    const off_END: usize = off_cman + re.cMan.SIZE;
 
     const frames: usize = 60 * 60 * 8; // 8min @ 60fps
-    //const frame_size: usize = off_cman + rc.EntitySize(.cMan);
+    //const frame_size: usize = off_cman + rc.cMan.SIZE;
     const header_size: usize = std.math.divCeil(usize, off_END, 4 * 8) catch unreachable; // comptime
     const header_type: type = std.packed_int_array.PackedIntArray(u1, header_bits);
     const header_bits: usize = off_END / 4;
@@ -227,11 +229,14 @@ const state = struct {
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
     fn updateable(gs: *GlobalSt) bool {
-        const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
-        const paused = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
+        if (!gs.practice_mode) return false;
+
+        const tabbed_out = rg.GUI_STOPPED.* > 0;
+        const paused = rg.PAUSE_STATE.* > 0;
         const race_ok = gs.in_race.on();
         // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
         const loading_ok = mem.read(0x50CA34, u32) == 0;
+
         return race_ok and !tabbed_out and !paused and loading_ok;
     }
 
@@ -297,11 +302,11 @@ const state = struct {
             uncompress_frame(frame, true);
 
             const s1_base = raw_stage + off_END;
-            mem.read_bytes(rc.INPUT_COMBINED_ADDR, s1_base + off_input, rc.INPUT_COMBINED_SIZE);
-            r.ReadRaceDataValueBytes(0, s1_base + off_race, rc.RACE_DATA_SIZE);
-            r.ReadPlayerValueBytes(0, s1_base + off_test, rc.EntitySize(.Test));
-            r.ReadEntityValueBytes(.Hang, 0, 0, s1_base + off_hang, rc.EntitySize(.Hang));
-            r.ReadEntityValueBytes(.cMan, 0, 0, s1_base + off_cman, rc.EntitySize(.cMan));
+            mem.read_bytes(ri.COMBINED_ADDR, s1_base + off_input, ri.COMBINED_SIZE);
+            @memcpy(s1_base + off_race, rrd.PLAYER_SLICE.*);
+            @memcpy(s1_base + off_test, re.Test.PLAYER_SLICE.*);
+            @memcpy(s1_base + off_hang, re.Manager.entitySlice(.Hang, 0));
+            @memcpy(s1_base + off_cman, re.Manager.entitySlice(.cMan, 0));
 
             var header = &headers[frame];
             header.setAll(0);
@@ -317,11 +322,11 @@ const state = struct {
             }
         } else {
             data_size = off_END;
-            mem.read_bytes(rc.INPUT_COMBINED_ADDR, data + off_input, rc.INPUT_COMBINED_SIZE);
-            r.ReadRaceDataValueBytes(0, data + off_race, rc.RACE_DATA_SIZE);
-            r.ReadPlayerValueBytes(0, data + off_test, rc.EntitySize(.Test));
-            r.ReadEntityValueBytes(.Hang, 0, 0, data + off_hang, rc.EntitySize(.Hang));
-            r.ReadEntityValueBytes(.cMan, 0, 0, data + off_cman, rc.EntitySize(.cMan));
+            mem.read_bytes(ri.COMBINED_ADDR, data + off_input, ri.COMBINED_SIZE);
+            @memcpy(data + off_race, rrd.PLAYER_SLICE.*);
+            @memcpy(data + off_test, re.Test.PLAYER_SLICE.*);
+            @memcpy(data + off_hang, re.Manager.entitySlice(.Hang, 0));
+            @memcpy(data + off_cman, re.Manager.entitySlice(.cMan, 0));
         }
         frame += 1;
         offsets[frame] = offsets[frame - 1] + data_size;
@@ -331,11 +336,11 @@ const state = struct {
         if (!loadable(gs)) return;
 
         uncompress_frame(index, false);
-        _ = mem.write_bytes(rc.INPUT_COMBINED_ADDR, &raw_stage[off_input], rc.INPUT_COMBINED_SIZE);
-        r.WriteRaceDataValueBytes(0, &raw_stage[off_race], rc.RACE_DATA_SIZE);
-        r.WritePlayerValueBytes(0, &raw_stage[off_test], rc.EntitySize(.Test));
-        r.WriteEntityValueBytes(.Hang, 0, 0, &raw_stage[off_hang], rc.EntitySize(.Hang));
-        r.WriteEntityValueBytes(.cMan, 0, 0, &raw_stage[off_cman], rc.EntitySize(.cMan));
+        _ = mem.write_bytes(ri.COMBINED_ADDR, &raw_stage[off_input], ri.COMBINED_SIZE);
+        @memcpy(rrd.PLAYER_SLICE.*, raw_stage[off_race..off_test]); // WARN: maybe perm issues
+        @memcpy(re.Test.PLAYER_SLICE.*, raw_stage[off_test..off_hang]); // WARN: maybe perm issues
+        @memcpy(re.Manager.entitySlice(.Hang, 0).ptr, raw_stage[off_hang..off_cman]);
+        @memcpy(re.Manager.entitySlice(.cMan, 0).ptr, raw_stage[off_cman..off_END]);
         frame = index + 1;
     }
 

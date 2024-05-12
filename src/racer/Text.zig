@@ -2,12 +2,6 @@ const Self = @This();
 
 const std = @import("std");
 
-const r = @import("racer.zig");
-const rf = @import("racer_fn.zig");
-const rc = @import("racer_const.zig");
-
-const msg = @import("message.zig");
-
 // NOTE: original idea notes
 // swrText_CreateEntry helper ideas
 //
@@ -31,6 +25,35 @@ const msg = @import("message.zig");
 //
 // 3
 // - an api that lets you do both ways, with overlapping ideas homogenized
+
+// GAME FUNCTIONS
+
+pub const swrText_CreateEntry: *fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+pub const swrText_CreateEntry1: *fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+pub const swrText_CreateEntry2: *fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+pub const swrText_DrawTime2: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
+pub const swrText_DrawTime3: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
+pub const swrText_NewNotification: *fn (str: [*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
+
+// GAME CONSTANTS
+
+pub const TEXT_COLOR_PRESET = [10]u32{
+    0x000000, // (black)
+    0xFFFFFF, // (white)
+    0x6EB4FF, // (blue)
+    0xFFFF9C, // (yellow)
+    0x96FF96, // (green)
+    0xFF6450, // (red)
+    0xBC865E, // (brown)
+    0x6E6E80, // (gray)
+    0xFFA7D1, // (pink)
+    0x985EFF, // (purple)
+};
+
+pub const TEXT_HIRES_FLAG_ADDR: usize = 0x50C0AC;
+pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(TEXT_HIRES_FLAG_ADDR);
+
+// HELPERS
 
 pub const DEFAULT_STYLE: []const u8 = "~F0~s";
 
@@ -158,7 +181,7 @@ pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?
     const head: []const u8 = style orelse DEFAULT_STYLE;
     const body = try std.fmt.bufPrintZ(state.buf1[head.len..], fmt, args);
     _ = try std.fmt.bufPrintZ(&state.buf2, "{s}{s}", .{ head, body });
-    rf.swrText_CreateEntry1(
+    swrText_CreateEntry1(
         x,
         y,
         @as(u8, @truncate(color >> 24)),

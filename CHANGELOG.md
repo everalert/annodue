@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Plugin: Collision Viewer ([#3](https://github.com/everalert/annodue/pull/3))
+
 ### Changed
 
 - Migrated `patch/util/racer*` to `racer` module

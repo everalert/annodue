@@ -132,3 +132,6 @@ HRESULT WINAPI DirectInputCreateA(
 RETURN:
 	return o_DirectInputCreateA(hinst, dwVersion, lplpDirectInput, punkOuter);
 }
+
+__asm__(".global DirectInputCreateA\n"
+        "DirectInputCreateA=_DirectInputCreateA@16\n");

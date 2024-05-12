@@ -25,6 +25,7 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Free Camera
 	- Savestates & Rewinding
 	- Quick Race Menu - setup a new race without going back to the cantina
+    - Collision visualization (by [tly000](https://github.com/tly000))
 	- Input display
 	- Extended post-race summary
 	- Extended race UI overlay
@@ -181,6 +182,21 @@ Configured under `[qol]`
 |`default_laps`           |`u32` |1 to 5
 |`fast_countdown_enable`  |`bool`|&nbsp;
 |`fast_countdown_duration`|`f32` |0.05 to 3.00
+
+### Collision Viewer
+
+Credit to ([tly000](https://github.com/tly000)) for plugin.
+
+- Visualize collision faces
+- Visualize collision mesh
+- Visualize spline
+
+##### Controls
+
+|Action|Keyboard|XInput|Note|
+|:---|:---|:---|:---|
+|Open/Close Menu      |`9`       |&nbsp; |&nbsp;
+|Toggle visualization |`8`       |&nbsp; |&nbsp;
 
 ### Cosmetic
 

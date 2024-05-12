@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2024-05-12
+
+### Added
+
+- Build: Compile `dinput.dll` via Zig
+- Plugin: Collision Viewer ([#3](https://github.com/everalert/annodue/pull/3))
+
+### Changed
+
+- Build: Convert tooling to cross-platform compatible code
+- Core: Migrated `patch/util/racer*` to `racer` module
+
+### Removed
+
+- Build: `-Ddbp` option
+
 ## [0.1.4] - 2024-05-09
 
 ### Added
@@ -44,7 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- Can now hold button to open instead of double-tap
 	- Scroll through FPS presets with hotkey
 	- Scroll through tracks by planet with hotkey
-
 
 ### Changed
 
@@ -144,7 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Triggered race events displayed on UI
 - Rainbow-colored race UI elements
 
-[unreleased]: https://github.com/everalert/annodue/compare/0.1.4...HEAD
+[unreleased]: https://github.com/everalert/annodue/compare/0.1.5...HEAD
+[0.1.5]: https://github.com/everalert/annodue/compare/0.1.4...0.1.5
 [0.1.4]: https://github.com/everalert/annodue/compare/0.1.3...0.1.4
 [0.1.3]: https://github.com/everalert/annodue/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/everalert/annodue/compare/0.1.1...0.1.2

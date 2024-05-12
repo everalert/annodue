@@ -8,8 +8,8 @@ const GlobalSt = @import("Global.zig").GlobalState;
 const GlobalFn = @import("Global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("Global.zig").PLUGIN_VERSION;
 
-const r = @import("../util/racer.zig");
-const rt = r.text;
+const r = @import("racer");
+const rt = r.Text;
 
 // TODO: post-toast callback functions
 // TODO: decide whether the spawning/scrolling behaviour should be reversed (like DOOM)

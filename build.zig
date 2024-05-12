@@ -8,7 +8,7 @@ const std = @import("std");
 // TODO: get up to date on tooling error and success messaging
 
 // example release build command
-// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Ddbp="C:\msys64\home\EVAL\annodue\build" -Drop="F:\Projects\swe1r\annodue\.release"
+// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Drop="F:\Projects\swe1r\annodue\.release"
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -43,6 +43,10 @@ pub fn build(b: *std.Build) void {
     const zigwin32_m = zigwin32.module("zigwin32");
     const zzip = b.dependency("zzip", .{});
     const zzip_m = zzip.module("zzip");
+
+    const racerlib = b.createModule(.{
+        .source_file = .{ .path = "src/racer/racer.zig" },
+    });
 
     const options = b.addOptions();
     const options_label = "BuildOptions";
@@ -87,7 +91,7 @@ pub fn build(b: *std.Build) void {
     const generate_safe_plugin_hash_file = b.addExecutable(.{
         .name = "generate_safe_plugin_hash_file",
         .root_source_file = .{ .path = "src/tools/generate_safe_plugin_hash_file.zig" },
-        .target = target,
+        .target = .{},
     });
     generate_safe_plugin_hash_file.addModule("zigwin32", zigwin32_m);
     generate_safe_plugin_hash_file.addModule("zzip", zzip_m);
@@ -113,14 +117,25 @@ pub fn build(b: *std.Build) void {
 
     // TODO: update once script is actually written
     // TODO: automate version input somehow?
+    // TODO: split dinput part into its own section and integrate with rest
+    // of build system; copypath etc.
 
     const release_zip_files_step = b.step("release", "Package built files for release");
 
-    const dinputpath = b.option(
-        []const u8,
-        "dbp",
-        "Path to dinput.dll build directory; used to locate dinput.dll when packaging a release build",
-    ) orelse null;
+    const dinput_dll = b.addSharedLibrary(.{
+        .name = "dinput",
+        .target = target,
+        .optimize = optimize,
+    });
+    dinput_dll.linkLibC();
+    dinput_dll.addCSourceFiles(&.{
+        "src/dinput/dinput.c",
+    }, &.{});
+
+    var dinput_dll_release = b.addInstallArtifact(dinput_dll, .{});
+
+    const dinput_step = b.step("dinput", "Build dinput.dll");
+    dinput_step.dependOn(&dinput_dll_release.step);
 
     const releasepath = b.option(
         []const u8,
@@ -141,7 +156,7 @@ pub fn build(b: *std.Build) void {
         const generate_release_zip_files = b.addExecutable(.{
             .name = "generate_release_zip_files",
             .root_source_file = .{ .path = "src/tools/generate_release_zip_files.zig" },
-            .target = target,
+            .target = .{},
         });
         generate_release_zip_files.addModule("zigwin32", zigwin32_m);
         generate_release_zip_files.addModule("zzip", zzip_m);
@@ -151,10 +166,8 @@ pub fn build(b: *std.Build) void {
             const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
             generate_release_zip_files_run.addArg(arg_z_ip);
 
-            if (dinputpath) |dp| {
-                const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{dp}) catch unreachable;
-                generate_release_zip_files_run.addArg(arg_z_dp);
-            }
+            const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{b.lib_dir}) catch unreachable;
+            generate_release_zip_files_run.addArg(arg_z_dp);
 
             const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{rp}) catch unreachable;
             generate_release_zip_files_run.addArg(arg_z_op);
@@ -174,6 +187,7 @@ pub fn build(b: *std.Build) void {
             .install_subdir = "annodue",
         });
         zip_step.?.dependOn(&asset_install.step);
+        zip_step.?.dependOn(&dinput_dll_release.step);
 
         const arg_z_cleanup_path = std.fmt.allocPrint(alloc, "{s}/release", .{b.install_path}) catch unreachable;
         const zip_cleanup = b.addRemoveDirTree(arg_z_cleanup_path);
@@ -193,6 +207,21 @@ pub fn build(b: *std.Build) void {
     );
     hash_step.dependOn(plugin_step);
 
+    // STEP - build collision viewer c/c++ part
+
+    const collision_viewer = b.addStaticLibrary(.{
+        .name = "collision_viewer",
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    collision_viewer.linkLibC();
+    collision_viewer.linkLibCpp();
+    collision_viewer.addCSourceFiles(&.{
+        "src/collision_viewer/main.cpp",
+    }, &.{"-std=c++20"});
+    collision_viewer.linkSystemLibrary("Dwmapi");
+    collision_viewer.linkSystemLibrary("gdi32");
+
     const PluginDef = struct { name: []const u8, to_hash: bool = true };
     const plugins = [_]PluginDef{
         .{ .name = "test", .to_hash = false },
@@ -205,6 +234,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "developer", .to_hash = false },
         .{ .name = "inputdisplay" },
         .{ .name = "cam7" },
+        .{ .name = "collision_viewer" },
     };
 
     for (plugins) |plugin| {
@@ -218,9 +248,14 @@ pub fn build(b: *std.Build) void {
         });
         dll.linkLibC();
         dll.addOptions(options_label, options);
+        dll.addModule("racer", racerlib);
         dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
+        if (std.mem.eql(u8, plugin.name, "collision_viewer")) {
+            dll.linkLibrary(collision_viewer);
+            dll.addIncludePath(.{ .path = "src/collision_viewer" });
+        }
 
         // TODO: investigate options arg
         var dll_install = b.addInstallArtifact(dll, .{});
@@ -248,6 +283,7 @@ pub fn build(b: *std.Build) void {
     });
     core.linkLibC();
     core.addOptions(options_label, options);
+    core.addModule("racer", racerlib);
     core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);

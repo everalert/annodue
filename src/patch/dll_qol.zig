@@ -22,10 +22,16 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
 
-const r = @import("util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
+const rg = @import("racer").Global;
+const rti = @import("racer").Time;
+const rt = @import("racer").Text;
+const ri = @import("racer").Input;
+const rv = @import("racer").Vehicle;
+const rtr = @import("racer").Track;
+const rso = @import("racer").Sound;
+const rvi = @import("racer").Video;
+const rrd = @import("racer").RaceData;
+const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;
@@ -138,7 +144,7 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 // TODO: cleanup
 fn PatchHudTimerMs(enable: bool) void {
-    const draw_fn = if (enable) rf.swrText_DrawTime3 else rf.swrText_DrawTime2;
+    const draw_fn = if (enable) rt.swrText_DrawTime3 else rt.swrText_DrawTime2;
     const end_race_timer_offset: u8 = if (enable) 12 else 0;
     // hudDrawRaceHud
     _ = x86.call(0x460BD3, @intFromPtr(draw_fn));
@@ -160,7 +166,7 @@ fn PatchPlanetCutscenes(enable: bool) void {
     if (enable) {
         _ = x86.nop_until(0x45753D, comptime 0x45753D + 5);
     } else {
-        _ = x86.call(0x45753D, @intFromPtr(rf.swrVideo_PlayVideoFile));
+        _ = x86.call(0x45753D, @intFromPtr(rvi.swrVideo_PlayVideoFile));
     }
 }
 
@@ -170,11 +176,8 @@ fn PatchPlanetCutscenes(enable: bool) void {
 // TODO: fix sound bug when activating cy yunga cheat (use sound 45)
 // TODO: setting to actually enable the jinn/cy patches?
 
-const JINN_REESO_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 8;
-const JINN_REESO_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 8;
-
 fn PatchJinnReesoCheat(enable: bool) void {
-    _ = x86.call(0x4105DD, @intFromPtr(if (enable) &ToggleJinnReeso else rf.Vehicle_EnableJinnReeso));
+    _ = x86.call(0x4105DD, @intFromPtr(if (enable) &ToggleJinnReeso else rv.Vehicle_EnableJinnReeso));
 }
 
 fn ToggleJinnReeso() callconv(.C) void {
@@ -183,13 +186,13 @@ fn ToggleJinnReeso() callconv(.C) void {
         var on: bool = false;
     };
     if (!state.initialized) {
-        state.on = mem.read(JINN_REESO_METADATA_ADDR + 4, u32) == 299;
+        state.on = mem.read(rv.JINN_REESO_METADATA_ADDR + 4, u32) == 299;
         state.initialized = true;
     }
 
     state.on = !state.on;
     if (state.on) {
-        rf.Vehicle_EnableJinnReeso();
+        rv.Vehicle_EnableJinnReeso();
     } else {
         DisableJinnReeso();
     }
@@ -197,30 +200,27 @@ fn ToggleJinnReeso() callconv(.C) void {
 
 fn DisableJinnReeso() callconv(.C) void {
     //VehicleMetadata = 0x4C28A0
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
-    _ = mem.write(comptime JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
+    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
     //MysteryStruct = 0x4C73E8
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
-    _ = mem.write(comptime JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
+    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
 }
 
-const CY_YUNGA_METADATA_ADDR: usize = rc.VEHICLE_METADATA_ARRAY_ADDR + rc.VEHICLE_METADATA_ITEM_SIZE * 22;
-const CY_YUNGA_MYSTERY_ADDR: usize = 0x4C7088 + 0x6C * 22;
-
 fn PatchCyYungaCheat(enable: bool) void {
-    _ = x86.call(0x410578, @intFromPtr(if (enable) &ToggleCyYunga else rf.Vehicle_EnableCyYunga));
+    _ = x86.call(0x410578, @intFromPtr(if (enable) &ToggleCyYunga else rv.Vehicle_EnableCyYunga));
 }
 
 fn ToggleCyYunga() callconv(.C) void {
@@ -229,13 +229,13 @@ fn ToggleCyYunga() callconv(.C) void {
         var on: bool = false;
     };
     if (!state.initialized) {
-        state.on = mem.read(CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
+        state.on = mem.read(rv.CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
         state.initialized = true;
     }
 
     state.on = !state.on;
     if (state.on) {
-        rf.Vehicle_EnableCyYunga();
+        rv.Vehicle_EnableCyYunga();
     } else {
         DisableCyYunga();
     }
@@ -243,19 +243,19 @@ fn ToggleCyYunga() callconv(.C) void {
 
 fn DisableCyYunga() callconv(.C) void {
     //VehicleMetadata = 0x4C2B78
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
-    _ = mem.write(comptime CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
+    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
     //MysteryStruct = 0x4C79D0
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
-    _ = mem.write(comptime CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
+    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
 }
 
 fn PatchCyYungaCheatAudio(enable: bool) void {
@@ -274,7 +274,7 @@ const FastCountdown = struct {
     var CurrentFrametime: f64 = 1 / 24;
 
     fn update() void {
-        CurrentFrametime = CountRatio * rc.TIME_FRAMETIME_64.*;
+        CurrentFrametime = CountRatio * rti.FRAMETIME_64.*;
     }
 
     fn init(duration: f32) void {
@@ -284,7 +284,7 @@ const FastCountdown = struct {
     }
 
     fn patch(enable: bool) void {
-        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rc.ADDR_TIME_FRAMETIME_64;
+        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rti.FRAMETIME_64_ADDR;
         const prerace_max_time: u32 = if (enable) @bitCast(9.10 + CountDif) else 0x4111999A; // 9.10
         const boost_window_min: u32 = if (enable) @bitCast(0.05 * CountRatio) else 0x3D4CCCCD; // 0.05
         const boost_window_max: u32 = if (enable) @bitCast(0.30 * CountRatio) else 0x3E99999A; // 0.30
@@ -402,7 +402,7 @@ const race = struct {
 
     fn update_position() void {
         prev_position = this_position;
-        this_position = r.ReadPlayerValue(0x50, spatial.Pos3D);
+        this_position = @bitCast(re.Test.PLAYER.*.transform[12..15].*); // FIXME: ???
     }
 };
 
@@ -436,10 +436,8 @@ const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
 const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
 
 fn RenderRaceResultStatUpgrade(i: i16, cat: u8, lv: u8, hp: u8) void {
-    RenderRaceResultStat(i, rc.UpgradeCategories[cat], "{s}{d:0>3} ~1{s}", .{
-        if (hp < 255) s_upg_dmg else s_upg_full,
-        hp,
-        rc.UpgradeNames[cat * 6 + lv],
+    RenderRaceResultStat(i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
+        if (hp < 255) s_upg_dmg else s_upg_full, hp, rv.PartNameS(cat)[lv],
     });
 }
 
@@ -536,47 +534,46 @@ const QuickRaceMenu = extern struct {
     fn load_race() void {
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
-        r.WriteEntityValue(.Hang, 0, 0x73, u8, @as(u8, @intCast(values.vehicle)));
-        r.WriteEntityValue(.Hang, 0, 0x5D, u8, @as(u8, @intCast(values.track)));
-        r.WriteEntityValue(.Hang, 0, 0x5E, u8, rc.TrackCircuitIdMap[@intCast(values.track)]);
-        r.WriteEntityValue(.Hang, 0, 0x6E, u8, @as(u8, @intCast(values.mirror)));
-        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @intCast(values.laps)));
-        r.WriteEntityValue(.Hang, 0, 0x72, u8, @as(u8, @intCast(values.racers))); // for race reset
+        var hang = re.Manager.entity(.Hang, 0);
+        hang.vehicle = @intCast(values.vehicle);
+        hang.track = @intCast(values.track);
+        hang.circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
+        hang.mirror = @intCast(values.mirror);
+        hang.laps = @intCast(values.laps);
+        hang.aiSpeed = @intCast(values.ai_speed + 1);
+        hang.racers = @intCast(values.racers);
         _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
-        r.WriteEntityValue(.Hang, 0, 0x90, u8, @as(u8, @intCast(values.ai_speed + 1)));
-        //r.WriteEntityValue(.Hang, 0, 0x91, u8, @as(u8, @intCast(values.winnings_split)));
-        const u = mem.deref(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 });
-        for (values.up_lv, values.up_hp, 0..) |lv, hp, i| {
-            _ = mem.write(u + 0 + i, u8, @as(u8, @intCast(lv)));
-            _ = mem.write(u + 7 + i, u8, @as(u8, @intCast(hp)));
+        for (0..7) |i| {
+            rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
+            rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
         }
 
-        const jdge = r.DerefEntity(.Jdge, 0, 0);
-        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
+        const jdge = re.Manager.entity(.Jdge, 0);
+        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
         close();
     }
 
     // TODO: repurpose to run every EventJdgeBegn, maybe add different init if
     // that introduces issues with state loop
     fn init() void {
-        values.vehicle = r.ReadEntityValue(.Hang, 0, 0x73, u8);
-        values.track = r.ReadEntityValue(.Hang, 0, 0x5D, u8);
-        values.mirror = r.ReadEntityValue(.Hang, 0, 0x6E, u8);
-        values.laps = r.ReadEntityValue(.Hang, 0, 0x8F, u8);
-        values.racers = r.ReadEntityValue(.Hang, 0, 0x72, u8); // also: 0x50C558
-        values.ai_speed = r.ReadEntityValue(.Hang, 0, 0x90, u8) - 1;
-        //values.winnings_split = r.ReadEntityValue(.Hang, 0, 0x91, u8);
-        const u: [14]u8 = mem.deref_read(&.{ rc.ADDR_RACE_DATA, 0x0C, 0x41 }, [14]u8);
-        for (u[0..7], u[7..14], 0..) |lv, hp, i| {
-            values.up_lv[i] = lv;
-            values.up_hp[i] = hp;
+        const hang = re.Manager.entity(.Hang, 0);
+        values.vehicle = hang.vehicle;
+        values.track = hang.track;
+        values.mirror = hang.mirror;
+        values.laps = hang.laps;
+        values.racers = hang.racers;
+        values.ai_speed = hang.aiSpeed - 1;
+        //values.ai_speed = hang.winnings;
+        for (0..7) |i| {
+            values.up_lv[i] = rrd.PLAYER.*.pFile.upgrade_lv[i];
+            values.up_hp[i] = rrd.PLAYER.*.pFile.upgrade_hp[i];
         }
 
         initialized = true;
     }
 
     fn open() void {
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, open_threshold);
+        rg.PAUSE_SCROLLINOUT.* = open_threshold;
         if (!gf.GameFreezeEnable(menu_key)) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
@@ -585,8 +582,8 @@ const QuickRaceMenu = extern struct {
 
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
-        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 3);
+        rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+        rg.PAUSE_STATE.* = 3;
         menu_active.update(false);
     }
 
@@ -606,9 +603,9 @@ const QuickRaceMenu = extern struct {
             return close();
 
         const pi = QolState.input_pause.gets();
-        if (rc.PAUSE_STATE.* == 2 and pi == .JustOn)
+        if (rg.PAUSE_STATE.* == 2 and pi == .JustOn)
             return open();
-        if (rc.PAUSE_STATE.* == 2 and rc.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
+        if (rg.PAUSE_STATE.* == 2 and rg.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
             return open();
     }
 
@@ -622,17 +619,17 @@ const QuickRaceMenu = extern struct {
 const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rc.Vehicles, true, null),
+    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, null),
     // FIXME: maybe change to menu order?
-    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true, &QuickRaceTrackCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rtr.TracksById, true, &QuickRaceTrackCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rc.UpgradeCategories[0], &rc.UpgradeNames[0 * 6 .. 0 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rc.UpgradeCategories[1], &rc.UpgradeNames[1 * 6 .. 1 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rc.UpgradeCategories[2], &rc.UpgradeNames[2 * 6 .. 2 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rc.UpgradeCategories[3], &rc.UpgradeNames[3 * 6 .. 3 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rc.UpgradeCategories[4], &rc.UpgradeNames[4 * 6 .. 4 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rc.UpgradeCategories[5], &rc.UpgradeNames[5 * 6 .. 5 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
-    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rc.UpgradeCategories[6], &rc.UpgradeNames[6 * 6 .. 6 * 6 + 6].*, false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rv.UpgradeNames[0], rv.PartNameS(0), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rv.UpgradeNames[1], rv.PartNameS(1), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[2], rv.UpgradeNames[2], rv.PartNameS(2), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[3], rv.UpgradeNames[3], rv.PartNameS(3), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[4], rv.UpgradeNames[4], rv.PartNameS(4), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[5], rv.UpgradeNames[5], rv.PartNameS(5), false, &QuickRaceUpgradeCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.up_lv[6], rv.UpgradeNames[6], rv.PartNameS(6), false, &QuickRaceUpgradeCallback),
     mi.MenuItemSpacer(),
     mi.MenuItemToggle(&QuickRaceMenu.values.mirror, "Mirror"),
     mi.MenuItemRange(&QuickRaceMenu.values.laps, "Laps", 1, 5, true, null),
@@ -700,7 +697,7 @@ fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
         // save without restarting
         if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
             QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
-            rf.swrSound_PlaySoundMacro(0x2D);
+            rso.swrSound_PlaySoundMacro(0x2D);
         }
     }
     return false;
@@ -778,7 +775,7 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: look into using in-game default setter, see fn_45BD90
 
     if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
-        r.WriteEntityValue(.Hang, 0, 0x8F, u8, @as(u8, @truncate(QolState.default_laps)));
+        re.Manager.entity(.Hang, 0).laps = @truncate(QolState.default_laps);
 
     if (QolState.default_racers >= 1 and QolState.default_racers <= 12)
         _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
@@ -811,13 +808,13 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
-    _ = mem.write(rc.INPUT_RAW_STATE_ON + 4, u32, start_on);
-    _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
+    _ = mem.write(ri.RAW_STATE_ON + 4, u32, start_on);
+    _ = mem.write(ri.RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
 
 export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: confirm tabbed_in is actually needed here, possibly move to global state
-    const tabbed_in: bool = mem.read(rc.ADDR_GUI_STOPPED, u32) == 0;
+    const tabbed_in: bool = rg.GUI_STOPPED.* == 0;
     if (gs.in_race.on() and tabbed_in and QolState.fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
 }
@@ -837,9 +834,9 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
         (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
     {
-        const jdge = r.DerefEntity(.Jdge, 0, 0);
-        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        rf.TriggerLoad_InRace(jdge, rc.MAGIC_RSTR);
+        const jdge = re.Manager.entity(.Jdge, 0);
+        rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
         return; // skip quick race menu
     }
 
@@ -854,15 +851,14 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
 
-        const race_times: [6]f32 = r.ReadRaceDataValue(0x60, [6]f32);
-        const total_time: f32 = race_times[5];
+        const total_time: f32 = rrd.PLAYER.*.time.total;
 
         if (gs.race_state == .Countdown) {
             race.update_position();
         }
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
-            const speed: f32 = r.ReadPlayerValue(0x1A0, f32);
+            const speed = re.Test.PLAYER.*.speed;
             race.update_position();
             const this_distance = race.this_position.distance(&race.prev_position);
             race.set_motion(total_time, speed, this_distance);
@@ -885,7 +881,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
-                rc.UpgradeNames[gs.player.upgrades_lv[0]],
+                rv.PartNamesShort[gs.player.upgrades_lv[0]],
                 upg_postfix,
             });
 
@@ -915,5 +911,5 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    rc.TEXT_HIRES_FLAG.* = 0;
+    rt.TEXT_HIRES_FLAG.* = 0;
 }

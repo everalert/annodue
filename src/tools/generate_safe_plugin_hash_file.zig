@@ -2,12 +2,6 @@ const std = @import("std");
 
 const Sha512 = std.crypto.hash.sha2.Sha512;
 
-const w = std.os.windows;
-const w32 = @import("zigwin32");
-const w32ll = w32.system.library_loader;
-const w32f = w32.foundation;
-const w32fs = w32.storage.file_system;
-
 // TODO: add output param
 // TODO: remove length from format
 // TODO: add hash of the hashes at the end
@@ -50,16 +44,10 @@ pub fn main() !void {
     if (i_path == null) return error.NoInputPath;
     if (o_path == null) return error.NoOutputPath;
 
-    if (0 == w32fs.CreateDirectoryA(o_path.?, null)) {
-        var e = w.kernel32.GetLastError();
-        if (e == w.Win32Error.PATH_NOT_FOUND) {
-            std.debug.print(
-                "MOVE ERROR  Cannot create directory \"{s}\"; intermediary path does not exist.\n",
-                .{o_path.?},
-            );
-            return error.InvalidOutputDirectory;
-        }
-    }
+    std.fs.makeDirAbsolute(o_path.?) catch |err| switch(err) {
+        error.PathAlreadyExists => {},
+        else => return err,
+    };
 
     // generate hash file
 

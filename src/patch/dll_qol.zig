@@ -25,6 +25,7 @@ const st = @import("util/active_state.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").Text;
+const ri = @import("racer").Input;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
@@ -811,8 +812,8 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
-    _ = mem.write(rc.INPUT_RAW_STATE_ON + 4, u32, start_on);
-    _ = mem.write(rc.INPUT_RAW_STATE_JUST_ON + 4, u32, start_just_on);
+    _ = mem.write(ri.RAW_STATE_ON + 4, u32, start_on);
+    _ = mem.write(ri.RAW_STATE_JUST_ON + 4, u32, start_just_on);
 }
 
 export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {

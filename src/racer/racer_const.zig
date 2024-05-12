@@ -38,66 +38,6 @@ pub const ADDR_GUI_STOPPED: usize = 0x50CB64; // u32
 pub const VEHICLE_METADATA_ARRAY_ADDR: usize = 0x4C2700;
 pub const VEHICLE_METADATA_ITEM_SIZE: usize = 0x34;
 
-// Input
-
-pub const INPUT_RAW_STATE_TIMESTAMP: usize = 0x50E028;
-pub const INPUT_RAW_STATE_ON: usize = 0x50E868;
-pub const INPUT_RAW_STATE_JUST_ON: usize = 0x50F668;
-
-pub const INPUT_COMBINED_ADDR: usize = 0xEC8810;
-pub const INPUT_COMBINED_SIZE: usize = 0x30;
-
-pub const INPUT_AXIS_LENGTH: usize = 4;
-pub const INPUT_AXIS_SIZE: usize = INPUT_AXIS_LENGTH * 4;
-pub const INPUT_AXIS_COMBINED_BASE_ADDR: usize = 0xEC8830;
-pub const INPUT_AXIS_JOYSTICK_BASE_ADDR: usize = 0x4D5E30;
-pub const INPUT_AXIS_MOUSE_BASE_ADDR: usize = 0x4D5E40;
-pub const INPUT_AXIS_KEYBOARD_BASE_ADDR: usize = 0x4D5E50;
-
-pub const INPUT_AXIS = enum(u8) {
-    Thrust,
-    Unk2, // NOTE: not analog brake; that results in digital brake output
-    Steering,
-    Pitch,
-};
-pub const INPUT_AXIS_STEERING: u8 = @intFromEnum(INPUT_AXIS.Steering);
-pub const INPUT_AXIS_PITCH: u8 = @intFromEnum(INPUT_AXIS.Pitch);
-
-pub const INPUT_BUTTON_LENGTH: usize = 15;
-pub const INPUT_BUTTON_SIZE: usize = 16;
-pub const INPUT_BUTTON_COMBINED_BASE_ADDR: usize = 0xEC8810;
-pub const INPUT_BUTTON_JOYSTICK_BASE_ADDR: usize = 0x4D5E80;
-pub const INPUT_BUTTON_MOUSE_BASE_ADDR: usize = 0x4D5EBC;
-pub const INPUT_BUTTON_KEYBOARD_BASE_ADDR: usize = 0x4D5EF8;
-
-pub const INPUT_BUTTON = enum(u8) {
-    Camera,
-    LookBack,
-    Brake,
-    Acceleration,
-    Boost,
-    Slide,
-    RollLeft,
-    RollRight,
-    Taunt,
-    Repair,
-    Unk11,
-    Unk12,
-    Unk13,
-    Unk14,
-    Unk15,
-};
-pub const INPUT_BUTTON_CAMERA: u8 = @intFromEnum(INPUT_BUTTON.Camera);
-pub const INPUT_BUTTON_LOOK_BACK: u8 = @intFromEnum(INPUT_BUTTON.LookBack);
-pub const INPUT_BUTTON_BRAKE: u8 = @intFromEnum(INPUT_BUTTON.Brake);
-pub const INPUT_BUTTON_ACCELERATION: u8 = @intFromEnum(INPUT_BUTTON.Acceleration);
-pub const INPUT_BUTTON_BOOST: u8 = @intFromEnum(INPUT_BUTTON.Boost);
-pub const INPUT_BUTTON_SLIDE: u8 = @intFromEnum(INPUT_BUTTON.Slide);
-pub const INPUT_BUTTON_ROLL_LEFT: u8 = @intFromEnum(INPUT_BUTTON.RollLeft);
-pub const INPUT_BUTTON_ROLL_RIGHT: u8 = @intFromEnum(INPUT_BUTTON.RollRight);
-pub const INPUT_BUTTON_TAUNT: u8 = @intFromEnum(INPUT_BUTTON.Taunt);
-pub const INPUT_BUTTON_REPAIR: u8 = @intFromEnum(INPUT_BUTTON.Repair);
-
 // Camera
 
 pub const CAM_METACAM_ARRAY_ADDR: usize = 0xDFB040; // NOTE: need a better name for this

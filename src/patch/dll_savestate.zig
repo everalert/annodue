@@ -19,6 +19,7 @@ const mem = @import("util/memory.zig");
 
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
+const ri = @import("racer").Input;
 const rt = @import("racer").Text;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
@@ -90,7 +91,7 @@ const state = struct {
     var last_framecount: u32 = 0;
 
     const off_input: usize = 0;
-    const off_race: usize = rc.INPUT_COMBINED_SIZE;
+    const off_race: usize = ri.COMBINED_SIZE;
     const off_test: usize = off_race + rrd.SIZE;
     const off_hang: usize = off_test + re.Test.SIZE;
     const off_cman: usize = off_hang + re.Hang.SIZE;
@@ -302,7 +303,7 @@ const state = struct {
             uncompress_frame(frame, true);
 
             const s1_base = raw_stage + off_END;
-            mem.read_bytes(rc.INPUT_COMBINED_ADDR, s1_base + off_input, rc.INPUT_COMBINED_SIZE);
+            mem.read_bytes(ri.COMBINED_ADDR, s1_base + off_input, ri.COMBINED_SIZE);
             @memcpy(s1_base + off_race, rrd.PLAYER_SLICE.*);
             @memcpy(s1_base + off_test, re.Test.PLAYER_SLICE.*);
             @memcpy(s1_base + off_hang, re.Manager.entitySlice(.Hang, 0));
@@ -322,7 +323,7 @@ const state = struct {
             }
         } else {
             data_size = off_END;
-            mem.read_bytes(rc.INPUT_COMBINED_ADDR, data + off_input, rc.INPUT_COMBINED_SIZE);
+            mem.read_bytes(ri.COMBINED_ADDR, data + off_input, ri.COMBINED_SIZE);
             @memcpy(data + off_race, rrd.PLAYER_SLICE.*);
             @memcpy(data + off_test, re.Test.PLAYER_SLICE.*);
             @memcpy(data + off_hang, re.Manager.entitySlice(.Hang, 0));
@@ -336,7 +337,7 @@ const state = struct {
         if (!loadable(gs)) return;
 
         uncompress_frame(index, false);
-        _ = mem.write_bytes(rc.INPUT_COMBINED_ADDR, &raw_stage[off_input], rc.INPUT_COMBINED_SIZE);
+        _ = mem.write_bytes(ri.COMBINED_ADDR, &raw_stage[off_input], ri.COMBINED_SIZE);
         @memcpy(rrd.PLAYER_SLICE.*, raw_stage[off_race..off_test]); // WARN: maybe perm issues
         @memcpy(re.Test.PLAYER_SLICE.*, raw_stage[off_test..off_hang]); // WARN: maybe perm issues
         @memcpy(re.Manager.entitySlice(.Hang, 0).ptr, raw_stage[off_hang..off_cman]);

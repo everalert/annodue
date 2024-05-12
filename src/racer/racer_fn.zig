@@ -13,14 +13,6 @@ pub const swrSound_PlaySoundMacro: *fn (id: i32) callconv(.C) void = @ptrFromInt
 /// @filename   a .znm file located in /data/anims
 pub const swrVideo_PlayVideoFile: *fn (filename: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4252A0);
 
-// Input
-
-pub const swrInput_ProcessInput: *fn () callconv(.C) void = @ptrFromInt(0x404DD0);
-pub const swrInput_ReadControls: *fn () callconv(.C) void = @ptrFromInt(0x485630);
-pub const swrInput_ReadKeyboard: *fn () callconv(.C) void = @ptrFromInt(0x486170);
-pub const swrInput_ReadJoysticks: *fn () callconv(.C) void = @ptrFromInt(0x486340);
-pub const swrInput_ReadMouse: *fn () callconv(.C) void = @ptrFromInt(0x486710);
-
 // Loading
 
 pub const TriggerLoad_InRace: *fn (jdge: *anyopaque, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);

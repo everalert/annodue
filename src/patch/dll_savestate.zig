@@ -106,6 +106,9 @@ const state = struct {
     const stage_off: usize = headers_off + headers_size;
     const data_off: usize = stage_off + off_END * 2;
 
+    // FIXME: remove gpa/alloc, do some kind of core integration instead
+    var gpa: ?std.heap.GeneralPurposeAllocator(.{}) = null;
+    var alloc: ?std.mem.Allocator = null;
     const memory_size: usize = 1024 * 1024 * 64; // 64MB
     var memory: []u8 = undefined;
     var memory_addr: usize = undefined;
@@ -121,6 +124,7 @@ const state = struct {
     var load_delay: usize = 500; // ms
     var load_time: usize = 0;
     var load_frame: usize = 0;
+    var load_count: usize = 0;
 
     // TODO: some kind of unified mapping thing, once dinput is implemented
     var save_input_st_data = ButtonInputMap{ .kb = .@"1", .xi = .DPAD_DOWN };
@@ -161,9 +165,12 @@ const state = struct {
     var layer_index_count: usize = undefined;
 
     fn init(_: *GlobalFn) void {
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        const alloc = gpa.allocator();
-        memory = alloc.alloc(u8, memory_size) catch @panic("failed to allocate memory for savestate/rewind");
+        if (initialized) return;
+        defer initialized = true;
+
+        gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        alloc = gpa.?.allocator();
+        memory = alloc.?.alloc(u8, memory_size) catch @panic("failed to allocate memory for savestate/rewind");
         @memset(memory[0..memory_size], 0x00);
 
         memory_addr = @intFromPtr(memory.ptr);
@@ -175,8 +182,19 @@ const state = struct {
         offsets = @as(@TypeOf(offsets), @ptrFromInt(memory_addr + offsets_off));
         headers = @as(@TypeOf(headers), @ptrFromInt(memory_addr + headers_off));
         stage = @as(@TypeOf(stage), @ptrFromInt(memory_addr + stage_off));
+    }
 
-        initialized = true;
+    fn deinit(_: *GlobalFn) void {
+        if (!initialized) return;
+        defer initialized = false;
+
+        if (alloc) |a| a.free(memory);
+        if (gpa) |_| switch (gpa.?.deinit()) {
+            .leak => @panic("leak detected when deinitializing savestate/rewind"),
+            else => {},
+        };
+
+        reset();
     }
 
     fn reset() void {
@@ -184,6 +202,7 @@ const state = struct {
         frame = 0;
         frame_total = 0;
         load_frame = 0;
+        load_count = 0;
         scrub_frame = 0;
         rec_state = .Recording;
     }
@@ -199,7 +218,21 @@ const state = struct {
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
     fn loadable(gs: *GlobalSt) bool {
-        return gs.in_race.on();
+        const race_ok = gs.in_race.on();
+        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
+        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        return race_ok and loading_ok;
+    }
+
+    // FIXME: check if you're actually in the racing part, also integrate with global
+    // apis like Freeze (same for saveable())
+    fn updateable(gs: *GlobalSt) bool {
+        const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
+        const paused = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
+        const race_ok = gs.in_race.on();
+        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
+        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        return race_ok and !tabbed_out and !paused and loading_ok;
     }
 
     fn get_depth(index: usize) usize {
@@ -336,6 +369,7 @@ fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
     }
     if (gs.timestamp >= state.load_time) {
         state.load_compressed(state.load_frame, gs);
+        state.load_count += 1;
         return .Recording;
     }
     return .Loading;
@@ -369,10 +403,17 @@ fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
     }
 
     if (gs.timestamp < state.load_time) return .ScrubExiting;
+
+    state.load_count += 1;
     return .Recording;
 }
 
 fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
+    if (!state.updateable(gs)) return;
+
+    if (gs.race_state != .Racing)
+        return state.reset();
+
     state.rec_state = switch (state.rec_state) {
         .Recording => DoStateRecording(gs, gv),
         .Loading => DoStateLoading(gs, gv),
@@ -401,7 +442,9 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    state.deinit(gf);
+}
 
 // HOOKS
 
@@ -423,27 +466,22 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 // TODO: maybe reset state/recording if savestates or practice mode disabled?
 export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
-
-    const tabbed_out = mem.read(rc.ADDR_GUI_STOPPED, u32) > 0;
-    const paused: bool = mem.read(rc.ADDR_PAUSE_STATE, u8) > 0;
-    const player_ok: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
-        r.ReadRaceDataValue(0x84, u32) != 0;
-    if (!paused and !tabbed_out and gs.practice_mode and player_ok) {
-        if (gs.player.in_race_racing.on()) UpdateState(gs, gf) else state.reset();
-    }
+    UpdateState(gs, gf);
 }
 
+// TODO: merge with EngineUpdateStage20A?
 export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
+    // TODO: show during whole race scene? esp. if recording from count
     // TODO: experiment with positioning
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
-    if (gs.practice_mode and gs.in_race.on()) {
-        if (gs.player.in_race_racing.on()) {
-            rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};
-            rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
-        }
+    if (gs.practice_mode and gs.race_state == .Racing) {
+        rt.DrawText(16, 480 - 16, "Fr {d}", .{state.frame}, null, null) catch {};
+        rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
+        if (state.load_count > 0)
+            rt.DrawText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch {};
     }
 }
 

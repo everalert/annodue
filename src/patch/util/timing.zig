@@ -24,12 +24,10 @@ pub const TimeSpinlock = struct {
     timer_step_ns: u64 = 0,
     timer_step_cmp: u64 = 0,
     step_excess: u64 = 0,
-    test_tstart: u64 = 0,
-    test_tsleep: u64 = 0,
-    test_tspin: u64 = 0,
 
     pub fn Start(self: *TimeSpinlock) void {
         if (self.initialized) return;
+        defer self.initialized = true;
 
         var caps: w.winmm.TIMECAPS = undefined;
         if (w.winmm.timeGetDevCaps(&caps, 8) != w.winmm.TIMERR_NOERROR) return; // FIXME: error handling
@@ -39,34 +37,28 @@ pub const TimeSpinlock = struct {
         self.timer_step_ns = self.timer_step * std.time.ns_per_ms; // convert to ns
         self.timer_step_cmp = self.timer_step_ns * 2; // add wiggle room
         self.timer = std.time.Timer.start() catch return;
-
-        self.initialized = true;
     }
 
     // FIXME: probably want to integrate timeBeginPeriod etc. with annodue instead of letting
     // individual plugins handle it; need to actually set that up tho, just doing this for now
     pub fn End(self: *TimeSpinlock) void {
         if (!self.initialized) return;
-        self.initialized = false;
+        defer self.initialized = false;
 
         if (self.timer_step > 0) _ = w.winmm.timeEndPeriod(self.timer_step); // FIXME: error handling
     }
 
-    // TODO: still need to figure out why the f this runs even in menus for droopy
     pub fn Sleep(self: *TimeSpinlock) void {
         self.Start();
 
         var period: u64 = if (self.period > self.step_excess) self.period - self.step_excess else self.period;
         var timer_cur: u64 = self.timer.?.read();
-        self.test_tstart = timer_cur;
 
         while (timer_cur + self.timer_step_cmp < period) : (timer_cur = self.timer.?.read())
             std.time.sleep(self.timer_step);
-        self.test_tsleep = timer_cur;
 
         while (timer_cur < period) : (timer_cur = self.timer.?.read())
             continue;
-        self.test_tspin = timer_cur;
 
         timer_cur = self.timer.?.lap();
         self.step_excess = timer_cur - period;

@@ -100,6 +100,7 @@ pub inline fn MenuItemRange(
     min: i32,
     max: i32,
     wrap: bool,
+    callback: ?MenuItemCallbackType,
 ) MenuItem {
     return .{
         .value = value,
@@ -107,6 +108,7 @@ pub inline fn MenuItemRange(
         .min = min,
         .max = max,
         .wrap = wrap,
+        .callback = callback,
     };
 }
 
@@ -115,6 +117,7 @@ pub inline fn MenuItemList(
     label: [*:0]const u8,
     options: []const [*:0]const u8,
     wrap: bool,
+    callback: ?MenuItemCallbackType,
 ) MenuItem {
     return .{
         .value = value,
@@ -122,5 +125,6 @@ pub inline fn MenuItemList(
         .options = @ptrCast(&options[0]),
         .max = options.len,
         .wrap = wrap,
+        .callback = callback,
     };
 }

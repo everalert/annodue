@@ -38,8 +38,8 @@ pub const Version = std.SemanticVersion{
     .major = 0,
     .minor = 1,
     .patch = 4,
-    .pre = "alpha",
-    .build = "270",
+    //.pre = "alpha",
+    .build = "346",
 };
 
 // TODO: use SemanticVersion parse fn instead
@@ -53,11 +53,13 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable; // comptime
 };
 
-pub const PLUGIN_VERSION = 17;
+pub const PLUGIN_VERSION = 19;
 
 // STATE
 
-const GLOBAL_STATE_VERSION = 3;
+const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
+
+const GLOBAL_STATE_VERSION = 5;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -85,19 +87,20 @@ pub const GlobalState = extern struct {
     framecount: u32 = 0,
 
     in_race: st.ActiveState = .Off,
+    race_state: RaceState = .None,
+    race_state_prev: RaceState = .None,
+    race_state_new: bool = false,
     player: extern struct {
         upgrades: bool = false,
         upgrades_lv: [7]u8 = undefined,
         upgrades_hp: [7]u8 = undefined,
 
         flags1: u32 = 0,
-        in_race_count: st.ActiveState = .Off,
-        in_race_results: st.ActiveState = .Off,
-        in_race_racing: st.ActiveState = .Off,
         boosting: st.ActiveState = .Off,
         underheating: st.ActiveState = .On,
         overheating: st.ActiveState = .Off,
         dead: st.ActiveState = .Off,
+        deaths: u32 = 0,
 
         heat_rate: f32 = 0,
         cool_rate: f32 = 0,
@@ -114,13 +117,11 @@ pub const GlobalState = extern struct {
         } else false;
 
         p.flags1 = 0;
-        p.in_race_count = .Off;
-        p.in_race_results = .Off;
-        p.in_race_racing = .Off;
         p.boosting = .Off;
         p.underheating = .On; // you start the race underheating
         p.overheating = .Off;
         p.dead = .Off;
+        p.deaths = 0;
 
         p.heat_rate = r.ReadPlayerValue(0x8C, f32);
         p.cool_rate = r.ReadPlayerValue(0x90, f32);
@@ -139,9 +140,7 @@ pub const GlobalState = extern struct {
             if (engine[i] & (1 << 3) > 0) break true;
         } else false);
         p.dead.update((p.flags1 & (1 << 14)) > 0);
-        p.in_race_count.update((p.flags1 & (1 << 0)) > 0);
-        p.in_race_results.update((p.flags1 & (1 << 5)) == 0);
-        p.in_race_racing.update(!(p.in_race_count.on() or p.in_race_results.on()));
+        if (p.dead == .JustOn) p.deaths += 1;
     }
 };
 
@@ -208,25 +207,29 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
 
-pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    // TODO: move to identifying in-race mode via player Test entity ptr being set; get rid of gs.in_race.on()s
-    // TODO: enum indicating state of in-race mode (none, pre-race, countdown, racing, post-race)
-    gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
-    if (gs.in_race == .JustOn) gs.player_reset();
-    if (gs.in_race.on()) gs.player_update();
+pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    const player_ready: bool = mem.read(rc.RACE_DATA_PLAYER_RACE_DATA_PTR_ADDR, u32) != 0 and
+        r.ReadRaceDataValue(0x84, u32) != 0;
+    gs.in_race.update(player_ready);
 
-    //if (!s.prac.get("practice_tool_enable", bool)) return;
-    // FIXME: investigate past usage of practice tool ini setting; may need to adjust
-    // some things, primarily to do with lifecycle, because the past setting assumed
-    // it would be on permanently. also, do a pass on everything to integrate/migrate
-    // to global practice_mode.
-    // FIXME: move to Practice when practice stuff moved to core
-    // TODO: ability to toggle off practice mode if still in pre-countdown
-    if (input.get_kb_pressed(.P) and (!(gs.in_race.on() and gs.practice_mode))) {
-        gs.practice_mode = !gs.practice_mode;
-        const text: [:0]const u8 = if (gs.practice_mode) "Practice Mode Enabled" else "Practice Mode Disabled";
-        _ = gf.ToastNew(text, rt.ColorRGB.Yellow.rgba(0));
-    }
+    gs.race_state_prev = gs.race_state;
+    gs.race_state = blk: {
+        if (!gs.in_race.on()) break :blk .None;
+        if (mem.read(rc.ADDR_IN_RACE, u8) == 0) break :blk .PreRace;
+        // TODO: figure out how the engine knows to set these and use those instead
+        const flags1 = r.ReadPlayerValue(0x60, u32);
+        const countdown: bool = flags1 & (1 << 0) != 0;
+        if (countdown) break :blk .Countdown;
+        const postrace: bool = flags1 & (1 << 5) == 0;
+        const show_stats: bool = r.ReadEntityValue(.Jdge, 0, 0x08, u32) & 0x0F == 2;
+        if (postrace and show_stats) break :blk .PostRace;
+        if (postrace) break :blk .PostRaceExiting;
+        break :blk .Racing;
+    };
+    gs.race_state_new = gs.race_state != gs.race_state_prev;
+
+    if (gs.race_state_new and gs.race_state == .PreRace) gs.player_reset();
+    if (gs.in_race.on()) gs.player_update();
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
@@ -273,6 +276,10 @@ pub fn MenuStartRaceB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn MenuRaceResultsB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    DrawMenuPracticeModeLabel();
+}
+
+pub fn MenuTrackSelectB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 

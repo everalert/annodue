@@ -37,8 +37,8 @@ pub fn build(b: *std.Build) void {
 
     // MODULES
 
-    //const zigini = b.dependency("zigini", .{});
-    //const zigini_m = zigini.module("zigini");
+    const zigini = b.dependency("zigini", .{});
+    const zigini_m = zigini.module("ini");
     const zigwin32 = b.dependency("zigwin32", .{});
     const zigwin32_m = zigwin32.module("zigwin32");
     const zzip = b.dependency("zzip", .{});
@@ -239,6 +239,7 @@ pub fn build(b: *std.Build) void {
         });
         dll.linkLibC();
         dll.addOptions(options_label, options);
+        dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
         if (std.mem.eql(u8, plugin.name, "collision_viewer")) {
@@ -272,6 +273,7 @@ pub fn build(b: *std.Build) void {
     });
     core.linkLibC();
     core.addOptions(options_label, options);
+    core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);
     core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });

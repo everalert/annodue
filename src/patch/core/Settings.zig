@@ -80,6 +80,7 @@ pub fn init() void {
     SettingsState.qol.add("quick_race_menu_enable", bool, true);
     SettingsState.qol.add("ms_timer_enable", bool, true);
     SettingsState.qol.add("fps_limiter_enable", bool, true);
+    SettingsState.qol.add("fps_limiter_default", u32, 24);
     SettingsState.qol.add("skip_planet_cutscenes", bool, true);
     SettingsState.qol.add("default_laps", u32, 3);
     SettingsState.qol.add("default_racers", u32, 1);

@@ -16,7 +16,7 @@ const mem = @import("util/memory.zig");
 
 const rc = @import("racer").constants;
 const rq = @import("racer").Quad;
-const rt = @import("racer").text;
+const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
@@ -138,7 +138,7 @@ const InputDisplay = struct {
     }
 
     fn InitSingle(i: *?u16, spr: u32, x: i16, y: i16, xs: f32, ys: f32, bg: bool) void {
-        i.* = rq.InitNewQuad(spr);
+        i.* = rq.InitNewQuad(spr) catch return; // FIXME: actual error handling
         rq.swrQuad_SetFlags(i.*.?, 1 << 16);
         if (bg) rq.swrQuad_SetColor(i.*.?, 0x28, 0x28, 0x28, 0x80);
         if (!bg) rq.swrQuad_SetColor(i.*.?, 0x00, 0x00, 0x00, 0xFF);

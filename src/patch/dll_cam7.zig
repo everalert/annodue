@@ -18,7 +18,6 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
-const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const re = @import("racer").Entity;

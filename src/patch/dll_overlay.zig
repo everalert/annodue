@@ -8,10 +8,9 @@ const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
 
 const debug = @import("core/Debug.zig");
 
-const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
-const rt = @import("racer").text;
+const rt = @import("racer").Text;
 const rrd = @import("racer").RaceData;
 const rete = @import("racer").Entity.Test;
 const rto = rt.TextStyleOpts;

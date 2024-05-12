@@ -17,10 +17,9 @@ const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 
-const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
-const rt = @import("racer").text;
+const rt = @import("racer").Text;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;

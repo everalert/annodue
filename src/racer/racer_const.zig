@@ -98,23 +98,6 @@ pub const INPUT_BUTTON_ROLL_RIGHT: u8 = @intFromEnum(INPUT_BUTTON.RollRight);
 pub const INPUT_BUTTON_TAUNT: u8 = @intFromEnum(INPUT_BUTTON.Taunt);
 pub const INPUT_BUTTON_REPAIR: u8 = @intFromEnum(INPUT_BUTTON.Repair);
 
-// Text
-
-pub const TEXT_COLOR_PRESET = [10]u32{
-    0x000000, // (black)
-    0xFFFFFF, // (white)
-    0x6EB4FF, // (blue)
-    0xFFFF9C, // (yellow)
-    0x96FF96, // (green)
-    0xFF6450, // (red)
-    0xBC865E, // (brown)
-    0x6E6E80, // (gray)
-    0xFFA7D1, // (pink)
-    0x985EFF, // (purple)
-};
-
-pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(0x50C0AC);
-
 // Camera
 
 pub const CAM_METACAM_ARRAY_ADDR: usize = 0xDFB040; // NOTE: need a better name for this

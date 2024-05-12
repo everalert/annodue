@@ -10,7 +10,6 @@ const ScrollControl = @import("scroll_control.zig").ScrollControl;
 const st = @import("active_state.zig");
 const input = @import("../core/input.zig");
 
-const r = @import("racer.zig");
 const rc = @import("racer").constants;
 const rf = @import("racer").functions;
 const rt = @import("racer").text;

@@ -13,7 +13,7 @@ const input = @import("../core/input.zig");
 const r = @import("racer");
 const rc = r.constants;
 const rf = r.functions;
-const rt = r.text;
+const rt = r.Text;
 const rto = rt.TextStyleOpts;
 
 // TODO: scrolling menu when the menu is too long to fit on screen

@@ -22,8 +22,10 @@ pub const QUAD_STAT_BAR_INDEX: *u16 = @ptrFromInt(QUAD_STAT_BAR_INDEX_ADDR);
 
 // HELPER FUNCTIONS
 
-pub fn InitNewQuad(spr: u32) u16 {
-    swrQuad_InitQuad(QUAD_INITIALIZED_INDEX.*, spr);
-    QUAD_INITIALIZED_INDEX.* += 1;
-    return QUAD_INITIALIZED_INDEX.*;
+pub fn InitNewQuad(spr: u32) !u16 {
+    if (QUAD_INITIALIZED_INDEX.* >= 400) return error.QueueFull;
+
+    const index = QUAD_INITIALIZED_INDEX.*;
+    swrQuad_InitQuad(index, spr);
+    return index;
 }

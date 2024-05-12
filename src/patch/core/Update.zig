@@ -22,7 +22,7 @@ const GlobalFn = @import("Global.zig").GlobalFunction;
 const Version = @import("Global.zig").Version;
 
 const r = @import("racer");
-const rt = r.text;
+const rt = r.Text;
 
 const msg = @import("../util/message.zig");
 

@@ -22,10 +22,9 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
 
-const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
-const rt = @import("racer").text;
+const rt = @import("racer").Text;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
@@ -140,7 +139,7 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 // TODO: cleanup
 fn PatchHudTimerMs(enable: bool) void {
-    const draw_fn = if (enable) rf.swrText_DrawTime3 else rf.swrText_DrawTime2;
+    const draw_fn = if (enable) rt.swrText_DrawTime3 else rt.swrText_DrawTime2;
     const end_race_timer_offset: u8 = if (enable) 12 else 0;
     // hudDrawRaceHud
     _ = x86.call(0x460BD3, @intFromPtr(draw_fn));
@@ -915,5 +914,5 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    rc.TEXT_HIRES_FLAG.* = 0;
+    rt.TEXT_HIRES_FLAG.* = 0;
 }

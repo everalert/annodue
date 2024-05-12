@@ -11,7 +11,6 @@ const debug = @import("core/Debug.zig");
 
 const msg = @import("util/message.zig");
 
-const r = @import("util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;

@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const r = @import("../util/racer.zig");
 const rf = @import("racer").functions;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;

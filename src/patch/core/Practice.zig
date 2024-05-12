@@ -11,10 +11,9 @@ const st = @import("../util/active_state.zig");
 const nt = @import("../util/normalized_transform.zig");
 const mem = @import("../util/memory.zig");
 
-const r = @import("../util/racer.zig");
 const rq = @import("racer").Quad;
 const rc = @import("racer").constants;
-const rt = @import("racer").text;
+const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 // FIXME: refactor and merge with core
@@ -49,7 +48,7 @@ const mode_vis = struct {
     }
 
     fn init_single(id: *u16, bottom: bool, right: bool) void {
-        id.* = rq.InitNewQuad(spr);
+        id.* = rq.InitNewQuad(spr) catch return; // FIXME: actual error handling
         rq.swrQuad_SetFlags(id.*, 1 << 15 | 1 << 16);
         if (right) rq.swrQuad_SetFlags(id.*, 1 << 2);
         if (!bottom) rq.swrQuad_SetFlags(id.*, 1 << 3);

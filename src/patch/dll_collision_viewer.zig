@@ -348,6 +348,7 @@ export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    QuickRaceMenu.close();
     deinit_collision_viewer();
     _ = gf;
     _ = gs;

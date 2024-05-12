@@ -8,9 +8,6 @@ const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
 
 const debug = @import("core/Debug.zig");
 
-const r = @import("racer");
-const rf = r.functions;
-
 const mem = @import("util/memory.zig");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging

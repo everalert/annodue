@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const rf = @import("racer").functions;
 const rg = @import("racer").Global;
 const re = @import("racer").Entity;
 

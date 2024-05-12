@@ -22,13 +22,14 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
 
-const rf = @import("racer").functions;
-const rc = @import("racer").constants;
 const rg = @import("racer").Global;
 const rti = @import("racer").Time;
 const rt = @import("racer").Text;
 const ri = @import("racer").Input;
 const rv = @import("racer").Vehicle;
+const rtr = @import("racer").Track;
+const rso = @import("racer").Sound;
+const rvi = @import("racer").Video;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
@@ -165,7 +166,7 @@ fn PatchPlanetCutscenes(enable: bool) void {
     if (enable) {
         _ = x86.nop_until(0x45753D, comptime 0x45753D + 5);
     } else {
-        _ = x86.call(0x45753D, @intFromPtr(rf.swrVideo_PlayVideoFile));
+        _ = x86.call(0x45753D, @intFromPtr(rvi.swrVideo_PlayVideoFile));
     }
 }
 
@@ -536,7 +537,7 @@ const QuickRaceMenu = extern struct {
         var hang = re.Manager.entity(.Hang, 0);
         hang.vehicle = @intCast(values.vehicle);
         hang.track = @intCast(values.track);
-        hang.circuit = rc.TrackCircuitIdMap[@intCast(values.track)];
+        hang.circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
         hang.mirror = @intCast(values.mirror);
         hang.laps = @intCast(values.laps);
         hang.aiSpeed = @intCast(values.ai_speed + 1);
@@ -548,7 +549,7 @@ const QuickRaceMenu = extern struct {
         }
 
         const jdge = re.Manager.entity(.Jdge, 0);
-        rf.TriggerLoad_InRace(jdge, re.M_RSTR);
+        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
         close();
     }
 
@@ -581,7 +582,7 @@ const QuickRaceMenu = extern struct {
 
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
-        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+        rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rg.PAUSE_STATE.* = 3;
         menu_active.update(false);
     }
@@ -620,7 +621,7 @@ const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemSpacer(),
     mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, null),
     // FIXME: maybe change to menu order?
-    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rc.TracksById, true, &QuickRaceTrackCallback),
+    mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rtr.TracksById, true, &QuickRaceTrackCallback),
     mi.MenuItemSpacer(),
     mi.MenuItemList(&QuickRaceMenu.values.up_lv[0], rv.UpgradeNames[0], rv.PartNameS(0), false, &QuickRaceUpgradeCallback),
     mi.MenuItemList(&QuickRaceMenu.values.up_lv[1], rv.UpgradeNames[1], rv.PartNameS(1), false, &QuickRaceUpgradeCallback),
@@ -696,7 +697,7 @@ fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
         // save without restarting
         if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
             QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
-            rf.swrSound_PlaySoundMacro(0x2D);
+            rso.swrSound_PlaySoundMacro(0x2D);
         }
     }
     return false;
@@ -834,8 +835,8 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
     {
         const jdge = re.Manager.entity(.Jdge, 0);
-        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        rf.TriggerLoad_InRace(jdge, re.M_RSTR);
+        rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
         return; // skip quick race menu
     }
 

@@ -10,8 +10,6 @@ const mem = @import("memory.zig");
 const input = @import("../core/input.zig");
 
 const r = @import("racer");
-const rc = r.constants;
-const rf = r.functions;
 const rt = r.Time;
 
 pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;

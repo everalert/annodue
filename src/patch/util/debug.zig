@@ -8,7 +8,7 @@ const w32wm = w32.ui.windows_and_messaging;
 
 const global = @import("../core/Global.zig");
 const mem = @import("memory.zig");
-const rc = @import("racer").constants;
+const rg = @import("racer").Global;
 
 const DebugConsole = struct {
     var initialized: bool = false;
@@ -28,7 +28,7 @@ fn Init() void {
     DebugConsole.initialized = true;
 
     _ = w32wm.SetWindowPos(DebugConsole.hwnd, null, 0, 0, 640, 960, .{});
-    _ = w32wm.SetForegroundWindow(mem.read(rc.ADDR_HWND, w32f.HWND));
+    _ = w32wm.SetForegroundWindow(rg.HWND.*);
 }
 
 fn WriteConsole(handle: win.HANDLE, comptime fmt: []const u8, args: anytype) !void {

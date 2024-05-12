@@ -17,13 +17,11 @@ const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 
-const rf = @import("racer").functions;
-const rc = @import("racer").constants;
 const rg = @import("racer").Global;
 const ri = @import("racer").Input;
-const rt = @import("racer").Text;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
+const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;

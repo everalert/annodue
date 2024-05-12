@@ -11,11 +11,6 @@ const debug = @import("core/Debug.zig");
 
 const msg = @import("util/message.zig");
 
-const rf = @import("racer").functions;
-const rc = @import("racer").constants;
-const rt = @import("racer").text;
-const rto = rt.TextStyleOpts;
-
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 

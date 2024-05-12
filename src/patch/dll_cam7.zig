@@ -18,8 +18,7 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
-const rf = @import("racer").functions;
-const rc = @import("racer").constants;
+const rc = @import("racer").Camera;
 const re = @import("racer").Entity;
 const rg = @import("racer").Global;
 
@@ -163,7 +162,7 @@ fn mat4x4_get_rotation(mat: *const [4][4]f32, euler: *Vec3) void {
     euler.z = t1;
 }
 
-const camstate_ref_addr: u32 = rc.CAM_METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
+const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
 
 fn CheckAndResetSavedCam() void {
     if (Cam7.saved_camstate_index == null) return;
@@ -199,8 +198,8 @@ fn SaveSavedCam() void {
     if (Cam7.saved_camstate_index != null) return;
     Cam7.saved_camstate_index = mem.read(camstate_ref_addr, u32);
 
-    const mat4_addr: u32 = rc.CAM_CAMSTATE_ARRAY_ADDR +
-        Cam7.saved_camstate_index.? * rc.CAM_CAMSTATE_ITEM_SIZE + 0x14;
+    const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
+        Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
     @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4[0])), @as([*]f32, @ptrFromInt(mat4_addr)));
     mat4x4_get_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
@@ -396,12 +395,12 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    rf.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
+    rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     RestoreSavedCam();
-    rf.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
+    rc.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
 }
 
 // HOOKS

@@ -1,6 +1,16 @@
 const std = @import("std");
 const e = @import("entity.zig");
 
+// GAME FUNCTIONS
+
+pub const TriggerLoad_InRace: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
+
+// GAME CONSTANTS
+
+// ...
+
+// GAME TYPEDEFS
+
 pub const SIZE: usize = e.EntitySize(.Jdge);
 
 // TODO: testing assertion of size correctness
@@ -34,3 +44,7 @@ pub const Jdge = extern struct {
     recordLap3: f32,
     _unk_1D8_1E7: [0x20]u8,
 };
+
+// HELPERS
+
+// ...

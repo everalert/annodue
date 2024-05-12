@@ -15,13 +15,11 @@ const dbg = @import("../util/debug.zig");
 const msg = @import("../util/message.zig");
 const mem = @import("../util/memory.zig");
 
-const rf = @import("racer").functions;
-const rc = @import("racer").constants;
-const rt = @import("racer").Text;
 const rti = @import("racer").Time;
 const rg = @import("racer").Global;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
+const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 const w32 = @import("zigwin32");

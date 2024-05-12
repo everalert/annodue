@@ -22,8 +22,6 @@ const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
 
 const r = @import("racer");
-const rc = r.constants;
-const rf = r.functions;
 const reh = r.Entity.Hang;
 
 // TODO: switch to Sha256 for perf?

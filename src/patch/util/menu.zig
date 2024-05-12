@@ -11,9 +11,8 @@ const st = @import("active_state.zig");
 const input = @import("../core/input.zig");
 
 const r = @import("racer");
-const rc = r.constants;
-const rf = r.functions;
 const rt = r.Text;
+const rso = r.Sound;
 const rto = rt.TextStyleOpts;
 
 // TODO: scrolling menu when the menu is too long to fit on screen
@@ -65,10 +64,10 @@ pub const Menu = extern struct {
         self.y_prev = self.idx;
         self.idx = self.y_scroll.UpdateEx(self.idx, self.items.len, self.wrap);
         if (self.idx != self.y_prev)
-            rf.swrSound_PlaySoundMacro(88);
+            rso.swrSound_PlaySoundMacro(88);
         if (self.callback) |cb| {
             if (cb(self))
-                rf.swrSound_PlaySoundMacro(88);
+                rso.swrSound_PlaySoundMacro(88);
         }
 
         if (self.idx < self.items.len) {
@@ -77,11 +76,11 @@ pub const Menu = extern struct {
                 self.x_prev = item.rval();
                 item.rset(self.x_scroll.UpdateEx(item.rval(), item.rmax(), item.wrap));
                 if (item.rval() != self.x_prev)
-                    rf.swrSound_PlaySoundMacro(88);
+                    rso.swrSound_PlaySoundMacro(88);
             }
             if (item.callback) |cb| {
                 if (cb(self))
-                    rf.swrSound_PlaySoundMacro(88);
+                    rso.swrSound_PlaySoundMacro(88);
             }
         }
 

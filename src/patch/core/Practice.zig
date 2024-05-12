@@ -12,7 +12,7 @@ const nt = @import("../util/normalized_transform.zig");
 const mem = @import("../util/memory.zig");
 
 const r = @import("../util/racer.zig");
-const rf = @import("racer").functions;
+const rq = @import("racer").Quad;
 const rc = @import("racer").constants;
 const rt = @import("racer").text;
 const rto = rt.TextStyleOpts;
@@ -41,7 +41,7 @@ const mode_vis = struct {
     var br: u16 = undefined;
 
     fn init() void {
-        spr = rf.swrQuad_LoadTga("annodue/images/corner_round_32.tga", 8000);
+        spr = rq.swrQuad_LoadTga("annodue/images/corner_round_32.tga", 8000);
         init_single(&tl, false, false);
         init_single(&tr, false, true);
         init_single(&bl, true, false);
@@ -49,27 +49,27 @@ const mode_vis = struct {
     }
 
     fn init_single(id: *u16, bottom: bool, right: bool) void {
-        id.* = r.InitNewQuad(spr);
-        rf.swrQuad_SetFlags(id.*, 1 << 15 | 1 << 16);
-        if (right) rf.swrQuad_SetFlags(id.*, 1 << 2);
-        if (!bottom) rf.swrQuad_SetFlags(id.*, 1 << 3);
-        rf.swrQuad_SetColor(id.*, 0xFF, 0xFF, 0x9C, 0xFF);
-        rf.swrQuad_SetPosition(id.*, if (right) x_rt else 0, if (bottom) y_bt else 0);
-        rf.swrQuad_SetScale(id.*, x_scale, y_scale);
+        id.* = rq.InitNewQuad(spr);
+        rq.swrQuad_SetFlags(id.*, 1 << 15 | 1 << 16);
+        if (right) rq.swrQuad_SetFlags(id.*, 1 << 2);
+        if (!bottom) rq.swrQuad_SetFlags(id.*, 1 << 3);
+        rq.swrQuad_SetColor(id.*, 0xFF, 0xFF, 0x9C, 0xFF);
+        rq.swrQuad_SetPosition(id.*, if (right) x_rt else 0, if (bottom) y_bt else 0);
+        rq.swrQuad_SetScale(id.*, x_scale, y_scale);
     }
 
     fn update(transition: f32, cr: u8, cg: u8, cb: u8) void {
         const active: bool = transition > 0;
-        rf.swrQuad_SetActive(tl, @intFromBool(active));
-        rf.swrQuad_SetActive(tr, @intFromBool(active));
-        rf.swrQuad_SetActive(bl, @intFromBool(active));
-        rf.swrQuad_SetActive(br, @intFromBool(active));
+        rq.swrQuad_SetActive(tl, @intFromBool(active));
+        rq.swrQuad_SetActive(tr, @intFromBool(active));
+        rq.swrQuad_SetActive(bl, @intFromBool(active));
+        rq.swrQuad_SetActive(br, @intFromBool(active));
         if (active) {
             const opacity: u8 = @intFromFloat(nt.pow2(transition) * 255);
-            rf.swrQuad_SetColor(tl, cr, cg, cb, opacity);
-            rf.swrQuad_SetColor(tr, cr, cg, cb, opacity);
-            rf.swrQuad_SetColor(bl, cr, cg, cb, opacity);
-            rf.swrQuad_SetColor(br, cr, cg, cb, opacity);
+            rq.swrQuad_SetColor(tl, cr, cg, cb, opacity);
+            rq.swrQuad_SetColor(tr, cr, cg, cb, opacity);
+            rq.swrQuad_SetColor(bl, cr, cg, cb, opacity);
+            rq.swrQuad_SetColor(br, cr, cg, cb, opacity);
         }
     }
 };

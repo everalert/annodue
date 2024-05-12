@@ -3,4 +3,5 @@ pub const functions = @import("racer_fn.zig");
 pub const text = @import("Text.zig");
 pub const RaceData = @import("RaceData.zig");
 pub const File = @import("File.zig");
+pub const Quad = @import("Quad.zig");
 pub const Entity = @import("Entity/entity.zig");

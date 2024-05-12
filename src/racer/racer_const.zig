@@ -115,11 +115,6 @@ pub const TEXT_COLOR_PRESET = [10]u32{
 
 pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(0x50C0AC);
 
-// Quad (screenspace drawing)
-
-pub const ADDR_QUAD_INITIALIZED_INDEX: usize = 0x4B91B8;
-pub const ADDR_QUAD_STAT_BAR_INDEX: usize = 0x50C928;
-
 // Camera
 
 pub const CAM_METACAM_ARRAY_ADDR: usize = 0xDFB040; // NOTE: need a better name for this

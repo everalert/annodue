@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Migrated `patch/util/racer*` to `racer` module
+
 ## [0.1.4] - 2024-05-09
 
 ### Added
@@ -46,7 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- Can now hold button to open instead of double-tap
 	- Scroll through FPS presets with hotkey
 	- Scroll through tracks by planet with hotkey
-
 
 ### Changed
 

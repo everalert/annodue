@@ -2,7 +2,11 @@ const std = @import("std");
 const f = @import("File.zig");
 const Stats = @import("Stats.zig").Stats;
 
-pub const SIZE: usize = 0x88;
+// GAME FUNCTIONS
+
+// ..
+
+// GAME CONSTANTS
 
 pub const PLAYER_PTR_ADDR: usize = 0x4D78A4;
 pub const PLAYER_PTR: *usize = @ptrFromInt(PLAYER_PTR_ADDR);
@@ -14,6 +18,10 @@ pub const PLAYER_SLICE: **[SIZE]u8 = @ptrFromInt(PLAYER_PTR_ADDR);
 pub const ARRAY_ADDR: usize = 0xE29BC0;
 pub const ARRAY: *[12]RaceData = @ptrFromInt(ARRAY_ADDR);
 pub const SLICE_ARRAY: *[12][SIZE]u8 = @ptrFromInt(ARRAY_ADDR); // TODO: convert to many-item pointer
+
+// GAME TYPEDEFS
+
+pub const SIZE: usize = 0x88;
 
 pub const RaceData = extern struct {
     index: u32,

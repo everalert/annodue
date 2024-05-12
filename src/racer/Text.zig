@@ -53,7 +53,7 @@ pub const TEXT_COLOR_PRESET = [10]u32{
 pub const TEXT_HIRES_FLAG_ADDR: usize = 0x50C0AC;
 pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(TEXT_HIRES_FLAG_ADDR);
 
-// HELPER FUNCTIONS
+// HELPERS
 
 pub const DEFAULT_STYLE: []const u8 = "~F0~s";
 

@@ -9,9 +9,12 @@ const COMPATIBILITY_VERSION = @import("core/global.zig").PLUGIN_VERSION;
 const rs = @import("racer").Sound;
 
 // FEATURES
-// -
-// - CONTROLS:      keyboard        xinput
-//   ..             ..              ..
+// - visualize collision faces
+// - visualize collision mesh
+// - visualize spline
+// - CONTROLS:              keyboard        xinput
+//   Open menu              9              ..
+//   Toggle visualization   8              ..
 // - SETTINGS:
 //   ..             type    note
 

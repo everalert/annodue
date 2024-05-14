@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const GlobalSt = @import("Global.zig").GlobalState;
-const GlobalFn = @import("Global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("Global.zig").PLUGIN_VERSION;
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
 
 // HOOK FUNCTIONS
 

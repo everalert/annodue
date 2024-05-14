@@ -5,9 +5,9 @@ const w32 = @import("zigwin32");
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
 
-const global = @import("Global.zig");
-const GlobalSt = global.GlobalState;
-const GlobalFn = global.GlobalFunction;
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
 
 const hook = @import("Hook.zig");
 const allocator = @import("Allocator.zig");

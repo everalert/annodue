@@ -28,7 +28,7 @@ fn Init() void {
     DebugConsole.initialized = true;
 
     _ = w32wm.SetWindowPos(DebugConsole.hwnd, null, 0, 0, 640, 960, .{});
-    _ = w32wm.SetForegroundWindow(rg.HWND.*);
+    _ = w32wm.SetForegroundWindow(@ptrCast(rg.HWND.*));
 }
 
 fn WriteConsole(handle: win.HANDLE, comptime fmt: []const u8, args: anytype) !void {

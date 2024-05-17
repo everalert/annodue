@@ -3,6 +3,8 @@ const Self = @This();
 const BuildOptions = @import("BuildOptions");
 
 const std = @import("std");
+const SemVer = std.SemanticVersion;
+
 const w = std.os.windows;
 const w32 = @import("zigwin32");
 const w32ll = w32.system.library_loader;
@@ -275,6 +277,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     if (p.PluginName == null or
         p.PluginVersion == null or
+        SemVer.parse(p.PluginVersion.?()[0..std.mem.len(p.PluginVersion.?())]) == error.InvalidVersion or
         p.PluginCompatibilityVersion == null or
         p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
         p.OnInit == null or

@@ -7,9 +7,9 @@ const w32wm = w32.ui.windows_and_messaging;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
-const GlobalSt = @import("core/Global.zig").GlobalState;
-const GlobalFn = @import("core/Global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
+const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const debug = @import("core/Debug.zig");
 

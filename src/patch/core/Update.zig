@@ -17,9 +17,10 @@ const w32wm = w32.ui.windows_and_messaging;
 
 const allocator = @import("Allocator.zig");
 const SettingsSt = @import("Settings.zig").SettingsState;
-const GlobalSt = @import("Global.zig").GlobalState;
-const GlobalFn = @import("Global.zig").GlobalFunction;
-const Version = @import("Global.zig").Version;
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
+const VERSION = app.VERSION;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -135,7 +136,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         const tag = parsed.value.object.get("tag_name").?.string;
         update.tag = alloc.dupe(u8, tag) catch return;
         const tag_ver = std.SemanticVersion.parse(update.tag.?) catch return;
-        if (std.SemanticVersion.order(Version, tag_ver) != .lt) return;
+        if (std.SemanticVersion.order(VERSION, tag_ver) != .lt) return;
 
         s.init = true; // at this point it doesn't matter if we can dl or not
 

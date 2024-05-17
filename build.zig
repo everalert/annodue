@@ -1,4 +1,7 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const SemVer = std.SemanticVersion;
+const appinfo = @import("src/patch/appinfo.zig");
 
 // TODO: review overall efficiency/readability
 // graph seems slow after rework when adding hashfile
@@ -13,6 +16,13 @@ const std = @import("std");
 
 // example release build command
 // zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Drop="F:\Projects\swe1r\annodue\.release"
+
+fn allocFmtSemVer(alloc: Allocator, ver: *const SemVer) ![]u8 {
+    if (ver.pre) |pre|
+        return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}-{s}", .{ ver.major, ver.minor, ver.patch, pre });
+
+    return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}", .{ ver.major, ver.minor, ver.patch });
+}
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -51,6 +61,11 @@ pub fn build(b: *std.Build) void {
     const racerlib = b.createModule(.{
         .source_file = .{ .path = "src/racer/racer.zig" },
     });
+
+    //const appinfo = b.createModule(.{
+    //    .source_file = .{ .path = "src/patch/appinfo.zig" },
+    //    .dependencies = &.{.{ .name = "zigwin32", .module = zigwin32_m }},
+    //});
 
     const options = b.addOptions();
     const options_label = "BuildOptions";
@@ -159,14 +174,6 @@ pub fn build(b: *std.Build) void {
         "Path to base output directory for release builds; required for 'release' step",
     ) orelse null;
 
-    // NOTE: minver checks fail if not specified
-    const release_ver = b.option([]const u8, "ver", "release version") orelse "0.0.0";
-    const release_minver = b.option(
-        []const u8,
-        "minver",
-        "minimum version needed to auto-update to this release",
-    ) orelse release_ver;
-
     var zip_step: ?*std.build.Step = null;
     if (releasepath) |rp| {
         const generate_release_zip_files = b.addExecutable(.{
@@ -188,9 +195,11 @@ pub fn build(b: *std.Build) void {
         const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{rp}) catch unreachable;
         generate_release_zip_files_run.addArg(arg_z_op);
 
+        const release_ver = allocFmtSemVer(alloc, &appinfo.VERSION) catch unreachable;
         const arg_z_ver = std.fmt.allocPrint(alloc, "-ver {s}", .{release_ver}) catch unreachable;
         generate_release_zip_files_run.addArg(arg_z_ver);
 
+        const release_minver = allocFmtSemVer(alloc, &appinfo.VERSION_MIN) catch unreachable;
         const arg_z_minver = std.fmt.allocPrint(alloc, "-minver {s}", .{release_minver}) catch unreachable;
         generate_release_zip_files_run.addArg(arg_z_minver);
 
@@ -264,6 +273,7 @@ pub fn build(b: *std.Build) void {
         dll.linkLibC();
         dll.addOptions(options_label, options);
         dll.addModule("racer", racerlib);
+        //dll.addModule("appinfo", appinfo);
         dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
@@ -301,6 +311,7 @@ pub fn build(b: *std.Build) void {
     core.linkLibC();
     core.addOptions(options_label, options);
     core.addModule("racer", racerlib);
+    //core.addModule("appinfo", appinfo);
     core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);

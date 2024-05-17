@@ -8,9 +8,9 @@ const deg2rad = m.degreesToRadians;
 const w32 = @import("zigwin32");
 const POINT = w32.foundation.POINT;
 
-const GlobalSt = @import("core/Global.zig").GlobalState;
-const GlobalFn = @import("core/Global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
+const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const debug = @import("core/Debug.zig");
 

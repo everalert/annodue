@@ -3,6 +3,8 @@ const Self = @This();
 const BuildOptions = @import("BuildOptions");
 
 const std = @import("std");
+const SemVer = std.SemanticVersion;
+
 const w = std.os.windows;
 const w32 = @import("zigwin32");
 const w32ll = w32.system.library_loader;
@@ -11,12 +13,13 @@ const w32fs = w32.storage.file_system;
 
 const core = @import("core.zig");
 const allocator = core.Allocator;
-const global = core.Global;
-const GlobalSt = global.GlobalState;
-const GLOBAL_STATE = &global.GLOBAL_STATE;
-const GlobalFn = global.GlobalFunction;
-const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
-const PLUGIN_VERSION = global.PLUGIN_VERSION;
+const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
+const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
+
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
@@ -274,8 +277,9 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     if (p.PluginName == null or
         p.PluginVersion == null or
+        SemVer.parse(p.PluginVersion.?()[0..std.mem.len(p.PluginVersion.?())]) == error.InvalidVersion or
         p.PluginCompatibilityVersion == null or
-        p.PluginCompatibilityVersion.?() != PLUGIN_VERSION or
+        p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
         p.OnInit == null or
         p.OnInitLate == null or
         p.OnDeinit == null)
@@ -348,7 +352,7 @@ pub fn init() void {
 
     // hooking game
 
-    var off = global.GLOBAL_STATE.patch_offset;
+    var off = GLOBAL_STATE.patch_offset;
     off = HookGameSetup(off);
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
@@ -360,7 +364,7 @@ pub fn init() void {
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
     //off = HookLoadSprite(off);
-    global.GLOBAL_STATE.patch_offset = off;
+    GLOBAL_STATE.patch_offset = off;
 }
 
 pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {

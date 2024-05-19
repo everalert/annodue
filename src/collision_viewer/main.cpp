@@ -317,10 +317,6 @@ void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, b
 
 void render_spline()
 {
-    auto hang = (const swrObjHang*)swrEvent_GetItem('Hang', 0);
-    if (!hang)
-        return;
-
     auto judge = (const swrObjJdge*)swrEvent_GetItem('Jdge', 0);
     if (!judge)
         return;
@@ -329,14 +325,14 @@ void render_spline()
     if (!spline)
         return;
 
-    int track_index = hang->track_index;
+	const int spline_id = judge->unk1b4_splineId;
 
     struct PrecomputedSpline
     {
         std::vector<std::vector<D3DVertex>> segments;
     };
     static std::map<int, PrecomputedSpline> precomputed_splines;
-    if (!precomputed_splines.contains(track_index))
+    if (!precomputed_splines.contains(spline_id))
     {
         PrecomputedSpline precomputed_spline;
         auto draw_cubic_bezier = [&](const rdVector3& p0, const rdVector3& p1, const rdVector3& p2, const rdVector3& p3) {
@@ -382,10 +378,10 @@ void render_spline()
             }
         }
 
-        precomputed_splines.emplace(track_index, std::move(precomputed_spline));
+        precomputed_splines.emplace(spline_id, std::move(precomputed_spline));
     }
 
-    const auto& segments = precomputed_splines.at(track_index).segments;
+    const auto& segments = precomputed_splines.at(spline_id).segments;
 
     rdMatrix44 model_mat;
     rdMatrix_SetIdentity44(&model_mat);

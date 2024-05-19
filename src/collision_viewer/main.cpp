@@ -325,7 +325,7 @@ void render_spline()
     if (!spline)
         return;
 
-	const int spline_id = judge->unk1b4_splineId;
+    const int spline_id = judge->unk1b4_splineId;
 
     struct PrecomputedSpline
     {

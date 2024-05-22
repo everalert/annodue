@@ -17,7 +17,7 @@ const st = @import("util/active_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
-const tc = @import("util/temporal_compression.zig");
+const TemporalCompressor = @import("util/temporal_compression.zig").TemporalCompressor;
 
 const rg = @import("racer").Global;
 const ri = @import("racer").Input;
@@ -82,7 +82,8 @@ const LoadState = enum(u32) {
     ScrubExiting,
 };
 
-var RewindData: tc.TemporalCompressor = .{};
+const RewindDataType = TemporalCompressor(4, 4, 4);
+var RewindData: RewindDataType = .{};
 
 const state = struct {
     var savestate_enable: bool = false;
@@ -167,12 +168,12 @@ const state = struct {
 
 fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.saveable(gs))
-        RewindData.save_compressed(gs);
+        RewindData.save_compressed(gs.framecount);
 
     if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = RewindData.frame - 1;
     }
-    if (state.save_input_ld.gets() == .JustOn and tc.TemporalCompressor.frames > 0) {
+    if (state.save_input_ld.gets() == .JustOn and RewindData.frames > 0) {
         state.load_time = state.load_delay + gs.timestamp;
         return .Loading;
     }

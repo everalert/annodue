@@ -18,6 +18,7 @@ const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const TemporalCompressor = @import("util/temporal_compression.zig").TemporalCompressor;
+const TDataPoint = @import("util/temporal_compression.zig").DataPoint;
 
 const rg = @import("racer").Global;
 const ri = @import("racer").Input;
@@ -83,12 +84,20 @@ const LoadState = enum(u32) {
 };
 
 const RewindDataType = TemporalCompressor(4, 4, 4);
-var RewindData: RewindDataType = .{};
 
 const state = struct {
     var savestate_enable: bool = false;
+    var initialized: bool = false;
 
     var rec_state: LoadState = .Recording;
+    var rec_data: RewindDataType = .{};
+    var rec_sources = [_]TDataPoint{
+        .{ .data = @as([*]u8, @ptrFromInt(ri.COMBINED_ADDR))[0..ri.COMBINED_SIZE] }, // Input
+        .{}, // RaceData
+        .{}, // Test
+        .{}, // Hang
+        .{}, // cMan
+    };
 
     var load_delay: usize = 500; // ms
     var load_time: usize = 0;
@@ -122,7 +131,12 @@ const state = struct {
     }
 
     fn reset() void {
-        RewindData.reset();
+        rec_data.reset();
+        //rec_sources[0].data = @ptrFromInt(ri.COMBINED_ADDR); // don't need to reset this
+        rec_sources[1].data = rrd.PLAYER_SLICE.*;
+        rec_sources[2].data = re.Test.PLAYER_SLICE.*;
+        rec_sources[3].data = re.Manager.entitySlice(.Hang, 0);
+        rec_sources[4].data = re.Manager.entitySlice(.cMan, 0);
         load_frame = 0;
         load_count = 0;
         scrub_frame = 0;
@@ -132,7 +146,7 @@ const state = struct {
     // FIXME: better new-frame checking that doesn't only account for tabbing out
     // i.e. also when pausing, physics frozen with ingame feature, etc.
     fn saveable(gs: *GlobalSt) bool {
-        return gs.in_race.on() and RewindData.saveable();
+        return gs.in_race.on() and rec_data.saveable();
     }
 
     // FIXME: check if you're actually in the racing part, also integrate with global
@@ -168,12 +182,12 @@ const state = struct {
 
 fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.saveable(gs))
-        RewindData.save_compressed(gs.framecount);
+        state.rec_data.save_compressed(gs.framecount);
 
     if (state.save_input_st.gets() == .JustOn) {
-        state.load_frame = RewindData.frame - 1;
+        state.load_frame = state.rec_data.frame - 1;
     }
-    if (state.save_input_ld.gets() == .JustOn and RewindData.frames > 0) {
+    if (state.save_input_ld.gets() == .JustOn and state.rec_data.frames > 0) {
         state.load_time = state.load_delay + gs.timestamp;
         return .Loading;
     }
@@ -183,13 +197,13 @@ fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
 
 fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_ld.gets() == .JustOn) {
-        state.scrub_frame = std.math.cast(i32, RewindData.frame).? - 1;
-        RewindData.frame_total = RewindData.frame;
+        state.scrub_frame = std.math.cast(i32, state.rec_data.frame).? - 1;
+        state.rec_data.frame_total = state.rec_data.frame;
         return .Scrubbing;
     }
     if (gs.timestamp >= state.load_time) {
         if (!state.loadable(gs)) return .Recording;
-        RewindData.load_compressed(state.load_frame);
+        state.rec_data.load_compressed(state.load_frame);
         state.load_count += 1;
         return .Recording;
     }
@@ -198,7 +212,7 @@ fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
 
 fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_st.gets() == .JustOn) {
-        state.load_frame = RewindData.frame - 1;
+        state.load_frame = state.rec_data.frame - 1;
     }
     if (state.save_input_ld.gets() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
@@ -208,21 +222,21 @@ fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
 
     state.scrub_frame = state.scrub.UpdateEx(
         state.scrub_frame,
-        std.math.cast(i32, RewindData.frame_total).?,
+        std.math.cast(i32, state.rec_data.frame_total).?,
         false,
     );
 
     if (!state.loadable(gs)) return .Scrubbing;
-    RewindData.load_compressed(std.math.cast(u32, state.scrub_frame).?);
+    state.rec_data.load_compressed(std.math.cast(u32, state.scrub_frame).?);
     return .Scrubbing;
 }
 
 fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.loadable(gs))
-        RewindData.load_compressed(std.math.cast(u32, state.scrub_frame).?);
+        state.rec_data.load_compressed(std.math.cast(u32, state.scrub_frame).?);
 
     if (state.save_input_st.gets() == .JustOn) {
-        state.load_frame = RewindData.frame - 1;
+        state.load_frame = state.rec_data.frame - 1;
     }
 
     if (gs.timestamp < state.load_time) return .ScrubExiting;
@@ -234,8 +248,17 @@ fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
 fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
     if (!state.updateable(gs)) return;
 
-    if (gs.race_state != .Racing)
-        return state.reset();
+    if (!state.initialized) {
+        defer state.initialized = true;
+        state.reset();
+        state.rec_data.sources = state.rec_sources[0..];
+        state.rec_data.init();
+    }
+
+    if (gs.race_state_new and gs.race_state == .PreRace)
+        state.reset();
+
+    if (gs.race_state != .Racing) return;
 
     state.rec_state = switch (state.rec_state) {
         .Recording => DoStateRecording(gs, gv),
@@ -261,13 +284,12 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.handle_settings(gf);
-    RewindData.init();
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    RewindData.deinit();
+    state.rec_data.deinit();
 }
 
 // HOOKS
@@ -302,7 +324,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
     if (gs.practice_mode and gs.race_state == .Racing) {
-        rt.DrawText(16, 480 - 16, "Fr {d}", .{RewindData.frame}, null, null) catch {};
+        rt.DrawText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch {};
         rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
         if (state.load_count > 0)
             rt.DrawText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch {};

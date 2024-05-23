@@ -10,6 +10,11 @@ const rto = rt.TextStyleOpts;
 const msg = @import("message.zig");
 const mem = @import("memory.zig");
 
+// FIXME: remove, for testing
+const dbg = @import("debug.zig");
+
+// TODO: convenient way to repurpose an instance for different data? i.e. rerun init but without alloc stuff
+
 // the RLE we want
 // - main idea: account for long strings of both different values and same values
 //   - long strings of different are likely e.g. for matrices
@@ -18,8 +23,7 @@ const mem = @import("memory.zig");
 // - mode bit on = bytes are consecutive different value
 
 pub const DataPoint = struct {
-    addr: usize,
-    len: usize,
+    data: ?[]u8 = null,
     off: usize = 0, // local offset in packed frame
 };
 
@@ -27,7 +31,7 @@ pub const DataPoint = struct {
 /// @layer_size     number of frames on a layer per layer keyframe
 /// @layer_depth    max number of layers, i.e. max number of decodes to recover a frame's data
 pub fn TemporalCompressor(
-    comptime item_size: isize,
+    comptime item_size: usize,
     comptime layer_size: isize,
     comptime layer_depth: isize,
 ) type {
@@ -41,71 +45,65 @@ pub fn TemporalCompressor(
         break :widths widths;
     };
 
-    const off_input: usize = 0;
-    const off_race: usize = ri.COMBINED_SIZE;
-    const off_test: usize = off_race + rrd.SIZE;
-    const off_hang: usize = off_test + re.Test.SIZE;
-    const off_cman: usize = off_hang + re.Hang.SIZE;
-    const off_END: usize = off_cman + re.cMan.SIZE;
-    std.debug.assert(off_END % item_size == 0);
-    const items: usize = off_END / item_size;
-
-    const header_bits: usize = off_END / item_size;
-    const header_size: usize = std.math.divCeil(usize, off_END, item_size * 8) catch unreachable; // comptime
-    const HeaderType: type = std.packed_int_array.PackedIntArray(u1, header_bits);
-
     const dflt_frames: usize = 60 * 60 * 8; // 8min @ 60fps
 
     return struct {
         const Self = @This();
 
+        sources: []DataPoint = undefined,
+
         frames: usize = 0,
-        //const frame_size: usize = off_cman + rc.cMan.SIZE;
         offsets_off: usize = 0,
         offsets_size: usize = 0,
         headers_off: usize = 0,
-        headers_size: usize = 0,
+        headers_size: usize = 0, // entire header block
+        header_size: usize = 0, // individual header
         stage_off: usize = 0,
+        stage_items: usize = 0,
         data_off: usize = 0,
 
         initialized: bool = false,
         frame: usize = 0,
         frame_total: usize = 0,
+        frame_size: usize = 0,
         last_framecount: u32 = 0,
-
-        //sources: []DataPoint,
-        //datalen: usize = 0,
 
         // FIXME: remove gpa/alloc, do some kind of core integration instead
         gpa: ?std.heap.GeneralPurposeAllocator(.{}) = null,
         alloc: ?std.mem.Allocator = null,
         memory: []u8 = undefined,
-        memory_addr: usize = undefined,
-        memory_end_addr: usize = undefined,
         raw_offsets: [*]u8 = undefined,
         raw_headers: [*]u8 = undefined,
         raw_stage: [*]u8 = undefined,
         offsets: []usize = undefined,
-        headers: []HeaderType = undefined,
-        stage: [][items]ItemType = undefined,
         data: [*]u8 = undefined,
 
         layer_indexes: [layer_depth + 1]usize = undefined,
         layer_index_count: usize = undefined,
 
+        // TODO: take in allocator, sources slice
         pub fn init(self: *Self) void {
             std.debug.assert(!self.initialized);
             defer self.initialized = true;
 
+            dbg.ConsoleOut("init()\n", .{}) catch {};
+
             // calc sizes
+
+            self.map_sources();
+            dbg.ConsoleOut("  map_sources() done\n", .{}) catch {};
+            self.header_size = std.math.divCeil(usize, self.frame_size, item_size * 8) catch
+                @panic("failed to calculate header size");
+            dbg.ConsoleOut("  header calculated\n", .{}) catch {};
 
             self.frames = dflt_frames;
             self.offsets_off = 0;
             self.offsets_size = self.frames * item_size;
             self.headers_off = 0 + self.offsets_size;
-            self.headers_size = header_size * self.frames;
+            self.headers_size = self.header_size * self.frames;
             self.stage_off = self.headers_off + self.headers_size;
-            self.data_off = self.stage_off + off_END * 2;
+            self.stage_items = self.frame_size / item_size;
+            self.data_off = self.stage_off + self.frame_size * 2;
 
             // allocate
 
@@ -114,16 +112,14 @@ pub fn TemporalCompressor(
             self.memory = self.alloc.?.alloc(u8, memory_size) catch
                 @panic("failed to allocate memory for savestate/rewind");
             @memset(self.memory[0..memory_size], 0x00);
+            dbg.ConsoleOut("  allocated memory\n", .{}) catch {};
 
-            self.memory_addr = @intFromPtr(self.memory.ptr);
-            self.memory_end_addr = @intFromPtr(self.memory.ptr) + memory_size;
             self.raw_offsets = self.memory.ptr + self.offsets_off;
             self.raw_headers = self.memory.ptr + self.headers_off;
             self.raw_stage = self.memory.ptr + self.stage_off;
             self.data = self.memory.ptr + self.data_off;
-            self.offsets = @as([*]usize, @ptrFromInt(self.memory_addr + self.offsets_off))[0..self.frames];
-            self.headers = @as([*]HeaderType, @ptrFromInt(self.memory_addr + self.headers_off))[0..self.frames];
-            self.stage = @as([*][items]ItemType, @ptrFromInt(self.memory_addr + self.stage_off))[0..self.frames];
+            self.offsets = @as([*]usize, @ptrCast(@alignCast(self.memory.ptr + self.offsets_off)))[0..self.frames];
+            dbg.ConsoleOut("  slices made\n", .{}) catch {};
         }
 
         pub fn deinit(self: *Self) void {
@@ -145,12 +141,34 @@ pub fn TemporalCompressor(
             self.frame_total = 0;
         }
 
-        // FIXME: better new-frame checking that doesn't only account for tabbing out
-        // i.e. also when pausing, physics frozen with ingame feature, etc.
+        /// configure offsets of each source, and set total size
+        fn map_sources(self: *Self) void {
+            var offset: usize = 0;
+            for (self.sources) |*source| {
+                std.debug.assert(source.data != null);
+                std.debug.assert(source.data.?.len % item_size == 0);
+                source.off = offset;
+                offset += source.data.?.len;
+            }
+            self.frame_size = offset;
+        }
+
+        inline fn getHeader(self: *Self, index: usize) []u8 {
+            std.debug.assert(index < self.frames);
+            const base = index * self.header_size;
+            return self.raw_headers[base .. base + self.header_size];
+        }
+
+        inline fn getStage(self: *Self, index: usize) []ItemType {
+            std.debug.assert(index < 2);
+            const base = index * self.stage_items;
+            return @as([*]ItemType, @ptrCast(@alignCast(self.raw_stage)))[base .. base + self.stage_items];
+        }
+
         pub fn saveable(self: *Self) bool {
             std.debug.assert(self.initialized);
-
-            const space_ok: bool = self.memory_end_addr - @intFromPtr(self.data) - self.offsets[self.frame] >= off_END;
+            const space_ok: bool = @intFromPtr(self.memory.ptr + self.memory.len) -
+                @intFromPtr(self.data) - self.offsets[self.frame] >= self.frame_size;
             const frames_ok: bool = self.frame < self.frames - 1;
             return space_ok and frames_ok;
         }
@@ -189,19 +207,22 @@ pub fn TemporalCompressor(
         pub fn uncompress_frame(self: *Self, index: usize, skip_last: bool) void {
             std.debug.assert(self.initialized);
 
-            @memcpy(self.raw_stage[0..off_END], self.data[0..off_END]);
+            @memcpy(self.raw_stage[0..self.frame_size], self.data[0..self.frame_size]);
 
             self.set_layer_indexes(index);
             var indexes: usize = self.layer_index_count - @intFromBool(skip_last);
             if (indexes == 0) return;
 
             for (self.layer_indexes[0..indexes]) |l| {
-                const header = &self.headers[l];
+                const header = self.getHeader(l);
                 const frame_data = @as([*]usize, @ptrFromInt(@intFromPtr(self.data) + self.offsets[l]));
+                var stage = self.getStage(0);
                 var j: usize = 0;
-                for (0..header_bits) |h| {
-                    if (header.get(h) == 1) {
-                        self.stage[0][h] = frame_data[j];
+                for (0..self.stage_items) |h| {
+                    const byte = h / 8;
+                    const mask: u8 = @as(u8, 1) << @as(u3, @intCast(h % 8));
+                    if (header[byte] & mask > 0) {
+                        stage[h] = frame_data[j];
                         j += 1;
                     }
                 }
@@ -219,32 +240,30 @@ pub fn TemporalCompressor(
             if (self.frame > 0) {
                 self.uncompress_frame(self.frame, true);
 
-                const s1_base = self.raw_stage + off_END;
-                mem.read_bytes(ri.COMBINED_ADDR, s1_base + off_input, ri.COMBINED_SIZE);
-                @memcpy(s1_base + off_race, rrd.PLAYER_SLICE.*);
-                @memcpy(s1_base + off_test, re.Test.PLAYER_SLICE.*);
-                @memcpy(s1_base + off_hang, re.Manager.entitySlice(.Hang, 0));
-                @memcpy(s1_base + off_cman, re.Manager.entitySlice(.cMan, 0));
+                const s1_base = self.raw_stage + self.frame_size;
+                for (self.sources) |*source|
+                    @memcpy(s1_base + source.off, source.data.?);
 
-                var header = &self.headers[self.frame];
-                header.setAll(0);
+                var header = self.getHeader(self.frame);
+                @memset(header, 0);
                 var new_frame = @as([*]u32, @ptrFromInt(@intFromPtr(self.data) + self.offsets[self.frame]));
                 var j: usize = 0;
-                for (0..header_bits) |h| {
-                    if (self.stage[0][h] != self.stage[1][h]) {
-                        header.set(h, 1);
-                        new_frame[j] = self.stage[1][h];
+                for (0..self.stage_items) |h| {
+                    const byte = h / 8;
+                    const mask: u8 = @as(u8, 1) << @as(u3, @intCast(h % 8));
+                    const stage0 = self.getStage(0);
+                    const stage1 = self.getStage(1);
+                    if (stage0[h] != stage1[h]) {
+                        header[byte] |= mask;
+                        new_frame[j] = stage1[h];
                         data_size += item_size;
                         j += 1;
                     }
                 }
             } else {
-                data_size = off_END;
-                mem.read_bytes(ri.COMBINED_ADDR, self.data + off_input, ri.COMBINED_SIZE);
-                @memcpy(self.data + off_race, rrd.PLAYER_SLICE.*);
-                @memcpy(self.data + off_test, re.Test.PLAYER_SLICE.*);
-                @memcpy(self.data + off_hang, re.Manager.entitySlice(.Hang, 0));
-                @memcpy(self.data + off_cman, re.Manager.entitySlice(.cMan, 0));
+                data_size = self.frame_size;
+                for (self.sources) |*source|
+                    @memcpy(self.data + source.off, source.data.?);
             }
             self.frame += 1;
             self.offsets[self.frame] = self.offsets[self.frame - 1] + data_size;
@@ -254,11 +273,8 @@ pub fn TemporalCompressor(
             std.debug.assert(self.initialized);
 
             self.uncompress_frame(index, false);
-            _ = mem.write_bytes(ri.COMBINED_ADDR, &self.raw_stage[off_input], ri.COMBINED_SIZE);
-            @memcpy(rrd.PLAYER_SLICE.*, self.raw_stage[off_race..off_test]); // WARN: maybe perm issues
-            @memcpy(re.Test.PLAYER_SLICE.*, self.raw_stage[off_test..off_hang]); // WARN: maybe perm issues
-            @memcpy(re.Manager.entitySlice(.Hang, 0).ptr, self.raw_stage[off_hang..off_cman]);
-            @memcpy(re.Manager.entitySlice(.cMan, 0).ptr, self.raw_stage[off_cman..off_END]);
+            for (self.sources) |*source|
+                @memcpy(source.data.?, self.raw_stage[source.off .. source.off + source.data.?.len]);
             self.frame = index + 1;
         }
     };

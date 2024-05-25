@@ -34,6 +34,11 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var alloc = gpa.allocator();
+
 // Usable in Practice Mode only
 
 // FEATURES
@@ -313,6 +318,27 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
     UpdateState(gs, gf);
+
+    // FIXME: remove, for testing
+    //if (gf.InputGetKb(.J, .JustOn)) blk: {
+    //    const file = std.fs.cwd().createFile("annodue/test_frame_data_dump.bin", .{}) catch break :blk;
+    //    defer file.close();
+    //    var file_w = file.writer();
+    //    state.rec_data.write(file_w, .{ .frames = 256, .headers = false }) catch break :blk;
+    //    dbg.ConsoleOut(
+    //        "frame data written to file\n  frame size: 0x{X}\n",
+    //        .{state.rec_data.frame_size},
+    //    ) catch {};
+    //}
+    if (gf.InputGetKb(.F, .JustOn)) blk: {
+        const file = std.fs.cwd().createFile("annodue/recording_raw-0x2458-nohead_mgs.bin.txt", .{}) catch break :blk;
+        defer file.close();
+        RewindDataType.calcPotential(alloc, file.writer(), .{
+            .compression = .bfid,
+            .sub_path = "annodue/recording_raw-0x2458-nohead_mgs.bin",
+            .frame_size = 0x2458,
+        }) catch {};
+    }
 }
 
 // TODO: merge with EngineUpdateStage20A?

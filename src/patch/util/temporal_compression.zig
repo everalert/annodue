@@ -1,4 +1,6 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const allocPrint = std.fmt.allocPrint;
 
 const rg = @import("racer").Global;
 const ri = @import("racer").Input;
@@ -64,9 +66,9 @@ pub fn TemporalCompressor(
 
         initialized: bool = false,
         frame: usize = 0,
-        frame_total: usize = 0,
+        frame_total: usize = 0, // FIXME: unused?
         frame_size: usize = 0,
-        last_framecount: u32 = 0,
+        last_framecount: usize = 0,
 
         // FIXME: remove gpa/alloc, do some kind of core integration instead
         gpa: ?std.heap.GeneralPurposeAllocator(.{}) = null,
@@ -173,17 +175,19 @@ pub fn TemporalCompressor(
             return space_ok and frames_ok;
         }
 
+        // TODO: rework this to eliminate edge cases where depth should be >0, e.g. first handful of frames
         /// get number of compression layers deep the frame at given index is
+        /// @index      frame to target
         pub fn get_depth(_: *Self, index: usize) usize {
             var depth: usize = layer_depth;
             var depth_test: usize = index;
-            while (depth_test % layer_size == 0 and depth > 0) : (depth -= 1) {
+            while (depth_test % layer_size == 0 and depth > 0) : (depth -= 1)
                 depth_test /= layer_size;
-            }
             return depth;
         }
 
         /// update list of compression tree indexes with those for frame at given index
+        /// @index      frame to target
         pub fn set_layer_indexes(self: *Self, index: usize) void {
             self.layer_index_count = 0;
             var last_base: usize = 0;
@@ -204,6 +208,9 @@ pub fn TemporalCompressor(
             }
         }
 
+        /// decode frame into stage 0
+        /// @index      frame to decode
+        /// @skip_last  don't decode last layer in chain, used to set basis for new encode
         pub fn uncompress_frame(self: *Self, index: usize, skip_last: bool) void {
             std.debug.assert(self.initialized);
 
@@ -277,72 +284,181 @@ pub fn TemporalCompressor(
                 @memcpy(source.data.?, self.raw_stage[source.off .. source.off + source.data.?.len]);
             self.frame = index + 1;
         }
+
+        const Compression = enum(u16) {
+            none,
+            bfid, // bitfield-indexed diff
+            xrle, // xor + rle
+            xrles, // xor + rle signed
+        };
+
+        const READ_WRITE_VER: u16 = 0;
+
+        const WriteSettings = struct {
+            compression: Compression = .none,
+            compression_version: u16 = 0,
+            frames: usize = std.math.maxInt(usize),
+            headers: bool = true,
+        };
+
+        // TODO: reader equiv for input
+        // TODO: writing only specific sources
+        // TODO: custom starting frame
+        /// dump raw data to file, useful for gathering test data
+        pub fn write(self: *Self, writer: anytype, opts: WriteSettings) !void {
+            std.debug.assert(self.initialized);
+            // TODO: double-check idiomatic way of verifying arbitrary passed-in writers, following rejected
+            //std.debug.assert(@hasField(writer, "context"));
+            //std.debug.assert(@hasDecl(writer, "Error"));
+            //std.debug.assert(@hasDecl(writer, "write"));
+
+            // common header
+            if (opts.headers) {
+                try writer.writeIntNative(u16, READ_WRITE_VER);
+                try writer.writeIntNative(u16, @intFromEnum(opts.compression));
+                try writer.writeIntNative(u16, opts.compression_version);
+                try writer.writeIntNative(usize, opts.frames);
+                try writer.writeIntNative(usize, self.frame_size);
+                try writer.writeIntNative(usize, self.sources.len);
+                for (self.sources) |*source|
+                    try writer.writeIntNative(usize, if (source.data) |d| d.len else 0);
+            }
+
+            const frame_st: usize = 0;
+            const frame_ed: usize = @min(self.frame + 1, opts.frames);
+            switch (opts.compression) {
+                .none => {
+                    for (frame_st..frame_ed) |i| {
+                        self.uncompress_frame(i, false);
+                        try writer.writeAll(self.raw_stage[0..self.frame_size]);
+                    }
+                },
+                .bfid => return error.CompressionNotImplemented,
+                .xrle => return error.CompressionNotImplemented,
+                .xrles => return error.CompressionNotImplemented,
+            }
+        }
+
+        const TestSettings = struct {
+            compression: Compression,
+            sub_path: []const u8,
+            frame_size: usize,
+            item_size: usize = 4,
+            layer_size: usize = 4,
+            layer_depth: usize = 4,
+            headers: bool = false, // false assumes data is a raw uncompressed consecutive dump
+        };
+
+        // TODO: strategy pattern thing for the actual compress step (diffing two frames into an output)
+        pub fn calcPotential(alloc: Allocator, writer: anytype, opts: TestSettings) !void {
+            std.debug.assert(opts.compression != .none);
+            std.debug.assert(opts.frame_size % opts.item_size == 0);
+            var str: []u8 = undefined;
+            const can_write: bool = @hasDecl(@TypeOf(writer), "writeAll");
+
+            // TODO: impl compressed input
+            if (opts.headers) return error.CompressedInputNotSupported;
+
+            var arena = std.heap.ArenaAllocator.init(alloc);
+            defer arena.deinit();
+            var arena_a = arena.allocator();
+
+            const file = try std.fs.cwd().openFile(opts.sub_path, .{});
+            defer file.close();
+
+            // header
+            if (can_write) {
+                str = try allocPrint(arena_a,
+                    \\testing: {s}
+                    \\---
+                    \\compression       {s}
+                    \\item size         0x{X}
+                    \\layer size        0x{X}
+                    \\layer depth       0x{X}
+                    \\---
+                    \\
+                , .{ opts.sub_path, @tagName(opts.compression), opts.item_size, opts.layer_size, opts.layer_depth });
+                try writer.writeAll(str);
+            }
+
+            var stage: []u8 = try arena_a.alloc(u8, opts.frame_size * (opts.layer_depth + 1));
+
+            var frame: usize = 0;
+            var size_orig: usize = 0;
+            var size_comp: usize = 0;
+            const file_r = file.reader();
+            switch (opts.compression) {
+                .none => {},
+                // TODO: confirm this is equivalent to actual logic
+                .bfid => {
+                    const size_head: usize = try std.math.divCeil(usize, opts.frame_size / opts.item_size, 8);
+
+                    while (true) : (frame += 1) {
+                        var depth: usize = opts.layer_depth;
+                        var depth_test: usize = frame;
+                        while (depth_test % opts.layer_size == 0 and depth > 0) : (depth -= 1)
+                            depth_test /= opts.layer_size;
+
+                        const base = depth * opts.frame_size;
+                        var data: []u8 = stage[base .. base + opts.frame_size];
+                        if (try file_r.read(data) < opts.frame_size) break;
+
+                        const frame_bytes: usize = if (depth > 0) bytes: {
+                            const data_prev: []u8 = stage[base - opts.frame_size .. base];
+                            var dif_bytes: usize = 0;
+                            for (0..opts.frame_size / opts.item_size) |i| {
+                                const idx = i * opts.item_size;
+                                const new = data[idx .. idx + opts.item_size];
+                                const src = data_prev[idx .. idx + opts.item_size];
+                                if (!std.mem.eql(u8, new, src)) dif_bytes += opts.item_size;
+                            }
+                            break :bytes dif_bytes;
+                        } else bytes: {
+                            for (0..opts.layer_depth) |d| {
+                                const idx = (d + 1) * opts.frame_size;
+                                @memcpy(stage[idx .. idx + opts.frame_size], data);
+                            }
+                            break :bytes opts.frame_size;
+                        };
+
+                        size_orig += opts.frame_size;
+                        size_comp += frame_bytes + size_head;
+
+                        if (can_write) {
+                            str = try allocPrint(
+                                arena_a,
+                                "F.{d: <5}  D.{d: <2}     {d: <6}\n",
+                                .{ frame, depth, frame_bytes + size_head },
+                            );
+                            try writer.writeAll(str);
+                        }
+                    }
+                    try writer.writeAll("---\n");
+                },
+                .xrle => return error.CompressionNotImplemented,
+                .xrles => return error.CompressionNotImplemented,
+            }
+
+            // footer
+            if (can_write) {
+                str = try allocPrint(arena_a,
+                    \\frames            {d}
+                    \\frame size        {d}
+                    \\original size     {d}
+                    \\compressed size   {d}
+                    \\ratio             {d:6.4}
+                    \\---
+                    \\
+                    \\
+                , .{
+                    frame,
+                    opts.frame_size,
+                    size_orig,
+                    size_comp,
+                    @as(f32, @floatFromInt(size_comp)) / @as(f32, @floatFromInt(size_orig)),
+                });
+                try writer.writeAll(str);
+            }
+        }
     };
-}
-
-// COMPRESSION-RELATED FUNCTIONS
-// not really in use/needs work, basically just stuff for testing
-
-// TODO: move to compression lib whenever that happens
-
-// FIXME: assumes array of raw data; rework to adapt it to new compressed data
-fn save_file() void {
-    const file = std.fs.cwd().createFile("annodue/testdata.bin", .{}) catch |err| return msg.ErrMessage("create file", @errorName(err));
-    defer file.close();
-
-    const middle = TemporalCompressor.frame * TemporalCompressor.frame_size;
-    const end = TemporalCompressor.frames * TemporalCompressor.frame_size;
-    _ = file.write(TemporalCompressor.data[middle..end]) catch return;
-    _ = file.write(TemporalCompressor.data[0..middle]) catch return;
-}
-
-// FIXME: dumped from patch.zig; need to rework into a generalized function
-// TODO: cleanup unreachable after migrating to lib
-fn check_compression_potential() void {
-    const savestate_size: usize = 0x2428 / 4;
-    const savestate_count: usize = 128;
-    const savestate_head: usize = savestate_size / 8;
-    const layer_size: usize = 4;
-    const layer_depth: usize = 4;
-
-    const testfile = std.fs.cwd().openFile("annodue/testdata.bin", .{}) catch unreachable;
-    defer testfile.close();
-    const reportfile = std.fs.cwd().createFile("annodue/testreport.txt", .{}) catch unreachable;
-    defer reportfile.close();
-
-    var data = std.mem.zeroes([layer_depth + 1][savestate_size]u32);
-    var total_bytes: usize = 0;
-
-    for (0..savestate_count - 1) |i| {
-        var depth: usize = layer_depth;
-        var depth_test: usize = i;
-        while (depth_test % layer_size == 0 and depth > 0) {
-            depth_test /= layer_size;
-            depth -= 1;
-        }
-
-        _ = testfile.read(@as(*[savestate_size * 4]u8, @ptrCast(&data[depth]))) catch unreachable;
-        if (depth < layer_depth) {
-            for (depth + 1..layer_depth) |d| {
-                data[d] = data[depth];
-            }
-        }
-
-        const frame_bytes: usize = if (depth > 0) bytes: {
-            var dif_count: usize = 0;
-            for (data[depth], data[depth - 1]) |new, src| {
-                if (new != src) dif_count += 1;
-            }
-            break :bytes dif_count * 4;
-        } else savestate_size * 4;
-
-        var buf: [17]u8 = undefined;
-        _ = std.fmt.bufPrint(&buf, "Frame {d: >3}:\t{d: >4}\r\n", .{ i + 1, frame_bytes + savestate_head }) catch unreachable;
-        _ = reportfile.write(&buf) catch unreachable;
-        total_bytes += frame_bytes + savestate_head;
-    }
-
-    var buf: [26]u8 = undefined;
-    _ = std.fmt.bufPrint(&buf, "Total: {d: >8}/{d: >8}\r\n", .{ total_bytes, savestate_size * savestate_count * 4 }) catch unreachable;
-    _ = reportfile.write(&buf) catch unreachable;
 }

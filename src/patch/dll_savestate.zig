@@ -331,12 +331,25 @@ export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     //    ) catch {};
     //}
     if (gf.InputGetKb(.F, .JustOn)) blk: {
-        const file = std.fs.cwd().createFile("annodue/recording_raw-0x2458-nohead_mgs.bin.txt", .{}) catch break :blk;
+        const file = std.fs.cwd().createFile("annodue/recording_raw-0x2458-nohead_mgs.bin.txt", .{}) catch
+            break :blk;
         defer file.close();
         RewindDataType.calcPotential(alloc, file.writer(), .{
             .compression = .bfid,
             .sub_path = "annodue/recording_raw-0x2458-nohead_mgs.bin",
             .frame_size = 0x2458,
+        }) catch {};
+        RewindDataType.calcPotential(alloc, file.writer(), .{
+            .compression = .xrle,
+            .sub_path = "annodue/recording_raw-0x2458-nohead_mgs.bin",
+            .frame_size = 0x2458,
+            .item_size = 1,
+        }) catch {};
+        RewindDataType.calcPotential(alloc, file.writer(), .{
+            .compression = .xrles,
+            .sub_path = "annodue/recording_raw-0x2458-nohead_mgs.bin",
+            .frame_size = 0x2458,
+            .item_size = 1,
         }) catch {};
     }
 }

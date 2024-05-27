@@ -387,57 +387,146 @@ pub fn TemporalCompressor(
             var size_orig: usize = 0;
             var size_comp: usize = 0;
             const file_r = file.reader();
-            switch (opts.compression) {
-                .none => {},
-                // TODO: confirm this is equivalent to actual logic
-                .bfid => {
-                    const size_head: usize = try std.math.divCeil(usize, opts.frame_size / opts.item_size, 8);
 
-                    while (true) : (frame += 1) {
-                        var depth: usize = opts.layer_depth;
-                        var depth_test: usize = frame;
-                        while (depth_test % opts.layer_size == 0 and depth > 0) : (depth -= 1)
-                            depth_test /= opts.layer_size;
+            while (true) : (frame += 1) {
+                var depth: usize = opts.layer_depth;
+                var depth_test: usize = frame;
+                while (depth_test % opts.layer_size == 0 and depth > 0) : (depth -= 1)
+                    depth_test /= opts.layer_size;
 
-                        const base = depth * opts.frame_size;
-                        var data: []u8 = stage[base .. base + opts.frame_size];
-                        if (try file_r.read(data) < opts.frame_size) break;
+                const base = depth * opts.frame_size;
+                var data: []u8 = stage[base .. base + opts.frame_size];
+                if (try file_r.read(data) < opts.frame_size) break;
 
-                        const frame_bytes: usize = if (depth > 0) bytes: {
+                if (depth == 0) {
+                    for (0..opts.layer_depth) |d| {
+                        const idx = (d + 1) * opts.frame_size;
+                        @memcpy(stage[idx .. idx + opts.frame_size], data);
+                    }
+                }
+
+                const items: usize = opts.frame_size / opts.item_size;
+                const frame_bytes: usize = switch (opts.compression) {
+                    .none => 0,
+                    .bfid => bytes: {
+                        // TODO: confirm this is equivalent to actual logic
+                        const head_size = try std.math.divCeil(usize, opts.frame_size / opts.item_size, 8);
+                        if (depth > 0) {
                             const data_prev: []u8 = stage[base - opts.frame_size .. base];
                             var dif_bytes: usize = 0;
-                            for (0..opts.frame_size / opts.item_size) |i| {
+                            for (0..items) |i| {
                                 const idx = i * opts.item_size;
                                 const new = data[idx .. idx + opts.item_size];
                                 const src = data_prev[idx .. idx + opts.item_size];
                                 if (!std.mem.eql(u8, new, src)) dif_bytes += opts.item_size;
                             }
-                            break :bytes dif_bytes;
-                        } else bytes: {
-                            for (0..opts.layer_depth) |d| {
-                                const idx = (d + 1) * opts.frame_size;
-                                @memcpy(stage[idx .. idx + opts.frame_size], data);
-                            }
-                            break :bytes opts.frame_size;
-                        };
-
-                        size_orig += opts.frame_size;
-                        size_comp += frame_bytes + size_head;
-
-                        if (can_write) {
-                            str = try allocPrint(
-                                arena_a,
-                                "F.{d: <5}  D.{d: <2}     {d: <6}\n",
-                                .{ frame, depth, frame_bytes + size_head },
-                            );
-                            try writer.writeAll(str);
+                            break :bytes dif_bytes + head_size;
                         }
-                    }
-                    try writer.writeAll("---\n");
-                },
-                .xrle => return error.CompressionNotImplemented,
-                .xrles => return error.CompressionNotImplemented,
+                        break :bytes opts.frame_size + head_size;
+                    },
+                    .xrle => bytes: {
+                        // FIXME: implement item size at the comparison level, like bfid?
+                        const head_size: usize = opts.item_size;
+                        const head_max: usize = try std.math.powi(usize, 2, 8 * head_size) - 1;
+                        var runs: usize = 0;
+                        var run_len: usize = 0;
+                        var len: usize = 0;
+                        var last: ?u8 = null;
+
+                        if (depth > 0) {
+                            const data_prev: []u8 = stage[base - opts.frame_size .. base];
+                            for (data, data_prev) |b1, b2| {
+                                const x = b1 ^ b2;
+                                if (run_len > head_max or (last != null and last.? != x)) {
+                                    len += head_size + 1;
+                                    runs += 1;
+                                    run_len = 0;
+                                }
+                                run_len += 1;
+                                last = x;
+                            }
+                            break :bytes len;
+                        }
+
+                        // FIXME: for 0 case, do we still do RLE but against 00 bytes?
+                        break :bytes opts.frame_size;
+                    },
+                    .xrles => bytes: {
+                        // FIXME: implement item size at the comparison level, like bfid?
+                        const head_size: usize = opts.item_size;
+                        const head_max: usize = try std.math.powi(usize, 2, 8 * head_size - 1) - 1;
+                        var runs: usize = 0;
+                        var run_len: usize = 0;
+                        var run_type: enum(u8) { none, same, dif } = .none;
+                        var len: usize = 0;
+                        var last: ?u8 = null;
+
+                        if (depth > 0) {
+                            const data_prev: []u8 = stage[base - opts.frame_size .. base];
+                            for (data, data_prev) |b1, b2| {
+                                const x = b1 ^ b2;
+
+                                switch (run_type) {
+                                    .none => {
+                                        if (last != null) run_type = if (x == last.?) .same else .dif;
+                                        runs += 1;
+                                    },
+                                    .same => same: {
+                                        if (run_len > head_max) {
+                                            len += head_size + 1;
+                                            run_len = 0;
+                                            run_type = .none;
+                                            break :same;
+                                        }
+                                        if (last != null and last.? != x) {
+                                            len += head_size + 1;
+                                            run_len = 0;
+                                            run_type = .dif;
+                                            runs += 1;
+                                        }
+                                    },
+                                    .dif => dif: {
+                                        if (run_len > head_max) {
+                                            len += head_size + head_max;
+                                            run_len = 0;
+                                            run_type = .none;
+                                            break :dif;
+                                        }
+                                        if (last != null and last.? == x) {
+                                            len += head_size + run_len;
+                                            run_len = 0;
+                                            run_type = .same;
+                                            runs += 1;
+                                        }
+                                    },
+                                }
+                                run_len += 1;
+                                last = x;
+                            }
+                            if (run_type == .dif) // leftovers
+                                len += head_size + run_len;
+
+                            break :bytes len;
+                        }
+
+                        // FIXME: for 0 case, do we still do RLE but against 00 bytes?
+                        break :bytes opts.frame_size;
+                    },
+                };
+
+                size_orig += opts.frame_size;
+                size_comp += frame_bytes;
+
+                if (can_write) {
+                    str = try allocPrint(
+                        arena_a,
+                        "F.{d: <5}  D.{d: <2}     {d: <6}\n",
+                        .{ frame, depth, frame_bytes },
+                    );
+                    try writer.writeAll(str);
+                }
             }
+            try writer.writeAll("---\n");
 
             // footer
             if (can_write) {

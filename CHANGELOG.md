@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Core: notify on plugin reload
 - Backend(Core): `appinfo` module for externally-facing defs
 - Backend(Core): enforcing semantic versioning for plugins
 
 ### Changed
 
 - Backend(Build): release versioning now based on `appinfo` module
+- Backend(Util): make rewind compression logic available in `temporal_compression` util
 
 ### Removed
 

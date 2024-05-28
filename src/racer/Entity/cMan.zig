@@ -73,7 +73,7 @@ pub const cMan = extern struct {
     _unkmat44_1E4: [16]f32, // TODO: typedef
     _staging_transform: [16]f32, // TODO: typedef
     _staging_transform_focus: [16]f32, // TODO: typedef
-    //0x02A4 ??? ref in 4542E0 (cManFunc0x20), looks like pointer to terrain flags
+    _unk_2A4: u32, // pointer to terrain flags?
     fogFlags: u32,
     visualFlags: u32, // defaults to 0xFFFFFF00
     zoom: f32,

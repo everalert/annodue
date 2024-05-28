@@ -346,13 +346,15 @@ pub fn TemporalCompressor(
             item_size: usize = 4,
             layer_size: usize = 4,
             layer_depth: usize = 4,
-            headers: bool = false, // false assumes data is a raw uncompressed consecutive dump
+            headers: bool = false, // false = input data is raw uncompressed dump
+            rle_head_size: ?usize = null,
         };
 
         // TODO: strategy pattern thing for the actual compress step (diffing two frames into an output)
         pub fn calcPotential(alloc: Allocator, writer: anytype, opts: TestSettings) !void {
             std.debug.assert(opts.compression != .none);
             std.debug.assert(opts.frame_size % opts.item_size == 0);
+
             var str: []u8 = undefined;
             const can_write: bool = @hasDecl(@TypeOf(writer), "writeAll");
 
@@ -372,12 +374,20 @@ pub fn TemporalCompressor(
                     \\testing: {s}
                     \\---
                     \\compression       {s}
-                    \\item size         0x{X}
-                    \\layer size        0x{X}
-                    \\layer depth       0x{X}
+                    \\layer size        {d}
+                    \\layer depth       {d}
+                    \\item size         {d}
+                    \\rle head size     {?d}
                     \\---
                     \\
-                , .{ opts.sub_path, @tagName(opts.compression), opts.item_size, opts.layer_size, opts.layer_depth });
+                , .{
+                    opts.sub_path,
+                    @tagName(opts.compression),
+                    opts.layer_size,
+                    opts.layer_depth,
+                    opts.item_size,
+                    opts.rle_head_size,
+                });
                 try writer.writeAll(str);
             }
 
@@ -425,25 +435,37 @@ pub fn TemporalCompressor(
                         break :bytes opts.frame_size + head_size;
                     },
                     .xrle => bytes: {
+                        std.debug.assert(opts.rle_head_size != null);
                         // FIXME: implement item size at the comparison level, like bfid?
-                        const head_size: usize = opts.item_size;
+                        const head_size: usize = opts.rle_head_size.?;
                         const head_max: usize = try std.math.powi(usize, 2, 8 * head_size) - 1;
                         var runs: usize = 0;
                         var run_len: usize = 0;
                         var len: usize = 0;
-                        var last: ?u8 = null;
+                        //var last: ?u8 = null;
+                        var is_same: bool = true;
+                        var last = try alloc.alloc(u8, opts.item_size);
+                        defer alloc.free(last);
+                        @memset(last, 0x00);
 
                         if (depth > 0) {
                             const data_prev: []u8 = stage[base - opts.frame_size .. base];
-                            for (data, data_prev) |b1, b2| {
+                            for (data, data_prev, 0..) |b1, b2, i| {
                                 const x = b1 ^ b2;
-                                if (run_len > head_max or (last != null and last.? != x)) {
-                                    len += head_size + 1;
+                                const sub_i = i % opts.item_size;
+                                is_same = is_same and last[sub_i] == x;
+                                last[sub_i] = x;
+                                if (sub_i + 1 != opts.item_size) continue;
+                                defer is_same = true;
+
+                                //const x = b1 ^ b2;
+                                if (run_len > head_max or !is_same) {
+                                    len += head_size + opts.item_size;
                                     runs += 1;
                                     run_len = 0;
                                 }
                                 run_len += 1;
-                                last = x;
+                                //last = x;
                             }
                             break :bytes len;
                         }
@@ -452,34 +474,42 @@ pub fn TemporalCompressor(
                         break :bytes opts.frame_size;
                     },
                     .xrles => bytes: {
-                        // FIXME: implement item size at the comparison level, like bfid?
-                        const head_size: usize = opts.item_size;
+                        std.debug.assert(opts.rle_head_size != null);
+                        const head_size: usize = opts.rle_head_size.?;
                         const head_max: usize = try std.math.powi(usize, 2, 8 * head_size - 1) - 1;
                         var runs: usize = 0;
                         var run_len: usize = 0;
                         var run_type: enum(u8) { none, same, dif } = .none;
                         var len: usize = 0;
-                        var last: ?u8 = null;
+                        var is_same: bool = true;
+                        var last = try alloc.alloc(u8, opts.item_size);
+                        defer alloc.free(last);
+                        @memset(last, 0x00);
 
                         if (depth > 0) {
                             const data_prev: []u8 = stage[base - opts.frame_size .. base];
-                            for (data, data_prev) |b1, b2| {
+                            for (data, data_prev, 0..) |b1, b2, i| {
                                 const x = b1 ^ b2;
+                                const sub_i = i % opts.item_size;
+                                is_same = is_same and last[sub_i] == x;
+                                last[sub_i] = x;
+                                if (sub_i + 1 != opts.item_size) continue;
+                                defer is_same = true;
 
                                 switch (run_type) {
                                     .none => {
-                                        if (last != null) run_type = if (x == last.?) .same else .dif;
+                                        run_type = if (is_same) .same else .dif;
                                         runs += 1;
                                     },
                                     .same => same: {
                                         if (run_len > head_max) {
-                                            len += head_size + 1;
+                                            len += head_size + opts.item_size;
                                             run_len = 0;
                                             run_type = .none;
                                             break :same;
                                         }
-                                        if (last != null and last.? != x) {
-                                            len += head_size + 1;
+                                        if (!is_same) {
+                                            len += head_size + opts.item_size;
                                             run_len = 0;
                                             run_type = .dif;
                                             runs += 1;
@@ -487,13 +517,13 @@ pub fn TemporalCompressor(
                                     },
                                     .dif => dif: {
                                         if (run_len > head_max) {
-                                            len += head_size + head_max;
+                                            len += head_size + head_max * opts.item_size;
                                             run_len = 0;
                                             run_type = .none;
                                             break :dif;
                                         }
-                                        if (last != null and last.? == x) {
-                                            len += head_size + run_len;
+                                        if (is_same) {
+                                            len += head_size + run_len * opts.item_size;
                                             run_len = 0;
                                             run_type = .same;
                                             runs += 1;
@@ -501,10 +531,9 @@ pub fn TemporalCompressor(
                                     },
                                 }
                                 run_len += 1;
-                                last = x;
                             }
                             if (run_type == .dif) // leftovers
-                                len += head_size + run_len;
+                                len += head_size + run_len * opts.item_size;
 
                             break :bytes len;
                         }

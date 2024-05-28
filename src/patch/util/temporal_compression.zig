@@ -355,12 +355,14 @@ pub fn TemporalCompressor(
             std.debug.assert(opts.compression != .none);
             std.debug.assert(opts.frame_size % opts.item_size == 0);
 
-            var str: []u8 = undefined;
+            var str: []u8 = "";
+            var substr: []u8 = "";
             const can_write: bool = @hasDecl(@TypeOf(writer), "writeAll");
 
             // TODO: impl compressed input
             if (opts.headers) return error.CompressedInputNotSupported;
 
+            // TODO: remove arena here, i.e. let caller decide if they will pass in an arena
             var arena = std.heap.ArenaAllocator.init(alloc);
             defer arena.deinit();
             var arena_a = arena.allocator();
@@ -436,17 +438,25 @@ pub fn TemporalCompressor(
                     },
                     .xrle => bytes: {
                         std.debug.assert(opts.rle_head_size != null);
-                        // FIXME: implement item size at the comparison level, like bfid?
                         const head_size: usize = opts.rle_head_size.?;
                         const head_max: usize = try std.math.powi(usize, 2, 8 * head_size) - 1;
                         var runs: usize = 0;
                         var run_len: usize = 0;
                         var len: usize = 0;
-                        //var last: ?u8 = null;
                         var is_same: bool = true;
                         var last = try alloc.alloc(u8, opts.item_size);
                         defer alloc.free(last);
                         @memset(last, 0x00);
+                        var total_runs: usize = 0;
+                        var max_run_len: usize = 0;
+                        var total_run_len: usize = 0;
+                        defer if (can_write) blk: {
+                            substr = allocPrint(arena_a, "runs:{d: <4}    max:{d: <4}  avg:{d: <4}", .{
+                                total_runs,
+                                max_run_len,
+                                if (total_run_len > 0) total_run_len / total_runs else 0,
+                            }) catch break :blk;
+                        };
 
                         if (depth > 0) {
                             const data_prev: []u8 = stage[base - opts.frame_size .. base];
@@ -458,15 +468,17 @@ pub fn TemporalCompressor(
                                 if (sub_i + 1 != opts.item_size) continue;
                                 defer is_same = true;
 
-                                //const x = b1 ^ b2;
                                 if (run_len > head_max or !is_same) {
+                                    if (max_run_len < run_len) max_run_len = @min(run_len, head_max);
+                                    total_run_len += @min(run_len, head_max);
                                     len += head_size + opts.item_size;
                                     runs += 1;
                                     run_len = 0;
                                 }
                                 run_len += 1;
-                                //last = x;
                             }
+
+                            if (total_runs < runs) total_runs = runs;
                             break :bytes len;
                         }
 
@@ -486,6 +498,25 @@ pub fn TemporalCompressor(
                         defer alloc.free(last);
                         @memset(last, 0x00);
 
+                        var total_runs: usize = 0;
+                        var pos_runs_total: usize = 0;
+                        var pos_run_len_max: usize = 0;
+                        var pos_run_len_total: usize = 0;
+                        var neg_runs_total: usize = 0;
+                        var neg_run_len_max: usize = 0;
+                        var neg_run_len_total: usize = 0;
+                        defer if (can_write) blk: {
+                            substr = allocPrint(arena_a, "runs:{d: <4}    p:{d: <4}  pmax:{d: <4}  pavg:{d: <4}    n:{d: <4}  nmax:{d: <4}  navg:{d: <4}", .{
+                                total_runs,
+                                pos_runs_total,
+                                pos_run_len_max,
+                                if (pos_run_len_total > 0) pos_run_len_total / pos_runs_total else 0,
+                                neg_runs_total,
+                                neg_run_len_max,
+                                if (neg_run_len_total > 0) neg_run_len_total / neg_runs_total else 0,
+                            }) catch break :blk;
+                        };
+
                         if (depth > 0) {
                             const data_prev: []u8 = stage[base - opts.frame_size .. base];
                             for (data, data_prev, 0..) |b1, b2, i| {
@@ -499,42 +530,57 @@ pub fn TemporalCompressor(
                                 switch (run_type) {
                                     .none => {
                                         run_type = if (is_same) .same else .dif;
+                                        if (is_same) neg_runs_total += 1 else pos_runs_total += 1;
                                         runs += 1;
                                     },
                                     .same => same: {
                                         if (run_len > head_max) {
+                                            if (pos_run_len_max < run_len) pos_run_len_max = head_max;
+                                            pos_run_len_total += head_max;
                                             len += head_size + opts.item_size;
                                             run_len = 0;
                                             run_type = .none;
                                             break :same;
                                         }
                                         if (!is_same) {
+                                            if (pos_run_len_max < run_len) pos_run_len_max = run_len;
+                                            pos_run_len_total += run_len;
                                             len += head_size + opts.item_size;
                                             run_len = 0;
                                             run_type = .dif;
                                             runs += 1;
+                                            pos_runs_total += 1;
                                         }
                                     },
                                     .dif => dif: {
                                         if (run_len > head_max) {
+                                            if (neg_run_len_max < run_len) neg_run_len_max = head_max;
+                                            neg_run_len_total += head_max;
                                             len += head_size + head_max * opts.item_size;
                                             run_len = 0;
                                             run_type = .none;
+                                            runs += 1;
                                             break :dif;
                                         }
                                         if (is_same) {
+                                            if (neg_run_len_max < run_len) neg_run_len_max = run_len;
+                                            neg_run_len_total += run_len;
                                             len += head_size + run_len * opts.item_size;
                                             run_len = 0;
                                             run_type = .same;
                                             runs += 1;
+                                            neg_runs_total += 1;
                                         }
                                     },
                                 }
                                 run_len += 1;
                             }
-                            if (run_type == .dif) // leftovers
+                            if (run_type == .dif) { // leftovers
                                 len += head_size + run_len * opts.item_size;
+                                neg_run_len_total += run_len;
+                            }
 
+                            if (total_runs < runs) total_runs = runs;
                             break :bytes len;
                         }
 
@@ -549,13 +595,13 @@ pub fn TemporalCompressor(
                 if (can_write) {
                     str = try allocPrint(
                         arena_a,
-                        "F.{d: <5}  D.{d: <2}     {d: <6}\n",
-                        .{ frame, depth, frame_bytes },
+                        "F:{d: <4}  D:{d: <2}    out:{d: <6}    {s}\n",
+                        .{ frame, depth, frame_bytes, substr },
                     );
                     try writer.writeAll(str);
                 }
             }
-            try writer.writeAll("---\n");
+            if (can_write) try writer.writeAll("---\n");
 
             // footer
             if (can_write) {

@@ -12,17 +12,12 @@ const rto = rt.TextStyleOpts;
 const msg = @import("message.zig");
 const mem = @import("memory.zig");
 
-// FIXME: remove, for testing
-const dbg = @import("debug.zig");
-
-// TODO: convenient way to repurpose an instance for different data? i.e. rerun init but without alloc stuff
-
-// the RLE we want
-// - main idea: account for long strings of both different values and same values
-//   - long strings of different are likely e.g. for matrices
-// - probably 15-bit number for count + 1 bit for mode
-// - mode bit off = bytes are consecutive same value
-// - mode bit on = bytes are consecutive different value
+// TODO: convenient way to repurpose an instance for different data? i.e. rerun init
+// but without alloc stuff
+// TODO: impl compression as option for actual compression logic
+// TODO: impl testing
+// TODO: overall needs some cleanup/reorganisation, mainly surrounding implementation
+// of alt compression options, which are not currently available in the compressor itself
 
 pub const DataPoint = struct {
     data: ?[]u8 = null,
@@ -88,15 +83,11 @@ pub fn TemporalCompressor(
             std.debug.assert(!self.initialized);
             defer self.initialized = true;
 
-            dbg.ConsoleOut("init()\n", .{}) catch {};
-
             // calc sizes
 
-            self.map_sources();
-            dbg.ConsoleOut("  map_sources() done\n", .{}) catch {};
+            self.mapSources();
             self.header_size = std.math.divCeil(usize, self.frame_size, item_size * 8) catch
                 @panic("failed to calculate header size");
-            dbg.ConsoleOut("  header calculated\n", .{}) catch {};
 
             self.frames = dflt_frames;
             self.offsets_off = 0;
@@ -114,14 +105,12 @@ pub fn TemporalCompressor(
             self.memory = self.alloc.?.alloc(u8, memory_size) catch
                 @panic("failed to allocate memory for savestate/rewind");
             @memset(self.memory[0..memory_size], 0x00);
-            dbg.ConsoleOut("  allocated memory\n", .{}) catch {};
 
             self.raw_offsets = self.memory.ptr + self.offsets_off;
             self.raw_headers = self.memory.ptr + self.headers_off;
             self.raw_stage = self.memory.ptr + self.stage_off;
             self.data = self.memory.ptr + self.data_off;
             self.offsets = @as([*]usize, @ptrCast(@alignCast(self.memory.ptr + self.offsets_off)))[0..self.frames];
-            dbg.ConsoleOut("  slices made\n", .{}) catch {};
         }
 
         pub fn deinit(self: *Self) void {
@@ -143,8 +132,16 @@ pub fn TemporalCompressor(
             self.frame_total = 0;
         }
 
+        pub fn canSave(self: *Self) bool {
+            std.debug.assert(self.initialized);
+            const space_ok: bool = @intFromPtr(self.memory.ptr + self.memory.len) -
+                @intFromPtr(self.data) - self.offsets[self.frame] >= self.frame_size;
+            const frames_ok: bool = self.frame < self.frames - 1;
+            return space_ok and frames_ok;
+        }
+
         /// configure offsets of each source, and set total size
-        fn map_sources(self: *Self) void {
+        fn mapSources(self: *Self) void {
             var offset: usize = 0;
             for (self.sources) |*source| {
                 std.debug.assert(source.data != null);
@@ -167,18 +164,10 @@ pub fn TemporalCompressor(
             return @as([*]ItemType, @ptrCast(@alignCast(self.raw_stage)))[base .. base + self.stage_items];
         }
 
-        pub fn saveable(self: *Self) bool {
-            std.debug.assert(self.initialized);
-            const space_ok: bool = @intFromPtr(self.memory.ptr + self.memory.len) -
-                @intFromPtr(self.data) - self.offsets[self.frame] >= self.frame_size;
-            const frames_ok: bool = self.frame < self.frames - 1;
-            return space_ok and frames_ok;
-        }
-
         // TODO: rework this to eliminate edge cases where depth should be >0, e.g. first handful of frames
         /// get number of compression layers deep the frame at given index is
         /// @index      frame to target
-        pub fn get_depth(_: *Self, index: usize) usize {
+        fn getDepth(_: *Self, index: usize) usize {
             var depth: usize = layer_depth;
             var depth_test: usize = index;
             while (depth_test % layer_size == 0 and depth > 0) : (depth -= 1)
@@ -188,7 +177,7 @@ pub fn TemporalCompressor(
 
         /// update list of compression tree indexes with those for frame at given index
         /// @index      frame to target
-        pub fn set_layer_indexes(self: *Self, index: usize) void {
+        fn setLayerIndexes(self: *Self, index: usize) void {
             self.layer_index_count = 0;
             var last_base: usize = 0;
             for (layer_widths) |w| {
@@ -208,15 +197,16 @@ pub fn TemporalCompressor(
             }
         }
 
+        // TODO: return slice?
         /// decode frame into stage 0
         /// @index      frame to decode
         /// @skip_last  don't decode last layer in chain, used to set basis for new encode
-        pub fn uncompress_frame(self: *Self, index: usize, skip_last: bool) void {
+        pub fn decode(self: *Self, index: usize, skip_last: bool) void {
             std.debug.assert(self.initialized);
 
             @memcpy(self.raw_stage[0..self.frame_size], self.data[0..self.frame_size]);
 
-            self.set_layer_indexes(index);
+            self.setLayerIndexes(index);
             var indexes: usize = self.layer_index_count - @intFromBool(skip_last);
             if (indexes == 0) return;
 
@@ -238,14 +228,14 @@ pub fn TemporalCompressor(
 
         // FIXME: in future, probably can skip the first step each new frame, because
         // the most recent frame would already be in stage1 from last time
-        pub fn save_compressed(self: *Self, framecount: usize) void {
+        pub fn save(self: *Self, framecount: usize) void {
             std.debug.assert(self.initialized);
 
             self.last_framecount = framecount;
 
             var data_size: usize = 0;
             if (self.frame > 0) {
-                self.uncompress_frame(self.frame, true);
+                self.decode(self.frame, true);
 
                 const s1_base = self.raw_stage + self.frame_size;
                 for (self.sources) |*source|
@@ -276,10 +266,10 @@ pub fn TemporalCompressor(
             self.offsets[self.frame] = self.offsets[self.frame - 1] + data_size;
         }
 
-        pub fn load_compressed(self: *Self, index: usize) void {
+        pub fn restore(self: *Self, index: usize) void {
             std.debug.assert(self.initialized);
 
-            self.uncompress_frame(index, false);
+            self.decode(index, false);
             for (self.sources) |*source|
                 @memcpy(source.data.?, self.raw_stage[source.off .. source.off + source.data.?.len]);
             self.frame = index + 1;
@@ -329,7 +319,7 @@ pub fn TemporalCompressor(
             switch (opts.compression) {
                 .none => {
                     for (frame_st..frame_ed) |i| {
-                        self.uncompress_frame(i, false);
+                        self.decode(i, false);
                         try writer.writeAll(self.raw_stage[0..self.frame_size]);
                     }
                 },
@@ -421,7 +411,6 @@ pub fn TemporalCompressor(
                 const frame_bytes: usize = switch (opts.compression) {
                     .none => 0,
                     .bfid => bytes: {
-                        // TODO: confirm this is equivalent to actual logic
                         const head_size = try std.math.divCeil(usize, opts.frame_size / opts.item_size, 8);
                         if (depth > 0) {
                             const data_prev: []u8 = stage[base - opts.frame_size .. base];
@@ -626,3 +615,31 @@ pub fn TemporalCompressor(
         }
     };
 }
+
+//test "dump recorded data" {
+//    if (gf.InputGetKb(.J, .JustOn)) blk: {
+//        const file = std.fs.cwd().createFile("annodue/test_frame_data_dump.bin", .{}) catch break :blk;
+//        defer file.close();
+//        var file_w = file.writer();
+//        state.rec_data.write(file_w, .{ .frames = 256, .headers = false }) catch break :blk;
+//        dbg.ConsoleOut(
+//            "frame data written to file\n  frame size: 0x{X}\n",
+//            .{state.rec_data.frame_size},
+//        ) catch {};
+//    }
+//}
+
+//test "calculate compression potential" {
+//    if (gf.InputGetKb(.F, .JustOn)) blk: {
+//        const file = std.fs.cwd().createFile("annodue/recording_raw-0x2458-nohead_mgs.bin.txt", .{}) catch
+//            break :blk;
+//        defer file.close();
+//        RewindDataType.calcPotential(alloc, file.writer(), .{
+//            .compression = .xrles,
+//            .sub_path = "annodue/recording_raw-0x2458-nohead_mgs.bin",
+//            .frame_size = 0x2458,
+//            .item_size = 1,
+//            .rle_head_size = 1,
+//        }) catch {};
+//    }
+//}

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Backend(Build): release versioning now based on `appinfo` module
+- Backend(Util): make rewind compression logic available in `temporal_compression` util
 
 ### Removed
 

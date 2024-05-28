@@ -114,7 +114,7 @@ pub fn TemporalCompressor(
         }
 
         pub fn deinit(self: *Self) void {
-            std.debug.assert(self.initialized);
+            if (!self.initialized) return;
             defer self.initialized = false;
 
             if (self.alloc) |a| a.free(self.memory);

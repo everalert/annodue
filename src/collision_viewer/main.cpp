@@ -8,6 +8,9 @@
 #include <map>
 #include <optional>
 #include <algorithm>
+
+#include <initguid.h>
+
 #include <d3d.h>
 #include <ddraw.h>
 
@@ -20,6 +23,12 @@
 // functions, also from https://github.com/tim-tim707/SW_RACER_RE
 auto stdDisplay_Update = (int (*)())0x00489ab0; // <-- will be hooked
 auto swrModel_UnkDraw = (void (*)(int x))0x00483A90; // <-- will be hooked
+
+auto rdMaterial_InvertTextureAlphaR4G4B4A4 = (void(*)(RdMaterial*)) 0x00431CF0; // <-- will be hooked
+auto rdMaterial_InvertTextureColorR4G4B4A4 = (void(*)(RdMaterial*)) 0x00431DF0; // <-- will be hooked
+auto rdMaterial_RemoveTextureAlphaR5G5B5A1 = (void(*)(RdMaterial*)) 0x00431EF0; // <-- will be hooked
+auto rdMaterial_RemoveTextureAlphaR4G4B4A4 = (void(*)(RdMaterial*)) 0x00431FD0; // <-- will be hooked
+auto rdMaterial_SaturateTextureR4G4B4A4 = (void(*)(RdMaterial*)) 0x004320B0; // <-- will be hooked
 
 const auto swrModel_NodeGetTransform = (void (*)(const swrModel_NodeTransformed* node, rdMatrix44* matrix))0x004316A0;
 const auto swrEvent_GetItem = (void* (*)(int event, int index))0x00450b30;
@@ -532,6 +541,58 @@ void swrModel_UnkDraw_Hook(int x)
     std::copy(temp_children.begin(), temp_children.end(), root_node->child_nodes);
 }
 
+template<typename F> void modify_texture_data(RdMaterial* mat, const char* name, F&& mod)
+{
+    if (strncmp(mat->aName, name, strlen(name)) == 0)
+        return;
+
+    sprintf(mat->aName, "%s", name);
+
+    tSystemTexture* tex = mat->aTextures;
+    IDirectDrawSurface4* surf = NULL;
+    if(tex->pD3DSrcTexture->QueryInterface(IID_IDirectDrawSurface4, (void**)&surf) != S_OK)
+        abort();
+
+    DDSURFACEDESC2 desc = {0};
+    desc.dwSize = sizeof(DDSURFACEDESC2);
+    if(surf->Lock(NULL, &desc, DDLOCK_WAIT, NULL) != S_OK)
+        abort();
+
+    uint16_t* data = (uint16_t*)desc.lpSurface;
+    for (int i = 0; i < desc.dwWidth * desc.dwHeight; i++)
+         data[i] = mod(data[i]);
+
+    surf->Unlock(NULL);
+
+    // this line is the only memory leak fix: release is missing in the original functions.
+    surf->Release();
+}
+
+void rdMaterial_InvertTextureAlphaR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "invert", [](uint16_t pixel) { return ~(pixel & 0xF000) | (pixel & 0xFFF); });
+}
+
+void rdMaterial_InvertTextureColorR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "invcol", [](uint16_t pixel) { return (pixel & 0xF000) | ~(pixel & 0xFFF); });
+}
+
+void rdMaterial_RemoveTextureAlphaR5G5B5A1_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "noalpha", [](uint16_t pixel) { return pixel | 0x8000; });
+}
+
+void rdMaterial_RemoveTextureAlphaR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "noalpha", [](uint16_t pixel) { return pixel | 0xF000; });
+}
+
+void rdMaterial_SaturateTextureR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "saturate", [](uint16_t pixel) { return pixel | 0x0FFF; });
+}
+
 void detour_attach(void** pPointer, void* pDetour, int num_bytes_to_copy)
 {
     if (num_bytes_to_copy < 5)
@@ -581,10 +642,26 @@ void detour_detach(void** pPointer, void* pDetour, int num_bytes_to_copy)
 extern "C" void init_collision_viewer(CollisionViewerState* global_state)
 {
     ::global_state = global_state;
+    // collision viewer
     detour_attach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
+
+    // fix memory leaks
+    detour_attach((void**)&rdMaterial_InvertTextureAlphaR4G4B4A4, (void*)rdMaterial_InvertTextureAlphaR4G4B4A4_Hook, 6);
+    detour_attach((void**)&rdMaterial_InvertTextureColorR4G4B4A4, (void*)rdMaterial_InvertTextureColorR4G4B4A4_Hook, 6);
+    detour_attach((void**)&rdMaterial_RemoveTextureAlphaR5G5B5A1, (void*)rdMaterial_RemoveTextureAlphaR5G5B5A1_Hook, 6);
+    detour_attach((void**)&rdMaterial_RemoveTextureAlphaR4G4B4A4, (void*)rdMaterial_RemoveTextureAlphaR4G4B4A4_Hook, 6);
+    detour_attach((void**)&rdMaterial_SaturateTextureR4G4B4A4, (void*)rdMaterial_SaturateTextureR4G4B4A4_Hook, 6);
 }
 
 extern "C" void deinit_collision_viewer()
 {
+    // collision viewer
     detour_detach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
+
+    // fix memory leaks
+    detour_detach((void**)&rdMaterial_InvertTextureAlphaR4G4B4A4, (void*)rdMaterial_InvertTextureAlphaR4G4B4A4_Hook, 6);
+    detour_detach((void**)&rdMaterial_InvertTextureColorR4G4B4A4, (void*)rdMaterial_InvertTextureColorR4G4B4A4_Hook, 6);
+    detour_detach((void**)&rdMaterial_RemoveTextureAlphaR5G5B5A1, (void*)rdMaterial_RemoveTextureAlphaR5G5B5A1_Hook, 6);
+    detour_detach((void**)&rdMaterial_RemoveTextureAlphaR4G4B4A4, (void*)rdMaterial_RemoveTextureAlphaR4G4B4A4_Hook, 6);
+    detour_detach((void**)&rdMaterial_SaturateTextureR4G4B4A4, (void*)rdMaterial_SaturateTextureR4G4B4A4_Hook, 6);
 }

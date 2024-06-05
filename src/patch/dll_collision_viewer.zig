@@ -226,7 +226,7 @@ const QuickRaceMenu = extern struct {
         mi.MenuItemSpacer(),
         mi.MenuItemToggle(&QuickRaceMenu.item_depth_test.input_converted, "Depth test"),
         mi.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces"),
-        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", 0, 100, false, null),
+        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", -100, 100, false, null),
     };
 
     var item_enabled = ConvertedMenuItem{ .input_bool = &state.enabled };
@@ -339,9 +339,17 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 extern fn init_collision_viewer(gs: *CollisionViewerState) callconv(.C) void;
 extern fn deinit_collision_viewer() callconv(.C) void;
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    init_collision_viewer(&state);
+fn handle_settings(gf: *GlobalFn) callconv(.C) void {
+    var biasInt: i32 = gf.SettingGetI("collisionviewer", "depth_bias") orelse 10;
+    var biasFloat: f32 = @floatFromInt(biasInt);
+    state.depth_bias = biasFloat / 100.0;
+}
 
+export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    handle_settings(gf);
+    
+    init_collision_viewer(&state);
+    
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
 }

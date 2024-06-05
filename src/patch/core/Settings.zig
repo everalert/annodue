@@ -43,6 +43,7 @@ pub const SettingsState = struct {
     pub var qol: SettingsGroup = undefined;
     pub var cosmetic: SettingsGroup = undefined;
     pub var developer: SettingsGroup = undefined;
+    pub var collisionviewer: SettingsGroup = undefined;
 };
 
 fn get(group: ?[*:0]const u8, setting: [*:0]const u8, comptime T: type) ?T {
@@ -134,6 +135,10 @@ pub fn init() void {
     SettingsState.gameplay.add("death_speed_min", f32, 325);
     SettingsState.gameplay.add("death_speed_drop", f32, 140);
     SettingsState.manager.add(&SettingsState.gameplay);
+    
+    SettingsState.collisionviewer = SettingsGroup.init(alloc, "collisionviewer");
+    SettingsState.collisionviewer.add("depth_bias", i32, 10);
+    SettingsState.manager.add(&SettingsState.collisionviewer);
 
     SettingsState.developer = SettingsGroup.init(alloc, "developer");
     SettingsState.developer.add("dump_fonts", bool, false); // working?
@@ -221,4 +226,5 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     defer SettingsState.qol.deinit();
     defer SettingsState.cosmetic.deinit();
     defer SettingsState.developer.deinit();
+    defer SettingsState.collisionviewer.deinit();
 }

@@ -80,6 +80,7 @@ pub const panic = debug.annodue_panic;
 // - feat: show milliseconds on all timers
 // - feat: limit fps during races (configurable via quick race menu)
 // - feat: skip planet cutscene
+// - feat: skip podium cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
 // - feat: fast countdown timer
@@ -112,6 +113,7 @@ const QolState = struct {
     var ms_timer: bool = false;
     var fps_limiter: bool = false;
     var skip_planet_cutscenes: bool = false;
+    var skip_podium_cutscene: bool = false;
     var fix_viewport_edges: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
@@ -136,12 +138,14 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
     QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
     QolState.fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
     QolState.skip_planet_cutscenes = gf.SettingGetB("qol", "skip_planet_cutscenes") orelse false;
+    QolState.skip_podium_cutscene = gf.SettingGetB("qol", "skip_podium_cutscene") orelse false;
     QolState.fix_viewport_edges = gf.SettingGetB("qol", "fix_viewport_edges") orelse false;
 
     if (!QolState.quickrace) QuickRaceMenu.close();
     // FIXME: add these to deinit?
     PatchHudTimerMs(QolState.ms_timer);
     PatchPlanetCutscenes(QolState.skip_planet_cutscenes);
+    PatchPodiumCutscene(QolState.skip_podium_cutscene);
     PatchViewportEdges(QolState.fix_viewport_edges);
 }
 
@@ -173,6 +177,22 @@ fn PatchPlanetCutscenes(enable: bool) void {
     } else {
         _ = x86.call(0x45753D, @intFromPtr(rvi.swrVideo_PlayVideoFile));
     }
+}
+
+// PODIUM CUTSCENE
+
+// force game to use in-built debug feature to fast scroll through podium cutscene
+fn PatchPodiumCutscene(enable: bool) void {
+    // see end of fn_43CEB0
+    var buf: [2]u8 = undefined;
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x75, 0x09 };
+    _ = mem.write_bytes(0x43D48C, &buf, 2); // jnz+09
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x29 };
+    _ = mem.write_bytes(0x43D495, &buf, 2); // jz+29
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x7E, 0x20 };
+    _ = mem.write_bytes(0x43D49E, &buf, 2); // jle+20
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x0A };
+    _ = mem.write_bytes(0x43D4B4, &buf, 2); // jz+0A
 }
 
 // VIEWPORT

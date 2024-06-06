@@ -36,6 +36,7 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Showing milliseconds digit on all timers
 	- Configurable defaults for free-play racers and laps
 	- Skip planet cutscenes
+	- Skip podium cutscene
 	- Fast countdown timer
 	- Double mouse cursor fix
 	- Jinn Reeso and Cy Yunga cheat toggling
@@ -149,6 +150,7 @@ Configured under `[overlay]`
 - Show milliseconds on all timers
 - Limit framerate during races (configurable via Quick Race Menu)
 - Skip planet cutscenes
+- Skip podium cutscene
 - Custom default number of racers
 - Custom default number of laps
 - Fast countdown timer
@@ -181,6 +183,7 @@ Configured under `[qol]`
 |`fps_limiter_enable`     |`bool`|&nbsp;
 |`fps_limiter_default`    |`u32` |&nbsp;
 |`skip_planet_cutscenes`  |`bool`|&nbsp;
+|`skip_podium_cutscene`   |`bool`|&nbsp;
 |`default_racers`         |`u32` |1 to 12
 |`default_laps`           |`u32` |1 to 5
 |`fast_countdown_enable`  |`bool`|&nbsp;

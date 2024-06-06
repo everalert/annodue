@@ -48,6 +48,8 @@ pub const panic = debug.annodue_panic;
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - fix: bugfix Cy Yunga cheat having no audio
 // - fix: bugfix map rendering not accounting for hi-res flag
+// - fix: remove 1px gap on right and bottom of viewport when rendering sprites
+//     - this may cut off sprites placed right at the edge, depending on your resolution settings
 // - feat: quick restart
 //     - CONTROLS:          Tab+Esc          Back+Start
 // - feat: quick race menu
@@ -110,6 +112,7 @@ const QolState = struct {
     var ms_timer: bool = false;
     var fps_limiter: bool = false;
     var skip_planet_cutscenes: bool = false;
+    var fix_viewport_edges: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -133,11 +136,13 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
     QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
     QolState.fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
     QolState.skip_planet_cutscenes = gf.SettingGetB("qol", "skip_planet_cutscenes") orelse false;
+    QolState.fix_viewport_edges = gf.SettingGetB("qol", "fix_viewport_edges") orelse false;
 
     if (!QolState.quickrace) QuickRaceMenu.close();
     // FIXME: add these to deinit?
     PatchHudTimerMs(QolState.ms_timer);
     PatchPlanetCutscenes(QolState.skip_planet_cutscenes);
+    PatchViewportEdges(QolState.fix_viewport_edges);
 }
 
 // HUD TIMER MS
@@ -168,6 +173,18 @@ fn PatchPlanetCutscenes(enable: bool) void {
     } else {
         _ = x86.call(0x45753D, @intFromPtr(rvi.swrVideo_PlayVideoFile));
     }
+}
+
+// VIEWPORT
+
+// eliminate the extra undrawn pixel on bottom and right of screen
+// tradeoff - slight cutoff for stuff placed right along edge,
+//   could possibly be mitigated by adjusting quad scale on per-sprite basis
+fn PatchViewportEdges(enable: bool) void {
+    const h: u8 = if (enable) 0x90 else 0x48; // dec eax = height
+    const w: u8 = if (enable) 0x90 else 0x49; // dec ecx = width
+    _ = mem.write(0x44F610, u8, h);
+    _ = mem.write(0x44F611, u8, w);
 }
 
 // GAME CHEATS

@@ -41,6 +41,7 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Jinn Reeso and Cy Yunga cheat toggling
 	- Cy Yunga cheat audio fix
 	- Map rendering hi-res text fix
+	- Viewport edge gap fix
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer
 - Cosmetic
@@ -139,6 +140,8 @@ Configured under `[overlay]`
 - Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Fix Cy Yunga cheat audio
 - Fix map rendering hi-res text
+- Fix 1px gap on right and bottom of viewport when rendering sprites at the edge
+    - This may cause the sprite to be clipped instead, depending on your resolution settings
 - Map controller `Start` to `Esc`
 - Race restart hotkey -- `Esc + Tab` or `Back + Start`
 - Quick Race Menu
@@ -182,6 +185,7 @@ Configured under `[qol]`
 |`default_laps`           |`u32` |1 to 5
 |`fast_countdown_enable`  |`bool`|&nbsp;
 |`fast_countdown_duration`|`f32` |0.05 to 3.00
+|`fix_viewport_edges`     |`bool`|&nbsp;
 
 ### Collision Viewer
 

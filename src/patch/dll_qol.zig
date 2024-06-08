@@ -101,6 +101,7 @@ pub const panic = debug.annodue_panic;
 // FIXME: quick race menu stops working after hot reload??
 // TODO: split this because it's getting unruly
 //   maybe -- quality of life + game bugfixes + non-gameplay extra features
+// TODO: settings for patching jinn/cy cheats
 
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -572,13 +573,13 @@ const QuickRaceMenu = extern struct {
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
         var hang = re.Manager.entity(.Hang, 0);
-        hang.vehicle = @intCast(values.vehicle);
-        hang.track = @intCast(values.track);
-        hang.circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
-        hang.mirror = @intCast(values.mirror);
-        hang.laps = @intCast(values.laps);
-        hang.aiSpeed = @intCast(values.ai_speed + 1);
-        hang.racers = @intCast(values.racers);
+        hang.VehiclePlayer = @intCast(values.vehicle);
+        hang.Track = @intCast(values.track);
+        hang.Circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
+        hang.Mirror = @intCast(values.mirror);
+        hang.Laps = @intCast(values.laps);
+        hang.AISpeed = @intCast(values.ai_speed + 1);
+        hang.Racers = @intCast(values.racers);
         _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
         for (0..7) |i| {
             rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
@@ -594,13 +595,13 @@ const QuickRaceMenu = extern struct {
     // that introduces issues with state loop
     fn init() void {
         const hang = re.Manager.entity(.Hang, 0);
-        values.vehicle = hang.vehicle;
-        values.track = hang.track;
-        values.mirror = hang.mirror;
-        values.laps = hang.laps;
-        values.racers = hang.racers;
-        values.ai_speed = hang.aiSpeed - 1;
-        //values.ai_speed = hang.winnings;
+        values.vehicle = hang.VehiclePlayer;
+        values.track = hang.Track;
+        values.mirror = hang.Mirror;
+        values.laps = hang.Laps;
+        values.racers = hang.Racers;
+        values.ai_speed = hang.AISpeed - 1;
+        //values.ai_speed = hang.Winnings;
         for (0..7) |i| {
             values.up_lv[i] = rrd.PLAYER.*.pFile.upgrade_lv[i];
             values.up_hp[i] = rrd.PLAYER.*.pFile.upgrade_hp[i];
@@ -810,12 +811,14 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: look into using in-game default setter, see fn_45BD90
+    // TODO: change annodue setting to i32 for both, also look into anywhere
+    // else like this that might have been affected by new Hang stuff
 
     if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
-        re.Manager.entity(.Hang, 0).laps = @truncate(QolState.default_laps);
+        re.Manager.entity(.Hang, 0).Laps = @intCast(QolState.default_laps);
 
     if (QolState.default_racers >= 1 and QolState.default_racers <= 12)
-        _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
+        _ = mem.write(0x50C558, i8, @as(i8, @intCast(QolState.default_racers))); // racers
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -948,5 +951,6 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // TODO: move to core? since it only matters with running annodue
     rt.TEXT_HIRES_FLAG.* = 0;
 }

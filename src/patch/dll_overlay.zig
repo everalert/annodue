@@ -65,7 +65,8 @@ const lbx: i16 = 64;
 const lby: i16 = 480 - 32;
 const sty: i16 = -10;
 
-export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    //export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
     if (gs.in_race.on()) {

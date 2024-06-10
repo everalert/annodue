@@ -199,17 +199,22 @@ fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
 }
 
 fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
+    if (state.saveable(gs))
+        state.rec_data.save(gs.framecount);
+
     if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.rec_data.frame).? - 1;
         state.rec_data.frame_total = state.rec_data.frame;
         return .Scrubbing;
     }
+
     if (gs.timestamp >= state.load_time) {
         if (!state.loadable(gs)) return .Recording;
         state.rec_data.restore(state.load_frame);
         state.load_count += 1;
         return .Recording;
     }
+
     return .Loading;
 }
 

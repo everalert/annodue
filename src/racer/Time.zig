@@ -17,6 +17,8 @@ pub const FIXED_STEP_ON: *bool = @ptrFromInt(FIXED_STEP_ON_ADDR);
 pub const FIXED_FRAMETIME_ADDR: usize = 0x50CB70;
 pub const FIXED_FRAMETIME: *f64 = @ptrFromInt(FIXED_FRAMETIME_ADDR);
 
+// TODO: typedef of struct holding this info, then update dll_savestate with new refs
+
 pub const FRAMECOUNT_ADDR: usize = 0xE22A30;
 pub const FRAMECOUNT: *u32 = @ptrFromInt(FRAMECOUNT_ADDR);
 pub const TOTALTIME_ADDR: usize = 0xE22A38;

@@ -220,6 +220,7 @@ fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_ld.gets() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
         state.load_time = state.load_delay + gs.timestamp;
+        state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
         return .ScrubExiting;
     }
 

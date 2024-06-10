@@ -93,7 +93,7 @@ const state = struct {
     var rec_data: RewindDataType = .{};
     var rec_sources = [_]TDataPoint{
         .{ .data = @as([*]u8, @ptrFromInt(0xE98E80))[0..0x50] }, // Input
-        .{ .data = @as([*]u8, @ptrFromInt(0xEC8810))[0..0xD0] }, // Input; ?? .. EC88E0
+        .{ .data = @as([*]u8, @ptrFromInt(0xEC8810))[0..0xD0] }, // Input
         //.{ .data = @as([*]u8, @ptrFromInt(ri.COMBINED_ADDR))[0..ri.COMBINED_SIZE] }, // Input
         .{}, // RaceData
         .{}, // Test

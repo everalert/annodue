@@ -12,6 +12,9 @@ pub const RAW_STATE_TIMESTAMP: usize = 0x50E028;
 pub const RAW_STATE_ON: usize = 0x50E868;
 pub const RAW_STATE_JUST_ON: usize = 0x50F668;
 
+// TODO: additions for bitfields, f32 arrays, etc. from 0xEC8840.., 0xE98E80..
+// and update dll_savestate with new defs
+
 pub const COMBINED_ADDR: usize = 0xEC8810;
 pub const COMBINED_SIZE: usize = 0x30;
 

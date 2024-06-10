@@ -92,7 +92,9 @@ const state = struct {
     var rec_state: LoadState = .Recording;
     var rec_data: RewindDataType = .{};
     var rec_sources = [_]TDataPoint{
-        .{ .data = @as([*]u8, @ptrFromInt(ri.COMBINED_ADDR))[0..ri.COMBINED_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrFromInt(0xE98E80))[0..0x50] }, // Input
+        .{ .data = @as([*]u8, @ptrFromInt(0xEC8810))[0..0xD0] }, // Input; ?? .. EC88E0
+        //.{ .data = @as([*]u8, @ptrFromInt(ri.COMBINED_ADDR))[0..ri.COMBINED_SIZE] }, // Input
         .{}, // RaceData
         .{}, // Test
         .{}, // Hang
@@ -132,11 +134,12 @@ const state = struct {
 
     fn reset() void {
         rec_data.reset();
-        //rec_sources[0].data = @ptrFromInt(ri.COMBINED_ADDR); // don't need to reset this
-        rec_sources[1].data = rrd.PLAYER_SLICE.*;
-        rec_sources[2].data = re.Test.PLAYER_SLICE.*;
-        rec_sources[3].data = re.Manager.entitySlice(.Hang, 0);
-        rec_sources[4].data = re.Manager.entitySlice(.cMan, 0);
+        //rec_sources[0].data = @ptrFromInt(0xE98E80); // don't need to reset this
+        //rec_sources[1].data = @ptrFromInt(ri.COMBINED_ADDR); // don't need to reset this
+        rec_sources[2].data = rrd.PLAYER_SLICE.*;
+        rec_sources[3].data = re.Test.PLAYER_SLICE.*;
+        rec_sources[4].data = re.Manager.entitySlice(.Hang, 0);
+        rec_sources[5].data = re.Manager.entitySlice(.cMan, 0);
         load_frame = 0;
         load_count = 0;
         scrub_frame = 0;

@@ -315,7 +315,8 @@ pub fn build(b: *std.Build) void {
     core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);
-    core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
+    if (!DEV_MODE)
+        core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
     // TODO: don't make the core depend on plugin_step,
     // connect plugins to default_step so it can be parallel unless doing release build
     core.step.dependOn(

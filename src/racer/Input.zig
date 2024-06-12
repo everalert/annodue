@@ -87,7 +87,7 @@ pub fn RaceInputs(comptime E: type, comptime T: type) type {
 pub const RACE_COMBINED_ADDR: usize = 0xEC8810;
 pub const RACE_COMBINED_SIZE: usize = 0xD0;
 pub const RACE_BUTTON_COMBINED_BASE_ADDR: usize = 0xEC8810;
-pub const RACE_BUTTON_COMBINED: *RaceInputs(BUTTON, f32) = @ptrFromInt(RACE_BUTTON_COMBINED_BASE_ADDR);
+pub const RACE_BUTTON_COMBINED: *RaceInputs(BUTTON, u8) = @ptrFromInt(RACE_BUTTON_COMBINED_BASE_ADDR);
 pub const RACE_BUTTON_JOYSTICK_BASE_ADDR: usize = 0x4D5E80;
 pub const RACE_BUTTON_JOYSTICK: *RaceInputs(BUTTON, f32) = @ptrFromInt(RACE_BUTTON_JOYSTICK_BASE_ADDR);
 pub const RACE_BUTTON_MOUSE_BASE_ADDR: usize = 0x4D5EBC;

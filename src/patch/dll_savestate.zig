@@ -21,9 +21,10 @@ const TemporalCompressor = @import("util/temporal_compression.zig").TemporalComp
 const TDataPoint = @import("util/temporal_compression.zig").DataPoint;
 
 const rg = @import("racer").Global;
-const ri = @import("racer").Input;
+const rin = @import("racer").Input;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
+const rti = @import("racer").Time;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
@@ -96,10 +97,10 @@ const state = struct {
         .{}, // Test
         .{}, // Hang
         .{}, // cMan
-        //.{ .data = @as([*]u8, @ptrFromInt(ri.COMBINED_ADDR))[0..ri.COMBINED_SIZE] }, // Input
-        .{ .data = @as([*]u8, @ptrFromInt(0xE98E80))[0..0x50] }, // Input
-        .{ .data = @as([*]u8, @ptrFromInt(0xEC8810))[0..0xD0] }, // Input
-        .{ .data = @as([*]u8, @ptrFromInt(0xE22A30))[0..0x24] }, // Timing
+        .{ .data = @as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
+        // TODO: RNG
     };
 
     var load_delay: usize = 500; // ms

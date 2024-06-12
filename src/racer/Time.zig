@@ -17,8 +17,6 @@ pub const FIXED_STEP_ON: *bool = @ptrFromInt(FIXED_STEP_ON_ADDR);
 pub const FIXED_FRAMETIME_ADDR: usize = 0x50CB70;
 pub const FIXED_FRAMETIME: *f64 = @ptrFromInt(FIXED_FRAMETIME_ADDR);
 
-// TODO: typedef of struct holding this info, then update dll_savestate with new refs
-
 pub const FRAMECOUNT_ADDR: usize = 0xE22A30;
 pub const FRAMECOUNT: *u32 = @ptrFromInt(FRAMECOUNT_ADDR);
 pub const TOTALTIME_ADDR: usize = 0xE22A38;
@@ -29,6 +27,17 @@ pub const FRAMETIME_64_RAW_ADDR: usize = 0xE22A48;
 pub const FRAMETIME_64_RAW: *f64 = @ptrFromInt(FRAMETIME_64_RAW_ADDR);
 pub const FRAMETIME_ADDR: usize = 0xE22A50;
 pub const FRAMETIME: *f32 = @ptrFromInt(FRAMETIME_ADDR);
+
+pub const Timing = extern struct {
+    frame_count: u32,
+    _unk_04: u32,
+    total_time: f64,
+    frame_time_64: f64,
+    frame_time: f32,
+};
+pub const TIMING: *Timing = @ptrFromInt(FRAMECOUNT_ADDR);
+pub const TIMING_SIZE: usize = @sizeOf(Timing);
+// TODO: assert(TIMING_SIZE == 0x24);
 
 pub const MFPS_ADDR: usize = 0x4C8174; // sithControl_secFPS; fps/1000
 pub const MFPS: *f32 = @ptrFromInt(MFPS_ADDR);

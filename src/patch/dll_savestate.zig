@@ -24,6 +24,7 @@ const rg = @import("racer").Global;
 const rin = @import("racer").Input;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
+const rr = @import("racer").Random;
 const rti = @import("racer").Time;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
@@ -100,7 +101,7 @@ const state = struct {
         .{ .data = @as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE] }, // Input
         .{ .data = @as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE] }, // Input
         .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
-        // TODO: RNG
+        .{ .data = @as([*]u8, @ptrCast(rr.NUMBER))[0..4] }, // RNG
     };
 
     var load_delay: usize = 500; // ms

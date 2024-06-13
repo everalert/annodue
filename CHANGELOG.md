@@ -10,8 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Core: notify on plugin reload
+- InputDisplay: Now shows inputs from savestate rewind
+- QOL: Option to skip podium cutscene
+- QOL: Option to remove 1px gap at screen edge
 - Backend(Core): `appinfo` module for externally-facing defs
 - Backend(Core): enforcing semantic versioning for plugins
+- Backend(RacerLib): Added `Random`
+- Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input` and `Timing`
 
 ### Changed
 
@@ -20,8 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Backend(Build): release `-Dver` option
-- Backend(Build): release `-Dminver` option
+- Backend(Build): `-Dver` option in `release` builds
+- Backend(Build): `-Dminver` option in `release` builds
+
+### Fixed
+
+- Savestate: Rewind ignoring saved inputs
+- Savestate: Rewind not restoring UI correctly
+- Savestate: Stuttering during rewind scrubbing
+- Savestate: Delayed camera when rewind scrubbing
+- Backend(Build): compile error building without hashfile present when build doesn't use hashfile
 
 ## [0.1.5] - 2024-05-12
 

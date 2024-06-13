@@ -66,8 +66,8 @@ const InputDisplay = struct {
     const style_left = rt.MakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
     fn ReadInputs() void {
-        analog = mem.read(ri.AXIS_COMBINED_BASE_ADDR, @TypeOf(analog));
-        digital = mem.read(ri.BUTTON_COMBINED_BASE_ADDR, @TypeOf(digital));
+        analog = mem.read(ri.RACE_AXIS_COMBINED_BASE_ADDR, @TypeOf(analog));
+        digital = mem.read(ri.RACE_BUTTON_COMBINED_BASE_ADDR, @TypeOf(digital));
     }
 
     fn GetStick(input: ri.AXIS) f32 {
@@ -378,7 +378,8 @@ export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 // TODO: probably cleaner with a state machine
-export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+//export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (InputDisplay.enable and !InputDisplay.initialized)
             InputDisplay.Init();

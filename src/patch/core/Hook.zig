@@ -109,6 +109,8 @@ const PluginExportFn = enum(u32) {
     EarlyEngineUpdateA,
     LateEngineUpdateB,
     LateEngineUpdateA,
+    EngineEntityUpdateB,
+    //EngineEntityUpdateA,
     //EngineUpdateStage14B,
     EngineUpdateStage14A,
     //EngineUpdateStage18B,
@@ -145,8 +147,10 @@ const PluginExportFn = enum(u32) {
     MenuTrackSelectB,
     MenuTrackB,
     MenuCantinaEntryB,
-    TextRenderB,
-    TextRenderA,
+    Draw2DB,
+    Draw2DA,
+    TextRenderB, // TODO: deprecate
+    TextRenderA, // TODO: deprecate
     MapRenderB,
     MapRenderA,
 };
@@ -425,6 +429,10 @@ fn HookEngineUpdate(memory: usize) usize {
     off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
     off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
 
+    // the function before CallAll0x14, at the start of the entity updates block
+    // EngineUpdateStage20A is the equivalent for end of block
+    off = hook.intercept_call(off, 0x4459D1, PluginFnCallback(.EngineEntityUpdateB), null);
+
     // entity system stages in EarlyEngineUpdate (CallAll0x14, etc.)
     // will only run when game is not paused
     off = hook.intercept_call(off, 0x4459D6, null, PluginFnCallback(.EngineUpdateStage14A));
@@ -561,6 +569,7 @@ fn HookTextRender(memory: usize) usize {
     // NOTE: 0x483F8B calls ProcessQueue1, only usable with after-fn when using intercept_call()
     var off = memory;
     // FlushQueue1
+    // TODO: deprecate, update to be more reflective of current knowledge and add granularity
     off = hook.intercept_call(
         off,
         0x450297,
@@ -573,6 +582,13 @@ fn HookTextRender(memory: usize) usize {
         0x45029C,
         PluginFnCallback(.MapRenderB),
         PluginFnCallback(.MapRenderA),
+    );
+    // MetaCam_Draw2D
+    off = hook.intercept_call(
+        off,
+        0x445A1A,
+        PluginFnCallback(.Draw2DB),
+        PluginFnCallback(.Draw2DA),
     );
     return off;
 }

@@ -22,7 +22,7 @@ pub const Freeze = extern struct {
         if (frozen or owner != null) return false;
         var jdge = re.Manager.entity(.Jdge, 0);
 
-        saved_pausebit = jdge.entity_flags & pausebit;
+        saved_pausebit = jdge.EntityFlags & pausebit;
         saved_pausepage = rg.PAUSE_PAGE.*;
         saved_pausestate = rg.PAUSE_STATE.*;
         saved_pausescroll = rg.PAUSE_SCROLLINOUT.*;
@@ -30,7 +30,7 @@ pub const Freeze = extern struct {
         rg.PAUSE_PAGE.* = 2;
         rg.PAUSE_STATE.* = 1;
         rg.PAUSE_SCROLLINOUT.* = 0;
-        jdge.entity_flags &= ~pausebit;
+        jdge.EntityFlags &= ~pausebit;
 
         owner = o;
         frozen = true;
@@ -43,7 +43,7 @@ pub const Freeze = extern struct {
         if (!frozen or !std.mem.eql(u8, owner.?[0..o_len], o[0..o_len])) return false;
         var jdge = re.Manager.entity(.Jdge, 0);
 
-        jdge.entity_flags |= saved_pausebit;
+        jdge.EntityFlags |= saved_pausebit;
         rg.PAUSE_SCROLLINOUT.* = saved_pausescroll;
         rg.PAUSE_STATE.* = saved_pausestate;
         rg.PAUSE_PAGE.* = saved_pausepage;

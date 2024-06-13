@@ -82,10 +82,12 @@ pub fn init() void {
     SettingsState.qol.add("fps_limiter_enable", bool, true);
     SettingsState.qol.add("fps_limiter_default", u32, 24);
     SettingsState.qol.add("skip_planet_cutscenes", bool, true);
+    SettingsState.qol.add("skip_podium_cutscene", bool, true);
     SettingsState.qol.add("default_laps", u32, 3);
     SettingsState.qol.add("default_racers", u32, 1);
     SettingsState.qol.add("fast_countdown_enable", bool, false);
     SettingsState.qol.add("fast_countdown_duration", f32, 1.0);
+    SettingsState.qol.add("fix_viewport_edges", bool, false);
     SettingsState.manager.add(&SettingsState.qol);
 
     SettingsState.cosmetic = SettingsGroup.init(alloc, "cosmetic");

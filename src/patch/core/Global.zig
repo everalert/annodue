@@ -150,7 +150,7 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
         const countdown: bool = flags1 & (1 << 0) != 0;
         if (countdown) break :blk .Countdown;
         const postrace: bool = flags1 & (1 << 5) == 0;
-        const show_stats: bool = re.Manager.entity(.Jdge, 0).flags & 0x0F == 2;
+        const show_stats: bool = re.Manager.entity(.Jdge, 0).Flags & 0x0F == 2;
         if (postrace and show_stats) break :blk .PostRace;
         if (postrace) break :blk .PostRaceExiting;
         break :blk .Racing;

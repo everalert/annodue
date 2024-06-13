@@ -21,9 +21,11 @@ const TemporalCompressor = @import("util/temporal_compression.zig").TemporalComp
 const TDataPoint = @import("util/temporal_compression.zig").DataPoint;
 
 const rg = @import("racer").Global;
-const ri = @import("racer").Input;
+const rin = @import("racer").Input;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
+const rr = @import("racer").Random;
+const rti = @import("racer").Time;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
@@ -92,11 +94,14 @@ const state = struct {
     var rec_state: LoadState = .Recording;
     var rec_data: RewindDataType = .{};
     var rec_sources = [_]TDataPoint{
-        .{ .data = @as([*]u8, @ptrFromInt(ri.COMBINED_ADDR))[0..ri.COMBINED_SIZE] }, // Input
         .{}, // RaceData
         .{}, // Test
         .{}, // Hang
         .{}, // cMan
+        .{ .data = @as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
+        .{ .data = @as([*]u8, @ptrCast(rr.NUMBER))[0..4] }, // RNG
     };
 
     var load_delay: usize = 500; // ms
@@ -132,11 +137,11 @@ const state = struct {
 
     fn reset() void {
         rec_data.reset();
-        //rec_sources[0].data = @ptrFromInt(ri.COMBINED_ADDR); // don't need to reset this
-        rec_sources[1].data = rrd.PLAYER_SLICE.*;
-        rec_sources[2].data = re.Test.PLAYER_SLICE.*;
-        rec_sources[3].data = re.Manager.entitySlice(.Hang, 0);
-        rec_sources[4].data = re.Manager.entitySlice(.cMan, 0);
+        rec_sources[0].data = rrd.PLAYER_SLICE.*;
+        rec_sources[1].data = re.Test.PLAYER_SLICE.*;
+        rec_sources[2].data = re.Manager.entitySlice(.Hang, 0);
+        rec_sources[3].data = re.Manager.entitySlice(.cMan, 0);
+        // don't need to update any other sources
         load_frame = 0;
         load_count = 0;
         scrub_frame = 0;
@@ -196,17 +201,22 @@ fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
 }
 
 fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
+    if (state.saveable(gs))
+        state.rec_data.save(gs.framecount);
+
     if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.rec_data.frame).? - 1;
         state.rec_data.frame_total = state.rec_data.frame;
         return .Scrubbing;
     }
+
     if (gs.timestamp >= state.load_time) {
         if (!state.loadable(gs)) return .Recording;
         state.rec_data.restore(state.load_frame);
         state.load_count += 1;
         return .Recording;
     }
+
     return .Loading;
 }
 
@@ -217,6 +227,7 @@ fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
     if (state.save_input_ld.gets() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
         state.load_time = state.load_delay + gs.timestamp;
+        state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
         return .ScrubExiting;
     }
 
@@ -309,15 +320,42 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.save_input_ld.update(gf);
 }
 
-// TODO: maybe reset state/recording if savestates or practice mode disabled?
-export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+// FIXME: if UpdateState runs in EngineUpdateStage20A:
+//  - the camera is frozen
+//  - the pod is shaky and acts 1 frame ahead of the cam
+// if it runs in EarlyEngineUpdateA instead
+//  - the camera is shaky
+//      - pod 'not' being shaky is probably because they are both shaky now
+//  - the pod acts on the same frame as the camera
+// the problem is, there is only 1 extra function running in-engine in the 2nd case
+// and that seems to only deal with the camera (metacam update fn)
+// FIXME: other unresolved issue - inputs still have some effect on the final rendering
+// no matter where in the loop we have tried to save the data so far; they have less
+// effect if run at EarlyEngineUpdateA, but UI elements etc still do not respect input.
+// possibly need to add the 'other'  input stuff to savestates
+// FIXME: UI rendering timer wrong with respect to loaded savestates, due to making the
+// CreateText call before the savestate load point. challenge here is that we can't just
+// make the savestate happen earlier, because state is still being changed at the same
+// entity stage
+//  - reason seems to be that, even though the state is being restored, the engine still
+//    needs to do work on the data to transfer state to the rest of the engine, e.g. the
+//    boost meter progress being sent to a global to be used in a specific boost meter
+//    renderer in the draw function. when you restore the state, you basically skip
+//    all those outward transfers, so the engine thinks they don't happen, unless you
+//    keep holding the buttons to make them proc on the next frame
+//  - idea: update savestates right before Stage14, so that the input of the NEXT frame
+//    is captured, then when you restore it may rerun all the stuff with your restored inputs
+//      - this seems to resolve most issues, but still need to manually press accel
+//        for some stuff (exhaust flame size, meter mid-charging, correct speed on
+//        speedo, etc.). however, being no longer able to influence steering, showing
+//        the correct boost readiness status, overlay timer being mismatched from
+//        UI, etc. without input all fixed
+//      - next step is to figure out the rest of SerializeInput and add that to savestates
+
+export fn EngineEntityUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    //export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
     UpdateState(gs, gf);
-}
-
-// TODO: merge with EngineUpdateStage20A?
-export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (!state.savestate_enable) return;
 
     // TODO: show during whole race scene? esp. if recording from count
     // TODO: experiment with positioning

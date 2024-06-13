@@ -48,6 +48,8 @@ pub const panic = debug.annodue_panic;
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - fix: bugfix Cy Yunga cheat having no audio
 // - fix: bugfix map rendering not accounting for hi-res flag
+// - fix: remove 1px gap on right and bottom of viewport when rendering sprites
+//     - this may cut off sprites placed right at the edge, depending on your resolution settings
 // - feat: quick restart
 //     - CONTROLS:          Tab+Esc          Back+Start
 // - feat: quick race menu
@@ -78,6 +80,7 @@ pub const panic = debug.annodue_panic;
 // - feat: show milliseconds on all timers
 // - feat: limit fps during races (configurable via quick race menu)
 // - feat: skip planet cutscene
+// - feat: skip podium cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
 // - feat: fast countdown timer
@@ -98,6 +101,7 @@ pub const panic = debug.annodue_panic;
 // FIXME: quick race menu stops working after hot reload??
 // TODO: split this because it's getting unruly
 //   maybe -- quality of life + game bugfixes + non-gameplay extra features
+// TODO: settings for patching jinn/cy cheats
 
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -110,6 +114,8 @@ const QolState = struct {
     var ms_timer: bool = false;
     var fps_limiter: bool = false;
     var skip_planet_cutscenes: bool = false;
+    var skip_podium_cutscene: bool = false;
+    var fix_viewport_edges: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -133,11 +139,15 @@ fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
     QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
     QolState.fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
     QolState.skip_planet_cutscenes = gf.SettingGetB("qol", "skip_planet_cutscenes") orelse false;
+    QolState.skip_podium_cutscene = gf.SettingGetB("qol", "skip_podium_cutscene") orelse false;
+    QolState.fix_viewport_edges = gf.SettingGetB("qol", "fix_viewport_edges") orelse false;
 
     if (!QolState.quickrace) QuickRaceMenu.close();
     // FIXME: add these to deinit?
     PatchHudTimerMs(QolState.ms_timer);
     PatchPlanetCutscenes(QolState.skip_planet_cutscenes);
+    PatchPodiumCutscene(QolState.skip_podium_cutscene);
+    PatchViewportEdges(QolState.fix_viewport_edges);
 }
 
 // HUD TIMER MS
@@ -168,6 +178,34 @@ fn PatchPlanetCutscenes(enable: bool) void {
     } else {
         _ = x86.call(0x45753D, @intFromPtr(rvi.swrVideo_PlayVideoFile));
     }
+}
+
+// PODIUM CUTSCENE
+
+// force game to use in-built debug feature to fast scroll through podium cutscene
+fn PatchPodiumCutscene(enable: bool) void {
+    // see end of fn_43CEB0
+    var buf: [2]u8 = undefined;
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x75, 0x09 };
+    _ = mem.write_bytes(0x43D48C, &buf, 2); // jnz+09
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x29 };
+    _ = mem.write_bytes(0x43D495, &buf, 2); // jz+29
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x7E, 0x20 };
+    _ = mem.write_bytes(0x43D49E, &buf, 2); // jle+20
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x0A };
+    _ = mem.write_bytes(0x43D4B4, &buf, 2); // jz+0A
+}
+
+// VIEWPORT
+
+// eliminate the extra undrawn pixel on bottom and right of screen
+// tradeoff - slight cutoff for stuff placed right along edge,
+//   could possibly be mitigated by adjusting quad scale on per-sprite basis
+fn PatchViewportEdges(enable: bool) void {
+    const h: u8 = if (enable) 0x90 else 0x48; // dec eax = height
+    const w: u8 = if (enable) 0x90 else 0x49; // dec ecx = width
+    _ = mem.write(0x44F610, u8, h);
+    _ = mem.write(0x44F611, u8, w);
 }
 
 // GAME CHEATS
@@ -535,13 +573,13 @@ const QuickRaceMenu = extern struct {
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
         var hang = re.Manager.entity(.Hang, 0);
-        hang.vehicle = @intCast(values.vehicle);
-        hang.track = @intCast(values.track);
-        hang.circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
-        hang.mirror = @intCast(values.mirror);
-        hang.laps = @intCast(values.laps);
-        hang.aiSpeed = @intCast(values.ai_speed + 1);
-        hang.racers = @intCast(values.racers);
+        hang.VehiclePlayer = @intCast(values.vehicle);
+        hang.Track = @intCast(values.track);
+        hang.Circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
+        hang.Mirror = @intCast(values.mirror);
+        hang.Laps = @intCast(values.laps);
+        hang.AISpeed = @intCast(values.ai_speed + 1);
+        hang.Racers = @intCast(values.racers);
         _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
         for (0..7) |i| {
             rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
@@ -557,13 +595,13 @@ const QuickRaceMenu = extern struct {
     // that introduces issues with state loop
     fn init() void {
         const hang = re.Manager.entity(.Hang, 0);
-        values.vehicle = hang.vehicle;
-        values.track = hang.track;
-        values.mirror = hang.mirror;
-        values.laps = hang.laps;
-        values.racers = hang.racers;
-        values.ai_speed = hang.aiSpeed - 1;
-        //values.ai_speed = hang.winnings;
+        values.vehicle = hang.VehiclePlayer;
+        values.track = hang.Track;
+        values.mirror = hang.Mirror;
+        values.laps = hang.Laps;
+        values.racers = hang.Racers;
+        values.ai_speed = hang.AISpeed - 1;
+        //values.ai_speed = hang.Winnings;
         for (0..7) |i| {
             values.up_lv[i] = rrd.PLAYER.*.pFile.upgrade_lv[i];
             values.up_hp[i] = rrd.PLAYER.*.pFile.upgrade_hp[i];
@@ -773,12 +811,14 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: look into using in-game default setter, see fn_45BD90
+    // TODO: change annodue setting to i32 for both, also look into anywhere
+    // else like this that might have been affected by new Hang stuff
 
     if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
-        re.Manager.entity(.Hang, 0).laps = @truncate(QolState.default_laps);
+        re.Manager.entity(.Hang, 0).Laps = @intCast(QolState.default_laps);
 
     if (QolState.default_racers >= 1 and QolState.default_racers <= 12)
-        _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
+        _ = mem.write(0x50C558, i8, @as(i8, @intCast(QolState.default_racers))); // racers
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -911,5 +951,6 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // TODO: move to core? since it only matters with running annodue
     rt.TEXT_HIRES_FLAG.* = 0;
 }

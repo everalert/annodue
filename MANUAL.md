@@ -36,11 +36,13 @@ If you normally need to run a specific `dinput.dll` to prevent the game from cra
 	- Showing milliseconds digit on all timers
 	- Configurable defaults for free-play racers and laps
 	- Skip planet cutscenes
+	- Skip podium cutscene
 	- Fast countdown timer
 	- Double mouse cursor fix
 	- Jinn Reeso and Cy Yunga cheat toggling
 	- Cy Yunga cheat audio fix
 	- Map rendering hi-res text fix
+	- Viewport edge gap fix
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer
 - Cosmetic
@@ -139,6 +141,8 @@ Configured under `[overlay]`
 - Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Fix Cy Yunga cheat audio
 - Fix map rendering hi-res text
+- Fix 1px gap on right and bottom of viewport when rendering sprites at the edge
+    - This may cause the sprite to be clipped instead, depending on your resolution settings
 - Map controller `Start` to `Esc`
 - Race restart hotkey -- `Esc + Tab` or `Back + Start`
 - Quick Race Menu
@@ -146,6 +150,7 @@ Configured under `[overlay]`
 - Show milliseconds on all timers
 - Limit framerate during races (configurable via Quick Race Menu)
 - Skip planet cutscenes
+- Skip podium cutscene
 - Custom default number of racers
 - Custom default number of laps
 - Fast countdown timer
@@ -178,10 +183,12 @@ Configured under `[qol]`
 |`fps_limiter_enable`     |`bool`|&nbsp;
 |`fps_limiter_default`    |`u32` |&nbsp;
 |`skip_planet_cutscenes`  |`bool`|&nbsp;
+|`skip_podium_cutscene`   |`bool`|&nbsp;
 |`default_racers`         |`u32` |1 to 12
 |`default_laps`           |`u32` |1 to 5
 |`fast_countdown_enable`  |`bool`|&nbsp;
 |`fast_countdown_duration`|`f32` |0.05 to 3.00
+|`fix_viewport_edges`     |`bool`|&nbsp;
 
 ### Collision Viewer
 

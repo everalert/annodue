@@ -205,6 +205,14 @@ Credit to ([tly000](https://github.com/tly000)) for plugin.
 |Open/Close Menu      |`9`       |&nbsp; |&nbsp;
 |Toggle visualization |`8`       |&nbsp; |&nbsp;
 
+##### Settings
+
+Configured under `[collisionviewer]`
+
+|Option|Type|Note|
+|:---|:---|:---|
+|`depth_bias`           |`i32` |correct misalignment between game and collision visuals
+
 ### Cosmetic
 
 - High-resolution fonts

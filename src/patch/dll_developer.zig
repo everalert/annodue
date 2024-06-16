@@ -11,6 +11,14 @@ const debug = @import("core/Debug.zig");
 
 const mem = @import("util/memory.zig");
 
+const r = @import("racer");
+const rt = r.Text;
+const re = r.Entity;
+const rej = r.Entity.Jdge;
+const ret = r.Entity.Test;
+const rm = r.Model;
+const Mat4x4 = r.Matrix.Mat4x4;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -85,6 +93,18 @@ fn DumpTextureTable(offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, 
     return count;
 }
 
+// SPLINE MARKER VIS
+
+var SplineMarkerTargets: [6]?*Mat4x4 = .{ null, null, null, null, null, null };
+var SplineMarkerParams: [6][6]u8 = .{
+    .{ 0xFF, 0x80, 0xFF, 0x00, 0x00, 0xFF }, // red
+    .{ 0xFF, 0x80, 0x00, 0xFF, 0x00, 0xFF }, // green
+    .{ 0xFF, 0x80, 0x00, 0x00, 0xFF, 0xFF }, // blue
+    .{ 0xFF, 0x80, 0xFF, 0xFF, 0x00, 0xFF }, // yellow
+    .{ 0xFF, 0x80, 0xFF, 0x00, 0xFF, 0xFF }, // magenta
+    .{ 0xFF, 0x80, 0x00, 0xFF, 0xFF, 0xFF }, // cyan
+};
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -117,4 +137,23 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-//export fn EarlyEngineUpdateAfter(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // DrawSplineMarkers runs in 1C, so we override here
+    if (!gs.in_race.on()) return;
+
+    if (gs.race_state == .PreRace and gs.race_state_new) {
+        SplineMarkerTargets[0] = &ret.PLAYER.*.EngineExhaustXfL;
+        SplineMarkerTargets[1] = &ret.PLAYER.*._unk_1490;
+        SplineMarkerTargets[2] = &ret.PLAYER.*._unk_14D0;
+        SplineMarkerTargets[3] = &ret.PLAYER.*.ScrapeSparkXf;
+        SplineMarkerTargets[4] = &ret.PLAYER.*._unk_13D0;
+        SplineMarkerTargets[5] = &ret.PLAYER.*.EngineExhaustXfR;
+    }
+
+    const jdge = re.Manager.entity(.Jdge, 0);
+    for (jdge.pSplineMarkers, SplineMarkerTargets, SplineMarkerParams) |m, t, p| {
+        if (m == null or t == null) continue;
+        rm.Node_SetTransform(m.?, t.?);
+        rm.Node_SetColorsOnAllMaterials(&m.?.Node, p[0], p[1], p[2], p[3], p[4], p[5]);
+    }
+}

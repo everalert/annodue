@@ -278,13 +278,13 @@ Configurable under `[gameplay]`
 *Disabled in current release*
 
 - Dump font data to file on launch
+- Visualize matrices via hijacking debug spline markers
 
 ##### Settings
 
 Configurable under `[developer]`
 
-*All settings in this section require game restart to apply*
-
 |Option|Type|
 |:---|:---|
-|`dump_fonts`|`bool`|
+|`dump_fonts`|`bool`|*Requires game restart to apply*
+|`visualize_matrices`|`bool`|&nbsp;

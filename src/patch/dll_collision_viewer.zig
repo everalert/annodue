@@ -14,10 +14,10 @@ const rs = @import("racer").Sound;
 // - visualize collision mesh
 // - visualize spline
 // - CONTROLS:              keyboard        xinput
-//   Open menu              9              ..
-//   Toggle visualization   8              ..
-// - SETTINGS:
-//   ..             type    note
+//   Open menu              9               ..
+//   Toggle visualization   8               ..
+// - SETTINGS:              type            note
+//   depth_bias             i32             for aligining collision models with ingame models correctly
 
 const PLUGIN_NAME: [*:0]const u8 = "PluginCollisionViewer";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -347,9 +347,9 @@ fn handle_settings(gf: *GlobalFn) callconv(.C) void {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     handle_settings(gf);
-    
+
     init_collision_viewer(&state);
-    
+
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
 }

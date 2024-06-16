@@ -104,6 +104,7 @@ git push origin ft/supremo-featrino
 ### Contributor Credit
 
 - [tly000](https://github.com/tly000)
+- [jcm93](https://github.com/jcm93)
 - [DeonPoncini](https://github.com/DeonPoncini)
 
 ## License

@@ -567,17 +567,19 @@ void modify_texture_data(RdMaterial* mat, const char* name, F&& mod)
 
     tSystemTexture* tex = mat->aTextures;
     IDirectDrawSurface4* surf = NULL;
-    if (tex->pD3DSrcTexture->QueryInterface(IID_IDirectDrawSurface4, (void**)&surf) != S_OK)
+    HRESULT err = tex->pD3DSrcTexture->QueryInterface(IID_IDirectDrawSurface4, (void**)&surf);
+    if (err != S_OK)
     {
-        debug_print("material %p %s: QueryInterface failed.", mat, name);
+        debug_print("material %p %s: QueryInterface failed: %08lx", mat, name, err);
         return;
     }
 
     DDSURFACEDESC2 desc = { 0 };
     desc.dwSize = sizeof(DDSURFACEDESC2);
-    if (surf->Lock(NULL, &desc, DDLOCK_WAIT, NULL) != S_OK)
+    err = surf->Lock(NULL, &desc, DDLOCK_WAIT, NULL);
+    if (err != S_OK)
     {
-        debug_print("material %p %s: Lock failed.", mat, name);
+        debug_print("material %p %s: Lock failed: %08lx", mat, name, err);
         return;
     }
 

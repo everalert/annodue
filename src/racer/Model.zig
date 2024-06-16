@@ -7,7 +7,7 @@ const Mat4x4 = mat.Mat4x4;
 // GAME FUNCTIONS
 
 pub const Node_SetTransform: *fn (*ModelNodeXf, *Mat4x4) callconv(.C) void = @ptrFromInt(0x431640);
-pub const Node_SetFlags: *fn (*ModelNode, i32, i32, i32, i32) callconv(.C) void = @ptrFromInt(0x431A50);
+pub const Node_SetFlags: *fn (*ModelNode, i32, i32, i8, i32) callconv(.C) void = @ptrFromInt(0x431A50);
 pub const Node_SetColorsOnAllMaterials: *fn (*ModelNode, unk2: u8, unk1: u8, R: u8, G: u8, B: u8, A: u8) callconv(.C) void = @ptrFromInt(0x42B640);
 
 // GAME CONSTANTS

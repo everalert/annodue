@@ -28,7 +28,7 @@ pub const Jdge = extern struct {
     EntityFlags: u32,
     Flags: u32,
     RaceTimer: f32,
-    pSplineMarkers: [6]?*ModelNodeXf,
+    pSplineMarkers: [6]*ModelNodeXf,
     _unk_028_63: [0x64 - 0x28]u8,
     _unkmat44_064: [16]f32, // TODO: typedef
     _unkmat44_0A4: [16]f32, // TODO: typedef

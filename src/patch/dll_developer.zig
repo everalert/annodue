@@ -107,6 +107,10 @@ const MatVisState = struct {
         .{ 0xFF, 0x80, 0xFF, 0x00, 0xFF, 0xFF }, // magenta
         .{ 0xFF, 0x80, 0x00, 0xFF, 0xFF, 0xFF }, // cyan
     };
+
+    fn doSettingsLoad(gf: *GlobalFn) void {
+        enabled = gf.SettingGetB("developer", "visualize_matrices").?;
+    }
 };
 
 // HOUSEKEEPING
@@ -124,6 +128,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    MatVisState.doSettingsLoad(gf);
+
     // TODO: make sure it only dumps once, even when hot reloading
     if (gf.SettingGetB("developer", "fonts_dump").?) {
         // This is a debug feature to dump the original font textures
@@ -142,7 +148,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 // HOOKS
 
 export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    MatVisState.enabled = gf.SettingGetB("developer", "visualize_matrices").?;
+    MatVisState.doSettingsLoad(gf);
 }
 
 export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -160,9 +166,10 @@ export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
         const jdge = re.Manager.entity(.Jdge, 0);
         for (jdge.pSplineMarkers, MatVisState.targets, MatVisState.params) |m, t, p| {
-            if (m == null or t == null) continue;
-            rm.Node_SetTransform(m.?, t.?);
-            rm.Node_SetColorsOnAllMaterials(&m.?.Node, p[0], p[1], p[2], p[3], p[4], p[5]);
+            if (@intFromPtr(m) == 0 or t == null) continue;
+            rm.Node_SetTransform(m, t.?);
+            rm.Node_SetFlags(&m.Node, 2, 3, 16, 2);
+            rm.Node_SetColorsOnAllMaterials(&m.Node, p[0], p[1], p[2], p[3], p[4], p[5]);
         }
     }
 }

@@ -9,7 +9,7 @@ pub const Mat4x4 = packed struct {
     t: [4]f32 = .{ 0, 0, 0, 1 },
 };
 
-pub const Pos3D = packed struct {
+pub const Pos3D = extern struct {
     const Self = @This();
     x: f32 = 0,
     y: f32 = 0,

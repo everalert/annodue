@@ -440,7 +440,7 @@ const race = struct {
 
     fn update_position() void {
         prev_position = this_position;
-        this_position = @as(*spatial.Pos3D, @alignCast(@ptrCast(&re.Test.PLAYER.*.transform._30))).*; // FIXME
+        this_position = @as(*spatial.Pos3D, @ptrCast(&re.Test.PLAYER.*.transform._30)).*; // FIXME
     }
 };
 

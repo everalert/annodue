@@ -11,14 +11,26 @@ const debug = @import("core/Debug.zig");
 
 const mem = @import("util/memory.zig");
 
+const r = @import("racer");
+const rt = r.Text;
+const re = r.Entity;
+const rej = r.Entity.Jdge;
+const ret = r.Entity.Test;
+const rm = r.Model;
+const mat = r.Matrix;
+const Mat4x4 = mat.Mat4x4;
+const vec = r.Vector;
+const Vec3 = vec.Vec3;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - Dump font data to file on launch
+// - Visualize 4x4 matrices via hijacking spline markers
 // - SETTINGS:
-//   * all settings require game restart to apply
-//   dump_fonts     bool
+//   dump_fonts             bool    * requires game restart to apply
+//   visualize_matrices     bool
 
 // TODO: arbitrary resource dumping?
 
@@ -85,6 +97,25 @@ fn DumpTextureTable(offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, 
     return count;
 }
 
+// MAT4X4 VISUALIZATION
+
+const MatVisState = struct {
+    var enabled: bool = false;
+    var targets: [6]?*Mat4x4 = .{ null, null, null, null, null, null };
+    var params: [6][6]u8 = .{
+        .{ 0xFF, 0x80, 0xFF, 0x00, 0x00, 0xFF }, // red
+        .{ 0xFF, 0x80, 0x00, 0xFF, 0x00, 0xFF }, // green
+        .{ 0xFF, 0x80, 0x00, 0x00, 0xFF, 0xFF }, // blue
+        .{ 0xFF, 0x80, 0xFF, 0xFF, 0x00, 0xFF }, // yellow
+        .{ 0xFF, 0x80, 0xFF, 0x00, 0xFF, 0xFF }, // magenta
+        .{ 0xFF, 0x80, 0x00, 0xFF, 0xFF, 0xFF }, // cyan
+    };
+
+    fn doSettingsLoad(gf: *GlobalFn) void {
+        enabled = gf.SettingGetB("developer", "visualize_matrices").?;
+    }
+};
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -100,6 +131,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    MatVisState.doSettingsLoad(gf);
+
     // TODO: make sure it only dumps once, even when hot reloading
     if (gf.SettingGetB("developer", "fonts_dump").?) {
         // This is a debug feature to dump the original font textures
@@ -117,4 +150,29 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-//export fn EarlyEngineUpdateAfter(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    MatVisState.doSettingsLoad(gf);
+}
+
+export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    m44vis: {
+        if (!gs.in_race.on() or !MatVisState.enabled) break :m44vis;
+
+        if (gs.race_state == .PreRace and gs.race_state_new) {
+            MatVisState.targets[0] = &ret.PLAYER.*.EngineXfR;
+            MatVisState.targets[1] = &ret.PLAYER.*.EngineXfL;
+            MatVisState.targets[2] = &ret.PLAYER.*.EngineExhaustXfR;
+            MatVisState.targets[3] = &ret.PLAYER.*.EngineExhaustXfL;
+            //MatVisState.targets[4] = &ret.PLAYER.*._unk_13D0;
+            //MatVisState.targets[5] = &ret.PLAYER.*.EngineExhaustXfR;
+        }
+
+        const jdge = re.Manager.entity(.Jdge, 0);
+        for (jdge.pSplineMarkers, MatVisState.targets, MatVisState.params) |m, t, p| {
+            if (@intFromPtr(m) == 0 or t == null) continue;
+            rm.Node_SetTransform(m, t.?);
+            rm.Node_SetFlags(&m.Node, 2, 3, 16, 2);
+            rm.Node_SetColorsOnAllMaterials(&m.Node, 0, 0, p[2], p[3], p[4], 0);
+        }
+    }
+}

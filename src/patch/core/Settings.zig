@@ -137,13 +137,14 @@ pub fn init() void {
     SettingsState.gameplay.add("death_speed_min", f32, 325);
     SettingsState.gameplay.add("death_speed_drop", f32, 140);
     SettingsState.manager.add(&SettingsState.gameplay);
-    
+
     SettingsState.collisionviewer = SettingsGroup.init(alloc, "collisionviewer");
     SettingsState.collisionviewer.add("depth_bias", i32, 10);
     SettingsState.manager.add(&SettingsState.collisionviewer);
 
     SettingsState.developer = SettingsGroup.init(alloc, "developer");
     SettingsState.developer.add("dump_fonts", bool, false); // working?
+    SettingsState.developer.add("visualize_matrices", bool, false);
     SettingsState.manager.add(&SettingsState.developer);
 
     // load settings

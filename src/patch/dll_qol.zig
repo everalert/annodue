@@ -347,7 +347,7 @@ const race = struct {
     const stat_y: i16 = 48;
     const stat_h: i16 = 12;
     const stat_col: ?u32 = 0xFFFFFFFF;
-    var this_position: spatial.Pos3D = .{};
+    var this_position: spatial.Pos3D = .{}; // TODO: convert to racer types & update with racer fns
     var prev_position: spatial.Pos3D = .{};
     var top_speed: f32 = 0;
     var total_distance: f32 = 0;
@@ -440,7 +440,7 @@ const race = struct {
 
     fn update_position() void {
         prev_position = this_position;
-        this_position = @bitCast(re.Test.PLAYER.*.transform[12..15].*); // FIXME: ???
+        this_position = @as(*spatial.Pos3D, @ptrCast(&re.Test.PLAYER.*.transform._30)).*; // FIXME
     }
 };
 

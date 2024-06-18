@@ -9,14 +9,18 @@ pub const RaceData = @import("RaceData.zig");
 pub const Entity = @import("Entity/entity.zig");
 
 pub const Time = @import("Time.zig");
-pub const Random = @import("Random.zig");
 pub const File = @import("File.zig");
+
+pub const Random = @import("Random.zig");
+pub const Vector = @import("Vector.zig");
+pub const Matrix = @import("Matrix.zig");
 
 pub const Input = @import("Input.zig");
 pub const Sound = @import("Sound.zig");
 pub const Video = @import("Video.zig");
 pub const Quad = @import("Quad.zig");
 pub const Text = @import("Text.zig");
+pub const Model = @import("Model.zig");
 
 pub const Camera = @import("Camera.zig");
 pub const Vehicle = @import("Vehicle.zig");

@@ -35,7 +35,15 @@ pub const Manager = extern struct {
 
     pub fn entitySlice(comptime E: ENTITY, i: usize) []u8 {
         const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
-        return &@as([*][@sizeOf(ENTITY.t(E))]u8, @ptrCast(manager.array))[i];
+        const st = i * manager.stride;
+        const en = st + manager.stride;
+        return @as([*]u8, @ptrCast(manager.array))[st..en];
+    }
+
+    pub fn entitySliceAll(comptime E: ENTITY) []u8 {
+        const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
+        const len = manager.count * manager.stride;
+        return @as([*]u8, @ptrCast(manager.array))[0..len];
     }
 };
 

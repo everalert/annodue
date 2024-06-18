@@ -1,5 +1,8 @@
 const std = @import("std");
+
 const e = @import("entity.zig");
+const m = @import("../Model.zig");
+const ModelNodeXf = m.ModelNodeXf;
 
 // GAME FUNCTIONS
 
@@ -25,12 +28,7 @@ pub const Jdge = extern struct {
     EntityFlags: u32,
     Flags: u32,
     RaceTimer: f32,
-    _unkptr_010: *anyopaque,
-    _unkptr_014: *anyopaque,
-    _unkptr_018: *anyopaque,
-    _unkptr_01C: *anyopaque,
-    _unkptr_020: *anyopaque,
-    _unkptr_024: *anyopaque,
+    pSplineMarkers: [6]*ModelNodeXf,
     _unk_028_63: [0x64 - 0x28]u8,
     _unkmat44_064: [16]f32, // TODO: typedef
     _unkmat44_0A4: [16]f32, // TODO: typedef

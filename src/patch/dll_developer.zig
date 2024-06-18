@@ -17,7 +17,10 @@ const re = r.Entity;
 const rej = r.Entity.Jdge;
 const ret = r.Entity.Test;
 const rm = r.Model;
-const Mat4x4 = r.Matrix.Mat4x4;
+const mat = r.Matrix;
+const Mat4x4 = mat.Mat4x4;
+const vec = r.Vector;
+const Vec3 = vec.Vec3;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -156,12 +159,12 @@ export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         if (!gs.in_race.on() or !MatVisState.enabled) break :m44vis;
 
         if (gs.race_state == .PreRace and gs.race_state_new) {
-            MatVisState.targets[0] = &ret.PLAYER.*.EngineExhaustXfL;
-            MatVisState.targets[1] = &ret.PLAYER.*._unk_1490;
-            MatVisState.targets[2] = &ret.PLAYER.*._unk_14D0;
-            MatVisState.targets[3] = &ret.PLAYER.*.ScrapeSparkXf;
-            MatVisState.targets[4] = &ret.PLAYER.*._unk_13D0;
-            MatVisState.targets[5] = &ret.PLAYER.*.EngineExhaustXfR;
+            MatVisState.targets[0] = &ret.PLAYER.*.EngineXfR;
+            MatVisState.targets[1] = &ret.PLAYER.*.EngineXfL;
+            MatVisState.targets[2] = &ret.PLAYER.*.EngineExhaustXfR;
+            MatVisState.targets[3] = &ret.PLAYER.*.EngineExhaustXfL;
+            //MatVisState.targets[4] = &ret.PLAYER.*._unk_13D0;
+            //MatVisState.targets[5] = &ret.PLAYER.*.EngineExhaustXfR;
         }
 
         const jdge = re.Manager.entity(.Jdge, 0);
@@ -169,7 +172,7 @@ export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             if (@intFromPtr(m) == 0 or t == null) continue;
             rm.Node_SetTransform(m, t.?);
             rm.Node_SetFlags(&m.Node, 2, 3, 16, 2);
-            rm.Node_SetColorsOnAllMaterials(&m.Node, p[0], p[1], p[2], p[3], p[4], p[5]);
+            rm.Node_SetColorsOnAllMaterials(&m.Node, 0, 0, p[2], p[3], p[4], 0);
         }
     }
 }

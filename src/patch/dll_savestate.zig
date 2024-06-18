@@ -98,6 +98,7 @@ const state = struct {
         .{}, // Test
         .{}, // Hang
         .{}, // cMan
+        .{}, // Smok
         .{ .data = @as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE] }, // Input
         .{ .data = @as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE] }, // Input
         .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
@@ -141,6 +142,7 @@ const state = struct {
         rec_sources[1].data = re.Test.PLAYER_SLICE.*;
         rec_sources[2].data = re.Manager.entitySlice(.Hang, 0);
         rec_sources[3].data = re.Manager.entitySlice(.cMan, 0);
+        rec_sources[4].data = re.Manager.entitySliceAll(.Smok);
         // don't need to update any other sources
         load_frame = 0;
         load_count = 0;

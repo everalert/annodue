@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core: notify on plugin reload
 - CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers
+- Savestate: Flame effects (Smok entities) added to saved state
 - InputDisplay: Now shows inputs from savestate rewind
 - QOL: Option to skip podium cutscene
 - QOL: Option to remove 1px gap at screen edge

@@ -21,8 +21,11 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const rc = @import("racer").Camera;
 const re = @import("racer").Entity;
 const rg = @import("racer").Global;
+const rm = @import("racer").Matrix;
+const rv = @import("racer").Vector;
 
 const st = @import("util/active_state.zig");
+const nt = @import("util/normalized_transform.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
@@ -80,20 +83,16 @@ const Cam7 = extern struct {
     const motion_speed_xy: f32 = 650;
     const motion_speed_z: f32 = 350;
     const fog_dist: f32 = 7500;
+
     var cam_state: CamState = .None;
     var saved_camstate_index: ?u32 = null;
-    var cam_mat4x4: [4][4]f32 = .{ // TODO: use actual Mat4x4
-        .{ 1, 0, 0, 0 },
-        .{ 0, 1, 0, 0 },
-        .{ 0, 0, 1, 0 },
-        .{ 0, 0, 0, 1 },
-    };
-    var xcam_rot: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_rot_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_rotation: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_rotation_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_motion: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_motion_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
+    var cam_mat4x4: rm.Mat4x4 = .{};
+    var xcam_rot: rv.Vec3 = .{};
+    var xcam_rot_target: rv.Vec3 = .{};
+    var xcam_rotation: rv.Vec3 = .{};
+    var xcam_rotation_target: rv.Vec3 = .{};
+    var xcam_motion: rv.Vec3 = .{};
+    var xcam_motion_target: rv.Vec3 = .{};
 
     var input_toggle_data = ButtonInputMap{ .kb = .@"0", .xi = .BACK };
     var input_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX, .kb_scale = 0.65 };
@@ -129,53 +128,57 @@ const Cam7 = extern struct {
             input_mouse_d_y = @as(f32, @floatFromInt(mouse_d.y)) / input_mouse_sens;
         }
     }
+
+    var v2 = extern struct {
+        var xf: rm.Mat4x4 = .{};
+        var rot: rv.Vec3 = .{};
+    };
 };
 
-// NOTE: stolen from Mat4x4_Rotate_430E00
-fn mat4x4_set_rotation(mat: *[4][4]f32, euler: *const Vec3) void {
-    const Xsin: f32 = m.sin(euler.x);
-    const Xcos: f32 = m.cos(euler.x);
-    const Ysin: f32 = m.sin(euler.y);
-    const Ycos: f32 = m.cos(euler.y);
-    const Zsin: f32 = m.sin(euler.z);
-    const Zcos: f32 = m.cos(euler.z);
-    mat[0][0] = Zcos * Xcos - Zsin * Xsin * Ysin;
-    mat[0][1] = Zsin * Xcos * Ysin + Zcos * Xsin;
-    mat[0][2] = -(Zsin * Ycos);
-    mat[1][0] = -(Ycos * Xsin);
-    mat[1][1] = Ycos * Xcos;
-    mat[1][2] = Ysin;
-    mat[2][0] = Zcos * Xsin * Ysin + Zsin * Xcos;
-    mat[2][1] = Zsin * Xsin - Zcos * Xcos * Ysin;
-    mat[2][2] = Zcos * Ycos;
-}
-
-fn mat4x4_get_rotation(mat: *const [4][4]f32, euler: *Vec3) void {
-    const t1: f32 = m.atan2(f32, mat[1][2], mat[2][2]); // Z
-    const c2: f32 = m.sqrt(mat[0][0] * mat[0][0] + mat[0][1] * mat[0][1]);
-    const t2: f32 = m.atan2(f32, -mat[0][2], c2); // Y
+fn mat4x4_get_rotation(mat: *const rm.Mat4x4, euler: *rv.Vec3) void {
+    const t1: f32 = m.atan2(f32, mat.Y.z, mat.Z.z); // Z
+    const c2: f32 = m.sqrt(mat.X.x * mat.X.x + mat.X.y * mat.X.y);
+    const t2: f32 = m.atan2(f32, -mat.X.z, c2); // Y
     const c1: f32 = m.cos(t1);
     const s1: f32 = m.sin(t1);
-    const t3: f32 = m.atan2(f32, s1 * mat[2][0] - c1 * mat[1][0], c1 * mat[1][1] - s1 * mat[2][1]); // X
+    const t3: f32 = m.atan2(f32, s1 * mat.Z.x - c1 * mat.Y.x, c1 * mat.Y.y - s1 * mat.Z.y); // X
     euler.x = t3;
     euler.y = t2;
     euler.z = t1;
 }
 
+inline fn vec3_damp(out: *rv.Vec3, in: *const rv.Vec3, t: f32, dt: f32) void {
+    out.x = std.math.lerp(out.x, in.x, 1 - std.math.exp(-t * dt));
+    out.y = std.math.lerp(out.y, in.y, 1 - std.math.exp(-t * dt));
+    out.z = std.math.lerp(out.z, in.z, 1 - std.math.exp(-t * dt));
+}
+
+// TODO: smooth transition, not just cutting off low values
+inline fn apply_deadzone(vec: *rv.Vec3, dz: f32) void {
+    if (rv.Vec3_Magnitude(vec) < dz) {
+        vec.x = 0;
+        vec.y = 0;
+        vec.z = 0;
+    }
+}
+
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
+
+inline fn CamTransitionOut() void {
+    _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
+    _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
+    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
+    Cam7.xcam_motion_target = .{};
+    Cam7.xcam_motion = .{};
+    Cam7.saved_camstate_index = null;
+}
 
 fn CheckAndResetSavedCam() void {
     if (Cam7.saved_camstate_index == null) return;
     if (mem.read(camstate_ref_addr, u32) == 31) return;
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 7;
-    _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
-    _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
-    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
-
-    Cam7.xcam_motion_target = comptime .{ .x = 0, .y = 0, .z = 0 };
-    Cam7.xcam_motion = comptime .{ .x = 0, .y = 0, .z = 0 };
-    Cam7.saved_camstate_index = null;
+    CamTransitionOut();
     Cam7.cam_state = .None;
 }
 
@@ -183,14 +186,7 @@ fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
         _ = mem.write(camstate_ref_addr, u32, i);
         re.Manager.entity(.cMan, 0).CamStateIndex = i;
-
-        _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
-        _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
-        _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
-
-        Cam7.xcam_motion_target = comptime .{ .x = 0, .y = 0, .z = 0 };
-        Cam7.xcam_motion = comptime .{ .x = 0, .y = 0, .z = 0 };
-        Cam7.saved_camstate_index = null;
+        CamTransitionOut();
     }
 }
 
@@ -200,7 +196,7 @@ fn SaveSavedCam() void {
 
     const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
         Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
-    @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4[0])), @as([*]f32, @ptrFromInt(mat4_addr)));
+    @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4)), @as([*]f32, @ptrFromInt(mat4_addr)));
     mat4x4_get_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
 
@@ -251,7 +247,7 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x.getf() else Cam7.input_look_x.getf();
         const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
 
-        const a_r_mag: f32 = smooth2(@min(m.sqrt(_a_rx * _a_rx + _a_ry * _a_ry), 1));
+        const a_r_mag: f32 = nt.smooth2(@min(m.sqrt(_a_rx * _a_rx + _a_ry * _a_ry), 1));
         const a_r_ang: f32 = m.atan2(f32, _a_ry, _a_rx);
         const a_rx: f32 = if (m.fabs(_a_rx) > Cam7.dz) a_r_mag * m.cos(a_r_ang) else 0;
         const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
@@ -268,7 +264,12 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         Cam7.xcam_rot.z += 0;
     }
     //Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
-    mat4x4_set_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
+    rm.Mat4x4_SetRotation(
+        @ptrCast(&Cam7.cam_mat4x4),
+        m.radiansToDegrees(f32, Cam7.xcam_rot.x),
+        m.radiansToDegrees(f32, Cam7.xcam_rot.y),
+        m.radiansToDegrees(f32, Cam7.xcam_rot.z),
+    );
 
     // motion
 
@@ -280,9 +281,9 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     // TODO: individual X, Y deadzone; rather than magnitude-based
     const a_l_mag: f32 = @min(m.sqrt(_a_lx * _a_lx + _a_ly * _a_ly), 1);
     const a_l_ang: f32 = m.atan2(f32, _a_ly, _a_lx);
-    const a_lx: f32 = smooth2(a_l_mag) * m.cos(a_l_ang + Cam7.xcam_rot.x);
-    const a_ly: f32 = smooth2(a_l_mag) * m.sin(a_l_ang + Cam7.xcam_rot.x);
-    const a_t: f32 = if (m.fabs(_a_t) > Cam7.dz) smooth2(_a_t) else 0;
+    const a_lx: f32 = nt.smooth2(a_l_mag) * m.cos(a_l_ang + Cam7.xcam_rot.x);
+    const a_ly: f32 = nt.smooth2(a_l_mag) * m.sin(a_l_ang + Cam7.xcam_rot.x);
+    const a_t: f32 = if (m.fabs(_a_t) > Cam7.dz) nt.smooth2(_a_t) else 0;
 
     Cam7.xcam_motion_target.x = if (a_l_mag > Cam7.dz) a_lx else 0;
     Cam7.xcam_motion_target.y = if (a_l_mag > Cam7.dz) a_ly else 0;
@@ -290,11 +291,11 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     //if (Cam7.xcam_motion_target.magnitude() > 1)
     //    Cam7.xcam_motion_target = Cam7.xcam_motion_target.normalize();
 
-    Cam7.xcam_motion.damp(&Cam7.xcam_motion_target, Cam7.motion_damp, gs.dt_f);
+    vec3_damp(&Cam7.xcam_motion, &Cam7.xcam_motion_target, Cam7.motion_damp, gs.dt_f);
 
-    Cam7.cam_mat4x4[3][0] += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.x;
-    Cam7.cam_mat4x4[3][1] += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.y;
-    Cam7.cam_mat4x4[3][2] += gs.dt_f * Cam7.motion_speed_z * Cam7.xcam_motion.z;
+    Cam7.cam_mat4x4.T.x += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.x;
+    Cam7.cam_mat4x4.T.y += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.y;
+    Cam7.cam_mat4x4.T.z += gs.dt_f * Cam7.motion_speed_z * Cam7.xcam_motion.z;
 
     return .FreeCam;
 }
@@ -311,70 +312,25 @@ fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
 
 const rot: f32 = m.pi * 2;
 
-// TODO: move
-fn smooth2(scalar: f32) f32 {
-    return m.fabs(scalar) * scalar;
-}
-
-// TODO: move to lib, or replace with real lib
-const Vec3 = extern struct {
-    x: f32,
-    y: f32,
-    z: f32,
-
-    inline fn magnitude(self: *const Vec3) f32 {
-        return std.math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z);
-    }
-
-    inline fn cross(self: *const Vec3, other: *const Vec3) Vec3 {
-        return .{
-            .x = self.y * other.z - self.z - other.y,
-            .y = self.z * other.x - self.x - other.z,
-            .z = self.x * other.y - self.y - other.x,
-        };
-    }
-
-    inline fn normalize(self: *const Vec3) Vec3 {
-        const mul: f32 = 1 / self.magnitude();
-        return .{
-            .x = self.x * mul,
-            .y = self.y * mul,
-            .z = self.z * mul,
-        };
-    }
-
-    inline fn apply_deadzone(self: *Vec3, dz: f32) void {
-        if (self.magnitude() < dz) {
-            self.x = 0;
-            self.y = 0;
-            self.z = 0;
-        }
-    }
-
-    inline fn damp(self: *Vec3, target: *const Vec3, t: f32, dt: f32) void {
-        self.x = std.math.lerp(self.x, target.x, 1 - std.math.exp(-t * dt));
-        self.y = std.math.lerp(self.y, target.y, 1 - std.math.exp(-t * dt));
-        self.z = std.math.lerp(self.z, target.z, 1 - std.math.exp(-t * dt));
-    }
-};
-
-const Mat4x4 = extern struct {
-    x: f32[4] = f32{ 1, 0, 0, 0 },
-    y: f32[4] = f32{ 0, 1, 0, 0 },
-    z: f32[4] = f32{ 0, 0, 1, 0 },
-    w: f32[4] = f32{ 0, 0, 0, 1 },
-};
-
-// TODO: move to vec lib, or find glm equivalent
-fn mmul(comptime n: u32, in1: *[n][n]f32, in2: *[n][n]f32, out: *[n][n]f32) void {
-    inline for (0..n) |i| {
-        inline for (0..n) |j| {
-            var v: f32 = 0;
-            inline for (0..n) |k| v += in1[i][k] * in2[k][j];
-            out[i][j] = v;
-        }
-    }
-}
+//// TODO: move to lib, or replace with real lib
+//const Vec3 = extern struct {
+//    x: f32,
+//    y: f32,
+//    z: f32,
+//
+//
+//};
+//
+//// TODO: move to vec lib, or find glm equivalent
+//fn mmul(comptime n: u32, in1: *[n][n]f32, in2: *[n][n]f32, out: *[n][n]f32) void {
+//    inline for (0..n) |i| {
+//        inline for (0..n) |j| {
+//            var v: f32 = 0;
+//            inline for (0..n) |k| v += in1[i][k] * in2[k][j];
+//            out[i][j] = v;
+//        }
+//    }
+//}
 
 // HOUSEKEEPING
 

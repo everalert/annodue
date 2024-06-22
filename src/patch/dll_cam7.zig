@@ -18,11 +18,13 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
+const rti = @import("racer").Time;
 const rc = @import("racer").Camera;
 const re = @import("racer").Entity;
 const rg = @import("racer").Global;
 const rm = @import("racer").Matrix;
 const rv = @import("racer").Vector;
+const rte = @import("racer").Text;
 
 const st = @import("util/active_state.zig");
 const nt = @import("util/normalized_transform.zig");
@@ -129,13 +131,103 @@ const Cam7 = extern struct {
         }
     }
 
-    var v2 = extern struct {
-        var xf: rm.Mat4x4 = .{};
-        var rot: rv.Vec3 = .{};
-    };
+    // FIXME: quaternion stuff
+    //var v2_xf: rm.Mat4x4 = .{};
+    //var v2_rot: rv.Vec3 = .{};
+    //var v2_quat: Quat = .{};
+    //var v2_loc: rm.Location = .{};
 };
 
-fn mat4x4_get_rotation(mat: *const rm.Mat4x4, euler: *rv.Vec3) void {
+const Quat = rv.Vec4;
+const AxisAngle = rv.Vec4;
+
+fn quat_mul(out: *Quat, in1: *const Quat, in2: *const Quat) void {
+    out.* = .{
+        .x = in1.w * in2.x + in1.x * in2.w + in1.y * in2.z - in1.z * in2.y,
+        .y = in1.w * in2.y + in1.y * in2.w + in1.z * in2.x - in1.x * in2.z,
+        .z = in1.w * in2.z + in1.z * in2.w + in1.x * in2.y - in1.y * in2.x,
+        .w = in1.w * in2.w - in1.x * in2.x - in1.y * in2.y - in1.z * in2.z,
+    };
+}
+
+// axis-angle def
+fn quat_setAA(out: *Quat, in: *const AxisAngle) void {
+    std.debug.assert(1 == rv.Vec3_Magnitude(@ptrCast(in)));
+
+    out.x = in.x * @sin(in.w);
+    out.y = in.y * @sin(in.w);
+    out.z = in.z * @sin(in.w);
+    out.w = @cos(in.w);
+}
+
+fn quat_getAA(in: *const Quat, out: *AxisAngle) void {
+    std.debug.assert(1 >= in.w);
+
+    out.w = m.acos(in.w) * 2;
+    const s: f32 = @sqrt(1 - in.w * in.w);
+    if (s < 0.001) {
+        out.x = in.x;
+        out.y = in.y;
+        out.z = in.z;
+    } else {
+        out.x = in.x / s;
+        out.y = in.y / s;
+        out.z = in.z / s;
+    }
+}
+
+fn mat4x4_getQuaternion(in: *const rm.Mat4x4, out: *Quat) void {
+    out.w = m.sqrt(1.0 + in.X.x + in.Y.y + in.Z.z) / 2;
+    const w4: f32 = 4 * out.w;
+    out.x = (in.Z.y - in.Y.z) / w4;
+    out.y = (in.X.z - in.Z.x) / w4;
+    out.z = (in.Y.x - in.X.y) / w4;
+}
+
+// adapted from rm.Mat4x4_InitQuat
+fn mat4x4_setQuaternion(out: *rm.Mat4x4, in: *const Quat) void {
+    const w_sin: f32 = @sin(in.w);
+    const w_cos: f32 = @cos(in.w);
+
+    if (in.z > 0.999) { // 0x3F7FBE77
+        out.X = .{ .x = w_cos, .y = w_sin, .z = 0.0, .w = 0.0 };
+        out.Y = .{ .x = -w_sin, .y = w_cos, .z = 0.0, .w = 0.0 };
+        out.Z = .{ .x = 0.0, .y = 0.0, .z = 1.0, .w = 0.0 };
+        return;
+    }
+
+    if (in.z < -0.999) { // 0xBF7FBE77
+        out.X = .{ .x = w_cos, .y = -w_sin, .z = 0.0, .w = 0.0 };
+        out.Y = .{ .x = w_sin, .y = w_cos, .z = 0.0, .w = 0.0 };
+        out.Z = .{ .x = 0.0, .y = 0.0, .z = 1.0, .w = 0.0 };
+        return;
+    }
+
+    const sqx = in.x * in.x;
+    const sqy = in.y * in.y;
+    const sqy_cos = sqy * w_cos;
+    const sqx_cos = sqx * w_cos;
+    const sqxy_inv = 1.0 - sqx - sqy;
+    const sqxy = 1.0 - sqxy_inv;
+    const w_cos_inv = 1.0 - w_cos;
+
+    out.X.x = (sqx_cos * sqxy_inv + sqy_cos) / sqxy + sqx;
+    out.Y.y = (sqy_cos * sqxy_inv + sqx_cos) / sqxy + sqy;
+    out.Z.z = sqx_cos + sqy_cos + sqxy_inv;
+    out.X.y = in.y * in.x * w_cos_inv + w_sin * in.z;
+    out.Y.x = in.y * in.x * w_cos_inv - w_sin * in.z;
+    out.X.z = in.z * in.x * w_cos_inv - w_sin * in.y;
+    out.Z.x = in.z * in.x * w_cos_inv + w_sin * in.y;
+    out.Y.z = in.z * in.y * w_cos_inv + w_sin * in.x;
+    out.Z.y = in.z * in.y * w_cos_inv - w_sin * in.x;
+
+    out.X.w = 0.0;
+    out.Y.w = 0.0;
+    out.Z.w = 0.0;
+}
+
+// TODO: rename getEuler
+fn mat4x4_getEuler(mat: *const rm.Mat4x4, euler: *rv.Vec3) void {
     const t1: f32 = m.atan2(f32, mat.Y.z, mat.Z.z); // Z
     const c2: f32 = m.sqrt(mat.X.x * mat.X.x + mat.X.y * mat.X.y);
     const t2: f32 = m.atan2(f32, -mat.X.z, c2); // Y
@@ -197,8 +289,11 @@ fn SaveSavedCam() void {
     const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
         Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
     @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4)), @as([*]f32, @ptrFromInt(mat4_addr)));
-    mat4x4_get_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
+    mat4x4_getEuler(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
+    // FIXME: new, quaternion stuff
+    //mat4x4_getQuaternion(@ptrFromInt(mat4_addr), &Cam7.v2_quat);
+    //rm.Mat4x4_GetLocation(@ptrFromInt(mat4_addr), &Cam7.v2_loc);
 
     _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
     var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, normal case
@@ -352,6 +447,8 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
+    // FIXME: quaternion stuff
+    //rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.v2_xf), 0);
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {

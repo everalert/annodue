@@ -6,13 +6,15 @@ const Vec4 = vec.Vec4;
 
 // GAME FUNCTIONS
 
+// NOTE: 'quaternion' functions actually take axis-angle input, then do AA->quat->mat4 conversion
+
 pub const Mat4x4_Mul: *fn (out: *Mat4x4, in1: *Mat4x4, in2: *Mat4x4) callconv(.C) void =
     @ptrFromInt(0x42FB70);
 pub const Mat4x4_MulSelf: *fn (in_out: *Mat4x4, in2: *Mat4x4) callconv(.C) void =
     @ptrFromInt(0x42FF80);
 
 pub const Mat4x4_GetLocation: *fn (in: *Mat4x4, out: *Location) callconv(.C) void =
-    @ptrFromInt(0x431060);
+    @ptrFromInt(0x430B80);
 pub const Mat4x4_SetRotation: *fn (out: *Mat4x4, x: f32, y: f32, z: f32) callconv(.C) void =
     @ptrFromInt(0x430E00);
 
@@ -62,8 +64,8 @@ pub const Mat4x3 = extern struct {
 
 // TODO: relocate once things get more ironed out
 pub const Location = extern struct {
-    Translation: Vec3 = .{},
-    Rotation: Vec3 = .{},
+    T: Vec3 = .{}, // translation
+    R: Vec3 = .{}, // rotation
 };
 
 // ...

@@ -28,6 +28,6 @@ pub inline fn fadeIn2(n: f32) f32 {
 }
 
 pub fn smooth2(n: f32) f32 {
-    std.debug.assert(n >= 0 and n <= 1);
+    std.debug.assert(n >= -1 and n <= 1);
     return std.math.fabs(n) * n;
 }

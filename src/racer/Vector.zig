@@ -12,7 +12,7 @@ pub const Vec2_Scaled: *fn (out: *Vec2, sc1: f32, in1: *Vec2) callconv(.C) void 
     @ptrFromInt(0x42F700);
 pub const Vec2_AddScaled: *fn (out: *Vec2, in1: *Vec2, sc2: f32, in2: *Vec2) callconv(.C) void =
     @ptrFromInt(0x42F720);
-pub const Vec2_Magnitude: *fn (in: *Vec2) callconv(.C) f32 =
+pub const Vec2_Magnitude: *fn (in: *const Vec2) callconv(.C) f32 =
     @ptrFromInt(0x42F750);
 pub const Vec2_Normalize: *fn (out: *Vec2) callconv(.C) void =
     @ptrFromInt(0x42F780);
@@ -23,7 +23,7 @@ pub const Vec3_Eql: *fn (in1: *Vec3, in2: *Vec3) callconv(.C) bool =
     @ptrFromInt(0x42F7F0);
 pub const Vec3_Dot: *fn (in1: *Vec3, in2: *Vec3) callconv(.C) f32 =
     @ptrFromInt(0x42F890);
-pub const Vec3_Magnitude: *fn (in: *Vec3) callconv(.C) f32 =
+pub const Vec3_Magnitude: *fn (in: *const Vec3) callconv(.C) f32 =
     @ptrFromInt(0x42F8C0);
 pub const Vec3_DistanceSquared: *fn (in: *Vec3) callconv(.C) f32 =
     @ptrFromInt(0x42F910);

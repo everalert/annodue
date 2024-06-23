@@ -78,7 +78,10 @@ const Cam7 = extern struct {
     var flip_look_x: bool = false;
     var flip_look_y: bool = false;
 
-    const dz: f32 = 0.05;
+    const dz_i: f32 = 0.05;
+    const dz_o: f32 = 0.95;
+    const dz_range: f32 = dz_o - dz_i;
+    const dz_fact: f32 = 1 / dz_range;
     const rotation_damp: f32 = 48;
     const rotation_speed: f32 = 360;
     const motion_damp: f32 = 8;
@@ -245,13 +248,28 @@ inline fn vec3_damp(out: *rv.Vec3, in: *const rv.Vec3, t: f32, dt: f32) void {
     out.z = std.math.lerp(out.z, in.z, 1 - std.math.exp(-t * dt));
 }
 
-// TODO: smooth transition, not just cutting off low values
-inline fn apply_deadzone(vec: *rv.Vec3, dz: f32) void {
-    if (rv.Vec3_Magnitude(vec) < dz) {
-        vec.x = 0;
-        vec.y = 0;
-        vec.z = 0;
+inline fn f32_applyDeadzone(out: *f32) void {
+    const mag: f32 = @fabs(out.*);
+
+    if (mag < Cam7.dz_i) {
+        out.* = 0;
+        return;
     }
+
+    const scale: f32 = if (mag > Cam7.dz_o) Cam7.dz_range / mag else (mag - Cam7.dz_i) / mag;
+    out.* *= scale;
+}
+
+inline fn vec2_applyDeadzone(out: *rv.Vec2) void {
+    const mag: f32 = rv.Vec2_Mag(out);
+
+    if (mag < Cam7.dz_i) {
+        out.* = .{ .x = 0, .y = 0 };
+        return;
+    }
+
+    const scale: f32 = if (mag > Cam7.dz_o) Cam7.dz_range / mag else (mag - Cam7.dz_i) / mag;
+    rv.Vec2_Scale(out, scale, out);
 }
 
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
@@ -331,33 +349,22 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
 
     // rotation
 
+    var rot_scale: f32 = undefined;
     if (Cam7.input_mouse_d_x != 0 or Cam7.input_mouse_d_y != 0) {
-        const _a_rx: f32 = if (Cam7.flip_look_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
-        const _a_ry: f32 = if (Cam7.flip_look_y) Cam7.input_mouse_d_y else -Cam7.input_mouse_d_y;
-
-        Cam7.xcam_rot.x += _a_rx * rot;
-        Cam7.xcam_rot.y += _a_ry * rot;
-        Cam7.xcam_rot.z += 0;
+        Cam7.xcam_rotation.x = if (Cam7.flip_look_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
+        Cam7.xcam_rotation.y = if (Cam7.flip_look_y) Cam7.input_mouse_d_y else -Cam7.input_mouse_d_y;
+        rot_scale = rot;
     } else {
-        const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x.getf() else Cam7.input_look_x.getf();
-        const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
-
-        const a_r_mag: f32 = nt.smooth2(@min(m.sqrt(_a_rx * _a_rx + _a_ry * _a_ry), 1));
-        const a_r_ang: f32 = m.atan2(f32, _a_ry, _a_rx);
-        const a_rx: f32 = if (m.fabs(_a_rx) > Cam7.dz) a_r_mag * m.cos(a_r_ang) else 0;
-        const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
-
-        Cam7.xcam_rotation.x = -a_rx;
-        Cam7.xcam_rotation.y = a_ry;
-        Cam7.xcam_rotation.z = 0;
-        //if (Cam7.xcam_rotation.magnitude() > 1)
-        //    Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
-        //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
-
-        Cam7.xcam_rot.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
-        Cam7.xcam_rot.y += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.y;
-        Cam7.xcam_rot.z += 0;
+        Cam7.xcam_rotation.x = if (Cam7.flip_look_x) Cam7.input_look_x.getf() else -Cam7.input_look_x.getf();
+        Cam7.xcam_rotation.y = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
+        vec2_applyDeadzone(@ptrCast(&Cam7.xcam_rotation));
+        const r_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_rotation)));
+        rv.Vec2_Scale(@ptrCast(&Cam7.xcam_rotation), r_scale, @ptrCast(&Cam7.xcam_rotation));
+        rot_scale = gs.dt_f * Cam7.rotation_speed / 360 * rot;
     }
+    Cam7.xcam_rotation.z = 0;
+    rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation);
+
     //Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
     rm.Mat4x4_SetRotation(
         @ptrCast(&Cam7.cam_mat4x4),
@@ -368,23 +375,17 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
 
     // motion
 
-    // TODO: normalize XY only
-    const _a_lx: f32 = Cam7.input_move_x.getf();
-    const _a_ly: f32 = Cam7.input_move_y.getf();
-    const _a_t: f32 = Cam7.input_move_z.getf();
+    Cam7.xcam_motion_target.x = Cam7.input_move_x.getf();
+    Cam7.xcam_motion_target.y = Cam7.input_move_y.getf();
+    vec2_applyDeadzone(@ptrCast(&Cam7.xcam_motion_target));
+    const l_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_motion_target)));
+    const l_ang: f32 = m.atan2(f32, Cam7.xcam_motion_target.y, Cam7.xcam_motion_target.x) + Cam7.xcam_rot.x;
+    Cam7.xcam_motion_target.x = l_scale * m.cos(l_ang);
+    Cam7.xcam_motion_target.y = l_scale * m.sin(l_ang);
 
-    // TODO: individual X, Y deadzone; rather than magnitude-based
-    const a_l_mag: f32 = @min(m.sqrt(_a_lx * _a_lx + _a_ly * _a_ly), 1);
-    const a_l_ang: f32 = m.atan2(f32, _a_ly, _a_lx);
-    const a_lx: f32 = nt.smooth2(a_l_mag) * m.cos(a_l_ang + Cam7.xcam_rot.x);
-    const a_ly: f32 = nt.smooth2(a_l_mag) * m.sin(a_l_ang + Cam7.xcam_rot.x);
-    const a_t: f32 = if (m.fabs(_a_t) > Cam7.dz) nt.smooth2(_a_t) else 0;
-
-    Cam7.xcam_motion_target.x = if (a_l_mag > Cam7.dz) a_lx else 0;
-    Cam7.xcam_motion_target.y = if (a_l_mag > Cam7.dz) a_ly else 0;
-    Cam7.xcam_motion_target.z = a_t;
-    //if (Cam7.xcam_motion_target.magnitude() > 1)
-    //    Cam7.xcam_motion_target = Cam7.xcam_motion_target.normalize();
+    Cam7.xcam_motion_target.z = Cam7.input_move_z.getf();
+    f32_applyDeadzone(&Cam7.xcam_motion_target.z);
+    Cam7.xcam_motion_target.z = nt.smooth2(Cam7.xcam_motion_target.z);
 
     vec3_damp(&Cam7.xcam_motion, &Cam7.xcam_motion_target, Cam7.motion_damp, gs.dt_f);
 

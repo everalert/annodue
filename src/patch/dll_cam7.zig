@@ -99,16 +99,20 @@ const Cam7 = extern struct {
     const rot_damp_val = [_]?f32{ null, 36, 24, 12 };
     var rot_damp: ?f32 = null;
     var rot_damp_i: usize = 0;
-    const rot_speed: f32 = 360;
+    const rot_speed_val = [_]f32{ 160, 240, 360, 540, 810 };
+    const rot_change_damp: f32 = 8;
+    var rot_speed: f32 = 360;
+    var rot_speed_target: f32 = 360;
+    var rot_speed_i: usize = 2;
     const motion_damp: f32 = 8;
     const motion_change_damp: f32 = 8;
-    var motion_speed_i: usize = 3;
+    var motion_speed_i: usize = 2;
     const motion_speed_xy_val = [_]f32{ 250, 500, 1000, 2000, 4000, 8000, 16000 };
-    var motion_speed_xy: f32 = 2000;
-    var motion_speed_xy_target: f32 = 2000;
+    var motion_speed_xy: f32 = 1000;
+    var motion_speed_xy_target: f32 = 1000;
     const motion_speed_z_val = [_]f32{ 125, 250, 500, 1000, 2000, 4000, 8000 };
-    var motion_speed_z: f32 = 1000;
-    var motion_speed_z_target: f32 = 1000;
+    var motion_speed_z: f32 = 500;
+    var motion_speed_z_target: f32 = 500;
     const fog_dist: f32 = 7500;
 
     var cam_state: CamState = .None;
@@ -406,13 +410,18 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     Cam7.motion_speed_xy = f32_damp(Cam7.motion_speed_xy, Cam7.motion_speed_xy_target, Cam7.motion_change_damp, gs.dt_f);
     Cam7.motion_speed_z = f32_damp(Cam7.motion_speed_z, Cam7.motion_speed_z_target, Cam7.motion_change_damp, gs.dt_f);
 
+    const rot_dec: bool = Cam7.input_rotation_dec.gets() == .JustOn;
+    const rot_inc: bool = Cam7.input_rotation_inc.gets() == .JustOn;
     if (Cam7.input_damp.gets().on()) {
-        if (Cam7.input_rotation_dec.gets() == .JustOn and Cam7.rot_damp_i > 0)
-            Cam7.rot_damp_i -= 1;
-        if (Cam7.input_rotation_inc.gets() == .JustOn and Cam7.rot_damp_i < 3)
-            Cam7.rot_damp_i += 1;
+        if (rot_dec and Cam7.rot_damp_i > 0) Cam7.rot_damp_i -= 1;
+        if (rot_inc and Cam7.rot_damp_i < 3) Cam7.rot_damp_i += 1;
         Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
+    } else {
+        if (rot_dec and Cam7.rot_speed_i > 0) Cam7.rot_speed_i -= 1;
+        if (rot_inc and Cam7.rot_speed_i < 4) Cam7.rot_speed_i += 1;
+        Cam7.rot_speed_target = Cam7.rot_speed_val[Cam7.rot_speed_i];
     }
+    Cam7.rot_speed = f32_damp(Cam7.rot_speed, Cam7.rot_speed_target, Cam7.rot_change_damp, gs.dt_f);
 
     // rotation
 
@@ -436,6 +445,7 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         vec3_damp(&Cam7.xcam_rotation_target, &Cam7.xcam_rotation, Cam7.rot_damp.?, gs.dt_f);
         rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation_target);
     } else {
+        rv.Vec3_Copy(&Cam7.xcam_rotation_target, &Cam7.xcam_rotation);
         rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation);
     }
 

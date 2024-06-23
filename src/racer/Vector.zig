@@ -19,6 +19,8 @@ pub const Vec2_Norm: *fn (out: *Vec2) callconv(.C) void =
 
 pub const Vec3_Set: *fn (out: *Vec3, x: f32, y: f32, z: f32) callconv(.C) void =
     @ptrFromInt(0x42F7B0);
+pub const Vec3_Copy: *fn (out: *Vec3, in: *const Vec3) callconv(.C) void =
+    @ptrFromInt(0x42F7D0);
 pub const Vec3_Eql: *fn (in1: *Vec3, in2: *Vec3) callconv(.C) bool =
     @ptrFromInt(0x42F7F0);
 pub const Vec3_Dot: *fn (in1: *Vec3, in2: *Vec3) callconv(.C) f32 =

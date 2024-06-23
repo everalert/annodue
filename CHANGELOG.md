@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Cam7: analog deadzone customization
+- Cam7: analog deadzone customization via settings
 - Cam7: changing movement speed with `Q or LB` and `E or RB`
 - Cam7: changing rotation speed with `Z or LSB` and `C or RSB`
 - Cam7: changing damping instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons

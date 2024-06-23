@@ -56,15 +56,18 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 
 ##### Controls
 
-|Action|Keyboard|XInput|
-|:---|:---|:---|
-|Toggle     |`0`                 |`Back`
-|XY-move    |`W A S D`           |`L Stick`
-|XY-rotate  |`Mouse` or `↑ ↓ ← →`|`R Stick`
-|Z-move up  |`Space`             |`L Trigger`
-|Z-move down|`Shift`             |`R Trigger`
-|speed up   |`E`                 |`RB`
-|speed down |`Q`                 |`LB`
+|Action|Keyboard|XInput|Note|
+|:---|:---|:---|:---|
+|Toggle        |`0`                 |`Back`     |&nbsp;
+|XY-move       |`W A S D`           |`L Stick`  |&nbsp;
+|XY-rotate     |`Mouse` or `↑ ↓ ← →`|`R Stick`  |&nbsp;
+|Z-move up     |`Space`             |`L Trigger`|&nbsp;
+|Z-move down   |`Shift`             |`R Trigger`|&nbsp;
+|movement up   |`E`                 |`RB`       |&nbsp;
+|movement down |`Q`                 |`LB`       |&nbsp;
+|rotation up   |`Z`                 |`RSB`      |&nbsp;
+|rotation down |`C`                 |`LSB`      |&nbsp;
+|damping       |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
 
 ##### Settings
 

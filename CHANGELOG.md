@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Cam7: analog deadzone customization
 - Cam7: changing movement speed with `Q or LB` and `E or RB`
+- Cam7: changing rotation speed with `Z or LSB` and `C or RSB`
+- Cam7: changing damping instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons
 - Core: notify on plugin reload
 - CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers

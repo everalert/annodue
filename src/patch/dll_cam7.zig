@@ -45,8 +45,12 @@ pub const panic = debug.annodue_panic;
 //   XY-rotate      Mouse or ↑↓→←   R Stick
 //   Z-move up      Space           L Trigger
 //   Z-move down    Shift           R Trigger
-//   speed down     Q               LB
-//   speed up       E               RB
+//   movement down  Q               LB
+//   movement up    E               RB
+//   rotation down  Z               LSB
+//   rotation up    C               RSB
+//   damping        X               Y               hold to edit movement/rotation
+//                                                  damping instead of speed
 // - SETTINGS:
 //   enable                 bool
 //   flip_look_x            bool
@@ -92,11 +96,13 @@ const Cam7 = extern struct {
     var input_mouse_cm360: f32 = 24; // real-world space per full rotation
     var input_mouse_sens: f32 = 15118.1; // derived; mouse units per full rotation
 
-    const rotation_damp: f32 = 48;
-    const rotation_speed: f32 = 360;
+    const rot_damp_val = [_]?f32{ null, 36, 24, 12 };
+    var rot_damp: ?f32 = null;
+    var rot_damp_i: usize = 0;
+    const rot_speed: f32 = 360;
     const motion_damp: f32 = 8;
     const motion_change_damp: f32 = 8;
-    var motion_speed_i: u32 = 3;
+    var motion_speed_i: usize = 3;
     const motion_speed_xy_val = [_]f32{ 250, 500, 1000, 2000, 4000, 8000, 16000 };
     var motion_speed_xy: f32 = 2000;
     var motion_speed_xy_target: f32 = 2000;
@@ -123,6 +129,9 @@ const Cam7 = extern struct {
     var input_move_z_data = AxisInputMap{ .kb_dec = .SHIFT, .kb_inc = .SPACE, .xi_dec = .TriggerR, .xi_inc = .TriggerL };
     var input_speed_dec_data = ButtonInputMap{ .kb = .Q, .xi = .LEFT_SHOULDER };
     var input_speed_inc_data = ButtonInputMap{ .kb = .E, .xi = .RIGHT_SHOULDER };
+    var input_rotation_dec_data = ButtonInputMap{ .kb = .Z, .xi = .LEFT_THUMB };
+    var input_rotation_inc_data = ButtonInputMap{ .kb = .C, .xi = .RIGHT_THUMB };
+    var input_damp_data = ButtonInputMap{ .kb = .X, .xi = .Y };
     var input_toggle = input_toggle_data.inputMap();
     var input_look_x = input_look_x_data.inputMap();
     var input_look_y = input_look_y_data.inputMap();
@@ -131,6 +140,9 @@ const Cam7 = extern struct {
     var input_move_z = input_move_z_data.inputMap();
     var input_speed_dec = input_speed_dec_data.inputMap();
     var input_speed_inc = input_speed_inc_data.inputMap();
+    var input_rotation_dec = input_rotation_dec_data.inputMap();
+    var input_rotation_inc = input_rotation_inc_data.inputMap();
+    var input_damp = input_damp_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -144,6 +156,9 @@ const Cam7 = extern struct {
         input_move_z.update(gf);
         input_speed_dec.update(gf);
         input_speed_inc.update(gf);
+        input_rotation_dec.update(gf);
+        input_rotation_inc.update(gf);
+        input_damp.update(gf);
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
@@ -391,10 +406,19 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     Cam7.motion_speed_xy = f32_damp(Cam7.motion_speed_xy, Cam7.motion_speed_xy_target, Cam7.motion_change_damp, gs.dt_f);
     Cam7.motion_speed_z = f32_damp(Cam7.motion_speed_z, Cam7.motion_speed_z_target, Cam7.motion_change_damp, gs.dt_f);
 
+    if (Cam7.input_damp.gets().on()) {
+        if (Cam7.input_rotation_dec.gets() == .JustOn and Cam7.rot_damp_i > 0)
+            Cam7.rot_damp_i -= 1;
+        if (Cam7.input_rotation_inc.gets() == .JustOn and Cam7.rot_damp_i < 3)
+            Cam7.rot_damp_i += 1;
+        Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
+    }
+
     // rotation
 
     var rot_scale: f32 = undefined;
-    if (Cam7.input_mouse_d_x != 0 or Cam7.input_mouse_d_y != 0) {
+    const using_mouse: bool = Cam7.input_mouse_d_x != 0 or Cam7.input_mouse_d_y != 0;
+    if (using_mouse) {
         Cam7.xcam_rotation.x = if (Cam7.flip_look_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
         Cam7.xcam_rotation.y = if (Cam7.flip_look_y) Cam7.input_mouse_d_y else -Cam7.input_mouse_d_y;
         rot_scale = rot;
@@ -404,12 +428,17 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         vec2_applyDeadzone(@ptrCast(&Cam7.xcam_rotation));
         const r_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_rotation)));
         rv.Vec2_Scale(@ptrCast(&Cam7.xcam_rotation), r_scale, @ptrCast(&Cam7.xcam_rotation));
-        rot_scale = gs.dt_f * Cam7.rotation_speed / 360 * rot;
+        rot_scale = gs.dt_f * Cam7.rot_speed / 360 * rot;
     }
     Cam7.xcam_rotation.z = 0;
-    rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation);
 
-    //Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
+    if (!using_mouse and Cam7.rot_damp != null) {
+        vec3_damp(&Cam7.xcam_rotation_target, &Cam7.xcam_rotation, Cam7.rot_damp.?, gs.dt_f);
+        rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation_target);
+    } else {
+        rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation);
+    }
+
     rm.Mat4x4_SetRotation(
         @ptrCast(&Cam7.cam_mat4x4),
         m.radiansToDegrees(f32, Cam7.xcam_rot.x),

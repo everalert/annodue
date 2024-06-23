@@ -85,8 +85,10 @@ const Cam7 = extern struct {
     const rotation_damp: f32 = 48;
     const rotation_speed: f32 = 360;
     const motion_damp: f32 = 8;
-    const motion_speed_xy: f32 = 650;
-    const motion_speed_z: f32 = 350;
+    const motion_speed_xy: f32 = 2600;
+    //const motion_speed_xy: f32 = 650;
+    const motion_speed_z: f32 = 1400;
+    //const motion_speed_z: f32 = 350;
     const fog_dist: f32 = 7500;
 
     var cam_state: CamState = .None;
@@ -378,14 +380,14 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     Cam7.xcam_motion_target.x = Cam7.input_move_x.getf();
     Cam7.xcam_motion_target.y = Cam7.input_move_y.getf();
     vec2_applyDeadzone(@ptrCast(&Cam7.xcam_motion_target));
-    const l_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_motion_target)));
+    const l_scale: f32 = nt.pow4(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_motion_target)));
     const l_ang: f32 = m.atan2(f32, Cam7.xcam_motion_target.y, Cam7.xcam_motion_target.x) + Cam7.xcam_rot.x;
     Cam7.xcam_motion_target.x = l_scale * m.cos(l_ang);
     Cam7.xcam_motion_target.y = l_scale * m.sin(l_ang);
 
     Cam7.xcam_motion_target.z = Cam7.input_move_z.getf();
     f32_applyDeadzone(&Cam7.xcam_motion_target.z);
-    Cam7.xcam_motion_target.z = nt.smooth2(Cam7.xcam_motion_target.z);
+    Cam7.xcam_motion_target.z = nt.smooth4(Cam7.xcam_motion_target.z);
 
     vec3_damp(&Cam7.xcam_motion, &Cam7.xcam_motion_target, Cam7.motion_damp, gs.dt_f);
 

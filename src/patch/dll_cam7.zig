@@ -45,6 +45,8 @@ pub const panic = debug.annodue_panic;
 //   XY-rotate      Mouse or ↑↓→←   R Stick
 //   Z-move up      Space           L Trigger
 //   Z-move down    Shift           R Trigger
+//   speed down     Q               LB
+//   speed up       E               RB
 // - SETTINGS:
 //   enable                 bool
 //   flip_look_x            bool
@@ -93,10 +95,14 @@ const Cam7 = extern struct {
     const rotation_damp: f32 = 48;
     const rotation_speed: f32 = 360;
     const motion_damp: f32 = 8;
-    const motion_speed_xy: f32 = 2600;
-    //const motion_speed_xy: f32 = 650;
-    const motion_speed_z: f32 = 1400;
-    //const motion_speed_z: f32 = 350;
+    const motion_change_damp: f32 = 8;
+    var motion_speed_i: u32 = 3;
+    const motion_speed_xy_val = [_]f32{ 250, 500, 1000, 2000, 4000, 8000, 16000 };
+    var motion_speed_xy: f32 = 2000;
+    var motion_speed_xy_target: f32 = 2000;
+    const motion_speed_z_val = [_]f32{ 125, 250, 500, 1000, 2000, 4000, 8000 };
+    var motion_speed_z: f32 = 1000;
+    var motion_speed_z_target: f32 = 1000;
     const fog_dist: f32 = 7500;
 
     var cam_state: CamState = .None;
@@ -115,12 +121,16 @@ const Cam7 = extern struct {
     var input_move_x_data = AxisInputMap{ .kb_dec = .A, .kb_inc = .D, .xi_inc = .StickLX };
     var input_move_y_data = AxisInputMap{ .kb_dec = .S, .kb_inc = .W, .xi_inc = .StickLY };
     var input_move_z_data = AxisInputMap{ .kb_dec = .SHIFT, .kb_inc = .SPACE, .xi_dec = .TriggerR, .xi_inc = .TriggerL };
+    var input_speed_dec_data = ButtonInputMap{ .kb = .Q, .xi = .LEFT_SHOULDER };
+    var input_speed_inc_data = ButtonInputMap{ .kb = .E, .xi = .RIGHT_SHOULDER };
     var input_toggle = input_toggle_data.inputMap();
     var input_look_x = input_look_x_data.inputMap();
     var input_look_y = input_look_y_data.inputMap();
     var input_move_x = input_move_x_data.inputMap();
     var input_move_y = input_move_y_data.inputMap();
     var input_move_z = input_move_z_data.inputMap();
+    var input_speed_dec = input_speed_dec_data.inputMap();
+    var input_speed_inc = input_speed_inc_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -132,6 +142,8 @@ const Cam7 = extern struct {
         input_move_x.update(gf);
         input_move_y.update(gf);
         input_move_z.update(gf);
+        input_speed_dec.update(gf);
+        input_speed_inc.update(gf);
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
@@ -236,7 +248,6 @@ fn mat4x4_setQuaternion(out: *rm.Mat4x4, in: *const Quat) void {
     out.Z.w = 0.0;
 }
 
-// TODO: rename getEuler
 fn mat4x4_getEuler(mat: *const rm.Mat4x4, euler: *rv.Vec3) void {
     const t1: f32 = m.atan2(f32, mat.Y.z, mat.Z.z); // Z
     const c2: f32 = m.sqrt(mat.X.x * mat.X.x + mat.X.y * mat.X.y);
@@ -249,10 +260,15 @@ fn mat4x4_getEuler(mat: *const rm.Mat4x4, euler: *rv.Vec3) void {
     euler.z = t1;
 }
 
+inline fn f32_damp(from: f32, to: f32, t: f32, dt: f32) f32 {
+    if (m.fabs(to - from) < m.floatEps(f32)) return to;
+    return std.math.lerp(from, to, 1 - std.math.exp(-t * dt));
+}
+
 inline fn vec3_damp(out: *rv.Vec3, in: *const rv.Vec3, t: f32, dt: f32) void {
-    out.x = std.math.lerp(out.x, in.x, 1 - std.math.exp(-t * dt));
-    out.y = std.math.lerp(out.y, in.y, 1 - std.math.exp(-t * dt));
-    out.z = std.math.lerp(out.z, in.z, 1 - std.math.exp(-t * dt));
+    out.x = f32_damp(out.x, in.x, t, dt);
+    out.y = f32_damp(out.y, in.y, t, dt);
+    out.z = f32_damp(out.z, in.z, t, dt);
 }
 
 // TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
@@ -268,6 +284,7 @@ inline fn f32_applyDeadzone(out: *f32) void {
     out.* *= scale;
 }
 
+// TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
 inline fn vec2_applyDeadzone(out: *rv.Vec2) void {
     const mag: f32 = rv.Vec2_Mag(out);
 
@@ -362,6 +379,17 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         RestoreSavedCam();
         return .None;
     }
+
+    // input
+
+    if (Cam7.input_speed_dec.gets() == .JustOn and Cam7.motion_speed_i > 0)
+        Cam7.motion_speed_i -= 1;
+    if (Cam7.input_speed_inc.gets() == .JustOn and Cam7.motion_speed_i < 6)
+        Cam7.motion_speed_i += 1;
+    Cam7.motion_speed_xy_target = Cam7.motion_speed_xy_val[Cam7.motion_speed_i];
+    Cam7.motion_speed_z_target = Cam7.motion_speed_z_val[Cam7.motion_speed_i];
+    Cam7.motion_speed_xy = f32_damp(Cam7.motion_speed_xy, Cam7.motion_speed_xy_target, Cam7.motion_change_damp, gs.dt_f);
+    Cam7.motion_speed_z = f32_damp(Cam7.motion_speed_z, Cam7.motion_speed_z_target, Cam7.motion_change_damp, gs.dt_f);
 
     // rotation
 

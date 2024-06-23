@@ -63,6 +63,8 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 |XY-rotate  |`Mouse` or `↑ ↓ ← →`|`R Stick`
 |Z-move up  |`Space`             |`L Trigger`
 |Z-move down|`Shift`             |`R Trigger`
+|speed up   |`E`                 |`RB`
+|speed down |`Q`                 |`LB`
 
 ##### Settings
 

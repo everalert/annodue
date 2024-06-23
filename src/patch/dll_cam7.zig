@@ -46,12 +46,16 @@ pub const panic = debug.annodue_panic;
 //   Z-move up      Space           L Trigger
 //   Z-move down    Shift           R Trigger
 // - SETTINGS:
-//   enable         bool
-//   flip_look_x    bool
-//   flip_look_y    bool
-//   mouse_dpi      u32     reference for mouse sensitivity calculations; does not change mouse
-//   mouse_cm360    f32     physical centimeters of motion for one 360° rotation
-//                          if you don't know what that means, just treat this value as a sensitivity scale
+//   enable                 bool
+//   flip_look_x            bool
+//   flip_look_y            bool
+//   stick_deadzone_inner   f32     0.0..0.5
+//   stick_deadzone_outer   f32     0.5..1.0
+//   mouse_dpi              u32     reference for mouse sensitivity calculations;
+//                                  does not change mouse
+//   mouse_cm360            f32     physical centimeters of motion for one 360° rotation
+//                                  if you don't know what that means, just treat
+//                                  this value as a sensitivity scale
 
 // FIXME: cam seems to not always correct itself upright when switching?
 // TODO: controls = ???

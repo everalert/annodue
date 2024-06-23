@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cam7: analog deadzone customization
 - Core: notify on plugin reload
 - CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers
@@ -17,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - InputDisplay: Now shows inputs from savestate rewind
 - QOL: Option to skip podium cutscene
 - QOL: Option to remove 1px gap at screen edge
+- Setting: 'cam7' -> 'stick_deadzone_inner'
+- Setting: 'cam7' -> 'stick_deadzone_outer'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): `appinfo` module for externally-facing defs
@@ -26,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Cam7: max lateral movement speed - `650` -> `2600`
+- Cam7: max vertical movement speed - `350` -> `1400`
+- Cam7: analog movement speed curve - `quadratic` -> `quartic` 
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
 

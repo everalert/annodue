@@ -74,14 +74,18 @@ const CamState = enum(u32) {
 };
 
 const Cam7 = extern struct {
+    // ini settings
     var enable: bool = false;
     var flip_look_x: bool = false;
     var flip_look_y: bool = false;
+    var dz_i: f32 = 0.05; // 0.0..0.5
+    var dz_o: f32 = 0.95; // 0.5..1.0
+    var dz_range: f32 = 0.9; // derived
+    var dz_fact: f32 = 1.0 / 0.9; // derived
+    var input_mouse_dpi: f32 = 1600; // only needed for sens calc, does not set mouse dpi
+    var input_mouse_cm360: f32 = 24; // real-world space per full rotation
+    var input_mouse_sens: f32 = 15118.1; // derived; mouse units per full rotation
 
-    const dz_i: f32 = 0.05;
-    const dz_o: f32 = 0.95;
-    const dz_range: f32 = dz_o - dz_i;
-    const dz_fact: f32 = 1 / dz_range;
     const rotation_damp: f32 = 48;
     const rotation_speed: f32 = 360;
     const motion_damp: f32 = 8;
@@ -115,9 +119,6 @@ const Cam7 = extern struct {
     var input_move_z = input_move_z_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
-    var input_mouse_dpi: f32 = 1600; // only needed for sens calc, does not set mouse dpi
-    var input_mouse_cm360: f32 = 24; // real-world space per full rotation
-    var input_mouse_sens: f32 = 15118.1; // mouse units per full rotation
 
     // TODO: maybe normalizing XY stuff
     fn update_input(gf: *GlobalFn) void {
@@ -250,27 +251,28 @@ inline fn vec3_damp(out: *rv.Vec3, in: *const rv.Vec3, t: f32, dt: f32) void {
     out.z = std.math.lerp(out.z, in.z, 1 - std.math.exp(-t * dt));
 }
 
+// TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
 inline fn f32_applyDeadzone(out: *f32) void {
     const mag: f32 = @fabs(out.*);
 
-    if (mag < Cam7.dz_i) {
+    if (mag <= Cam7.dz_i) {
         out.* = 0;
         return;
     }
 
-    const scale: f32 = if (mag > Cam7.dz_o) Cam7.dz_range / mag else (mag - Cam7.dz_i) / mag;
+    const scale: f32 = if (mag >= Cam7.dz_o) (Cam7.dz_range / mag * Cam7.dz_fact) else ((mag - Cam7.dz_i) / Cam7.dz_range / mag);
     out.* *= scale;
 }
 
 inline fn vec2_applyDeadzone(out: *rv.Vec2) void {
     const mag: f32 = rv.Vec2_Mag(out);
 
-    if (mag < Cam7.dz_i) {
+    if (mag <= Cam7.dz_i) {
         out.* = .{ .x = 0, .y = 0 };
         return;
     }
 
-    const scale: f32 = if (mag > Cam7.dz_o) Cam7.dz_range / mag else (mag - Cam7.dz_i) / mag;
+    const scale: f32 = if (mag >= Cam7.dz_o) (Cam7.dz_range / mag * Cam7.dz_fact) else ((mag - Cam7.dz_i) / Cam7.dz_range / mag);
     rv.Vec2_Scale(out, scale, out);
 }
 
@@ -326,11 +328,19 @@ fn SaveSavedCam() void {
 
 fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.enable = gf.SettingGetB("cam7", "enable") orelse false;
+
     Cam7.flip_look_x = gf.SettingGetB("cam7", "flip_look_x") orelse false;
     Cam7.flip_look_y = gf.SettingGetB("cam7", "flip_look_y") orelse false;
+
     Cam7.input_mouse_dpi = @floatFromInt(gf.SettingGetU("cam7", "mouse_dpi") orelse 1600);
     Cam7.input_mouse_cm360 = gf.SettingGetF("cam7", "mouse_cm360") orelse 24;
     Cam7.input_mouse_sens = Cam7.input_mouse_cm360 / 2.54 * Cam7.input_mouse_dpi;
+
+    // TODO: more sophisticated range limiting that allows for more freedom?
+    Cam7.dz_i = m.clamp(gf.SettingGetF("cam7", "stick_deadzone_inner") orelse 0.05, 0.000, 0.495);
+    Cam7.dz_o = m.clamp(gf.SettingGetF("cam7", "stick_deadzone_outer") orelse 0.95, 0.505, 1.000);
+    Cam7.dz_range = Cam7.dz_o - Cam7.dz_i;
+    Cam7.dz_fact = 1 / Cam7.dz_range;
 }
 
 // STATE MACHINE

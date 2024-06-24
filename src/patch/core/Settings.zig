@@ -108,6 +108,10 @@ pub fn init() void {
     SettingsState.cam7.add("flip_look_y", bool, false);
     SettingsState.cam7.add("stick_deadzone_inner", f32, 0.05);
     SettingsState.cam7.add("stick_deadzone_outer", f32, 0.95);
+    SettingsState.cam7.add("default_move_speed", u32, 2);
+    SettingsState.cam7.add("default_move_smoothing", u32, 2);
+    SettingsState.cam7.add("default_rotation_speed", u32, 2);
+    SettingsState.cam7.add("default_rotation_smoothing", u32, 0);
     SettingsState.cam7.add("mouse_dpi", u32, 1600);
     SettingsState.cam7.add("mouse_cm360", f32, 24.0);
     SettingsState.manager.add(&SettingsState.cam7);

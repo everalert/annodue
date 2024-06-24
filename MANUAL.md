@@ -75,13 +75,17 @@ Configured under `[cam7]`
 
 |Option|Type|Note|
 |:---|:---|:---|
-|`enable`               |`bool`|&nbsp;
-|`flip_look_x`          |`bool`|Invert x-axis rotation
-|`flip_look_y`          |`bool`|Invert y-axis rotation
-|`stick_deadzone_inner` |`f32` |clamped between `0.0` and `0.5`
-|`stick_deadzone_outer` |`f32` |clamped between `0.5` and `1.0`
-|`mouse_dpi`            |`u32` |reference for mouse sensitivity calculations; does not change mouse
-|`mouse_cm360`          |`f32` |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
+|`enable`                    |`bool`|&nbsp;
+|`flip_look_x`               |`bool`|Invert x-axis rotation
+|`flip_look_y`               |`bool`|Invert y-axis rotation
+|`stick_deadzone_inner`      |`f32` |0.0 to 0.5
+|`stick_deadzone_outer`      |`f32` |0.5 to 1.0
+|`default_move_speed`        |`u32` |0 to 6
+|`default_move_smoothing`    |`u32` |0 to 3
+|`default_rotation_speed`    |`u32` |0 to 4
+|`default_rotation_smoothing`|`u32` |0 to 3
+|`mouse_dpi`                 |`u32` |reference for mouse sensitivity calculations; does not change mouse
+|`mouse_cm360`               |`f32` |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
 
 ### Savestates & Rewind
 

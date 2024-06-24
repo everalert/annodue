@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Option to remove 1px gap at screen edge
 - Setting: 'cam7' -> 'stick_deadzone_inner'
 - Setting: 'cam7' -> 'stick_deadzone_outer'
+- Setting: 'cam7' -> 'default_move_speed'
+- Setting: 'cam7' -> 'default_move_smoothing'
+- Setting: 'cam7' -> 'default_rotation_speed'
+- Setting: 'cam7' -> 'default_rotation_smoothing'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): `appinfo` module for externally-facing defs
@@ -36,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: vertical movement speed - `350` -> `125..8000`
 - Cam7: movement smoothing - `8` -> `none,16,8,4`
 - Cam7: movement speed curve - `quadratic` -> `quartic` 
-- Cam7: rotation speed - `360` -> `0..810`
+- Cam7: rotation speed - `360` -> `160..810`
 - Cam7: rotation smoothing - `none` -> `none,36,24,12`
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Util): make rewind compression logic available in `temporal_compression` util

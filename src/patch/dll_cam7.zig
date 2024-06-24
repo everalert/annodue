@@ -52,16 +52,20 @@ pub const panic = debug.annodue_panic;
 //   damping        X               Y               hold to edit movement/rotation
 //                                                  damping instead of speed
 // - SETTINGS:
-//   enable                 bool
-//   flip_look_x            bool
-//   flip_look_y            bool
-//   stick_deadzone_inner   f32     0.0..0.5
-//   stick_deadzone_outer   f32     0.5..1.0
-//   mouse_dpi              u32     reference for mouse sensitivity calculations;
-//                                  does not change mouse
-//   mouse_cm360            f32     physical centimeters of motion for one 360° rotation
-//                                  if you don't know what that means, just treat
-//                                  this value as a sensitivity scale
+//   enable                     bool
+//   flip_look_x                bool
+//   flip_look_y                bool
+//   stick_deadzone_inner       f32     0.0..0.5
+//   stick_deadzone_outer       f32     0.5..1.0
+//   default_move_speed         u32     0..6
+//   default_move_smoothing     u32     0..3
+//   default_rotation_speed     u32     0..4
+//   default_rotation_smoothing u32     0..3
+//   mouse_dpi                  u32     reference for mouse sensitivity calculations;
+//                                      does not change mouse
+//   mouse_cm360                f32     physical centimeters of motion for one 360° rotation
+//                                      if you don't know what that means, just treat
+//                                      this value as a sensitivity scale
 
 // FIXME: cam seems to not always correct itself upright when switching?
 // TODO: controls = ???
@@ -95,21 +99,21 @@ const Cam7 = extern struct {
     var input_mouse_dpi: f32 = 1600; // only needed for sens calc, does not set mouse dpi
     var input_mouse_cm360: f32 = 24; // real-world space per full rotation
     var input_mouse_sens: f32 = 15118.1; // derived; mouse units per full rotation
+    var rot_damp_i: usize = 0;
+    var rot_spd_i: usize = 2;
+    var move_damp_i: usize = 2;
+    var move_spd_i: usize = 2;
 
     const rot_damp_val = [_]?f32{ null, 36, 24, 12 };
     var rot_damp: ?f32 = null;
-    var rot_damp_i: usize = 0;
     const rot_spd_val = [_]f32{ 160, 240, 360, 540, 810 };
     const rot_change_damp: f32 = 8;
     var rot_spd: f32 = 360;
     var rot_spd_tgt: f32 = 360;
-    var rot_spd_i: usize = 2;
 
     const move_damp_val = [_]?f32{ null, 16, 8, 4 };
     var move_damp: ?f32 = 8;
-    var move_damp_i: usize = 2;
     const move_change_damp: f32 = 8;
-    var move_spd_i: usize = 2;
     const move_spd_xy_val = [_]f32{ 250, 500, 1000, 2000, 4000, 8000, 16000 };
     var move_spd_xy: f32 = 1000;
     var move_spd_xy_tgt: f32 = 1000;
@@ -385,6 +389,17 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.dz_o = m.clamp(gf.SettingGetF("cam7", "stick_deadzone_outer") orelse 0.95, 0.505, 1.000);
     Cam7.dz_range = Cam7.dz_o - Cam7.dz_i;
     Cam7.dz_fact = 1 / Cam7.dz_range;
+
+    // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
+    Cam7.rot_damp_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_smoothing") orelse 0, 0, 3);
+    Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
+    Cam7.rot_spd_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_speed") orelse 2, 0, 4);
+    Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
+    Cam7.move_damp_i = m.clamp(gf.SettingGetU("cam7", "default_move_smoothing") orelse 2, 0, 3);
+    Cam7.move_damp = Cam7.move_damp_val[Cam7.move_damp_i];
+    Cam7.move_spd_i = m.clamp(gf.SettingGetU("cam7", "default_move_speed") orelse 2, 0, 6);
+    Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
+    Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
 }
 
 // STATE MACHINE

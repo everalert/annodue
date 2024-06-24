@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Cam7: analog deadzone customization via settings
-- Cam7: changing movement speed with `Q or LB` and `E or RB`
-- Cam7: changing rotation speed with `Z or LSB` and `C or RSB`
-- Cam7: changing damping instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons
+- Cam7: cycle movement speed with `Q or LB` and `E or RB`
+- Cam7: cycle rotation speed with `Z or LSB` and `C or RSB`
+- Cam7: cycle smoothing instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons
 - Core: notify on plugin reload
 - CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers
@@ -32,9 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Cam7: max lateral movement speed - `650` -> `250..16000`
-- Cam7: max vertical movement speed - `350` -> `125..8000`
-- Cam7: analog movement speed curve - `quadratic` -> `quartic` 
+- Cam7: lateral movement speed - `650` -> `250..16000`
+- Cam7: vertical movement speed - `350` -> `125..8000`
+- Cam7: movement smoothing - `8` -> `none,16,8,4`
+- Cam7: movement speed curve - `quadratic` -> `quartic` 
+- Cam7: rotation speed - `360` -> `0..810`
+- Cam7: rotation smoothing - `none` -> `none,36,24,12`
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
 

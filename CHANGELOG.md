@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Savestate: Stuttering during rewind scrubbing
 - Savestate: Delayed camera when rewind scrubbing
 - Backend(Build): compile error building without hashfile present when build doesn't use hashfile
+- Backend(Core): slowdown due to excessively opening search handles during plugin hot reloading
 
 ## [0.1.5] - 2024-05-12
 

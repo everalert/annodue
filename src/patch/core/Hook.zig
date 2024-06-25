@@ -160,6 +160,7 @@ const PluginState = struct {
     var last_check: u32 = 0;
     var core: std.ArrayList(Plugin) = undefined;
     var plugin: std.ArrayList(Plugin) = undefined;
+    var hot_reload_i: usize = 0;
 };
 
 pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
@@ -376,21 +377,24 @@ pub fn init() void {
 
 pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
-        for (PluginState.plugin.items, 0..) |*p, i| {
-            const len = for (p.Filename, 0..) |c, j| {
-                if (c == 0) break j;
-            } else p.Filename.len;
-            const load = LoadPlugin(p, p.Filename[0..len]);
-            if (load == null) continue;
-            if (load.?) {
-                var buf: [127:0]u8 = undefined;
-                _ = std.fmt.bufPrintZ(&buf, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch continue;
-                _ = gf.ToastNew(&buf, r.Text.ColorRGB.Green.rgba(0));
-            } else {
-                _ = PluginState.plugin.swapRemove(i);
-            }
+        const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];
+        defer PluginState.last_check = gs.timestamp;
+        defer PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
+
+        const len = for (p.Filename, 0..) |c, j| {
+            if (c == 0) break j;
+        } else p.Filename.len;
+        const load = LoadPlugin(p, p.Filename[0..len]);
+
+        if (load == null) return;
+
+        if (load.?) {
+            var buf: [127:0]u8 = undefined;
+            _ = std.fmt.bufPrintZ(&buf, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch return;
+            _ = gf.ToastNew(&buf, r.Text.ColorRGB.Green.rgba(0));
+        } else {
+            _ = PluginState.plugin.swapRemove(PluginState.hot_reload_i);
         }
-        PluginState.last_check = gs.timestamp;
     }
 }
 

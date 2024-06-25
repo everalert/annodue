@@ -241,7 +241,8 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
 
     // do we even need to do anything
     var fd1: w32fs.WIN32_FIND_DATAA = undefined;
-    _ = w32fs.FindFirstFileA(&buf1, &fd1);
+    const find_handle = w32fs.FindFirstFileA(&buf1, &fd1);
+    defer _ = w32fs.FindClose(find_handle); // TODO: hold onto the handle and reuse instead?
     if (p.Initialized and filetime_eql(&fd1.ftLastWriteTime, &p.WriteTime.?))
         return null;
 

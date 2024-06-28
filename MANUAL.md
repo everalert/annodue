@@ -84,6 +84,7 @@ Configured under `[cam7]`
 |`default_move_smoothing`    |`u32` |0 to 3
 |`default_rotation_speed`    |`u32` |0 to 4
 |`default_rotation_smoothing`|`u32` |0 to 3
+|`default_planar_movement`   |`bool`|movement is always level; turn off to move based on the view angle
 |`mouse_dpi`                 |`u32` |reference for mouse sensitivity calculations; does not change mouse
 |`mouse_cm360`               |`f32` |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
 

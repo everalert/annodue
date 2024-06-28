@@ -4,6 +4,7 @@ const std = @import("std");
 
 const m = std.math;
 const deg2rad = m.degreesToRadians;
+const rad2deg = m.radiansToDegrees;
 
 const w32 = @import("zigwin32");
 const POINT = w32.foundation.POINT;
@@ -25,6 +26,10 @@ const rg = @import("racer").Global;
 const rm = @import("racer").Matrix;
 const rv = @import("racer").Vector;
 const rte = @import("racer").Text;
+const Vec2 = rv.Vec2;
+const Vec3 = rv.Vec3;
+const Vec4 = rv.Vec4;
+const Mat4x4 = rm.Mat4x4;
 
 const st = @import("util/active_state.zig");
 const nt = @import("util/normalized_transform.zig");
@@ -39,18 +44,19 @@ pub const panic = debug.annodue_panic;
 // FEATURES
 // - free cam
 // - usable both in race and in cantina
-// - CONTROLS:      keyboard        xinput
-//   toggle         0               Back
-//   XY-move        WASD            L Stick
-//   XY-rotate      Mouse or ↑↓→←   R Stick
-//   Z-move up      Space           L Trigger
-//   Z-move down    Shift           R Trigger
-//   movement down  Q               LB
-//   movement up    E               RB
-//   rotation down  Z               LSB
-//   rotation up    C               RSB
-//   damping        X               Y               hold to edit movement/rotation
-//                                                  damping instead of speed
+// - CONTROLS:                  keyboard        xinput
+//   toggle                     0               Back
+//   XY-move                    WASD            L Stick
+//   XY-rotate                  Mouse or ↑↓→←   R Stick
+//   Z-move up                  Space           L Trigger
+//   Z-move down                Shift           R Trigger
+//   movement down              Q               LB
+//   movement up                E               RB
+//   rotation down              Z               LSB
+//   rotation up                C               RSB
+//   damping                    X               Y               hold to edit movement/rotation
+//                                                              damping instead of speed
+//   toggle planar movement     C               RSB
 // - SETTINGS:
 //   enable                     bool
 //   flip_look_x                bool
@@ -61,6 +67,7 @@ pub const panic = debug.annodue_panic;
 //   default_move_smoothing     u32     0..3
 //   default_rotation_speed     u32     0..4
 //   default_rotation_smoothing u32     0..3
+//   default_planar_movement    bool    level motion vs view angle-based motion
 //   mouse_dpi                  u32     reference for mouse sensitivity calculations;
 //                                      does not change mouse
 //   mouse_cm360                f32     physical centimeters of motion for one 360° rotation
@@ -103,6 +110,7 @@ const Cam7 = extern struct {
     var rot_spd_i: usize = 2;
     var move_damp_i: usize = 2;
     var move_spd_i: usize = 2;
+    var move_planar: bool = false;
 
     const rot_damp_val = [_]?f32{ null, 36, 24, 12 };
     var rot_damp: ?f32 = null;
@@ -125,13 +133,17 @@ const Cam7 = extern struct {
 
     var cam_state: CamState = .None;
     var saved_camstate_index: ?u32 = null;
-    var cam_mat4x4: rm.Mat4x4 = .{};
-    var xcam_rot: rv.Vec3 = .{};
-    var xcam_rot_tgt: rv.Vec3 = .{};
-    var xcam_rotation: rv.Vec3 = .{};
-    var xcam_rotation_tgt: rv.Vec3 = .{};
-    var xcam_motion: rv.Vec3 = .{};
-    var xcam_motion_tgt: rv.Vec3 = .{};
+    var xf: Mat4x4 = .{};
+    var xcam_rot: Vec3 = .{};
+    var xcam_rot_tgt: Vec3 = .{};
+    var xcam_rotation: Vec3 = .{};
+    var xcam_rotation_tgt: Vec3 = .{};
+    var xcam_motion: Vec3 = .{};
+    var xcam_motion_tgt: Vec3 = .{};
+
+    var dir_right: Vec3 = .{};
+    var dir_forward: Vec3 = .{};
+    var dir_up: Vec3 = .{};
 
     var input_toggle_data = ButtonInputMap{ .kb = .@"0", .xi = .BACK };
     var input_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX, .kb_scale = 0.65 };
@@ -144,6 +156,7 @@ const Cam7 = extern struct {
     var input_rotation_dec_data = ButtonInputMap{ .kb = .Z, .xi = .LEFT_THUMB };
     var input_rotation_inc_data = ButtonInputMap{ .kb = .C, .xi = .RIGHT_THUMB };
     var input_damp_data = ButtonInputMap{ .kb = .X, .xi = .Y };
+    var input_toggle_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .X };
     var input_toggle = input_toggle_data.inputMap();
     var input_look_x = input_look_x_data.inputMap();
     var input_look_y = input_look_y_data.inputMap();
@@ -155,6 +168,7 @@ const Cam7 = extern struct {
     var input_rotation_dec = input_rotation_dec_data.inputMap();
     var input_rotation_inc = input_rotation_inc_data.inputMap();
     var input_damp = input_damp_data.inputMap();
+    var input_toggle_planar = input_toggle_planar_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -171,6 +185,7 @@ const Cam7 = extern struct {
         input_rotation_dec.update(gf);
         input_rotation_inc.update(gf);
         input_damp.update(gf);
+        input_toggle_planar.update(gf);
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
@@ -181,14 +196,14 @@ const Cam7 = extern struct {
     }
 
     // FIXME: quaternion stuff
-    //var v2_xf: rm.Mat4x4 = .{};
-    //var v2_rot: rv.Vec3 = .{};
+    //var v2_xf: Mat4x4 = .{};
+    //var v2_rot: Vec3 = .{};
     //var v2_quat: Quat = .{};
     //var v2_loc: rm.Location = .{};
 };
 
-const Quat = rv.Vec4;
-const AxisAngle = rv.Vec4;
+const Quat = Vec4;
+const AxisAngle = Vec4;
 
 fn quat_mul(out: *Quat, in1: *const Quat, in2: *const Quat) void {
     out.* = .{
@@ -225,7 +240,7 @@ fn quat_getAA(in: *const Quat, out: *AxisAngle) void {
     }
 }
 
-fn mat4x4_getQuaternion(in: *const rm.Mat4x4, out: *Quat) void {
+fn mat4x4_getQuaternion(in: *const Mat4x4, out: *Quat) void {
     out.w = m.sqrt(1.0 + in.X.x + in.Y.y + in.Z.z) / 2;
     const w4: f32 = 4 * out.w;
     out.x = (in.Z.y - in.Y.z) / w4;
@@ -233,8 +248,8 @@ fn mat4x4_getQuaternion(in: *const rm.Mat4x4, out: *Quat) void {
     out.z = (in.Y.x - in.X.y) / w4;
 }
 
-// adapted from rm.Mat4x4_InitQuat
-fn mat4x4_setQuaternion(out: *rm.Mat4x4, in: *const Quat) void {
+// adapted from Mat4x4_InitQuat
+fn mat4x4_setQuaternion(out: *Mat4x4, in: *const Quat) void {
     const w_sin: f32 = @sin(in.w);
     const w_cos: f32 = @cos(in.w);
 
@@ -275,7 +290,7 @@ fn mat4x4_setQuaternion(out: *rm.Mat4x4, in: *const Quat) void {
     out.Z.w = 0.0;
 }
 
-fn mat4x4_getEuler(mat: *const rm.Mat4x4, euler: *rv.Vec3) void {
+fn mat4x4_getEuler(mat: *const Mat4x4, euler: *Vec3) void {
     const t1: f32 = m.atan2(f32, mat.Y.z, mat.Z.z); // Z
     const c2: f32 = m.sqrt(mat.X.x * mat.X.x + mat.X.y * mat.X.y);
     const t2: f32 = m.atan2(f32, -mat.X.z, c2); // Y
@@ -287,12 +302,23 @@ fn mat4x4_getEuler(mat: *const rm.Mat4x4, euler: *rv.Vec3) void {
     euler.z = t1;
 }
 
+fn mat4x4_getRow(in: *const Mat4x4, out: *Vec3, row: usize) void {
+    const _in: *const [4][4]f32 = @ptrCast(in);
+    out.x = _in[0][row];
+    out.y = _in[1][row];
+    out.z = _in[2][row];
+}
+
+fn mat4x4_setRotation(out: *Mat4x4, in: *const Vec3) void {
+    rm.Mat4x4_SetRotation(out, rad2deg(f32, in.x), rad2deg(f32, in.y), rad2deg(f32, in.z));
+}
+
 inline fn f32_damp(from: f32, to: f32, t: f32, dt: f32) f32 {
     if (m.fabs(to - from) < m.floatEps(f32)) return to;
     return std.math.lerp(from, to, 1 - std.math.exp(-t * dt));
 }
 
-inline fn vec3_damp(out: *rv.Vec3, in: *const rv.Vec3, t: f32, dt: f32) void {
+inline fn vec3_damp(out: *Vec3, in: *const Vec3, t: f32, dt: f32) void {
     out.x = f32_damp(out.x, in.x, t, dt);
     out.y = f32_damp(out.y, in.y, t, dt);
     out.z = f32_damp(out.z, in.z, t, dt);
@@ -312,7 +338,7 @@ inline fn f32_applyDeadzone(out: *f32) void {
 }
 
 // TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
-inline fn vec2_applyDeadzone(out: *rv.Vec2) void {
+inline fn vec2_applyDeadzone(out: *Vec2) void {
     const mag: f32 = rv.Vec2_Mag(out);
 
     if (mag <= Cam7.dz_i) {
@@ -358,8 +384,8 @@ fn SaveSavedCam() void {
 
     const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
         Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
-    @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4)), @as([*]f32, @ptrFromInt(mat4_addr)));
-    mat4x4_getEuler(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
+    @memcpy(@as(*[16]f32, @ptrCast(&Cam7.xf)), @as([*]f32, @ptrFromInt(mat4_addr)));
+    mat4x4_getEuler(&Cam7.xf, &Cam7.xcam_rot);
     @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_tgt)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
     // FIXME: new, quaternion stuff
     //mat4x4_getQuaternion(@ptrFromInt(mat4_addr), &Cam7.v2_quat);
@@ -391,6 +417,7 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.dz_fact = 1 / Cam7.dz_range;
 
     // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
+    Cam7.move_planar = gf.SettingGetB("cam7", "default_planar_movement") orelse false;
     Cam7.rot_damp_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_smoothing") orelse 0, 0, 3);
     Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
     Cam7.rot_spd_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_speed") orelse 2, 0, 4);
@@ -419,6 +446,9 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     }
 
     // input
+
+    if (Cam7.input_toggle_planar.gets() == .JustOn)
+        Cam7.move_planar = !Cam7.move_planar;
 
     const move_dec: bool = Cam7.input_movement_dec.gets() == .JustOn;
     const move_inc: bool = Cam7.input_movement_inc.gets() == .JustOn;
@@ -474,26 +504,30 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation);
     }
 
-    rm.Mat4x4_SetRotation(
-        @ptrCast(&Cam7.cam_mat4x4),
-        m.radiansToDegrees(f32, Cam7.xcam_rot.x),
-        m.radiansToDegrees(f32, Cam7.xcam_rot.y),
-        m.radiansToDegrees(f32, Cam7.xcam_rot.z),
-    );
+    mat4x4_setRotation(&Cam7.xf, &Cam7.xcam_rot);
+
+    //mat4x4_getRow(&Cam7.xf, &Cam7.dir_right, 0);
+    //mat4x4_getRow(&Cam7.xf, &Cam7.dir_up, 1);
+    //mat4x4_getRow(&Cam7.xf, &Cam7.dir_forward, 2);
 
     // motion
-
-    Cam7.xcam_motion_tgt.x = Cam7.input_move_x.getf();
-    Cam7.xcam_motion_tgt.y = Cam7.input_move_y.getf();
-    vec2_applyDeadzone(@ptrCast(&Cam7.xcam_motion_tgt));
-    const l_scale: f32 = nt.pow4(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_motion_tgt)));
-    const l_ang: f32 = m.atan2(f32, Cam7.xcam_motion_tgt.y, Cam7.xcam_motion_tgt.x) + Cam7.xcam_rot.x;
-    Cam7.xcam_motion_tgt.x = l_scale * m.cos(l_ang);
-    Cam7.xcam_motion_tgt.y = l_scale * m.sin(l_ang);
 
     Cam7.xcam_motion_tgt.z = Cam7.input_move_z.getf();
     f32_applyDeadzone(&Cam7.xcam_motion_tgt.z);
     Cam7.xcam_motion_tgt.z = nt.smooth4(Cam7.xcam_motion_tgt.z);
+
+    Cam7.xcam_motion_tgt.x = Cam7.input_move_x.getf();
+    Cam7.xcam_motion_tgt.y = Cam7.input_move_y.getf();
+    vec2_applyDeadzone(@ptrCast(&Cam7.xcam_motion_tgt));
+
+    if (Cam7.move_planar) {
+        const l_scale: f32 = nt.pow4(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_motion_tgt)));
+        const l_ang: f32 = m.atan2(f32, Cam7.xcam_motion_tgt.y, Cam7.xcam_motion_tgt.x) + Cam7.xcam_rot.x;
+        Cam7.xcam_motion_tgt.x = l_scale * m.cos(l_ang);
+        Cam7.xcam_motion_tgt.y = l_scale * m.sin(l_ang);
+    } else {
+        rv.Vec3_MulMat4x4(&Cam7.xcam_motion_tgt, &Cam7.xcam_motion_tgt, &Cam7.xf);
+    }
 
     if (Cam7.move_damp) |d| {
         vec3_damp(&Cam7.xcam_motion, &Cam7.xcam_motion_tgt, d, gs.dt_f);
@@ -501,9 +535,13 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         rv.Vec3_Copy(&Cam7.xcam_motion, &Cam7.xcam_motion_tgt);
     }
 
-    Cam7.cam_mat4x4.T.x += gs.dt_f * Cam7.move_spd_xy * Cam7.xcam_motion.x;
-    Cam7.cam_mat4x4.T.y += gs.dt_f * Cam7.move_spd_xy * Cam7.xcam_motion.y;
-    Cam7.cam_mat4x4.T.z += gs.dt_f * Cam7.move_spd_z * Cam7.xcam_motion.z;
+    Cam7.xf.T.x += gs.dt_f * Cam7.move_spd_xy * Cam7.xcam_motion.x;
+    Cam7.xf.T.y += gs.dt_f * Cam7.move_spd_xy * Cam7.xcam_motion.y;
+    Cam7.xf.T.z += gs.dt_f * Cam7.move_spd_z * Cam7.xcam_motion.z;
+
+    // TODO: remove, debug
+    for (@as(*[3]f32, @ptrCast(&Cam7.xcam_rot)), 0..) |v, i|
+        rte.DrawText(0 + 48 * @as(i16, @intCast(i)), 0, "{d:5.3}", .{@mod(v, m.pi)}, null, null) catch {};
 
     return .FreeCam;
 }
@@ -559,7 +597,7 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
+    rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.xf), 0);
     // FIXME: quaternion stuff
     //rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.v2_xf), 0);
 }

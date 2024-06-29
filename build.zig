@@ -37,12 +37,16 @@ pub fn build(b: *std.Build) void {
 
     // MODULES
 
-    //const zigini = b.dependency("zigini", .{});
-    //const zigini_m = zigini.module("zigini");
+    const zigini = b.dependency("zigini", .{});
+    const zigini_m = zigini.module("ini");
     const zigwin32 = b.dependency("zigwin32", .{});
     const zigwin32_m = zigwin32.module("zigwin32");
     const zzip = b.dependency("zzip", .{});
     const zzip_m = zzip.module("zzip");
+
+    const racerlib = b.createModule(.{
+        .source_file = .{ .path = "src/racer/racer.zig" },
+    });
 
     const options = b.addOptions();
     const options_label = "BuildOptions";
@@ -55,9 +59,9 @@ pub fn build(b: *std.Build) void {
     // TODO: look into ObjCopy build system stuff
 
     const copypath = b.option(
-            []const u8,
-            "copypath",
-            "Path to game directory for hot-reloading in DEV_MODE; will not copy files if not specified",
+        []const u8,
+        "copypath",
+        "Path to game directory for hot-reloading in DEV_MODE; will not copy files if not specified",
     ) orelse null;
 
     const hotcopy_move_files = b.addExecutable(.{
@@ -104,8 +108,8 @@ pub fn build(b: *std.Build) void {
     var hash_step = &generate_safe_plugin_hash_file_plugin.step;
 
     const hash_plugins_step = b.step(
-            "hashfile",
-            "Generate valid plugin hashfile",
+        "hashfile",
+        "Generate valid plugin hashfile",
     );
     hash_plugins_step.dependOn(hash_step);
 
@@ -113,6 +117,8 @@ pub fn build(b: *std.Build) void {
 
     // TODO: update once script is actually written
     // TODO: automate version input somehow?
+    // TODO: split dinput part into its own section and integrate with rest
+    // of build system; copypath etc.
 
     const release_zip_files_step = b.step("release", "Package built files for release");
 
@@ -128,18 +134,21 @@ pub fn build(b: *std.Build) void {
 
     var dinput_dll_release = b.addInstallArtifact(dinput_dll, .{});
 
+    const dinput_step = b.step("dinput", "Build dinput.dll");
+    dinput_step.dependOn(&dinput_dll_release.step);
+
     const releasepath = b.option(
-            []const u8,
-            "rop",
-            "Path to base output directory for release builds; required for 'release' step",
+        []const u8,
+        "rop",
+        "Path to base output directory for release builds; required for 'release' step",
     ) orelse null;
 
     // NOTE: minver checks fail if not specified
     const release_ver = b.option([]const u8, "ver", "release version") orelse "0.0.0";
     const release_minver = b.option(
-            []const u8,
-            "minver",
-            "minimum version needed to auto-update to this release",
+        []const u8,
+        "minver",
+        "minimum version needed to auto-update to this release",
     ) orelse release_ver;
 
     var zip_step: ?*std.build.Step = null;
@@ -193,8 +202,8 @@ pub fn build(b: *std.Build) void {
     // TODO: reorganize build script to make this more convenient to edit
 
     var plugin_step = b.step(
-            "plugins",
-            "Build plugin DLLs",
+        "plugins",
+        "Build plugin DLLs",
     );
     hash_step.dependOn(plugin_step);
 
@@ -239,6 +248,8 @@ pub fn build(b: *std.Build) void {
         });
         dll.linkLibC();
         dll.addOptions(options_label, options);
+        dll.addModule("racer", racerlib);
+        dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
         if (std.mem.eql(u8, plugin.name, "collision_viewer")) {
@@ -272,12 +283,14 @@ pub fn build(b: *std.Build) void {
     });
     core.linkLibC();
     core.addOptions(options_label, options);
+    core.addModule("racer", racerlib);
+    core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);
     core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
     core.step.dependOn(
         // we skip runtime hash checks in dev builds
-            if (DEV_MODE) plugin_step else hash_step,
+        if (DEV_MODE) plugin_step else hash_step,
     );
 
     // TODO: investigate options arg

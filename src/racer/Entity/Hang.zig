@@ -1,0 +1,81 @@
+const std = @import("std");
+const e = @import("entity.zig");
+
+pub const SIZE: usize = e.EntitySize(.Hang);
+
+pub const DRAW_MENU_JUMPTABLE_ADDR: usize = 0x457A88;
+pub const DRAW_MENU_JUMPTABLE_SCENE_3_ADDR: usize = 0x457AD4;
+
+// TODO: testing assertion of size correctness
+pub const Hang = extern struct {
+    entity_magic: u32,
+    entity_flags: u32,
+    menu: i32, // TODO: enum
+    menuPrev: i32,
+    menuSub8: i32,
+    flags: u32, // TODO: enum
+    _unk_18: u32,
+    _unk_1C: u32,
+    _unk_20: u32,
+    _unk_24: u32,
+    _unk_28: u32,
+    _unk_2C: u32,
+    _unk_30: u32,
+    _unk_34: u32,
+    _unk_38: u32,
+    _unk_3C: u32,
+    _unk_40: u32,
+    _unk_44: u32,
+    _unk_48: u32,
+    _unk_4C: u32,
+    _unk_50: u32,
+    _unk_54: u32,
+    _unk_58: u32,
+    _unk_5C: u8,
+    track: u8, // 0x5D
+    circuit: u8,
+    selectionMainMenu: u8,
+    _unk_60: u32,
+    _unk_64: u32,
+    _unk_68: u32,
+    _unk_6C: u8,
+    _unk_6D: u8,
+    mirror: u8,
+    _file_index: u8,
+    _unk_70: u8,
+    _unk_71: u8,
+    racers: u8,
+    vehicle: u8, // 0x73
+    opponentVehicle: [22]u8,
+    _unk_8A: u8,
+    _unk_8B: u8,
+    _unk_8C: u8,
+    _unk_8D: u8,
+    _unk_8E: u8,
+    laps: u8,
+    aiSpeed: u8,
+    winnings: u8,
+    prizeFair1: u16,
+    prizeFair2: u16,
+    prizeFair3: u16,
+    prizeFair4: u16,
+    prizeSkilled1: u16,
+    prizeSkilled2: u16,
+    prizeSkilled3: u16,
+    prizeSkilled4: u16,
+    prizeWinnerTakesAll1: u16,
+    prizeWinnerTakesAll2: u16,
+    prizeWinnerTakesAll3: u16,
+    prizeWinnerTakesAll4: u16,
+    _unk_AA: u8,
+    _unk_AB: u8,
+    _unk_AC: u32,
+    _unk_B0: u32,
+    _unk_B4: u32,
+    _unk_B8: u32,
+    _unk_BC: u32,
+    _unk_C0: u32,
+    _unk_C4: u32,
+    _unk_C8: u32,
+    _unk_CC: u32,
+};

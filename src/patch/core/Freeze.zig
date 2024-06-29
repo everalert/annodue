@@ -1,10 +1,7 @@
 const std = @import("std");
 
-const r = @import("../util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
-const rto = rt.TextStyleOpts;
+const rg = @import("racer").Global;
+const re = @import("racer").Entity;
 
 const mem = @import("../util/memory.zig");
 
@@ -23,17 +20,17 @@ pub const Freeze = extern struct {
     /// @return request processed successfully
     pub fn freeze(o: [*:0]const u8) bool {
         if (frozen or owner != null) return false;
-        const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
+        var jdge = re.Manager.entity(.Jdge, 0);
 
-        saved_pausebit = pauseflags & pausebit;
-        saved_pausepage = mem.read(rc.ADDR_PAUSE_PAGE, u8);
-        saved_pausestate = mem.read(rc.ADDR_PAUSE_STATE, u8);
-        saved_pausescroll = mem.read(rc.ADDR_PAUSE_SCROLLINOUT, f32);
+        saved_pausebit = jdge.entity_flags & pausebit;
+        saved_pausepage = rg.PAUSE_PAGE.*;
+        saved_pausestate = rg.PAUSE_STATE.*;
+        saved_pausescroll = rg.PAUSE_SCROLLINOUT.*;
 
-        _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, 2);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, 1);
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, 0);
-        _ = r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags & ~pausebit);
+        rg.PAUSE_PAGE.* = 2;
+        rg.PAUSE_STATE.* = 1;
+        rg.PAUSE_SCROLLINOUT.* = 0;
+        jdge.entity_flags &= ~pausebit;
 
         owner = o;
         frozen = true;
@@ -44,12 +41,12 @@ pub const Freeze = extern struct {
     pub fn unfreeze(o: [*:0]const u8) bool {
         const o_len = std.mem.len(o);
         if (!frozen or !std.mem.eql(u8, owner.?[0..o_len], o[0..o_len])) return false;
-        const pauseflags = r.ReadEntityValue(.Jdge, 0, 0x04, u32);
+        var jdge = re.Manager.entity(.Jdge, 0);
 
-        r.WriteEntityValue(.Jdge, 0, 0x04, u32, pauseflags | saved_pausebit);
-        _ = mem.write(rc.ADDR_PAUSE_SCROLLINOUT, f32, saved_pausescroll);
-        _ = mem.write(rc.ADDR_PAUSE_STATE, u8, saved_pausestate);
-        _ = mem.write(rc.ADDR_PAUSE_PAGE, u8, saved_pausepage);
+        jdge.entity_flags |= saved_pausebit;
+        rg.PAUSE_SCROLLINOUT.* = saved_pausescroll;
+        rg.PAUSE_STATE.* = saved_pausestate;
+        rg.PAUSE_PAGE.* = saved_pausepage;
 
         owner = null;
         frozen = false;

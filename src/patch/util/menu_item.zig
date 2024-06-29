@@ -10,12 +10,6 @@ const ScrollControl = @import("scroll_control.zig").ScrollControl;
 const st = @import("active_state.zig");
 const input = @import("../core/input.zig");
 
-const r = @import("racer.zig");
-const rc = r.constants;
-const rf = r.functions;
-const rt = r.text;
-const rto = rt.TextStyleOpts;
-
 pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) bool;
 
 pub const MenuItem = extern struct {
@@ -100,6 +94,7 @@ pub inline fn MenuItemRange(
     min: i32,
     max: i32,
     wrap: bool,
+    callback: ?MenuItemCallbackType,
 ) MenuItem {
     return .{
         .value = value,
@@ -107,6 +102,7 @@ pub inline fn MenuItemRange(
         .min = min,
         .max = max,
         .wrap = wrap,
+        .callback = callback,
     };
 }
 
@@ -115,6 +111,7 @@ pub inline fn MenuItemList(
     label: [*:0]const u8,
     options: []const [*:0]const u8,
     wrap: bool,
+    callback: ?MenuItemCallbackType,
 ) MenuItem {
     return .{
         .value = value,
@@ -122,5 +119,6 @@ pub inline fn MenuItemList(
         .options = @ptrCast(&options[0]),
         .max = options.len,
         .wrap = wrap,
+        .callback = callback,
     };
 }

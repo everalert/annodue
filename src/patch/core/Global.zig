@@ -14,10 +14,12 @@ const xinput = @import("../util/xinput.zig");
 const dbg = @import("../util/debug.zig");
 const msg = @import("../util/message.zig");
 const mem = @import("../util/memory.zig");
-const r = @import("../util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
+
+const rti = @import("racer").Time;
+const rg = @import("racer").Global;
+const rrd = @import("racer").RaceData;
+const re = @import("racer").Entity;
+const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 const w32 = @import("zigwin32");
@@ -37,9 +39,9 @@ const KS_PRESSED: i16 = 1; // since last call
 pub const Version = std.SemanticVersion{
     .major = 0,
     .minor = 1,
-    .patch = 4,
-    .pre = "alpha",
-    .build = "270",
+    .patch = 5,
+    //.pre = "alpha",
+    .build = "373",
 };
 
 // TODO: use SemanticVersion parse fn instead
@@ -53,11 +55,13 @@ pub const VersionStr: [:0]u8 = s: {
     }) catch unreachable; // comptime
 };
 
-pub const PLUGIN_VERSION = 17;
+pub const PLUGIN_VERSION = 19;
 
 // STATE
 
-const GLOBAL_STATE_VERSION = 3;
+const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
+
+const GLOBAL_STATE_VERSION = 5;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -85,19 +89,20 @@ pub const GlobalState = extern struct {
     framecount: u32 = 0,
 
     in_race: st.ActiveState = .Off,
+    race_state: RaceState = .None,
+    race_state_prev: RaceState = .None,
+    race_state_new: bool = false,
     player: extern struct {
         upgrades: bool = false,
         upgrades_lv: [7]u8 = undefined,
         upgrades_hp: [7]u8 = undefined,
 
         flags1: u32 = 0,
-        in_race_count: st.ActiveState = .Off,
-        in_race_results: st.ActiveState = .Off,
-        in_race_racing: st.ActiveState = .Off,
         boosting: st.ActiveState = .Off,
         underheating: st.ActiveState = .On,
         overheating: st.ActiveState = .Off,
         dead: st.ActiveState = .Off,
+        deaths: u32 = 0,
 
         heat_rate: f32 = 0,
         cool_rate: f32 = 0,
@@ -106,32 +111,29 @@ pub const GlobalState = extern struct {
 
     fn player_reset(self: *GlobalState) void {
         const p = &self.player;
-        const u: [14]u8 = mem.deref_read(&.{ 0x4D78A4, 0x0C, 0x41 }, [14]u8);
-        p.upgrades_lv = u[0..7].*;
-        p.upgrades_hp = u[7..14].*;
+        p.upgrades_lv = rrd.PLAYER.*.pFile.upgrade_lv; // TODO: remove from gs, now that it's easy?
+        p.upgrades_hp = rrd.PLAYER.*.pFile.upgrade_hp; // TODO: remove from gs, now that it's easy?
         p.upgrades = for (0..7) |i| {
-            if (u[i] > 0 and u[7 + i] > 0) break true;
+            if (p.upgrades_lv[i] > 0 and p.upgrades_hp[i] > 0) break true;
         } else false;
 
         p.flags1 = 0;
-        p.in_race_count = .Off;
-        p.in_race_results = .Off;
-        p.in_race_racing = .Off;
         p.boosting = .Off;
         p.underheating = .On; // you start the race underheating
         p.overheating = .Off;
         p.dead = .Off;
+        p.deaths = 0;
 
-        p.heat_rate = r.ReadPlayerValue(0x8C, f32);
-        p.cool_rate = r.ReadPlayerValue(0x90, f32);
+        p.heat_rate = re.Test.PLAYER.*.stats.HeatRate; // TODO: remove from gs, now that it's easy?
+        p.cool_rate = re.Test.PLAYER.*.stats.CoolRate; // TODO: remove from gs, now that it's easy?
         p.heat = 0;
     }
 
     fn player_update(self: *GlobalState) void {
         const p = &self.player;
-        p.flags1 = r.ReadPlayerValue(0x60, u32);
-        p.heat = r.ReadPlayerValue(0x218, f32);
-        const engine: [6]u32 = r.ReadPlayerValue(0x2A0, [6]u32);
+        p.flags1 = re.Test.PLAYER.*.flags1; // TODO: remove from gs, now that it's easy?
+        p.heat = re.Test.PLAYER.*.temperature; // TODO: remove from gs, now that it's easy?
+        const engine = re.Test.PLAYER.*.engineStatus; // TODO: remove from gs, now that it's easy?
 
         p.boosting.update((p.flags1 & (1 << 23)) > 0);
         p.underheating.update(p.heat >= 100);
@@ -139,9 +141,7 @@ pub const GlobalState = extern struct {
             if (engine[i] & (1 << 3) > 0) break true;
         } else false);
         p.dead.update((p.flags1 & (1 << 14)) > 0);
-        p.in_race_count.update((p.flags1 & (1 << 0)) > 0);
-        p.in_race_results.update((p.flags1 & (1 << 5)) == 0);
-        p.in_race_racing.update(!(p.in_race_count.on() or p.in_race_results.on()));
+        if (p.dead == .JustOn) p.deaths += 1;
     }
 };
 
@@ -196,8 +196,9 @@ pub fn init() bool {
     if (kb_shift_dn)
         return false;
 
-    GLOBAL_STATE.hwnd = mem.read(rc.ADDR_HWND, win.HWND);
-    GLOBAL_STATE.hinstance = mem.read(rc.ADDR_HINSTANCE, win.HINSTANCE);
+    // TODO: remove? probably don't need these anymore lol
+    GLOBAL_STATE.hwnd = rg.HWND.*;
+    GLOBAL_STATE.hinstance = rg.HINSTANCE.*;
 
     return true;
 }
@@ -208,34 +209,37 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
 
-pub fn EarlyEngineUpdateA(gs: *GlobalState, gf: *GlobalFunction) callconv(.C) void {
-    // TODO: move to identifying in-race mode via player Test entity ptr being set; get rid of gs.in_race.on()s
-    // TODO: enum indicating state of in-race mode (none, pre-race, countdown, racing, post-race)
-    gs.in_race.update(mem.read(rc.ADDR_IN_RACE, u8) > 0);
-    if (gs.in_race == .JustOn) gs.player_reset();
-    if (gs.in_race.on()) gs.player_update();
+pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;
+    gs.in_race.update(player_ready);
 
-    //if (!s.prac.get("practice_tool_enable", bool)) return;
-    // FIXME: investigate past usage of practice tool ini setting; may need to adjust
-    // some things, primarily to do with lifecycle, because the past setting assumed
-    // it would be on permanently. also, do a pass on everything to integrate/migrate
-    // to global practice_mode.
-    // FIXME: move to Practice when practice stuff moved to core
-    // TODO: ability to toggle off practice mode if still in pre-countdown
-    if (input.get_kb_pressed(.P) and (!(gs.in_race.on() and gs.practice_mode))) {
-        gs.practice_mode = !gs.practice_mode;
-        const text: [:0]const u8 = if (gs.practice_mode) "Practice Mode Enabled" else "Practice Mode Disabled";
-        _ = gf.ToastNew(text, rt.ColorRGB.Yellow.rgba(0));
-    }
+    gs.race_state_prev = gs.race_state;
+    gs.race_state = blk: {
+        if (!gs.in_race.on()) break :blk .None;
+        if (rg.IN_RACE.* == 0) break :blk .PreRace;
+        // TODO: figure out how the engine knows to set these and use those instead
+        const flags1 = re.Test.PLAYER.*.flags1;
+        const countdown: bool = flags1 & (1 << 0) != 0;
+        if (countdown) break :blk .Countdown;
+        const postrace: bool = flags1 & (1 << 5) == 0;
+        const show_stats: bool = re.Manager.entity(.Jdge, 0).flags & 0x0F == 2;
+        if (postrace and show_stats) break :blk .PostRace;
+        if (postrace) break :blk .PostRaceExiting;
+        break :blk .Racing;
+    };
+    gs.race_state_new = gs.race_state != gs.race_state_prev;
+
+    if (gs.race_state_new and gs.race_state == .PreRace) gs.player_reset();
+    if (gs.in_race.on()) gs.player_update();
 }
 
 pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
-    gs.dt_f = mem.read(rc.ADDR_TIME_FRAMETIME, f32);
-    gs.fps = mem.read(rc.ADDR_TIME_FPS, f32);
+    gs.dt_f = rti.FRAMETIME.*;
+    gs.fps = rti.FPS.*;
     const fps_res: f32 = 1 / gs.dt_f * 2;
     gs.fps_avg = (gs.fps_avg * (fps_res - 1) + (1 / gs.dt_f)) / fps_res;
-    gs.timestamp = mem.read(rc.ADDR_TIME_TIMESTAMP, u32);
-    gs.framecount = mem.read(rc.ADDR_TIME_FRAMECOUNT, u32);
+    gs.timestamp = rti.TIMESTAMP.*;
+    gs.framecount = rti.FRAMECOUNT.*;
 }
 
 pub fn MenuTitleScreenB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
@@ -273,6 +277,10 @@ pub fn MenuStartRaceB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn MenuRaceResultsB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    DrawMenuPracticeModeLabel();
+}
+
+pub fn MenuTrackSelectB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 

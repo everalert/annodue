@@ -6,16 +6,15 @@ const GlobalSt = @import("core/Global.zig").GlobalState;
 const GlobalFn = @import("core/Global.zig").GlobalFunction;
 const COMPATIBILITY_VERSION = @import("core/global.zig").PLUGIN_VERSION;
 
-const r = @import("util/racer.zig");
-const rf = r.functions;
-const rc = r.constants;
-const rt = r.text;
-const rto = rt.TextStyleOpts;
+const rs = @import("racer").Sound;
 
 // FEATURES
-// -
-// - CONTROLS:      keyboard        xinput
-//   ..             ..              ..
+// - visualize collision faces
+// - visualize collision mesh
+// - visualize spline
+// - CONTROLS:              keyboard        xinput
+//   Open menu              9              ..
+//   Toggle visualization   8              ..
 // - SETTINGS:
 //   ..             type    note
 
@@ -217,16 +216,16 @@ const QuickRaceMenu = extern struct {
         mi.MenuItemToggle(&QuickRaceMenu.item_show_collision_mesh.input_converted, "Show collision mesh"),
         mi.MenuItemToggle(&QuickRaceMenu.item_show_visual_mesh.input_converted, "Show visual mesh"),
         mi.MenuItemToggle(&QuickRaceMenu.item_show_spline.input_converted, "Show spline"),
-        mi.MenuItemList(&preset_index, "Preset", &preset_names, false),
+        mi.MenuItemList(&preset_index, "Preset", &preset_names, false, null),
         mi.MenuItemSpacer(),
-        mi.MenuItemRange(&QuickRaceMenu.item_mesh_opacity.input_converted, "Collision mesh opacity", 0, 100, false),
-        mi.MenuItemRange(&QuickRaceMenu.item_mesh_brightness.input_converted, "Collision mesh brightness", 0, 100, false),
-        mi.MenuItemRange(&QuickRaceMenu.item_line_opacity.input_converted, "Collision line opacity", 0, 100, false),
-        mi.MenuItemRange(&QuickRaceMenu.item_line_brightness.input_converted, "Collision line brightness", 0, 100, false),
+        mi.MenuItemRange(&QuickRaceMenu.item_mesh_opacity.input_converted, "Collision mesh opacity", 0, 100, false, null),
+        mi.MenuItemRange(&QuickRaceMenu.item_mesh_brightness.input_converted, "Collision mesh brightness", 0, 100, false, null),
+        mi.MenuItemRange(&QuickRaceMenu.item_line_opacity.input_converted, "Collision line opacity", 0, 100, false, null),
+        mi.MenuItemRange(&QuickRaceMenu.item_line_brightness.input_converted, "Collision line brightness", 0, 100, false, null),
         mi.MenuItemSpacer(),
         mi.MenuItemToggle(&QuickRaceMenu.item_depth_test.input_converted, "Depth test"),
         mi.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces"),
-        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", 0, 100, false),
+        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", 0, 100, false, null),
     };
 
     var item_enabled = ConvertedMenuItem{ .input_bool = &state.enabled };
@@ -261,14 +260,14 @@ const QuickRaceMenu = extern struct {
 
     fn open() void {
         if (!gf.GameFreezeEnable(menu_key)) return;
-        //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
+        rs.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
         if (!gf.GameFreezeDisable(menu_key)) return;
-        rf.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+        rs.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         menu_active = false;
     }
 
@@ -291,13 +290,13 @@ const QuickRaceMenu = extern struct {
         if (menu_active) {
             var current_preset: i32 = -1;
 
-            for (presets[0..presets.len-1], 0..) |preset, index| {
+            for (presets[0 .. presets.len - 1], 0..) |preset, index| {
                 if (std.meta.eql(preset, state.settings))
                     current_preset = @intCast(index);
             }
             if (current_preset == -1) {
-                presets[presets.len-1] = state.settings;
-                current_preset = @intCast(presets.len-1);
+                presets[presets.len - 1] = state.settings;
+                current_preset = @intCast(presets.len - 1);
             }
 
             preset_index = current_preset;
@@ -352,6 +351,7 @@ export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    QuickRaceMenu.close();
     deinit_collision_viewer();
     _ = gf;
     _ = gs;

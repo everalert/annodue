@@ -41,12 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Cam7: lateral movement speed - `650` -> `250..16000`
-- Cam7: vertical movement speed - `350` -> `125..8000`
+- Cam7: lateral movement speed - `650` -> `125..16000`
+- Cam7: vertical movement speed - `350` -> `62.5..8000`
 - Cam7: movement smoothing - `8` -> `none,16,8,4`
 - Cam7: movement speed curve - `quadratic` -> `quartic` 
-- Cam7: rotation speed - `360` -> `160..810`
-- Cam7: rotation smoothing - `none` -> `none,36,24,12`
+- Cam7: rotation speed - `360` -> `80..810`
+- Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
 
@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: Corrected steering while upside-down to be more intuitive
 - Cam7: Corrected Y/Z movement while upside-down in planar movement mode
 - Cam7: Minimap lagging behind camera motion while in free cam
+- Cam7: Faster rotation toward diagonals with keyboard input
 - Savestate: Rewind ignoring saved inputs
 - Savestate: Rewind not restoring UI correctly
 - Savestate: Stuttering during rewind scrubbing

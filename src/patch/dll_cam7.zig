@@ -111,18 +111,18 @@ const Cam7 = extern struct {
     var input_mouse_cm360: f32 = 24; // real-world space per full rotation
     var input_mouse_sens: f32 = 15118.1; // derived; mouse units per full rotation
     var rot_damp_i_dflt: usize = 0;
-    var rot_spd_i_dflt: usize = 2;
+    var rot_spd_i_dflt: usize = 3;
     var move_damp_i_dflt: usize = 2;
-    var move_spd_i_dflt: usize = 2;
+    var move_spd_i_dflt: usize = 3;
     var rot_damp_i: usize = 0;
-    var rot_spd_i: usize = 2;
+    var rot_spd_i: usize = 3;
     var move_damp_i: usize = 2;
-    var move_spd_i: usize = 2;
+    var move_spd_i: usize = 3;
     var move_planar: bool = false;
 
-    const rot_damp_val = [_]?f32{ null, 36, 24, 12 };
+    const rot_damp_val = [_]?f32{ null, 36, 24, 12, 6 };
     var rot_damp: ?f32 = null;
-    const rot_spd_val = [_]f32{ 160, 240, 360, 540, 810 };
+    const rot_spd_val = [_]f32{ 80, 160, 240, 360, 540, 810 };
     const rot_change_damp: f32 = 8;
     var rot_spd: f32 = 360;
     var rot_spd_tgt: f32 = 360;
@@ -133,10 +133,10 @@ const Cam7 = extern struct {
     const move_damp_val = [_]?f32{ null, 16, 8, 4 };
     var move_damp: ?f32 = 8;
     const move_change_damp: f32 = 8;
-    const move_spd_xy_val = [_]f32{ 250, 500, 1000, 2000, 4000, 8000, 16000 };
+    const move_spd_xy_val = [_]f32{ 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
     var move_spd_xy: f32 = 1000;
     var move_spd_xy_tgt: f32 = 1000;
-    const move_spd_z_val = [_]f32{ 125, 250, 500, 1000, 2000, 4000, 8000 };
+    const move_spd_z_val = [_]f32{ 62.5, 125, 250, 500, 1000, 2000, 4000, 8000 };
     var move_spd_z: f32 = 500;
     var move_spd_z_tgt: f32 = 500;
 
@@ -158,8 +158,8 @@ const Cam7 = extern struct {
     var dir_up: Vec3 = .{};
 
     var input_toggle_data = ButtonInputMap{ .kb = .@"0", .xi = .BACK };
-    var input_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX, .kb_scale = 0.65 };
-    var input_look_y_data = AxisInputMap{ .kb_dec = .DOWN, .kb_inc = .UP, .xi_inc = .StickRY, .kb_scale = 0.65 };
+    var input_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX };
+    var input_look_y_data = AxisInputMap{ .kb_dec = .DOWN, .kb_inc = .UP, .xi_inc = .StickRY };
     var input_move_x_data = AxisInputMap{ .kb_dec = .A, .kb_inc = .D, .xi_inc = .StickLX };
     var input_move_y_data = AxisInputMap{ .kb_dec = .S, .kb_inc = .W, .xi_inc = .StickLY };
     var input_move_z_data = AxisInputMap{ .kb_dec = .SHIFT, .kb_inc = .SPACE, .xi_dec = .TriggerR, .xi_inc = .TriggerL };
@@ -442,16 +442,16 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 
     // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
     Cam7.move_planar = gf.SettingGetB("cam7", "default_planar_movement") orelse false;
-    Cam7.rot_damp_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_smoothing") orelse 0, 0, 3);
+    Cam7.rot_damp_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_smoothing") orelse 0, 0, 4);
     Cam7.rot_damp_i_dflt = Cam7.rot_damp_i;
     Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
-    Cam7.rot_spd_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_speed") orelse 2, 0, 4);
+    Cam7.rot_spd_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_speed") orelse 3, 0, 5);
     Cam7.rot_spd_i_dflt = Cam7.rot_spd_i;
     Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
     Cam7.move_damp_i = m.clamp(gf.SettingGetU("cam7", "default_move_smoothing") orelse 2, 0, 3);
     Cam7.move_damp_i_dflt = Cam7.move_damp_i;
     Cam7.move_damp = Cam7.move_damp_val[Cam7.move_damp_i];
-    Cam7.move_spd_i = m.clamp(gf.SettingGetU("cam7", "default_move_speed") orelse 2, 0, 6);
+    Cam7.move_spd_i = m.clamp(gf.SettingGetU("cam7", "default_move_speed") orelse 3, 0, 6);
     Cam7.move_spd_i_dflt = Cam7.move_spd_i;
     Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
     Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
@@ -498,7 +498,7 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         Cam7.move_damp = Cam7.move_damp_val[Cam7.move_damp_i];
     } else {
         if (move_dec and Cam7.move_spd_i > 0) Cam7.move_spd_i -= 1;
-        if (move_inc and Cam7.move_spd_i < 6) Cam7.move_spd_i += 1;
+        if (move_inc and Cam7.move_spd_i < 7) Cam7.move_spd_i += 1;
         if (move_both) Cam7.move_spd_i = Cam7.move_spd_i_dflt;
         Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
         Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
@@ -512,12 +512,12 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         (rot_inc and Cam7.input_rotation_dec.gets().on());
     if (Cam7.input_damp.gets().on()) {
         if (rot_dec and Cam7.rot_damp_i > 0) Cam7.rot_damp_i -= 1;
-        if (rot_inc and Cam7.rot_damp_i < 3) Cam7.rot_damp_i += 1;
+        if (rot_inc and Cam7.rot_damp_i < 4) Cam7.rot_damp_i += 1;
         if (rot_both) Cam7.rot_damp_i = Cam7.rot_damp_i_dflt;
         Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
     } else {
         if (rot_dec and Cam7.rot_spd_i > 0) Cam7.rot_spd_i -= 1;
-        if (rot_inc and Cam7.rot_spd_i < 4) Cam7.rot_spd_i += 1;
+        if (rot_inc and Cam7.rot_spd_i < 5) Cam7.rot_spd_i += 1;
         if (rot_both) Cam7.rot_spd_i = Cam7.rot_spd_i_dflt;
         Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
     }

@@ -39,6 +39,7 @@ pub fn InputUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // MAPPING
 
+// TODO: add 'dominant' field, as a way of communicating which device is 'active'
 pub const InputMap = struct {
     ptr: *anyopaque,
     s_val: ?*st.ActiveState = null,
@@ -58,6 +59,7 @@ pub const InputMap = struct {
     }
 };
 
+// TODO: StickInputMap, with deadzone inbuilt, and remove kb_scale in lieu of 'dominant' field on InputMap
 pub const AxisInputMap = struct {
     kb_dec: ?w32kb.VIRTUAL_KEY = null,
     kb_inc: ?w32kb.VIRTUAL_KEY = null,

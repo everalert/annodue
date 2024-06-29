@@ -51,11 +51,11 @@ pub const panic = debug.annodue_panic;
 //   Z-move up                  Space           L Trigger
 //   Z-move down                Shift           R Trigger
 //   movement down              Q               LB
-//   movement up                E               RB
+//   movement up                E               RB          up+down = return to default
 //   rotation down              Z               LSB
-//   rotation up                C               RSB
-//   damping                    X               Y               hold to edit movement/rotation
-//                                                              damping instead of speed
+//   rotation up                C               RSB         up+down = return to default
+//   damping                    X               Y           hold to edit movement/rotation
+//                                                          damping instead of speed
 //   toggle planar movement     Tab             X
 // - SETTINGS:
 //   enable                     bool
@@ -108,6 +108,10 @@ const Cam7 = extern struct {
     var input_mouse_dpi: f32 = 1600; // only needed for sens calc, does not set mouse dpi
     var input_mouse_cm360: f32 = 24; // real-world space per full rotation
     var input_mouse_sens: f32 = 15118.1; // derived; mouse units per full rotation
+    var rot_damp_i_dflt: usize = 0;
+    var rot_spd_i_dflt: usize = 2;
+    var move_damp_i_dflt: usize = 2;
+    var move_spd_i_dflt: usize = 2;
     var rot_damp_i: usize = 0;
     var rot_spd_i: usize = 2;
     var move_damp_i: usize = 2;
@@ -423,12 +427,16 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
     Cam7.move_planar = gf.SettingGetB("cam7", "default_planar_movement") orelse false;
     Cam7.rot_damp_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_smoothing") orelse 0, 0, 3);
+    Cam7.rot_damp_i_dflt = Cam7.rot_damp_i;
     Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
     Cam7.rot_spd_i = m.clamp(gf.SettingGetU("cam7", "default_rotation_speed") orelse 2, 0, 4);
+    Cam7.rot_spd_i_dflt = Cam7.rot_spd_i;
     Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
     Cam7.move_damp_i = m.clamp(gf.SettingGetU("cam7", "default_move_smoothing") orelse 2, 0, 3);
+    Cam7.move_damp_i_dflt = Cam7.move_damp_i;
     Cam7.move_damp = Cam7.move_damp_val[Cam7.move_damp_i];
     Cam7.move_spd_i = m.clamp(gf.SettingGetU("cam7", "default_move_speed") orelse 2, 0, 6);
+    Cam7.move_spd_i_dflt = Cam7.move_spd_i;
     Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
     Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
 }
@@ -456,13 +464,17 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
 
     const move_dec: bool = Cam7.input_movement_dec.gets() == .JustOn;
     const move_inc: bool = Cam7.input_movement_inc.gets() == .JustOn;
+    const move_both: bool = (move_dec and Cam7.input_movement_inc.gets().on()) or
+        (move_inc and Cam7.input_movement_dec.gets().on());
     if (Cam7.input_damp.gets().on()) {
         if (move_dec and Cam7.move_damp_i > 0) Cam7.move_damp_i -= 1;
         if (move_inc and Cam7.move_damp_i < 3) Cam7.move_damp_i += 1;
+        if (move_both) Cam7.move_damp_i = Cam7.move_damp_i_dflt;
         Cam7.move_damp = Cam7.move_damp_val[Cam7.move_damp_i];
     } else {
         if (move_dec and Cam7.move_spd_i > 0) Cam7.move_spd_i -= 1;
         if (move_inc and Cam7.move_spd_i < 6) Cam7.move_spd_i += 1;
+        if (move_both) Cam7.move_spd_i = Cam7.move_spd_i_dflt;
         Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
         Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
     }
@@ -471,13 +483,17 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
 
     const rot_dec: bool = Cam7.input_rotation_dec.gets() == .JustOn;
     const rot_inc: bool = Cam7.input_rotation_inc.gets() == .JustOn;
+    const rot_both: bool = (rot_dec and Cam7.input_rotation_inc.gets().on()) or
+        (rot_inc and Cam7.input_rotation_dec.gets().on());
     if (Cam7.input_damp.gets().on()) {
         if (rot_dec and Cam7.rot_damp_i > 0) Cam7.rot_damp_i -= 1;
         if (rot_inc and Cam7.rot_damp_i < 3) Cam7.rot_damp_i += 1;
+        if (rot_both) Cam7.rot_damp_i = Cam7.rot_damp_i_dflt;
         Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
     } else {
         if (rot_dec and Cam7.rot_spd_i > 0) Cam7.rot_spd_i -= 1;
         if (rot_inc and Cam7.rot_spd_i < 4) Cam7.rot_spd_i += 1;
+        if (rot_both) Cam7.rot_spd_i = Cam7.rot_spd_i_dflt;
         Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
     }
     Cam7.rot_spd = f32_damp(Cam7.rot_spd, Cam7.rot_spd_tgt, Cam7.rot_change_damp, gs.dt_f);

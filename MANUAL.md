@@ -64,9 +64,9 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 |Z-move up              |`Space`             |`L Trigger`|&nbsp;
 |Z-move down            |`Shift`             |`R Trigger`|&nbsp;
 |movement up            |`E`                 |`RB`       |&nbsp;
-|movement down          |`Q`                 |`LB`       |&nbsp;
+|movement down          |`Q`                 |`LB`       |up+down to return to default
 |rotation up            |`Z`                 |`RSB`      |&nbsp;
-|rotation down          |`C`                 |`LSB`      |&nbsp;
+|rotation down          |`C`                 |`LSB`      |up+down to return to default
 |damping                |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
 |toggle planar movement |`Tab`               |`X`        |&nbsp;
 

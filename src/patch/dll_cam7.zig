@@ -705,6 +705,6 @@ export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HandleSettings(gf);
 }
 
-export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage1CA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     UpdateState(gs, gf);
 }

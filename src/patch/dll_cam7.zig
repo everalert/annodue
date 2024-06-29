@@ -26,6 +26,7 @@ const rg = @import("racer").Global;
 const rm = @import("racer").Matrix;
 const rv = @import("racer").Vector;
 const rte = @import("racer").Text;
+const rmo = @import("racer").Model;
 const Vec2 = rv.Vec2;
 const Vec3 = rv.Vec3;
 const Vec4 = rv.Vec4;
@@ -56,7 +57,8 @@ pub const panic = debug.annodue_panic;
 //   rotation up                C               RSB         up+down = return to default
 //   damping                    X               Y           hold to edit movement/rotation
 //                                                          damping instead of speed
-//   toggle planar movement     Tab             X
+//   toggle planar movement     Tab             B
+//   pan and orbit mode         RCtrl           X           hold
 // - SETTINGS:
 //   enable                     bool
 //   flip_look_x                bool
@@ -124,6 +126,9 @@ const Cam7 = extern struct {
     const rot_change_damp: f32 = 8;
     var rot_spd: f32 = 360;
     var rot_spd_tgt: f32 = 360;
+    var orbit_dist: f32 = 0;
+    var orbit_dist_delta: f32 = 0;
+    var orbit_pos: Vec3 = .{};
 
     const move_damp_val = [_]?f32{ null, 16, 8, 4 };
     var move_damp: ?f32 = 8;
@@ -163,7 +168,10 @@ const Cam7 = extern struct {
     var input_rotation_dec_data = ButtonInputMap{ .kb = .Z, .xi = .LEFT_THUMB };
     var input_rotation_inc_data = ButtonInputMap{ .kb = .C, .xi = .RIGHT_THUMB };
     var input_damp_data = ButtonInputMap{ .kb = .X, .xi = .Y };
-    var input_toggle_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .X };
+    var input_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .B };
+    var input_sweep_data = ButtonInputMap{ .kb = .RCONTROL, .xi = .X };
+    //var input_mpan_data = ButtonInputMap{ .kb = .LBUTTON };
+    //var input_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
     var input_toggle = input_toggle_data.inputMap();
     var input_look_x = input_look_x_data.inputMap();
     var input_look_y = input_look_y_data.inputMap();
@@ -175,7 +183,8 @@ const Cam7 = extern struct {
     var input_rotation_dec = input_rotation_dec_data.inputMap();
     var input_rotation_inc = input_rotation_inc_data.inputMap();
     var input_damp = input_damp_data.inputMap();
-    var input_toggle_planar = input_toggle_planar_data.inputMap();
+    var input_planar = input_planar_data.inputMap();
+    var input_sweep = input_sweep_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -192,7 +201,8 @@ const Cam7 = extern struct {
         input_rotation_dec.update(gf);
         input_rotation_inc.update(gf);
         input_damp.update(gf);
-        input_toggle_planar.update(gf);
+        input_planar.update(gf);
+        input_sweep.update(gf);
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
@@ -320,9 +330,10 @@ fn mat4x4_setRotation(out: *Mat4x4, in: *const Vec3) void {
     rm.Mat4x4_SetRotation(out, rad2deg(f32, in.x), rad2deg(f32, in.y), rad2deg(f32, in.z));
 }
 
-inline fn f32_damp(from: f32, to: f32, t: f32, dt: f32) f32 {
-    if (m.fabs(to - from) < m.floatEps(f32)) return to;
-    return std.math.lerp(from, to, 1 - std.math.exp(-t * dt));
+inline fn vec3_mul3(out: *Vec3, x: f32, y: f32, z: f32) void {
+    out.x *= x;
+    out.y *= y;
+    out.z *= z;
 }
 
 inline fn vec3_damp(out: *Vec3, in: *const Vec3, t: f32, dt: f32) void {
@@ -331,17 +342,9 @@ inline fn vec3_damp(out: *Vec3, in: *const Vec3, t: f32, dt: f32) void {
     out.z = f32_damp(out.z, in.z, t, dt);
 }
 
-// TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
-inline fn f32_applyDeadzone(out: *f32) void {
-    const mag: f32 = @fabs(out.*);
-
-    if (mag <= Cam7.dz_i) {
-        out.* = 0;
-        return;
-    }
-
-    const scale: f32 = if (mag >= Cam7.dz_o) (Cam7.dz_range / mag * Cam7.dz_fact) else ((mag - Cam7.dz_i) / Cam7.dz_range / mag);
-    out.* *= scale;
+inline fn f32_damp(from: f32, to: f32, t: f32, dt: f32) f32 {
+    if (m.fabs(to - from) < m.floatEps(f32)) return to;
+    return std.math.lerp(from, to, 1 - std.math.exp(-t * dt));
 }
 
 // TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
@@ -355,6 +358,19 @@ inline fn vec2_applyDeadzone(out: *Vec2) void {
 
     const scale: f32 = if (mag >= Cam7.dz_o) (Cam7.dz_range / mag * Cam7.dz_fact) else ((mag - Cam7.dz_i) / Cam7.dz_range / mag);
     rv.Vec2_Scale(out, scale, out);
+}
+
+// TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
+inline fn f32_applyDeadzone(out: *f32) void {
+    const mag: f32 = @fabs(out.*);
+
+    if (mag <= Cam7.dz_i) {
+        out.* = 0;
+        return;
+    }
+
+    const scale: f32 = if (mag >= Cam7.dz_o) (Cam7.dz_range / mag * Cam7.dz_fact) else ((mag - Cam7.dz_i) / Cam7.dz_range / mag);
+    out.* *= scale;
 }
 
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
@@ -459,8 +475,17 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
 
     // input
 
-    if (Cam7.input_toggle_planar.gets() == .JustOn)
+    if (Cam7.input_planar.gets() == .JustOn)
         Cam7.move_planar = !Cam7.move_planar;
+
+    const move_sweep: bool = Cam7.input_sweep.gets().on();
+    if (Cam7.input_sweep.gets() == .JustOn) {
+        Cam7.orbit_dist = 200;
+        Cam7.orbit_dist_delta = 0;
+        var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Add(&Cam7.orbit_pos, @ptrCast(&Cam7.xf.T), &fwd);
+    }
 
     const move_dec: bool = Cam7.input_movement_dec.gets() == .JustOn;
     const move_inc: bool = Cam7.input_movement_inc.gets() == .JustOn;
@@ -527,9 +552,23 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation);
     }
 
+    if (move_sweep) {
+        var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Add(&Cam7.orbit_pos, @ptrCast(&Cam7.xf.T), &fwd);
+    }
+
     mat4x4_setRotation(&Cam7.xf, &Cam7.xcam_rot);
 
+    if (move_sweep) {
+        var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Sub(@ptrCast(&Cam7.xf.T), &Cam7.orbit_pos, &fwd);
+    }
+
     // motion
+
+    var xf_ref: *Mat4x4 = &Cam7.xf;
 
     Cam7.xcam_motion_tgt.z = Cam7.input_move_z.getf();
     f32_applyDeadzone(&Cam7.xcam_motion_tgt.z);
@@ -539,16 +578,33 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     Cam7.xcam_motion_tgt.y = Cam7.input_move_y.getf();
     vec2_applyDeadzone(@ptrCast(&Cam7.xcam_motion_tgt));
 
-    if (Cam7.move_planar) {
+    // TODO: state machine enum, probably
+    if (move_sweep) {
+        var orbit_dist_delta_target: f32 = Cam7.xcam_motion_tgt.z;
+        Cam7.xcam_motion_tgt.z = Cam7.xcam_motion_tgt.y;
+        vec3_mul3(&Cam7.xcam_motion_tgt, Cam7.move_spd_xy, 0, Cam7.move_spd_xy);
+
+        Cam7.orbit_dist_delta = if (Cam7.move_damp) |d| f32_damp(Cam7.orbit_dist_delta, orbit_dist_delta_target, d, gs.dt_f) else orbit_dist_delta_target;
+        var dist_delta: f32 = Cam7.orbit_dist_delta * Cam7.move_spd_z * gs.dt_f;
+        if (Cam7.orbit_dist + dist_delta < 0) dist_delta = -Cam7.orbit_dist;
+        var fwd: Vec3 = .{ .y = dist_delta };
+        Cam7.orbit_dist += dist_delta;
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Sub(@ptrCast(&Cam7.xf.T), @ptrCast(&Cam7.xf.T), &fwd);
+    } else if (Cam7.move_planar) {
         if (upside_down) {
             Cam7.xcam_motion_tgt.y *= -1.0;
             Cam7.xcam_motion_tgt.z *= -1.0;
         }
+        vec3_mul3(&Cam7.xcam_motion_tgt, Cam7.move_spd_xy, Cam7.move_spd_xy, Cam7.move_spd_z);
+
         rm.Mat4x4_SetRotation(&Cam7.xf_look, rad2deg(f32, Cam7.xcam_rot.x), 0, rad2deg(f32, Cam7.xcam_rot.z));
-        rv.Vec3_MulMat4x4(&Cam7.xcam_motion_tgt, &Cam7.xcam_motion_tgt, &Cam7.xf_look);
+        xf_ref = &Cam7.xf_look;
     } else {
-        rv.Vec3_MulMat4x4(&Cam7.xcam_motion_tgt, &Cam7.xcam_motion_tgt, &Cam7.xf);
+        vec3_mul3(&Cam7.xcam_motion_tgt, Cam7.move_spd_xy, Cam7.move_spd_xy, Cam7.move_spd_z);
     }
+
+    rv.Vec3_MulMat4x4(&Cam7.xcam_motion_tgt, &Cam7.xcam_motion_tgt, xf_ref);
 
     if (Cam7.move_damp) |d| {
         vec3_damp(&Cam7.xcam_motion, &Cam7.xcam_motion_tgt, d, gs.dt_f);
@@ -556,13 +612,24 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
         rv.Vec3_Copy(&Cam7.xcam_motion, &Cam7.xcam_motion_tgt);
     }
 
-    Cam7.xf.T.x += gs.dt_f * Cam7.move_spd_xy * Cam7.xcam_motion.x;
-    Cam7.xf.T.y += gs.dt_f * Cam7.move_spd_xy * Cam7.xcam_motion.y;
-    Cam7.xf.T.z += gs.dt_f * Cam7.move_spd_z * Cam7.xcam_motion.z;
+    rv.Vec3_AddScale1(@ptrCast(&Cam7.xf.T), @ptrCast(&Cam7.xf.T), gs.dt_f, &Cam7.xcam_motion);
 
-    // TODO: remove, debug
-    for (@as(*[3]f32, @ptrCast(&Cam7.xcam_rot)), 0..) |v, i|
-        rte.DrawText(0 + 48 * @as(i16, @intCast(i)), 0, "{d:5.3}", .{@mod(v / rot - 0.25, 1)}, null, null) catch {};
+    //// FIXME: remove, debug
+    //rte.DrawText(0, 0, "ORBIT DIST {d:5.3}", .{Cam7.orbit_dist}, null, null) catch {};
+    //if (move_sweep) {
+    //    var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
+    //    rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+    //    rv.Vec3_Add(&Cam7.orbit_pos, @ptrCast(&Cam7.xf.T), &fwd);
+
+    //    var mark_xf: Mat4x4 = Cam7.xf;
+    //    rv.Vec3_Set(@ptrCast(&mark_xf.T), Cam7.orbit_pos.x, Cam7.orbit_pos.y, Cam7.orbit_pos.z);
+    //    const mark = re.Manager.entity(.Jdge, 0).pSplineMarkers[0];
+    //    if (@intFromPtr(mark) != 0) {
+    //        rmo.Node_SetTransform(mark, &mark_xf);
+    //        rmo.Node_SetFlags(&mark.Node, 2, 3, 16, 2);
+    //        rmo.Node_SetColorsOnAllMaterials(&mark.Node, 0, 0, 255, 63, 63, 0);
+    //    }
+    //}
 
     return .FreeCam;
 }

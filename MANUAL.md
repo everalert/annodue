@@ -68,7 +68,8 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 |rotation up            |`Z`                 |`RSB`      |&nbsp;
 |rotation down          |`C`                 |`LSB`      |up+down to return to default
 |damping                |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
-|toggle planar movement |`Tab`               |`X`        |&nbsp;
+|toggle planar movement |`Tab`               |`B`        |&nbsp;
+|pan and orbit mode     |`RCtrl`             |`X`        |hold
 
 ##### Settings
 

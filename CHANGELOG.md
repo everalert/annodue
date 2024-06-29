@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Cam7: analog deadzone customization via settings
-- Cam7: ability to toggle planar movement with `TAB(kb) or X(xinput)`
+- Cam7: ability to toggle planar movement with `TAB(kb) or B(xinput)`
+- Cam7: pan and orbit with `RCtrl(kb) or X(xinput)`
 - Cam7: cycle movement speed with `Q or LB` and `E or RB`
 - Cam7: cycle rotation speed with `Z or LSB` and `C or RSB`
 - Cam7: cycle smoothing instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons

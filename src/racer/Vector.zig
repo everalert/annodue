@@ -23,6 +23,10 @@ pub const Vec3_Copy: *fn (out: *Vec3, in: *const Vec3) callconv(.C) void =
     @ptrFromInt(0x42F7D0);
 pub const Vec3_Eql: *fn (in1: *Vec3, in2: *Vec3) callconv(.C) bool =
     @ptrFromInt(0x42F7F0);
+pub const Vec3_Add: *fn (out: *Vec3, in1: *const Vec3, in2: *const Vec3) callconv(.C) void =
+    @ptrFromInt(0x42F830);
+pub const Vec3_Sub: *fn (out: *Vec3, in1: *const Vec3, in2: *const Vec3) callconv(.C) void =
+    @ptrFromInt(0x42F860);
 pub const Vec3_Dot: *fn (in1: *Vec3, in2: *Vec3) callconv(.C) f32 =
     @ptrFromInt(0x42F890);
 pub const Vec3_Mag: *fn (in: *const Vec3) callconv(.C) f32 =

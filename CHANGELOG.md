@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'default_rotation_speed'
 - Setting: 'cam7' -> 'default_rotation_smoothing'
 - Setting: 'cam7' -> 'default_planar_movement'
+- Setting: 'cam7' -> 'flip_look_x_inverted'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): `appinfo` module for externally-facing defs
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cam7: Corrected steering while upside-down to be more intuitive
 - Savestate: Rewind ignoring saved inputs
 - Savestate: Rewind not restoring UI correctly
 - Savestate: Stuttering during rewind scrubbing

@@ -56,11 +56,12 @@ pub const panic = debug.annodue_panic;
 //   rotation up                C               RSB
 //   damping                    X               Y               hold to edit movement/rotation
 //                                                              damping instead of speed
-//   toggle planar movement     C               RSB
+//   toggle planar movement     Tab             X
 // - SETTINGS:
 //   enable                     bool
 //   flip_look_x                bool
 //   flip_look_y                bool
+//   flip_look_x_inverted       bool
 //   stick_deadzone_inner       f32     0.0..0.5
 //   stick_deadzone_outer       f32     0.5..1.0
 //   default_move_speed         u32     0..6
@@ -99,6 +100,7 @@ const Cam7 = extern struct {
     var enable: bool = false;
     var flip_look_x: bool = false;
     var flip_look_y: bool = false;
+    var flip_look_x_inverted: bool = true;
     var dz_i: f32 = 0.05; // 0.0..0.5
     var dz_o: f32 = 0.95; // 0.5..1.0
     var dz_range: f32 = 0.9; // derived
@@ -405,6 +407,7 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 
     Cam7.flip_look_x = gf.SettingGetB("cam7", "flip_look_x") orelse false;
     Cam7.flip_look_y = gf.SettingGetB("cam7", "flip_look_y") orelse false;
+    Cam7.flip_look_x_inverted = gf.SettingGetB("cam7", "flip_look_x_inverted") orelse false;
 
     Cam7.input_mouse_dpi = @floatFromInt(gf.SettingGetU("cam7", "mouse_dpi") orelse 1600);
     Cam7.input_mouse_cm360 = gf.SettingGetF("cam7", "mouse_cm360") orelse 24;
@@ -482,12 +485,13 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
 
     var rot_scale: f32 = undefined;
     const using_mouse: bool = Cam7.input_mouse_d_x != 0 or Cam7.input_mouse_d_y != 0;
+    const flip_x: bool = Cam7.flip_look_x != (Cam7.flip_look_x_inverted and (@mod(Cam7.xcam_rot.y / rot - 0.25, 1) < 0.5));
     if (using_mouse) {
-        Cam7.xcam_rotation.x = if (Cam7.flip_look_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
+        Cam7.xcam_rotation.x = if (flip_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
         Cam7.xcam_rotation.y = if (Cam7.flip_look_y) Cam7.input_mouse_d_y else -Cam7.input_mouse_d_y;
         rot_scale = rot;
     } else {
-        Cam7.xcam_rotation.x = if (Cam7.flip_look_x) Cam7.input_look_x.getf() else -Cam7.input_look_x.getf();
+        Cam7.xcam_rotation.x = if (flip_x) Cam7.input_look_x.getf() else -Cam7.input_look_x.getf();
         Cam7.xcam_rotation.y = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
         vec2_applyDeadzone(@ptrCast(&Cam7.xcam_rotation));
         const r_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_rotation)));
@@ -505,10 +509,6 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     }
 
     mat4x4_setRotation(&Cam7.xf, &Cam7.xcam_rot);
-
-    //mat4x4_getRow(&Cam7.xf, &Cam7.dir_right, 0);
-    //mat4x4_getRow(&Cam7.xf, &Cam7.dir_up, 1);
-    //mat4x4_getRow(&Cam7.xf, &Cam7.dir_forward, 2);
 
     // motion
 
@@ -541,7 +541,7 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
 
     // TODO: remove, debug
     for (@as(*[3]f32, @ptrCast(&Cam7.xcam_rot)), 0..) |v, i|
-        rte.DrawText(0 + 48 * @as(i16, @intCast(i)), 0, "{d:5.3}", .{@mod(v, m.pi)}, null, null) catch {};
+        rte.DrawText(0 + 48 * @as(i16, @intCast(i)), 0, "{d:5.3}", .{@mod(v / rot - 0.25, 1)}, null, null) catch {};
 
     return .FreeCam;
 }

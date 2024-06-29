@@ -58,16 +58,17 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
-|Toggle        |`0`                 |`Back`     |&nbsp;
-|XY-move       |`W A S D`           |`L Stick`  |&nbsp;
-|XY-rotate     |`Mouse` or `↑ ↓ ← →`|`R Stick`  |&nbsp;
-|Z-move up     |`Space`             |`L Trigger`|&nbsp;
-|Z-move down   |`Shift`             |`R Trigger`|&nbsp;
-|movement up   |`E`                 |`RB`       |&nbsp;
-|movement down |`Q`                 |`LB`       |&nbsp;
-|rotation up   |`Z`                 |`RSB`      |&nbsp;
-|rotation down |`C`                 |`LSB`      |&nbsp;
-|damping       |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
+|Toggle                 |`0`                 |`Back`     |&nbsp;
+|XY-move                |`W A S D`           |`L Stick`  |&nbsp;
+|XY-rotate              |`Mouse` or `↑ ↓ ← →`|`R Stick`  |&nbsp;
+|Z-move up              |`Space`             |`L Trigger`|&nbsp;
+|Z-move down            |`Shift`             |`R Trigger`|&nbsp;
+|movement up            |`E`                 |`RB`       |&nbsp;
+|movement down          |`Q`                 |`LB`       |&nbsp;
+|rotation up            |`Z`                 |`RSB`      |&nbsp;
+|rotation down          |`C`                 |`LSB`      |&nbsp;
+|damping                |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
+|toggle planar movement |`Tab`               |`X`        |&nbsp;
 
 ##### Settings
 
@@ -78,6 +79,7 @@ Configured under `[cam7]`
 |`enable`                    |`bool`|&nbsp;
 |`flip_look_x`               |`bool`|Invert x-axis rotation
 |`flip_look_y`               |`bool`|Invert y-axis rotation
+|`flip_look_x_inverted`      |`bool`|Invert x-axis rotation while upside-down
 |`stick_deadzone_inner`      |`f32` |0.0 to 0.5
 |`stick_deadzone_outer`      |`f32` |0.5 to 1.0
 |`default_move_speed`        |`u32` |0 to 6

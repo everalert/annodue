@@ -106,6 +106,7 @@ pub fn init() void {
     SettingsState.cam7.add("enable", bool, true);
     SettingsState.cam7.add("flip_look_x", bool, false);
     SettingsState.cam7.add("flip_look_y", bool, false);
+    SettingsState.cam7.add("flip_look_x_inverted", bool, true);
     SettingsState.cam7.add("stick_deadzone_inner", f32, 0.05);
     SettingsState.cam7.add("stick_deadzone_outer", f32, 0.95);
     SettingsState.cam7.add("default_move_speed", u32, 2);

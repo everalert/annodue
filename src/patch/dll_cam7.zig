@@ -361,6 +361,18 @@ inline fn vec2_applyDeadzone(out: *Vec2) void {
 }
 
 // TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
+// sm64-style deadzone
+inline fn vec2_applyDeadzoneSq(out: *Vec2) void {
+    out.x = if (@fabs(out.x) < Cam7.dz_i) 0 else out.x - -m.sign(out.x) * Cam7.dz_i;
+    out.y = if (@fabs(out.y) < Cam7.dz_i) 0 else out.y - -m.sign(out.y) * Cam7.dz_i;
+    if (out.x == 0 and out.y == 0) return;
+
+    const mag: f32 = rv.Vec2_Mag(out);
+    const scale: f32 = if (mag > Cam7.dz_range) Cam7.dz_range / mag else Cam7.dz_fact;
+    rv.Vec2_Scale(out, scale, out);
+}
+
+// TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
 inline fn f32_applyDeadzone(out: *f32) void {
     const mag: f32 = @fabs(out.*);
 
@@ -371,6 +383,16 @@ inline fn f32_applyDeadzone(out: *f32) void {
 
     const scale: f32 = if (mag >= Cam7.dz_o) (Cam7.dz_range / mag * Cam7.dz_fact) else ((mag - Cam7.dz_i) / Cam7.dz_range / mag);
     out.* *= scale;
+}
+
+// TODO: testing, e.g. 0.05..0.95 (0.35) -> mag 0.333..
+// sm64-style deadzone
+inline fn f32_applyDeadzoneSq(out: *f32) void {
+    out.* = if (@fabs(out.*) < Cam7.dz_i) 0 else out.* - -m.sign(out.*) * Cam7.dz_i;
+    if (out.* == 0) return;
+
+    const mag: f32 = @fabs(out.*);
+    out.* *= if (mag > Cam7.dz_range) Cam7.dz_range / mag else Cam7.dz_fact;
 }
 
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
@@ -537,7 +559,7 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     } else {
         Cam7.xcam_rotation.x = if (flip_x) Cam7.input_look_x.getf() else -Cam7.input_look_x.getf();
         Cam7.xcam_rotation.y = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
-        vec2_applyDeadzone(@ptrCast(&Cam7.xcam_rotation));
+        vec2_applyDeadzoneSq(@ptrCast(&Cam7.xcam_rotation));
         const r_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_rotation)));
         rv.Vec2_Scale(@ptrCast(&Cam7.xcam_rotation), r_scale, @ptrCast(&Cam7.xcam_rotation));
         rot_scale = gs.dt_f * Cam7.rot_spd / 360 * rot;
@@ -571,12 +593,12 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     var xf_ref: *Mat4x4 = &Cam7.xf;
 
     Cam7.xcam_motion_tgt.z = Cam7.input_move_z.getf();
-    f32_applyDeadzone(&Cam7.xcam_motion_tgt.z);
+    f32_applyDeadzoneSq(&Cam7.xcam_motion_tgt.z);
     Cam7.xcam_motion_tgt.z = nt.smooth4(Cam7.xcam_motion_tgt.z);
 
     Cam7.xcam_motion_tgt.x = Cam7.input_move_x.getf();
     Cam7.xcam_motion_tgt.y = Cam7.input_move_y.getf();
-    vec2_applyDeadzone(@ptrCast(&Cam7.xcam_motion_tgt));
+    vec2_applyDeadzoneSq(@ptrCast(&Cam7.xcam_motion_tgt));
 
     // TODO: state machine enum, probably
     if (move_sweep) {

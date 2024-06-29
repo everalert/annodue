@@ -60,6 +60,8 @@ pub const InputMap = struct {
 };
 
 // TODO: StickInputMap, with deadzone inbuilt, and remove kb_scale in lieu of 'dominant' field on InputMap
+
+// TODO: inbuilt deadzone, remove kb_scale in lieu of 'dominant' field on InputMap
 pub const AxisInputMap = struct {
     kb_dec: ?w32kb.VIRTUAL_KEY = null,
     kb_inc: ?w32kb.VIRTUAL_KEY = null,
@@ -77,6 +79,10 @@ pub const AxisInputMap = struct {
         const xi_inc: f32 = if (self.xi_inc) |x| gf.InputGetXInputAxis(x) else 0;
 
         self.state = std.math.clamp(xi_inc - xi_dec + (kb_inc - kb_dec) * self.kb_scale, -1, 1);
+
+        //const kb: f32 = std.math.clamp((kb_inc - kb_dec) * self.kb_scale, -1, 1);
+        //const xi: f32 = std.math.clamp(xi_inc - xi_dec, -1, 1);
+        //self.state = if (@fabs(kb) > @fabs(xi)) kb else xi;
     }
 
     pub fn inputMap(self: *AxisInputMap) InputMap {

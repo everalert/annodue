@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <d3d.h>
 #include <ddraw.h>
+#include <set>
 
 // headers are from https://github.com/tim-tim707/SW_RACER_RE
 #define INCLUDE_DX_HEADERS
@@ -23,6 +24,7 @@ auto swrModel_UnkDraw = (void (*)(int x))0x00483A90; // <-- will be hooked
 
 const auto swrModel_NodeGetTransform = (void (*)(const swrModel_NodeTransformed* node, rdMatrix44* matrix))0x004316A0;
 const auto swrEvent_GetItem = (void* (*)(int event, int index))0x00450b30;
+const auto swrEvent_GetEventCount = (int (*)(int event))0x00450b00;
 const auto std3D_SetRenderState = (void (*)(Std3DRenderState rdflags))0x0048a450;
 const auto stdDisplay_BackBufferFill = (void (*)(unsigned int r, unsigned int b, unsigned int g, LECRECT* lpRect))0x00489cd0;
 const auto rdCache_Flush = (void (*)(void))0x0048dce0;
@@ -52,6 +54,130 @@ struct D3DVertex
     float x, y, z;
     Color c;
 };
+
+constexpr std::array<D3DVertex, 14> box_triangle_strip = []() constexpr {
+    std::array<D3DVertex, 14> vertices;
+    for (int k = 0; k < 14; k++)
+    {
+        // 0x05e8, 0x238e, 0x0f43
+        vertices[k] = {
+            2 * float((0x05e8 >> k) & 1) - 1,
+            2 * float((0x238e >> k) & 1) - 1,
+            2 * float((0x0f43 >> k) & 1) - 1,
+        };
+    }
+    return vertices;
+}();
+
+void render_triangle_strip(auto vertices, const Color& color)
+{
+    const auto& settings = global_state->settings;
+
+    const Color line_color{
+        uint8_t(color.b * settings.collision_line_brightness),
+        uint8_t(color.g * settings.collision_line_brightness),
+        uint8_t(color.r * settings.collision_line_brightness),
+        uint8_t(255 * settings.collision_line_opacity),
+    };
+
+    const Color mesh_color{
+        uint8_t(color.b * settings.collision_mesh_brightness),
+        uint8_t(color.g * settings.collision_mesh_brightness),
+        uint8_t(color.r * settings.collision_mesh_brightness),
+        uint8_t(255 * settings.collision_mesh_opacity),
+    };
+
+    for (auto& v : vertices)
+        v.c = mesh_color;
+
+    if (settings.collision_mesh_opacity != 0.0)
+    {
+        std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_SOLID);
+        std3D_pD3Device->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(), vertices.size(), 0);
+    }
+
+    for (auto& v : vertices)
+        v.c = line_color;
+
+    if (settings.collision_line_opacity != 0.0)
+    {
+        std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_WIREFRAME);
+        std3D_pD3Device->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(), vertices.size(), 0);
+    }
+}
+
+void debug_render_triggers(const swrModel_Node* node, const CollisionViewerSettings& settings)
+{
+    static std::array<D3DVertex, 4> plane_triangle_strip = { { { -1, 0, -1 }, { 1, 0, -1 }, { -1, 0, 1 }, { 1, 0, 1 } } };
+
+    static std::array<D3DVertex, 42> capsule_triangle_strip = [] {
+        std::array<D3DVertex, 42> vertices;
+        D3DVertex* v = vertices.data();
+        for (int i = 0; i < 10; i++)
+        {
+            const float t = i / 9.0 * 3.14159;
+            const float c = cos(t);
+            const float s = sin(t);
+            *v++ = { (1 + s), c, 1 };
+            *v++ = { (1 + s), c, -1 };
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            const float t = (i / 9.0 + 1) * 3.14159;
+            const float c = cos(t);
+            const float s = sin(t);
+            *v++ = { -1 + s, c, 1 };
+            *v++ = { -1 + s, c, -1 };
+        }
+
+        *v++ = vertices[0];
+        *v++ = vertices[1];
+        return vertices;
+    }();
+
+    if (!node)
+        return;
+
+    if (node->type & NODE_HAS_CHILDREN)
+    {
+        for (int i = 0; i < node->num_children; i++)
+            debug_render_triggers(node->child_nodes[i], settings);
+    }
+    if (node->type == NODE_MESH_GROUP)
+    {
+        for (int i = 0; i < node->num_children; i++)
+        {
+            const swrModel_Mesh* mesh = node->meshes[i];
+            if (!mesh || !mesh->mapping)
+                continue;
+
+            for (auto it = mesh->mapping->subs; it; it = it->next)
+            {
+                if (it->flags & 0x1)
+                    continue;
+
+                const auto& p = it->position;
+                const auto& d = it->direction;
+                const float s_xy = it->size_xy * 0.5f;
+                const float s_z = it->size_z * 0.5f;
+
+                const rdMatrix44 model_matrix{
+                    { -d[1] * s_xy, d[0] * s_xy, 0, 0 },
+                    { d[0] * s_xy, d[1] * s_xy, 0, 0 },
+                    { 0, 0, s_z, 0 },
+                    { p[0], p[1], p[2], 1 },
+                };
+
+                std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_matrix.vA.x);
+                if (it->model_id == 102 || it->model_id == 104)
+                    render_triangle_strip(plane_triangle_strip, { 0, 0, 255 });
+                else
+                    render_triangle_strip(capsule_triangle_strip, { 0, 0, 255 });
+            }
+        }
+    }
+}
 
 void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat, const rdMatrix44& model_matrix)
 {
@@ -413,21 +539,22 @@ void render_collision_meshes()
     IDirect3DViewport3* backup_viewport;
     std3D_pD3Device->GetCurrentViewport(&backup_viewport);
 
-    // Setup viewport, copy the current viewport to retrieve the correct resolution from it
+    IDirect3DViewport3* viewport;
+    std3D_pDirect3D->CreateViewport(&viewport, nullptr);
+
+    // Setup viewport
     D3DVIEWPORT2 vp{};
     vp.dwSize = sizeof(D3DVIEWPORT2);
-    backup_viewport->GetViewport2(&vp);
-
-    // fix clip space
+    vp.dwX = 0;
+    vp.dwY = 0;
+    vp.dwWidth = screen_width;
+    vp.dwHeight = screen_height;
     vp.dvMinZ = -1.0f;
     vp.dvMaxZ = 1.0f;
     vp.dvClipX = -1;
     vp.dvClipY = 1;
     vp.dvClipWidth = 2;
     vp.dvClipHeight = 2;
-
-    IDirect3DViewport3* viewport;
-    std3D_pDirect3D->CreateViewport(&viewport, nullptr);
 
     std3D_pD3Device->AddViewport(viewport);
     viewport->SetViewport2(&vp);
@@ -480,6 +607,27 @@ void render_collision_meshes()
 
         if (global_state->show_spline)
             render_spline();
+
+        debug_render_triggers(root_node, settings);
+
+        std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_mat.vA.x);
+        int num_test_objects = swrEvent_GetEventCount('Test');
+        for (int i = 0; i < num_test_objects; i++)
+        {
+            auto test = (const swrRace*)swrEvent_GetItem('Test', i);
+            if (test)
+            {
+                const auto& p = test->transform.vD;
+                const rdMatrix44 model_matrix{
+                    { 0.15, 0, 0, 0 },
+                    { 0, 0.15, 0, 0 },
+                    { 0, 0, 0.15, 0 },
+                    { p.x, p.y, p.z, 1 },
+                };
+                std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_matrix.vA.x);
+                render_triangle_strip(box_triangle_strip, { 255, 255, 0 });
+            }
+        }
 
         std3D_pD3Device->EndScene();
     }
@@ -581,6 +729,17 @@ extern "C" void init_collision_viewer(CollisionViewerState* global_state)
 {
     ::global_state = global_state;
     detour_attach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
+
+    /*{
+        FILE* log = fopen("collision_viewer.log", "wb");
+        for (const auto& v : box_triangle_strip)
+        {
+            fprintf(log, "%f %f %f", v.x, v.y, v.z);
+            fflush(log);
+        }
+        fclose(log);
+        abort();
+    }*/
 }
 
 extern "C" void deinit_collision_viewer()

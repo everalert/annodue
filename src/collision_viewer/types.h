@@ -1503,14 +1503,13 @@ extern "C"
 
     typedef struct swrModel_MappingChild
     {
-        float vector0[3];
-        float vector1[3];
-        uint32_t unk3;
-        uint32_t unk4;
-        uint16_t unk5;
-        uint16_t unk6;
-        uint16_t unk7;
-        uint16_t unk9;
+        float position[3];
+        float direction[3];
+        float size_xy;
+        float size_z;
+        swrModel_Node* node;
+        uint16_t model_id;
+        uint16_t flags;
         struct swrModel_MappingChild* next;
     } swrModel_MappingChild;
 

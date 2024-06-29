@@ -152,23 +152,23 @@ pub const XINPUT_GAMEPAD_BUTTON_INDEX = enum(u16) {
 
 pub fn update_xinput() callconv(.C) void {
     const controller: u8 = 0;
-    var new_state = std.mem.zeroInit(xinput.XINPUT_STATE, .{});
-    if (xinput.XInputGetState(controller, &new_state) == 0) {
+
+    InputState.xbox_raw = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});
+    var new_state: xinput.XINPUT_STATE = undefined;
+    if (xinput.XInputGetState(controller, &new_state) == 0)
         InputState.xbox_raw = new_state.Gamepad;
-        const buttons = comptime std.enums.values(xinput.XINPUT_GAMEPAD_BUTTON);
-        for (buttons, 0..) |b, i| {
-            const b_int: u16 = @intFromEnum(b);
-            InputState.xbox.Button[i].update((new_state.Gamepad.wButtons & b_int) > 0);
-        }
-        InputState.xbox.Axis[0] = @as(f32, @floatFromInt(new_state.Gamepad.bLeftTrigger)) / 255;
-        InputState.xbox.Axis[1] = @as(f32, @floatFromInt(new_state.Gamepad.bRightTrigger)) / 255;
-        InputState.xbox.Axis[2] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbLX)) / 32767;
-        InputState.xbox.Axis[3] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbLY)) / 32767;
-        InputState.xbox.Axis[4] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbRX)) / 32767;
-        InputState.xbox.Axis[5] = @as(f32, @floatFromInt(new_state.Gamepad.sThumbRY)) / 32767;
-    } else {
-        InputState.xbox_raw = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});
+
+    const buttons = comptime std.enums.values(xinput.XINPUT_GAMEPAD_BUTTON);
+    for (buttons, 0..) |b, i| {
+        const b_int: u16 = @intFromEnum(b);
+        InputState.xbox.Button[i].update((InputState.xbox_raw.wButtons & b_int) > 0);
     }
+    InputState.xbox.Axis[0] = @as(f32, @floatFromInt(InputState.xbox_raw.bLeftTrigger)) / 255;
+    InputState.xbox.Axis[1] = @as(f32, @floatFromInt(InputState.xbox_raw.bRightTrigger)) / 255;
+    InputState.xbox.Axis[2] = @as(f32, @floatFromInt(InputState.xbox_raw.sThumbLX)) / 32767;
+    InputState.xbox.Axis[3] = @as(f32, @floatFromInt(InputState.xbox_raw.sThumbLY)) / 32767;
+    InputState.xbox.Axis[4] = @as(f32, @floatFromInt(InputState.xbox_raw.sThumbRX)) / 32767;
+    InputState.xbox.Axis[5] = @as(f32, @floatFromInt(InputState.xbox_raw.sThumbRY)) / 32767;
 }
 
 pub fn get_xinput_button(button: XINPUT_GAMEPAD_BUTTON_INDEX) st.ActiveState {

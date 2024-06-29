@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Cam7: Corrected steering while upside-down to be more intuitive
+- Cam7: Corrected Y/Z movement while upside-down in planar movement mode
 - Savestate: Rewind ignoring saved inputs
 - Savestate: Rewind not restoring UI correctly
 - Savestate: Stuttering during rewind scrubbing

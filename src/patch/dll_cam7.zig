@@ -136,6 +136,7 @@ const Cam7 = extern struct {
     var cam_state: CamState = .None;
     var saved_camstate_index: ?u32 = null;
     var xf: Mat4x4 = .{};
+    var xf_look: Mat4x4 = .{};
     var xcam_rot: Vec3 = .{};
     var xcam_rot_tgt: Vec3 = .{};
     var xcam_rotation: Vec3 = .{};
@@ -481,11 +482,13 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     }
     Cam7.rot_spd = f32_damp(Cam7.rot_spd, Cam7.rot_spd_tgt, Cam7.rot_change_damp, gs.dt_f);
 
+    const upside_down: bool = @mod(Cam7.xcam_rot.y / rot - 0.25, 1) < 0.5;
+
     // rotation
 
     var rot_scale: f32 = undefined;
     const using_mouse: bool = Cam7.input_mouse_d_x != 0 or Cam7.input_mouse_d_y != 0;
-    const flip_x: bool = Cam7.flip_look_x != (Cam7.flip_look_x_inverted and (@mod(Cam7.xcam_rot.y / rot - 0.25, 1) < 0.5));
+    const flip_x: bool = Cam7.flip_look_x != (Cam7.flip_look_x_inverted and upside_down);
     if (using_mouse) {
         Cam7.xcam_rotation.x = if (flip_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
         Cam7.xcam_rotation.y = if (Cam7.flip_look_y) Cam7.input_mouse_d_y else -Cam7.input_mouse_d_y;
@@ -521,10 +524,12 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     vec2_applyDeadzone(@ptrCast(&Cam7.xcam_motion_tgt));
 
     if (Cam7.move_planar) {
-        const l_scale: f32 = nt.pow4(rv.Vec2_Mag(@ptrCast(&Cam7.xcam_motion_tgt)));
-        const l_ang: f32 = m.atan2(f32, Cam7.xcam_motion_tgt.y, Cam7.xcam_motion_tgt.x) + Cam7.xcam_rot.x;
-        Cam7.xcam_motion_tgt.x = l_scale * m.cos(l_ang);
-        Cam7.xcam_motion_tgt.y = l_scale * m.sin(l_ang);
+        if (upside_down) {
+            Cam7.xcam_motion_tgt.y *= -1.0;
+            Cam7.xcam_motion_tgt.z *= -1.0;
+        }
+        rm.Mat4x4_SetRotation(&Cam7.xf_look, rad2deg(f32, Cam7.xcam_rot.x), 0, rad2deg(f32, Cam7.xcam_rot.z));
+        rv.Vec3_MulMat4x4(&Cam7.xcam_motion_tgt, &Cam7.xcam_motion_tgt, &Cam7.xf_look);
     } else {
         rv.Vec3_MulMat4x4(&Cam7.xcam_motion_tgt, &Cam7.xcam_motion_tgt, &Cam7.xf);
     }

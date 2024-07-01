@@ -18,6 +18,7 @@ const r = @import("racer");
 const Test = r.Entity.Test.Test;
 const Trig = r.Entity.Trig.Trig;
 const Trig_HandleTriggers = r.Entity.Trig.HandleTriggers;
+const t = r.Text;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -30,6 +31,8 @@ pub const panic = debug.annodue_panic;
 //   ..             type    note
 
 fn HandleTriggersHooked(tr: *Trig, te: *Test, is_local: BOOL) callconv(.C) void {
+    if (tr.pTrigDesc.Type == 202) te._fall_float_value -= 1.5;
+    t.DrawText(0, 0, "Trigger {d}", .{tr.pTrigDesc.Type}, null, null) catch {};
     Trig_HandleTriggers(tr, te, is_local);
 }
 

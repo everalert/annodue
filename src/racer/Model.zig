@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const vec = @import("Vector.zig");
+const Vec3 = vec.Vec3;
 const mat = @import("Matrix.zig");
 const Mat4x3 = mat.Mat4x3;
 const Mat4x4 = mat.Mat4x4;
@@ -43,6 +45,21 @@ pub const ModelMesh = extern struct {};
 
 // TODO
 pub const ModelMeshMaterial = extern struct {};
+
+// TODO
+pub const ModelAnimation = extern struct {};
+
+// size 0x2C
+pub const ModelTriggerDescription = extern struct {
+    Center: Vec3,
+    Direction: Vec3, // orientation?
+    SizeXY: f32,
+    SizeZ: f32,
+    pModelNode: *ModelNode,
+    Type: u16,
+    Flags: u16,
+    pNext: *ModelTriggerDescription,
+};
 
 // HELPERS
 

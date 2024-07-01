@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Core: notify on plugin reload
+- Backend(Core): `appinfo` module for externally-facing defs
+- Backend(Core): enforcing semantic versioning for plugins
+
+### Changed
+
+- Backend(Build): release versioning now based on `appinfo` module
+- Backend(Util): make rewind compression logic available in `temporal_compression` util
+
+### Removed
+
+- Backend(Build): release `-Dver` option
+- Backend(Build): release `-Dminver` option
+
 ## [0.1.5] - 2024-05-12
 
 ### Added

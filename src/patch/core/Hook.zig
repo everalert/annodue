@@ -3,6 +3,8 @@ const Self = @This();
 const BuildOptions = @import("BuildOptions");
 
 const std = @import("std");
+const SemVer = std.SemanticVersion;
+
 const w = std.os.windows;
 const w32 = @import("zigwin32");
 const w32ll = w32.system.library_loader;
@@ -11,12 +13,13 @@ const w32fs = w32.storage.file_system;
 
 const core = @import("core.zig");
 const allocator = core.Allocator;
-const global = core.Global;
-const GlobalSt = global.GlobalState;
-const GLOBAL_STATE = &global.GLOBAL_STATE;
-const GlobalFn = global.GlobalFunction;
-const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
-const PLUGIN_VERSION = global.PLUGIN_VERSION;
+const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
+const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
+
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
@@ -219,8 +222,9 @@ fn ensureDirectoryExists(alloc: std.mem.Allocator, path: []const u8) bool {
 // updating already loaded plugins
 // NOTE: assumes index is allocated and initialized, to allow different
 // ways of handling the backing data
-/// @return plugin loaded correctly; guarantee of no dangling handles on failure
-fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
+/// @return     null = no change, true = (re)loaded, false = rejected
+///             guarantee of no dangling handles on failure
+fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
     const i_ext = filename.len - 4;
 
     std.debug.assert(std.mem.eql(u8, ".DLL", filename[i_ext..]) or
@@ -235,7 +239,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     var fd1: w32fs.WIN32_FIND_DATAA = undefined;
     _ = w32fs.FindFirstFileA(&buf1, &fd1);
     if (p.Initialized and filetime_eql(&fd1.ftLastWriteTime, &p.WriteTime.?))
-        return true;
+        return null;
 
     if (BuildOptions.BUILD_MODE != .Developer) blk: {
         const this_hash = getFileSha512(filepath) catch return false;
@@ -274,8 +278,9 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     if (p.PluginName == null or
         p.PluginVersion == null or
+        SemVer.parse(p.PluginVersion.?()[0..std.mem.len(p.PluginVersion.?())]) == error.InvalidVersion or
         p.PluginCompatibilityVersion == null or
-        p.PluginCompatibilityVersion.?() != PLUGIN_VERSION or
+        p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
         p.OnInit == null or
         p.OnInitLate == null or
         p.OnDeinit == null)
@@ -342,13 +347,14 @@ pub fn init() void {
 
         p = PluginState.plugin.addOne() catch @panic("failed to add user plugin to arraylist");
         p.* = std.mem.zeroInit(Plugin, .{});
-        if (!LoadPlugin(p, file.name))
+        const load = LoadPlugin(p, file.name);
+        if (load != null and !load.?)
             _ = PluginState.plugin.pop();
     }
 
     // hooking game
 
-    var off = global.GLOBAL_STATE.patch_offset;
+    var off = GLOBAL_STATE.patch_offset;
     off = HookGameSetup(off);
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
@@ -360,17 +366,24 @@ pub fn init() void {
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
     //off = HookLoadSprite(off);
-    global.GLOBAL_STATE.patch_offset = off;
+    GLOBAL_STATE.patch_offset = off;
 }
 
-pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
         for (PluginState.plugin.items, 0..) |*p, i| {
             const len = for (p.Filename, 0..) |c, j| {
                 if (c == 0) break j;
             } else p.Filename.len;
-            if (!LoadPlugin(p, p.Filename[0..len]))
+            const load = LoadPlugin(p, p.Filename[0..len]);
+            if (load == null) continue;
+            if (load.?) {
+                var buf: [127:0]u8 = undefined;
+                _ = std.fmt.bufPrintZ(&buf, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch continue;
+                _ = gf.ToastNew(&buf, r.Text.ColorRGB.Green.rgba(0));
+            } else {
                 _ = PluginState.plugin.swapRemove(i);
+            }
         }
         PluginState.last_check = gs.timestamp;
     }

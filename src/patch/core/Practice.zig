@@ -3,8 +3,9 @@ pub const Self = @This();
 const std = @import("std");
 
 const s = @import("Settings.zig").state;
-const GlobalSt = @import("Global.zig").GlobalState;
-const GlobalFn = @import("Global.zig").GlobalFunction;
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
 
 const fl = @import("../util/flash.zig");
 const st = @import("../util/active_state.zig");

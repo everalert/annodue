@@ -12,9 +12,9 @@ const HWND = w32.foundation.HWND;
 const xinput = @import("../util/xinput.zig");
 const st = @import("../util/active_state.zig");
 
-const global = @import("Global.zig");
-const GlobalSt = global.GlobalState;
-const GlobalFn = global.GlobalFunction;
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
 
 pub const INPUT_DOWN: u8 = 0b01;
 pub const INPUT_NEW: u8 = 0b10;

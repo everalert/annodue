@@ -1,14 +1,28 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const SemVer = std.SemanticVersion;
+const appinfo = @import("src/patch/appinfo.zig");
 
-// TODO: look into getting rid of zigini from git once and for all!!1
-// TODO: review overall efficiency/readability, graph seems slow after rework when adding hashfile
+// TODO: review overall efficiency/readability
+// graph seems slow after rework when adding hashfile
+// also seems slower after turning racerlib into module
 // TODO: review idiomatic-ness, see: https://ziglang.org/learn/build-system
 //  - esp. using addArgs(.{...}) instead of formatting them manually
 // TODO: tooling code review
 // TODO: get up to date on tooling error and success messaging
+// FIXME: need to rethink the DAG and step endpoints
+// e.g. endpoints for all the pieces, maximal parallelism, streamline integration of
+// hotcopy etc., only running the pieces that need to be for the command and ordered well, etc. ..
 
 // example release build command
 // zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Drop="F:\Projects\swe1r\annodue\.release"
+
+fn allocFmtSemVer(alloc: Allocator, ver: *const SemVer) ![]u8 {
+    if (ver.pre) |pre|
+        return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}-{s}", .{ ver.major, ver.minor, ver.patch, pre });
+
+    return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}", .{ ver.major, ver.minor, ver.patch });
+}
 
 pub fn build(b: *std.Build) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -48,6 +62,11 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "src/racer/racer.zig" },
     });
 
+    //const appinfo = b.createModule(.{
+    //    .source_file = .{ .path = "src/patch/appinfo.zig" },
+    //    .dependencies = &.{.{ .name = "zigwin32", .module = zigwin32_m }},
+    //});
+
     const options = b.addOptions();
     const options_label = "BuildOptions";
     options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
@@ -74,16 +93,21 @@ pub fn build(b: *std.Build) void {
 
     const hotcopy_move_files_core = b.addRunArtifact(hotcopy_move_files);
     const hotcopy_move_files_plugin = b.addRunArtifact(hotcopy_move_files);
+    const hotcopy_move_files_dinput = b.addRunArtifact(hotcopy_move_files);
     if (copypath) |path| {
         const arg_hci = std.fmt.allocPrint(alloc, "-I{s}", .{b.lib_dir}) catch unreachable;
 
-        const arg_hcoc = std.fmt.allocPrint(alloc, "-O{s}", .{path}) catch unreachable;
+        const arg_hcoc = std.fmt.allocPrint(alloc, "-O{s}/annodue", .{path}) catch unreachable;
         hotcopy_move_files_core.addArg(arg_hci);
         hotcopy_move_files_core.addArg(arg_hcoc);
 
-        const arg_hcop = std.fmt.allocPrint(alloc, "-O{s}/plugin", .{path}) catch unreachable;
+        const arg_hcop = std.fmt.allocPrint(alloc, "-O{s}/annodue/plugin", .{path}) catch unreachable;
         hotcopy_move_files_plugin.addArg(arg_hci);
         hotcopy_move_files_plugin.addArg(arg_hcop);
+
+        const arg_hcod = std.fmt.allocPrint(alloc, "-O{s}/", .{path}) catch unreachable;
+        hotcopy_move_files_dinput.addArg(arg_hci);
+        hotcopy_move_files_dinput.addArg(arg_hcod);
     }
 
     // STEP - PLUGIN HASHING
@@ -113,6 +137,28 @@ pub fn build(b: *std.Build) void {
     );
     hash_plugins_step.dependOn(hash_step);
 
+    // STEP - BUILD DINPUT DLL
+
+    const dinput = b.addSharedLibrary(.{
+        .name = "dinput",
+        .target = target,
+        .optimize = optimize,
+    });
+    dinput.linkLibC();
+    dinput.addCSourceFiles(&.{
+        "src/dinput/dinput.c",
+    }, &.{});
+
+    var dinput_install = b.addInstallArtifact(dinput, .{});
+
+    const dinput_step = b.step("dinput", "Build dinput.dll");
+    dinput_step.dependOn(&dinput_install.step);
+
+    if (DEV_MODE and copypath != null) {
+        hotcopy_move_files_dinput.addArg("-Fdinput.dll");
+        hotcopy_move_files.step.dependOn(&dinput_install.step);
+    }
+
     // STEP - PACKAGE ZIP FOR RELEASE
 
     // TODO: update once script is actually written
@@ -122,34 +168,11 @@ pub fn build(b: *std.Build) void {
 
     const release_zip_files_step = b.step("release", "Package built files for release");
 
-    const dinput_dll = b.addSharedLibrary(.{
-        .name = "dinput",
-        .target = target,
-        .optimize = optimize,
-    });
-    dinput_dll.linkLibC();
-    dinput_dll.addCSourceFiles(&.{
-        "src/dinput/dinput.c",
-    }, &.{});
-
-    var dinput_dll_release = b.addInstallArtifact(dinput_dll, .{});
-
-    const dinput_step = b.step("dinput", "Build dinput.dll");
-    dinput_step.dependOn(&dinput_dll_release.step);
-
     const releasepath = b.option(
         []const u8,
         "rop",
         "Path to base output directory for release builds; required for 'release' step",
     ) orelse null;
-
-    // NOTE: minver checks fail if not specified
-    const release_ver = b.option([]const u8, "ver", "release version") orelse "0.0.0";
-    const release_minver = b.option(
-        []const u8,
-        "minver",
-        "minimum version needed to auto-update to this release",
-    ) orelse release_ver;
 
     var zip_step: ?*std.build.Step = null;
     if (releasepath) |rp| {
@@ -162,22 +185,23 @@ pub fn build(b: *std.Build) void {
         generate_release_zip_files.addModule("zzip", zzip_m);
 
         const generate_release_zip_files_run = b.addRunArtifact(generate_release_zip_files);
-        {
-            const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
-            generate_release_zip_files_run.addArg(arg_z_ip);
 
-            const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{b.lib_dir}) catch unreachable;
-            generate_release_zip_files_run.addArg(arg_z_dp);
+        const arg_z_ip = std.fmt.allocPrint(alloc, "-I {s}/release", .{b.install_path}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_ip);
 
-            const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{rp}) catch unreachable;
-            generate_release_zip_files_run.addArg(arg_z_op);
+        const arg_z_dp = std.fmt.allocPrint(alloc, "-D {s}", .{b.lib_dir}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_dp);
 
-            const arg_z_ver = std.fmt.allocPrint(alloc, "-ver {s}", .{release_ver}) catch unreachable;
-            generate_release_zip_files_run.addArg(arg_z_ver);
+        const arg_z_op = std.fmt.allocPrint(alloc, "-O {s}", .{rp}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_op);
 
-            const arg_z_minver = std.fmt.allocPrint(alloc, "-minver {s}", .{release_minver}) catch unreachable;
-            generate_release_zip_files_run.addArg(arg_z_minver);
-        }
+        const release_ver = allocFmtSemVer(alloc, &appinfo.VERSION) catch unreachable;
+        const arg_z_ver = std.fmt.allocPrint(alloc, "-ver {s}", .{release_ver}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_ver);
+
+        const release_minver = allocFmtSemVer(alloc, &appinfo.VERSION_MIN) catch unreachable;
+        const arg_z_minver = std.fmt.allocPrint(alloc, "-minver {s}", .{release_minver}) catch unreachable;
+        generate_release_zip_files_run.addArg(arg_z_minver);
 
         zip_step = &generate_release_zip_files_run.step;
 
@@ -187,7 +211,7 @@ pub fn build(b: *std.Build) void {
             .install_subdir = "annodue",
         });
         zip_step.?.dependOn(&asset_install.step);
-        zip_step.?.dependOn(&dinput_dll_release.step);
+        zip_step.?.dependOn(&dinput_install.step);
 
         const arg_z_cleanup_path = std.fmt.allocPrint(alloc, "{s}/release", .{b.install_path}) catch unreachable;
         const zip_cleanup = b.addRemoveDirTree(arg_z_cleanup_path);
@@ -249,6 +273,7 @@ pub fn build(b: *std.Build) void {
         dll.linkLibC();
         dll.addOptions(options_label, options);
         dll.addModule("racer", racerlib);
+        //dll.addModule("appinfo", appinfo);
         dll.addModule("zigini", zigini_m);
         dll.addModule("zigwin32", zigwin32_m);
         dll.addModule("zzip", zzip_m);
@@ -262,8 +287,10 @@ pub fn build(b: *std.Build) void {
         plugin_step.dependOn(&dll_install.step);
 
         var bufo = std.fmt.allocPrint(alloc, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
-        hotcopy_move_files_plugin.addArg(bufo);
-        if (plugin.to_hash) generate_safe_plugin_hash_file_plugin.addArg(bufo);
+        if (DEV_MODE and copypath != null)
+            hotcopy_move_files_plugin.addArg(bufo);
+        if (plugin.to_hash)
+            generate_safe_plugin_hash_file_plugin.addArg(bufo);
 
         var dll_release = b.addInstallArtifact(dll, .{
             .dest_dir = .{ .override = .{ .custom = "release/annodue/plugin" } },
@@ -284,10 +311,13 @@ pub fn build(b: *std.Build) void {
     core.linkLibC();
     core.addOptions(options_label, options);
     core.addModule("racer", racerlib);
+    //core.addModule("appinfo", appinfo);
     core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);
     core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
+    // TODO: don't make the core depend on plugin_step,
+    // connect plugins to default_step so it can be parallel unless doing release build
     core.step.dependOn(
         // we skip runtime hash checks in dev builds
         if (DEV_MODE) plugin_step else hash_step,
@@ -296,8 +326,10 @@ pub fn build(b: *std.Build) void {
     // TODO: investigate options arg
     const core_install = b.addInstallArtifact(core, .{});
 
-    hotcopy_move_files_core.addArg("-Fannodue.dll");
-    hotcopy_move_files.step.dependOn(&core_install.step);
+    if (DEV_MODE and copypath != null) {
+        hotcopy_move_files_core.addArg("-Fannodue.dll");
+        hotcopy_move_files.step.dependOn(&core_install.step);
+    }
 
     var core_release = b.addInstallArtifact(core, .{
         .dest_dir = .{ .override = .{ .custom = "release/annodue" } },
@@ -308,27 +340,30 @@ pub fn build(b: *std.Build) void {
 
     // DEFAULT STEP
 
+    // TODO: make plugins connect here instead of core step
     b.default_step.dependOn(&core_install.step);
+    b.default_step.dependOn(&dinput_install.step);
     if (DEV_MODE and copypath != null) {
         b.default_step.dependOn(&hotcopy_move_files_core.step);
         b.default_step.dependOn(&hotcopy_move_files_plugin.step);
+        b.default_step.dependOn(&hotcopy_move_files_dinput.step);
     }
 
     // MISC OLD STUFF
 
-    //    // Creates a step for unit testing. This only builds the test executable
-    //    // but does not run it.
-    //    const main_tests = b.addTest(.{
-    //        .root_source_file = .{ .path = "src/main.zig" },
-    //        .target = target,
-    //        .optimize = optimize,
-    //    });
+    //// Creates a step for unit testing. This only builds the test executable
+    //// but does not run it.
+    //const main_tests = b.addTest(.{
+    //    .root_source_file = .{ .path = "src/main.zig" },
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
     //
-    //    const run_main_tests = b.addRunArtifact(main_tests);
+    //const run_main_tests = b.addRunArtifact(main_tests);
     //
-    //    // This creates a build step. It will be visible in the `zig build --help` menu,
-    //    // and can be selected like this: `zig build test`
-    //    // This will evaluate the `test` step rather than the default, which is "install".
-    //    const test_step = b.step("test", "Run library tests");
-    //    test_step.dependOn(&run_main_tests.step);
+    //// This creates a build step. It will be visible in the `zig build --help` menu,
+    //// and can be selected like this: `zig build test`
+    //// This will evaluate the `test` step rather than the default, which is "install".
+    //const test_step = b.step("test", "Run library tests");
+    //test_step.dependOn(&run_main_tests.step);
 }

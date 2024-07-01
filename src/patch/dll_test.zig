@@ -11,6 +11,14 @@ const debug = @import("core/Debug.zig");
 
 const msg = @import("util/message.zig");
 
+// FIXME: remove or whatever, testing
+const x86 = @import("util/x86.zig");
+const BOOL = std.os.windows.BOOL;
+const r = @import("racer");
+const Test = r.Entity.Test.Test;
+const Trig = r.Entity.Trig.Trig;
+const Trig_HandleTriggers = r.Entity.Trig.HandleTriggers;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -20,6 +28,10 @@ pub const panic = debug.annodue_panic;
 //   ..             ..              ..
 // - SETTINGS:
 //   ..             type    note
+
+fn HandleTriggersHooked(tr: *Trig, te: *Test, is_local: BOOL) callconv(.C) void {
+    Trig_HandleTriggers(tr, te, is_local);
+}
 
 const PLUGIN_NAME: [*:0]const u8 = "PluginTest";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -38,11 +50,18 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // 0x476E7C -> 0x476E88 (0x0C)
+    // 0x476E80 = the actual call instruction
+    _ = x86.call(0x476E80, @intFromPtr(&HandleTriggersHooked));
+}
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // deinit here
+    _ = x86.call(0x476E80, @intFromPtr(&Trig_HandleTriggers));
+}
 
 // HOOKS
 

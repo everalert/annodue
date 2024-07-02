@@ -112,6 +112,8 @@ const preset_names = [_][*:0]const u8{
 var state: CollisionViewerState = .{
     .enabled = false,
     .show_collision_mesh = true,
+    .show_triggers = true,
+    .show_active_collision_only = false,
     .settings = .{
         .show_visual_mesh = true,
         .collision_mesh_opacity = 0.3,
@@ -216,6 +218,8 @@ const QuickRaceMenu = extern struct {
         mi.MenuItemToggle(&QuickRaceMenu.item_enabled.input_converted, "Enable viewer"),
         mi.MenuItemToggle(&QuickRaceMenu.item_show_collision_mesh.input_converted, "Show collision mesh"),
         mi.MenuItemToggle(&QuickRaceMenu.item_show_visual_mesh.input_converted, "Show visual mesh"),
+        mi.MenuItemToggle(&QuickRaceMenu.item_show_triggers.input_converted, "Show triggers"),
+        mi.MenuItemToggle(&QuickRaceMenu.item_show_active_collsion_only.input_converted, "Active collision only"),
         mi.MenuItemToggle(&QuickRaceMenu.item_show_spline.input_converted, "Show spline"),
         mi.MenuItemList(&preset_index, "Preset", &preset_names, false, null),
         mi.MenuItemSpacer(),
@@ -232,6 +236,8 @@ const QuickRaceMenu = extern struct {
     var item_enabled = ConvertedMenuItem{ .input_bool = &state.enabled };
     var item_show_collision_mesh = ConvertedMenuItem{ .input_bool = &state.show_collision_mesh };
     var item_show_visual_mesh = ConvertedMenuItem{ .input_bool = &state.settings.show_visual_mesh };
+    var item_show_triggers = ConvertedMenuItem{ .input_bool = &state.show_triggers };
+    var item_show_active_collsion_only = ConvertedMenuItem{ .input_bool = &state.show_active_collision_only };
     var item_mesh_opacity = ConvertedMenuItem{ .input_float = &state.settings.collision_mesh_opacity };
     var item_mesh_brightness = ConvertedMenuItem{ .input_float = &state.settings.collision_mesh_brightness };
     var item_line_opacity = ConvertedMenuItem{ .input_float = &state.settings.collision_line_opacity };
@@ -245,6 +251,8 @@ const QuickRaceMenu = extern struct {
         &item_enabled,
         &item_show_collision_mesh,
         &item_show_visual_mesh,
+        &item_show_triggers,
+        &item_show_active_collsion_only,
         &item_mesh_opacity,
         &item_mesh_brightness,
         &item_line_opacity,

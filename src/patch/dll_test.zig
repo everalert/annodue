@@ -48,6 +48,15 @@ fn HandleTriggersHooked(tr: *Trig, te: *Test, is_local: BOOL) callconv(.C) void 
     Trig_HandleTriggers(tr, te, is_local);
 }
 
+// TERRAIN
+
+// TODO: integrate with core
+//   proper interface (add: remove(), ..)
+//   global functions
+//   owner autoremove on plugin deinit
+// TODO: protections to reserve group 3 for internal use
+// TODO: testing cleanup
+
 const CustomTerrainDef = extern struct {
     slot: u16,
     fnTerrain: *const fn (*Test) callconv(.C) void,
@@ -94,11 +103,11 @@ const CustomTerrain = struct {
         const base: u16 = @intCast(((flags >> 30) & 0b11) * 11);
         var custom_flags = (flags >> 18) & 0b0111_1111_1111;
         for (0..11) |i| {
-            defer custom_flags >>= 1;
             if ((custom_flags & 1) > 0) {
-                const id: u16 = base + @as(u16, @intCast(i));
-                if (getSlot(id)) |def| def.fnTerrain(te);
+                const slot: u16 = @intCast(base + i);
+                if (getSlot(slot)) |def| def.fnTerrain(te);
             }
+            custom_flags >>= 1;
         }
 
         // proof of concept stuff
@@ -108,8 +117,6 @@ const CustomTerrain = struct {
             flags >> 8 & 255,
             flags & 255,
         }, null, null) catch {};
-        //if (flags & (1 << 5) > 0) // SLIP terrain
-        //    te.temperature = @min(2 * r.Time.FRAMETIME.* * te.stats.CoolRate + te.temperature, 100);
     }
 };
 

@@ -91,12 +91,12 @@ const CustomTerrain = struct {
         if (@intFromPtr(behavior) == 0) return;
 
         const flags = behavior.TerrainFlags;
-        const base: u16 = @intCast((flags & 0b11) * 11);
-        var custom_flags = (flags >> 3) & 0b0111_1111_1111;
+        const base: u16 = @intCast(((flags >> 30) & 0b11) * 11);
+        var custom_flags = (flags >> 18) & 0b0111_1111_1111;
         for (0..11) |i| {
             defer custom_flags >>= 1;
             if ((custom_flags & 1) > 0) {
-                const id: u16 = base + 11 - @as(u16, @intCast(i)) - 1;
+                const id: u16 = base + @as(u16, @intCast(i));
                 if (getSlot(id)) |def| def.fnTerrain(te);
             }
         }

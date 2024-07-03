@@ -76,14 +76,16 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
             return null;
         }
 
-        pub fn insert(self: *Self, value: T) !Handle(I) {
+        pub fn insert(self: *Self, owner: I, value: T) !Handle(I) {
             var handle: Handle(I) = undefined;
             if (self.next < @as(I, @intCast(self.sparse_indices.len))) {
                 var entry = &self.sparse_indices.buffer[self.next];
                 std.debug.assert(entry.generation < std.math.maxInt(I)); // "Generation sparse indices overflow"
 
+                entry.owner = owner;
                 entry.generation += 1;
                 handle = .{
+                    .owner = entry.owner,
                     .generation = entry.generation,
                     .index = self.next,
                 };
@@ -95,9 +97,11 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
                 std.debug.assert(self.next < L); // "Index sparse indices overflow"
 
                 handle = Handle(I){
+                    .owner = owner,
                     .index = @as(I, @intCast(self.sparse_indices.len)),
                 };
                 try self.sparse_indices.append(.{
+                    .owner = owner,
                     .index_or_next = @as(I, @intCast(self.handles.len)),
                 });
                 try self.handles.append(handle);
@@ -127,11 +131,20 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
             }
             return null;
         }
+
+        pub fn removeOwner(self: *Self, o: I) void {
+            const n = self.handles.len;
+            for (0..n) |i| {
+                const h = self.handles.buffer[n - i - 1];
+                if (h.owner == o)
+                    _ = self.remove(h);
+            }
+        }
     };
 }
 
 test {
-    const HM = HandleMapStatic(f32, u16, 1);
+    const HM = HandleMapStatic(f32, u16, 2);
     const H = Handle(u16);
 
     var m = try HM.init();
@@ -140,17 +153,26 @@ test {
     var value: f32 = 123.456;
 
     try std.testing.expect(!m.isFull());
-    var h: H = try m.insert(value);
 
-    try std.testing.expect(m.hasHandle(h));
-    try std.testing.expect(m.isFull());
+    var h1: H = try m.insert(123, value);
+    var h2: H = try m.insert(456, value);
+    var h_: H = h1;
+    h_.owner = 789;
+
     //try std.testing.expectError(error.Overflow, m.insert(value)); // covered by assertion
+    try std.testing.expect(m.isFull());
+    try std.testing.expect(m.hasHandle(h1));
+    try std.testing.expect(m.hasHandle(h2));
+    try std.testing.expect(!m.hasHandle(h_));
 
-    var ptr = m.get(h);
+    m.removeOwner(456);
+    try std.testing.expect(!m.hasHandle(h2));
+    try std.testing.expect(!m.isFull());
+
+    var ptr = m.get(h1);
     try std.testing.expect(ptr != null);
     try std.testing.expect(ptr.?.* == value);
 
-    _ = m.remove(h);
-    try std.testing.expect(!m.hasHandle(h));
-    try std.testing.expect(!m.isFull());
+    _ = m.remove(h1);
+    try std.testing.expect(!m.hasHandle(h1));
 }

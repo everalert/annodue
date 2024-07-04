@@ -16,6 +16,8 @@ pub const Mesh_GetBehavior: *fn (*ModelMesh) callconv(.C) *ModelBehavior = @ptrF
 
 pub const MeshMaterial_SetColors: *fn (*ModelMeshMaterial, unk2: i16, unk1: i16, R: i16, G: i16, B: i16, A: i16) callconv(.C) void = @ptrFromInt(0x42B640);
 
+pub const TriggerDescription_AddItem: *fn (*ModelTriggerDescription) callconv(.C) void = @ptrFromInt(0x47E760);
+
 // GAME CONSTANTS
 
 // ...

@@ -91,7 +91,7 @@ const CustomTrigger = struct {
     }
 
     inline fn extractSettingsTD(td: *ModelTriggerDescription) u16 {
-        return (td.Flags >> 6) | 0b11_1111_1111;
+        return (td.Flags >> 6) & 0b11_1111_1111;
     }
 
     inline fn getId(id: u32) ?*CustomTriggerDef {
@@ -286,7 +286,7 @@ const CustomTrigger = struct {
 };
 
 fn TriggerBounce(_: *Trig, te: *Test, _: BOOL, settings: u16) callconv(.C) void {
-    const strength: f32 = if (settings > 0) @as(f32, @floatFromInt(settings)) / 1000 else 1.5;
+    const strength: f32 = if (settings > 0) @as(f32, @floatFromInt(settings)) / 100 else 1.5;
     te._fall_float_value -= strength;
 }
 

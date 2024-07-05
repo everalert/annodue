@@ -192,22 +192,18 @@ const CustomTrigger = struct {
     // - original fn may need to be called manually if you do non-dynamic stuff
     //fn hookDoEntityCreate(_: *Trig) callconv(.C) void {}
 
+    const buf = struct {
+        var init: [32]u8 = undefined;
+        var destroy: [32]u8 = undefined;
+        const d_ins = [_]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 }; // cmp dword ptr [esi+08], 0x1F5 (501)
+        var update: [32]u8 = undefined;
+        const u_ins = [_]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 }; // cmp eax, 0x134 (308)
+    };
+
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
     // fine since it has the same pattern as destroy
     pub fn init(alloc: Allocator) void {
         data = HandleMap(CustomTriggerDef, u16).init(alloc);
-
-        const buf = struct {
-            var init: [32]u8 = undefined;
-
-            var destroy: [32]u8 = undefined;
-            // cmp dword ptr [esi+08], 0x1F5 (501)
-            var destroy_cmp = [_]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 };
-
-            var update: [32]u8 = undefined;
-            // cmp eax, 0x134 (308)
-            var update_cmp = [_]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 };
-        };
 
         // triggers
         // 0x476E7C -> 0x476E88 (0x0C)
@@ -237,8 +233,7 @@ const CustomTrigger = struct {
         destroy_buf = x86.push(destroy_buf, .{ .r32 = .esi });
         destroy_buf = x86.call(destroy_buf, @intFromPtr(&hookDestroy));
         destroy_buf = x86.add_esp32(destroy_buf, 4);
-        // cmp dword ptr [esi+08], 0x1F5 (501)
-        destroy_buf = mem.write_bytes(destroy_buf, &buf.destroy_cmp, 7);
+        destroy_buf = mem.write_bytes(destroy_buf, &buf.d_ins, 7);
         destroy_buf = x86.jmp(destroy_buf, destroy_addr);
         destroy_addr = x86.nop_until(destroy_addr, destroy_end);
 
@@ -252,21 +247,13 @@ const CustomTrigger = struct {
         update_buf = x86.call(update_buf, @intFromPtr(&hookUpdate));
         update_buf = x86.add_esp32(update_buf, 4);
         update_buf = x86.restore_eax(update_buf);
-        // cmp eax, 0x134 (308)
-        update_buf = mem.write_bytes(update_buf, &buf.update_cmp, 5);
+        update_buf = mem.write_bytes(update_buf, &buf.u_ins, 5);
         update_buf = x86.jmp(update_buf, update_addr);
         update_addr = x86.nop_until(update_addr, update_end);
     }
 
     pub fn deinit() void {
         data.deinit();
-
-        const buf = struct {
-            // cmp dword ptr [esi+08], 0x1F5 (501)
-            var destroy_cmp = [_]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 };
-            // cmp eax, 0x134 (308)
-            var update_cmp = [_]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 };
-        };
 
         // trigger
         _ = x86.call(0x476E80, @intFromPtr(&Trig_HandleTriggers));
@@ -279,11 +266,11 @@ const CustomTrigger = struct {
 
         // destroy
         var destroy_addr: usize = 0x47C4D9;
-        destroy_addr = mem.write_bytes(destroy_addr, &buf.destroy_cmp, 7);
+        destroy_addr = mem.write_bytes(destroy_addr, &buf.d_ins, 7);
 
         // update
         var update_addr: usize = 0x47C51B;
-        update_addr = mem.write_bytes(update_addr, &buf.update_cmp, 5);
+        update_addr = mem.write_bytes(update_addr, &buf.u_ins, 5);
     }
 };
 

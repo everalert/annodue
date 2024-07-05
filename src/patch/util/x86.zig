@@ -5,11 +5,15 @@ const mem = @import("memory.zig");
 
 // NOTE: supporting x86 only, not x86_64
 
-const GenReg32 = enum(u8) { eax, ecx, edx, ebx, esp, ebp, esi, edi }; // general register
-const GenReg16 = enum(u8) { ax, cx, dx, bx, sp, bp, si, di }; // general register
 const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
 const OpEn = enum { mem, reg, imm, zo }; // operator encoding
 const EffAdd = enum(u8) { mem, mem8, mem32, reg }; // effective address
+
+// general registers
+// TODO: separate index/pointer registers from 16/32-bit register enum
+const GenReg8 = enum(u8) { al, cl, dl, bl, ah, ch, dh, bh };
+const GenReg16 = enum(u8) { ax, cx, dx, bx, sp, bp, si, di };
+const GenReg32 = enum(u8) { eax, ecx, edx, ebx, esp, ebp, esi, edi };
 
 // helpers
 
@@ -229,9 +233,9 @@ pub fn mov_edx_esp(memory_offset: usize) usize {
 // TODO: r/m16, r/m32 (FF /6)
 pub inline fn push(
     offset: usize,
-    operand: union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 },
+    src: union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 },
 ) usize {
-    switch (operand) {
+    switch (src) {
         .r16 => |reg| return op_r16(offset, 0x50, reg),
         .r32 => |reg| return op_r32(offset, 0x50, reg),
         .imm8 => |imm| return op_imm8(offset, 0x6A, imm),
@@ -250,9 +254,9 @@ pub inline fn push(
 // TODO: r/m16, r/m32 (8F /0)
 pub inline fn pop(
     offset: usize,
-    operand: union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 },
+    dest: union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 },
 ) usize {
-    switch (operand) {
+    switch (dest) {
         .r16 => |reg| return op_r16(offset, 0x58, reg),
         .r32 => |reg| return op_r32(offset, 0x58, reg),
         .seg => |seg| return switch (seg) {
@@ -268,37 +272,29 @@ pub inline fn pop(
 
 pub fn save_esp(memory_offset: usize) usize {
     var offset: usize = memory_offset;
-    // ; push ebp
-    // ; mov ebp, esp
-    offset = push(offset, .{ .r32 = .ebp });
-    offset = mov_rm32_r32(offset, 0xE5);
+    offset = push(offset, .{ .r32 = .ebp }); // ; push ebp
+    offset = mov_rm32_r32(offset, 0xE5); // ; mov ebp, esp
     return offset;
 }
 
 pub fn restore_esp(memory_offset: usize) usize {
     var offset: usize = memory_offset;
-    // ; mov esp, ebp
-    // ; pop ebp
-    offset = mov_rm32_r32(offset, 0xEC);
-    offset = pop(offset, .{ .r32 = .ebp });
+    offset = mov_rm32_r32(offset, 0xEC); // ; mov esp, ebp
+    offset = pop(offset, .{ .r32 = .ebp }); // ; pop ebp
     return offset;
 }
 
 pub fn save_eax(memory_offset: usize) usize {
     var offset: usize = memory_offset;
-    // ; push ebp
-    // ; mov ebp, eax
-    offset = push(offset, .{ .r32 = .ebp });
-    offset = mov_rm32_r32(offset, 0xC5);
+    offset = push(offset, .{ .r32 = .ebp }); // ; push ebp
+    offset = mov_rm32_r32(offset, 0xC5); // ; mov ebp, eax
     return offset;
 }
 
 pub fn restore_eax(memory_offset: usize) usize {
     var offset: usize = memory_offset;
-    // ; mov eax, ebp
-    // ; pop ebp
-    offset = mov_rm32_r32(offset, 0xE8);
-    offset = pop(offset, .{ .r32 = .ebp });
+    offset = mov_rm32_r32(offset, 0xE8); // ; mov eax, ebp
+    offset = pop(offset, .{ .r32 = .ebp }); // ; pop ebp
     return offset;
 }
 
@@ -308,7 +304,6 @@ pub fn call(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = mem.write(offset, u8, 0xE8);
     offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    //offset = write(offset, u32, address - (offset + 4));
     return offset;
 }
 pub fn call_rm32(memory_offset: usize, address: usize) usize {
@@ -334,7 +329,6 @@ pub fn jmp(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = mem.write(offset, u8, 0xE9);
     offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    //offset = write(offset, u32, address - (offset + 4));
     return offset;
 }
 
@@ -345,7 +339,6 @@ pub fn jnz(memory_offset: usize, address: usize) usize {
     offset = mem.write(offset, u8, 0x0F);
     offset = mem.write(offset, u8, 0x85);
     offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    //offset = write(offset, u32, address - (offset + 4));
     return offset;
 }
 
@@ -363,7 +356,6 @@ pub fn jz(memory_offset: usize, address: usize) usize {
     offset = mem.write(offset, u8, 0x0F);
     offset = mem.write(offset, u8, 0x84);
     offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    //offset = write(offset, u32, address - (offset + 4));
     return offset;
 }
 

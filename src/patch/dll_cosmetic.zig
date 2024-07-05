@@ -258,7 +258,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = x86.push(off, .{ .imm32 = offset_tga_path }); // (fmt)
     off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
-    off = x86.pop_edx(off); // (buffer)
+    off = x86.pop(off, .{ .r32 = .edx }); // (buffer)
     off = x86.add_esp32(off, 0x4);
 
     // Attempt to load the TGA, then remove path from stack
@@ -320,7 +320,7 @@ fn PatchTriggerDisplay(memory: usize) usize {
     off = x86.push(off, .{ .imm32 = offset_trigger_string }); // (fmt)
     off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
-    off = x86.pop_edx(off); // (buffer)
+    off = x86.pop(off, .{ .r32 = .edx }); // (buffer)
     off = x86.add_esp32(off, 0x8);
 
     // Display a message

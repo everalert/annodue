@@ -247,31 +247,23 @@ pub inline fn push(
     }
 }
 
-// TODO: generic pop
-// https://www.felixcloutier.com/x86/pop
-
-pub fn pop_eax(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x58);
-}
-
-pub fn pop_edx(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x5A);
-}
-
-pub fn pop_edi(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x5F);
-}
-
-pub fn pop_esi(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x5E);
-}
-
-pub fn pop_ebp(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x5D);
-}
-
-pub fn pop_ebx(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x5B);
+// TODO: r/m16, r/m32 (8F /0)
+pub inline fn pop(
+    offset: usize,
+    operand: union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 },
+) usize {
+    switch (operand) {
+        .r16 => |reg| return op_r16(offset, 0x58, reg),
+        .r32 => |reg| return op_r32(offset, 0x58, reg),
+        .seg => |seg| return switch (seg) {
+            .ds => mem.write(offset, u8, 0x1F),
+            .es => mem.write(offset, u8, 0x07),
+            .ss => mem.write(offset, u8, 0x17),
+            .fs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA1 }, 2),
+            .gs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA9 }, 2),
+            else => @panic("pop(): invalid segment register"),
+        },
+    }
 }
 
 pub fn save_esp(memory_offset: usize) usize {
@@ -288,7 +280,7 @@ pub fn restore_esp(memory_offset: usize) usize {
     // ; mov esp, ebp
     // ; pop ebp
     offset = mov_rm32_r32(offset, 0xEC);
-    offset = pop_ebp(offset);
+    offset = pop(offset, .{ .r32 = .ebp });
     return offset;
 }
 
@@ -306,7 +298,7 @@ pub fn restore_eax(memory_offset: usize) usize {
     // ; mov eax, ebp
     // ; pop ebp
     offset = mov_rm32_r32(offset, 0xE8);
-    offset = pop_ebp(offset);
+    offset = pop(offset, .{ .r32 = .ebp });
     return offset;
 }
 

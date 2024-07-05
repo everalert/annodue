@@ -48,6 +48,7 @@ pub const panic = debug.annodue_panic;
 // TRIGGERS
 
 // notes for plugin devs:
+// TODO: explain lifecycle of a trigger common model-entity interactions at each stage, ..
 // - you have to do any modelblock-related init and cleanup yourself
 // - you may want to call Trig_CreateTrigger during fnDoInit to 'pre-seed' a Trig entity
 // - entity-related auto-cleanup behaviour depends on what callbacks you define
@@ -145,9 +146,6 @@ const CustomTrigger = struct {
             if (def.fnDestroy == null and def.fnUpdate == null)
                 basicCleanup(tr);
         }
-
-        // proof of concept stuff
-        //TriggerBounce(tr, te, is_local, 0);
     }
 
     // inserted into Model_TrigDescInit, after Model_TrigDescAddItem
@@ -194,6 +192,8 @@ const CustomTrigger = struct {
     // - original fn may need to be called manually if you do non-dynamic stuff
     //fn hookDoEntityCreate(_: *Trig) callconv(.C) void {}
 
+    // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
+    // fine since it has the same pattern as destroy
     pub fn init(alloc: Allocator) void {
         data = HandleMap(CustomTriggerDef, u16).init(alloc);
 
@@ -219,38 +219,40 @@ const CustomTrigger = struct {
         var init_addr: usize = 0x47D397;
         const init_end: usize = 0x47D3A0;
         init_addr = x86.jmp(init_addr, init_buf);
-        init_buf = x86.push_esi(init_buf);
+        init_buf = x86.push(init_buf, .{ .r32 = .esi });
         init_buf = x86.call(init_buf, @intFromPtr(TriggerDescription_AddItem));
         init_buf = x86.add_esp32(init_buf, 4);
-        init_buf = x86.push_ebp(init_buf);
-        init_buf = x86.push_esi(init_buf);
+        init_buf = x86.push(init_buf, .{ .r32 = .ebp });
+        init_buf = x86.push(init_buf, .{ .r32 = .esi });
         init_buf = x86.call(init_buf, @intFromPtr(&hookInit));
         init_buf = x86.add_esp32(init_buf, 8);
         init_buf = x86.jmp(init_buf, init_addr);
         init_addr = x86.nop_until(init_addr, init_end);
 
-        // FIXME: may be blocking 501 (gold lava) from being destroyed, verify
         // destroy
         var destroy_buf: usize = @intFromPtr(&buf.destroy);
         var destroy_addr: usize = 0x47C4D9;
         const destroy_end: usize = 0x47C4E0;
         destroy_addr = x86.jmp(destroy_addr, destroy_buf);
-        destroy_buf = x86.push_esi(destroy_buf);
+        destroy_buf = x86.push(destroy_buf, .{ .r32 = .esi });
         destroy_buf = x86.call(destroy_buf, @intFromPtr(&hookDestroy));
         destroy_buf = x86.add_esp32(destroy_buf, 4);
+        // cmp dword ptr [esi+08], 0x1F5 (501)
         destroy_buf = mem.write_bytes(destroy_buf, &buf.destroy_cmp, 7);
         destroy_buf = x86.jmp(destroy_buf, destroy_addr);
         destroy_addr = x86.nop_until(destroy_addr, destroy_end);
 
-        // FIXME: may be blocking 308 (aqc fish) from updating, verify
         // update
         var update_buf: usize = @intFromPtr(&buf.update);
         var update_addr: usize = 0x47C51B;
         const update_end: usize = 0x47C520;
         update_addr = x86.jmp(update_addr, update_buf);
-        update_buf = x86.push_esi(update_buf);
+        update_buf = x86.save_eax(update_buf);
+        update_buf = x86.push(update_buf, .{ .r32 = .esi });
         update_buf = x86.call(update_buf, @intFromPtr(&hookUpdate));
         update_buf = x86.add_esp32(update_buf, 4);
+        update_buf = x86.restore_eax(update_buf);
+        // cmp eax, 0x134 (308)
         update_buf = mem.write_bytes(update_buf, &buf.update_cmp, 5);
         update_buf = x86.jmp(update_buf, update_addr);
         update_addr = x86.nop_until(update_addr, update_end);
@@ -271,7 +273,7 @@ const CustomTrigger = struct {
 
         // init
         var init_addr: usize = 0x47D397;
-        init_addr = x86.push_esi(init_addr);
+        init_addr = x86.push(init_addr, .{ .r32 = .esi });
         init_addr = x86.call(init_addr, @intFromPtr(TriggerDescription_AddItem));
         init_addr = x86.add_esp32(init_addr, 4);
 

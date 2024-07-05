@@ -3,6 +3,82 @@ pub const Self = @This();
 const std = @import("std");
 const mem = @import("memory.zig");
 
+// NOTE: supporting x86 only, not x86_64
+
+const GenReg32 = enum(u8) { eax, ecx, edx, ebx, esp, ebp, esi, edi }; // general register
+const GenReg16 = enum(u8) { ax, cx, dx, bx, sp, bp, si, di }; // general register
+const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
+const OpEn = enum { mem, reg, imm, zo }; // operator encoding
+const EffAdd = enum(u8) { mem, mem8, mem32, reg }; // effective address
+
+// helpers
+
+inline fn parseRM(comptime reg: GenReg32) u8 {
+    return @intFromEnum(reg) * 0x08;
+}
+
+inline fn parseMod(comptime mod: EffAdd) u8 {
+    return @intFromEnum(mod) * 0x40;
+}
+
+inline fn parseModRM(
+    comptime mod: EffAdd,
+    comptime rm: GenReg32, // dest
+    comptime reg: GenReg32, // src
+) u8 {
+    return @intFromEnum(mod) * 0x40 + @intFromEnum(reg) + @intFromEnum(rm) * 0x08;
+}
+
+// TODO: op_r16, op_r32 reg and base+reg should be comptime, not sure why zig
+// complains about them when e.g. push() is called with runtime .imm32 value,
+// they should not be called in that case anyway
+
+pub inline fn op_r16(
+    offset: usize,
+    comptime base: u8,
+    reg: GenReg16,
+) usize {
+    return mem.write_bytes(offset, &[2]u8{ 0x66, base + @intFromEnum(reg) }, 2);
+}
+
+pub inline fn op_r32(
+    offset: usize,
+    comptime base: u8,
+    reg: GenReg32,
+) usize {
+    return mem.write(offset, u8, base + @intFromEnum(reg));
+}
+
+pub inline fn op_imm8(
+    offset: usize,
+    comptime op: u8,
+    value: u8,
+) usize {
+    return mem.write_bytes(offset, &[2]u8{ op, value }, 2);
+}
+
+pub inline fn op_imm32(
+    offset: usize,
+    comptime op: u8,
+    value: u32,
+) usize {
+    var addr = mem.write(offset, u8, op);
+    return mem.write(addr, u32, value);
+}
+
+pub inline fn op_modRM(
+    offset: usize,
+    op: u8,
+    comptime mod: EffAdd,
+    comptime dest: GenReg32,
+    comptime src: GenReg32,
+) usize {
+    var addr = mem.write(offset, u8, op);
+    return mem.write(addr, u32, comptime parseModRM(mod, dest, src));
+}
+
+// stuff
+
 pub fn add_rm32_imm8(memory_offset: usize, rm32: u8, imm8: u8) usize {
     var offset = memory_offset;
     offset = mem.write(offset, u8, 0x83);
@@ -150,25 +226,29 @@ pub fn mov_edx_esp(memory_offset: usize) usize {
     return mov_rm32_r32(memory_offset, 0xE2);
 }
 
-pub fn push_eax(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x50);
+// TODO: r/m16, r/m32 (FF /6)
+pub inline fn push(
+    offset: usize,
+    operand: union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 },
+) usize {
+    switch (operand) {
+        .r16 => |reg| return op_r16(offset, 0x50, reg),
+        .r32 => |reg| return op_r32(offset, 0x50, reg),
+        .imm8 => |imm| return op_imm8(offset, 0x6A, imm),
+        .imm16, .imm32 => |imm| return op_imm32(offset, 0x68, imm),
+        .seg => |seg| return switch (seg) {
+            .cs => mem.write(offset, u8, 0x0E),
+            .ss => mem.write(offset, u8, 0x16),
+            .ds => mem.write(offset, u8, 0x1E),
+            .es => mem.write(offset, u8, 0x06),
+            .fs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA0 }, 2),
+            .gs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA8 }, 2),
+        },
+    }
 }
 
-pub fn push_edx(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x52);
-}
-
-pub fn push_ebp(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x55);
-}
-
-pub fn push_esi(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x56);
-}
-
-pub fn push_edi(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x57);
-}
+// TODO: generic pop
+// https://www.felixcloutier.com/x86/pop
 
 pub fn pop_eax(memory_offset: usize) usize {
     return mem.write(memory_offset, u8, 0x58);
@@ -194,18 +274,11 @@ pub fn pop_ebx(memory_offset: usize) usize {
     return mem.write(memory_offset, u8, 0x5B);
 }
 
-pub fn push_u32(memory_offset: usize, value: usize) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x68);
-    offset = mem.write(offset, u32, value);
-    return offset;
-}
-
 pub fn save_esp(memory_offset: usize) usize {
     var offset: usize = memory_offset;
     // ; push ebp
     // ; mov ebp, esp
-    offset = push_ebp(offset);
+    offset = push(offset, .{ .r32 = .ebp });
     offset = mov_rm32_r32(offset, 0xE5);
     return offset;
 }
@@ -215,6 +288,24 @@ pub fn restore_esp(memory_offset: usize) usize {
     // ; mov esp, ebp
     // ; pop ebp
     offset = mov_rm32_r32(offset, 0xEC);
+    offset = pop_ebp(offset);
+    return offset;
+}
+
+pub fn save_eax(memory_offset: usize) usize {
+    var offset: usize = memory_offset;
+    // ; push ebp
+    // ; mov ebp, eax
+    offset = push(offset, .{ .r32 = .ebp });
+    offset = mov_rm32_r32(offset, 0xC5);
+    return offset;
+}
+
+pub fn restore_eax(memory_offset: usize) usize {
+    var offset: usize = memory_offset;
+    // ; mov eax, ebp
+    // ; pop ebp
+    offset = mov_rm32_r32(offset, 0xE8);
     offset = pop_ebp(offset);
     return offset;
 }
@@ -239,7 +330,7 @@ pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
     var offset = memory_offset;
     offset = save_esp(offset);
     offset = mov_eax_esp_add(offset, 0x08);
-    offset = push_eax(offset);
+    offset = push(offset, .{ .r32 = .eax });
     offset = call(offset, address);
     offset = restore_esp(offset);
     return offset;

@@ -111,10 +111,10 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
     const cave_memory_offset: usize = off;
 
     // Patches the arguments for the texture loader
-    off = x86.push_u32(off, height);
-    off = x86.push_u32(off, width);
-    off = x86.push_u32(off, height);
-    off = x86.push_u32(off, width);
+    off = x86.push(off, .{ .imm32 = height });
+    off = x86.push(off, .{ .imm32 = width });
+    off = x86.push(off, .{ .imm32 = height });
+    off = x86.push(off, .{ .imm32 = width });
     off = x86.jmp(off, code_end_offset);
 
     // Detour original code to ours
@@ -254,15 +254,15 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = x86.mov_edx_esp(off);
 
     // Generate the path, keep sprite_index on stack as we'll keep using it
-    off = x86.push_eax(off); // (sprite_index)
-    off = x86.push_u32(off, offset_tga_path); // (fmt)
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .r32 = .eax }); // (sprite_index)
+    off = x86.push(off, .{ .imm32 = offset_tga_path }); // (fmt)
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
     off = x86.pop_edx(off); // (buffer)
     off = x86.add_esp32(off, 0x4);
 
     // Attempt to load the TGA, then remove path from stack
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x4114D0); // load_sprite_from_tga_and_add_loaded_sprite
     off = x86.add_esp32(off, 0x4);
 
@@ -316,16 +316,16 @@ fn PatchTriggerDisplay(memory: usize) usize {
     off = x86.mov_edx_esp(off);
 
     // Generate the string we'll display
-    off = x86.push_eax(off); // (trigger index)
-    off = x86.push_u32(off, offset_trigger_string); // (fmt)
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .r32 = .eax }); // (trigger index)
+    off = x86.push(off, .{ .imm32 = offset_trigger_string }); // (fmt)
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
     off = x86.pop_edx(off); // (buffer)
     off = x86.add_esp32(off, 0x8);
 
     // Display a message
-    off = x86.push_u32(off, @bitCast(trigger_string_display_duration));
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .imm32 = @bitCast(trigger_string_display_duration) });
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x44FCE0);
     off = x86.add_esp32(off, 0x8);
 

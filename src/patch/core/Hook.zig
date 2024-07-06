@@ -194,10 +194,12 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
 // TODO: generalize for OnPluginInit etc.
 fn PluginFnOnPluginDeinit(owner: u16) void {
     for (PluginState.core.items) |p| {
+        if (p.OwnerId == owner) continue;
         PluginState.working_owner = p.OwnerId;
         if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
     }
     for (PluginState.plugin.items) |p| {
+        if (p.OwnerId == owner) continue;
         PluginState.working_owner = p.OwnerId;
         if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
     }

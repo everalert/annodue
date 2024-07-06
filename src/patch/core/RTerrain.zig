@@ -16,11 +16,7 @@ const ModelMesh_GetBehavior = r.Model.Mesh_GetBehavior;
 // TERRAIN
 
 // TODO: integrate with core
-//   proper interface (add: remove(), ..)
-//   global functions
 //   owner autoremove on plugin deinit
-// TODO: protections to reserve group 3 for internal use
-// TODO: testing cleanup
 
 const CustomTerrainDef = extern struct {
     slot: u16,
@@ -40,14 +36,21 @@ const CustomTerrain = struct {
         _ = data.remove(h);
     }
 
+    pub fn removeAll(owner: u16) void {
+        _ = data.removeOwner(owner);
+    }
+
     pub fn insert(
         owner: u16,
         group: u16,
         bit: u16,
         fnTerrain: *const fn (*Test) callconv(.C) void,
+        user: bool,
     ) ?HandleStatic(u16) {
         std.debug.assert(group <= 3);
         std.debug.assert(bit >= 18 and bit < 29);
+        if (!user and group < 3) return null;
+        if (user and group == 3) return null;
 
         const slot: u16 = group * 11 + bit - 18;
         if (find(slot)) |_| return null;
@@ -78,14 +81,6 @@ const CustomTerrain = struct {
             }
             custom_flags >>= 1;
         }
-
-        // FIXME: remove, proof of concept stuff
-        t.DrawText(0, 0, "Terrain Flags {b:0>8} {b:0>8} {b:0>8} {b:0>8}", .{
-            flags >> 24 & 255,
-            flags >> 16 & 255,
-            flags >> 8 & 255,
-            flags & 255,
-        }, null, null) catch {};
     }
 
     pub fn init() void {
@@ -101,15 +96,43 @@ const CustomTerrain = struct {
     }
 };
 
-// HOOKS
+// GLOBAL EXPORTS
 
-export fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    CustomTerrain.init();
-    //_ = CustomTerrain.insert(0, 0, 18, TerrainCooldown);
+/// attempt to add behaviour to a terrain flag
+/// returns handle to resource if acquisition success, 'null' handle if failed
+/// @owner
+/// @group      0..2
+/// @bit        18..28
+/// @fnTerrain
+pub fn RRequest(
+    owner: u16,
+    group: u16,
+    bit: u16,
+    fnTerrain: *const fn (*Test) callconv(.C) void,
+) callconv(.C) HandleStatic(u16) {
+    if (group > 2) return .{};
+    if (bit < 18 or bit >= 29) return .{};
+    return CustomTerrain.insert(owner, group, bit, fnTerrain, true) orelse .{};
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+/// release a single handle
+pub fn RRelease(h: HandleStatic(u16)) callconv(.C) void {
+    CustomTerrain.remove(h);
+}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+/// release all handles held by the plugin
+pub fn RReleaseAll(owner: u16) callconv(.C) void {
+    CustomTerrain.removeAll(owner);
+}
+
+// HOOKS
+
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    CustomTerrain.init();
+}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     CustomTerrain.deinit();
 }

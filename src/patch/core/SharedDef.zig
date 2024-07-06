@@ -8,9 +8,14 @@ const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const POINT = w32.foundation.POINT;
 
 const ActiveState = @import("../util/active_state.zig").ActiveState;
+const HandleStatic = @import("../util/handle_map_static.zig").Handle;
+const HandleMapStatic = @import("../util/handle_map_static.zig").HandleMapStatic;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
+
+const r = @import("racer");
+const Test = r.Entity.Test.Test;
 
 const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
@@ -63,7 +68,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 15;
+pub const GLOBAL_FUNCTION_VERSION = 16;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -86,4 +91,9 @@ pub const GlobalFunction = extern struct {
     GameFreezeIsFrozen: *const fn () bool,
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
+    // Resources
+    // TODO: manage resource owners with core automatically
+    RTerrainRequest: *const fn (owner: u16, group: u16, bit: u16, fnTerrain: *const fn (*Test) callconv(.C) void) callconv(.C) HandleStatic(u16),
+    RTerrainRelease: *const fn (h: HandleStatic(u16)) callconv(.C) void,
+    RTerrainReleaseAll: *const fn (owner: u16) callconv(.C) void,
 };

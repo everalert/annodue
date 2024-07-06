@@ -9,9 +9,9 @@ pub fn Handle(comptime T: type) type {
     std.debug.assert(@typeInfo(T).Int.bits % 8 == 0);
 
     return extern struct {
-        owner: T = 0,
-        generation: T = 0,
-        index: T = 0,
+        owner: T = std.math.maxInt(T),
+        generation: T = std.math.maxInt(T),
+        index: T = std.math.maxInt(T),
     };
 }
 
@@ -21,15 +21,15 @@ pub fn SparseIndex(comptime T: type) type {
     std.debug.assert(@typeInfo(T).Int.bits % 8 == 0);
 
     return extern struct {
-        owner: T = 0,
-        generation: T = 0,
-        index_or_next: T = 0,
+        owner: T = std.math.maxInt(T),
+        generation: T = std.math.maxInt(T),
+        index_or_next: T = std.math.maxInt(T),
     };
 }
 
 pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) type {
     std.debug.assert(@typeInfo(I) == .Int);
-    std.debug.assert(L <= std.math.maxInt(I));
+    std.debug.assert(L < std.math.maxInt(I)); // reserve topmost index for C-compatible 'null'
 
     return struct {
         const Self = @This();
@@ -80,7 +80,7 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
             var handle: Handle(I) = undefined;
             if (self.next < @as(I, @intCast(self.sparse_indices.len))) {
                 var entry = &self.sparse_indices.buffer[self.next];
-                std.debug.assert(entry.generation < std.math.maxInt(I)); // "Generation sparse indices overflow"
+                std.debug.assert(entry.generation < std.math.maxInt(I) - 1); // "Generation sparse indices overflow"
 
                 entry.owner = owner;
                 entry.generation += 1;

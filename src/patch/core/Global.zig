@@ -11,6 +11,7 @@ const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const settings = @import("Settings.zig");
 const s = settings.SettingsState;
+const rterrain = @import("RTerrain.zig");
 
 const st = @import("../util/active_state.zig");
 const xinput = @import("../util/xinput.zig");
@@ -100,6 +101,10 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .GameFreezeIsFrozen = &freeze.Freeze.is_frozen,
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
+    // Resources
+    .RTerrainRequest = &rterrain.RRequest,
+    .RTerrainRelease = &rterrain.RRelease,
+    .RTerrainReleaseAll = &rterrain.RReleaseAll,
 };
 
 // UTIL

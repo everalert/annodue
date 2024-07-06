@@ -47,8 +47,8 @@ pub const panic = debug.annodue_panic;
 
 // TRIGGERS
 
-// notes for plugin devs:
 // TODO: explain lifecycle of a trigger common model-entity interactions at each stage, ..
+// notes for plugin devs:
 // - you have to do any modelblock-related init and cleanup yourself
 // - you may want to call Trig_CreateTrigger during fnDoInit to 'pre-seed' a Trig entity
 // - entity-related auto-cleanup behaviour depends on what callbacks you define
@@ -78,8 +78,6 @@ const CustomTriggerDef = extern struct {
 const CustomTrigger = struct {
     var data: HandleMap(CustomTriggerDef, u16) = undefined;
 
-    // fn removeId()
-
     // based on loc_47D138 in HandleTriggers
     inline fn basicCleanup(tr: *Trig) void {
         tr.pTrigDesc.Flags |= 1;
@@ -95,10 +93,14 @@ const CustomTrigger = struct {
         return (td.Flags >> 6) & 0b11_1111_1111;
     }
 
-    inline fn getId(id: u32) ?*CustomTriggerDef {
+    inline fn find(id: u32) ?*CustomTriggerDef {
         for (data.values.items) |*def|
             if (def.id == @as(u16, @intCast(id))) return def;
         return null;
+    }
+
+    pub fn remove(h: Handle(u16)) void {
+        _ = data.remove(h);
     }
 
     pub fn insert(
@@ -114,7 +116,7 @@ const CustomTrigger = struct {
         if (!user and id >= TRIGGER_LIMIT_INTERNAL) return null;
         if (user and id < TRIGGER_LIMIT_INTERNAL) return null;
 
-        if (getId(id)) |_| return null;
+        if (find(id)) |_| return null;
 
         var value = CustomTriggerDef{
             .id = id,
@@ -140,7 +142,7 @@ const CustomTrigger = struct {
             return;
         }
 
-        if (getId(tr.Type)) |def| {
+        if (find(tr.Type)) |def| {
             def.fnTrigger(tr, te, is_local, extractSettings(tr));
             tr.Flags |= 1;
             if (def.fnDestroy == null and def.fnUpdate == null)
@@ -153,7 +155,7 @@ const CustomTrigger = struct {
     fn hookInit(td: *ModelTriggerDescription, flags: u32) callconv(.C) void {
         if (td.Type < TRIGGER_LIMIT_GAME) return;
 
-        if (getId(td.Type)) |def| {
+        if (find(td.Type)) |def| {
             if (def.fnInit == null) return;
             def.fnInit.?(td, flags, extractSettingsTD(td));
         }
@@ -169,7 +171,7 @@ const CustomTrigger = struct {
     fn hookDestroy(tr: *Trig) callconv(.C) void {
         if (tr.Type < TRIGGER_LIMIT_GAME) return;
 
-        if (getId(tr.Type)) |def| {
+        if (find(tr.Type)) |def| {
             if (def.fnDestroy == null) return;
             if (!def.fnDestroy.?(tr, extractSettings(tr))) return;
             basicCleanup(tr);
@@ -181,7 +183,7 @@ const CustomTrigger = struct {
     fn hookUpdate(tr: *Trig) callconv(.C) void {
         if (tr.Type < TRIGGER_LIMIT_GAME) return;
 
-        if (getId(tr.Type)) |def| {
+        if (find(tr.Type)) |def| {
             if (def.fnUpdate == null) return;
             def.fnUpdate.?(tr, extractSettings(tr));
         }
@@ -252,6 +254,8 @@ const CustomTrigger = struct {
         update_addr = x86.nop_until(update_addr, update_end);
     }
 
+    // FIXME: crashes after reinit -> track load
+    // probably due to timing of hotreload or un-cleared triggers
     pub fn deinit() void {
         data.deinit();
 
@@ -296,10 +300,14 @@ const CustomTerrainDef = extern struct {
 const CustomTerrain = struct {
     var data: HandleMapStatic(CustomTerrainDef, u16, 44) = undefined;
 
-    inline fn getSlot(slot: u16) ?*CustomTerrainDef {
+    inline fn find(slot: u16) ?*CustomTerrainDef {
         for (data.values.slice()) |*def|
             if (def.slot == slot) return def;
         return null;
+    }
+
+    pub fn remove(h: HandleStatic(u16)) void {
+        _ = data.remove(h);
     }
 
     pub fn insert(
@@ -312,7 +320,7 @@ const CustomTerrain = struct {
         std.debug.assert(bit >= 18 and bit < 29);
 
         const slot: u16 = group * 11 + bit - 18;
-        if (getSlot(slot)) |_| return null;
+        if (find(slot)) |_| return null;
 
         var value = CustomTerrainDef{
             .slot = slot,
@@ -336,12 +344,12 @@ const CustomTerrain = struct {
         for (0..11) |i| {
             if ((custom_flags & 1) > 0) {
                 const slot: u16 = @intCast(base + i);
-                if (getSlot(slot)) |def| def.fnTerrain(te);
+                if (find(slot)) |def| def.fnTerrain(te);
             }
             custom_flags >>= 1;
         }
 
-        // proof of concept stuff
+        // FIXME: remove, proof of concept stuff
         t.DrawText(0, 0, "Terrain Flags {b:0>8} {b:0>8} {b:0>8} {b:0>8}", .{
             flags >> 24 & 255,
             flags >> 16 & 255,
@@ -401,30 +409,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn EarlyEngineUpdateA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    const s = struct {
-        const beachpp: **mo.ModelNode = @ptrFromInt(0xE287E8);
-        var bit1: bool = true;
-        var bit2: bool = true;
-    };
-
-    if (gf.InputGetKbRaw(.J) == .JustOn) {
-        if (s.bit1) {
-            mo.Node_SetFlags(s.beachpp.*, 2, 0b01, 0x10, 2); // flags |= 0x00000001
-        } else {
-            mo.Node_SetFlags(s.beachpp.*, 2, -2, 0x10, 3); // flags &= 0xFFFFFFFE
-        }
-        s.bit1 = !s.bit1;
-    }
-    if (gf.InputGetKbRaw(.F) == .JustOn) {
-        if (s.bit2) {
-            mo.Node_SetFlags(s.beachpp.*, 2, 0b10, 0x10, 2); // flags |= 0x00000002
-        } else {
-            mo.Node_SetFlags(s.beachpp.*, 2, -3, 0x10, 3); // flags &= 0xFFFFFFFD
-        }
-        s.bit2 = !s.bit2;
-    }
-
+export fn EarlyEngineUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     //rt.DrawText(16, 16, "{s} {s}", .{
     //    PLUGIN_NAME,
     //    PLUGIN_VERSION,

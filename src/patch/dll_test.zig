@@ -310,7 +310,7 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     CustomTrigger.init(gpa.allocator());
     _ = CustomTrigger.insert(0, 2000, TriggerBounce, null, null, null, false);
     _ = CustomTrigger.insert(0, 5000, TriggerBounce, null, null, null, true);
-    TerrainCooldownHandle = gf.RTerrainRequest(0, 0, 18, TerrainCooldown);
+    TerrainCooldownHandle = gf.RTerrainRequest(0, 18, TerrainCooldown);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

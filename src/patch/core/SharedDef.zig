@@ -92,8 +92,7 @@ pub const GlobalFunction = extern struct {
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources
-    // TODO: manage resource owners with core automatically
-    RTerrainRequest: *const fn (owner: u16, group: u16, bit: u16, fnTerrain: *const fn (*Test) callconv(.C) void) callconv(.C) HandleStatic(u16),
+    RTerrainRequest: *const fn (group: u16, bit: u16, fnTerrain: *const fn (*Test) callconv(.C) void) callconv(.C) HandleStatic(u16),
     RTerrainRelease: *const fn (h: HandleStatic(u16)) callconv(.C) void,
-    RTerrainReleaseAll: *const fn (owner: u16) callconv(.C) void,
+    RTerrainReleaseAll: *const fn () callconv(.C) void,
 };

@@ -2,6 +2,7 @@ const std = @import("std");
 
 const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const workingOwner = &@import("Hook.zig").PluginState.workingOwner;
 
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 const HandleMapStatic = @import("../util/handle_map_static.zig").HandleMapStatic;
@@ -105,14 +106,13 @@ const CustomTerrain = struct {
 /// @bit        18..28
 /// @fnTerrain
 pub fn RRequest(
-    owner: u16,
     group: u16,
     bit: u16,
     fnTerrain: *const fn (*Test) callconv(.C) void,
 ) callconv(.C) HandleStatic(u16) {
     if (group > 2) return .{};
     if (bit < 18 or bit >= 29) return .{};
-    return CustomTerrain.insert(owner, group, bit, fnTerrain, true) orelse .{};
+    return CustomTerrain.insert(workingOwner(), group, bit, fnTerrain, true) orelse .{};
 }
 
 /// release a single handle
@@ -121,8 +121,8 @@ pub fn RRelease(h: HandleStatic(u16)) callconv(.C) void {
 }
 
 /// release all handles held by the plugin
-pub fn RReleaseAll(owner: u16) callconv(.C) void {
-    CustomTerrain.removeAll(owner);
+pub fn RReleaseAll() callconv(.C) void {
+    CustomTerrain.removeAll(workingOwner());
 }
 
 // HOOKS

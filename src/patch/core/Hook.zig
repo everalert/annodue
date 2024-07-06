@@ -48,6 +48,7 @@ const Plugin = plugin: {
         .{ "WriteTime", ?w32f.FILETIME },
         .{ "Initialized", bool },
         .{ "Filename", [127:0]u8 },
+        .{ "OwnerId", u16 },
     };
     const ev = std.enums.values(PluginExportFn);
     var fields: [stdf.len + ev.len]std.builtin.Type.StructField = undefined;
@@ -155,21 +156,32 @@ const PluginExportFn = enum(u32) {
     MapRenderA,
 };
 
-const PluginState = struct {
+pub const PluginState = struct {
     const check_freq: u32 = 1000 / 24; // in lieu of every frame
     var last_check: u32 = 0;
     var core: std.ArrayList(Plugin) = undefined;
     var plugin: std.ArrayList(Plugin) = undefined;
     var hot_reload_i: usize = 0;
+    var owners_core: u16 = 0x0000;
+    var owners_user: u16 = 0x0800;
+    var working_owner: u16 = 0;
+
+    pub fn workingOwner() u16 {
+        return working_owner;
+    }
 };
 
 pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
         fn callback() void {
-            for (PluginState.core.items) |p|
+            for (PluginState.core.items) |p| {
+                PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
-            for (PluginState.plugin.items) |p|
+            }
+            for (PluginState.plugin.items) |p| {
+                PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
+            }
         }
     };
     return &c.callback;
@@ -296,6 +308,9 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
         return false;
     }
 
+    p.OwnerId = PluginState.owners_user;
+    PluginState.owners_user += 1;
+    PluginState.working_owner = p.OwnerId;
     p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
     if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION);
     p.Initialized = true;
@@ -337,6 +352,9 @@ pub fn init() void {
         if (this_p) |plug| {
             if (plug.OnInit == null or plug.OnInitLate == null or plug.OnDeinit == null)
                 @panic("core plugin missing OnInit, OnInitLate or OnDeinit");
+            plug.OwnerId = PluginState.owners_core;
+            PluginState.owners_core += 1;
+            PluginState.working_owner = plug.OwnerId;
             plug.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
         }
     }

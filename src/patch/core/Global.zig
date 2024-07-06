@@ -133,9 +133,13 @@ pub fn init() bool {
 
 // HOOK CALLS
 
+pub fn OnInit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
+
 pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
+
+pub fn OnDeinit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
 
 pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;

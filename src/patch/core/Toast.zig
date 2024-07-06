@@ -48,6 +48,12 @@ pub const ToastSystem = extern struct {
 
 // HOOK FUNCTIONS
 
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
 pub fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     const r_start: u32 = @intCast(ToastSystem.buffer.b);
     const r_end: u32 = r_start + ToastSystem.buffer.len;

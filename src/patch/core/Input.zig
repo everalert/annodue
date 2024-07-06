@@ -30,6 +30,14 @@ const InputState = extern struct {
     var mouse_lock: bool = false;
 };
 
+// HOOKS
+
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
 pub fn InputUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     update_xinput();
     update_kb();

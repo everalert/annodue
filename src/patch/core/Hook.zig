@@ -317,8 +317,6 @@ pub fn init() void {
     // TODO: hot-reloading core (i.e. all of annodue)
 
     // TODO: move to LoadPlugin equivalent?
-    // TODO: require OnInit, OnLateInit, OnDeinit?
-    // TODO: run OnInit immediately like plugins
     // TODO: (after hot-reloading core) run OnLateInit immediately on hot-reload like plugins
     // TODO: filtering/error-checking the fields to make sure they're actually objects, not functions etc.
     const fn_fields = comptime std.enums.values(PluginExportFn);
@@ -335,6 +333,11 @@ pub fn init() void {
                 }
                 @field(this_p.?, @tagName(ff)) = &@field(this_decl, @tagName(ff));
             }
+        }
+        if (this_p) |plug| {
+            if (plug.OnInit == null or plug.OnInitLate == null or plug.OnDeinit == null)
+                @panic("core plugin missing OnInit, OnInitLate or OnDeinit");
+            plug.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
         }
     }
 
@@ -374,6 +377,14 @@ pub fn init() void {
     //off = HookLoadSprite(off);
     GLOBAL_STATE.patch_offset = off;
 }
+
+// HOOKS
+
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {

@@ -85,6 +85,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginName, .PluginVersion => ?*const fn () callconv(.C) [*:0]const u8,
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
+        .OnPluginDeinit => ?*const fn (u16) callconv(.C) void,
         else => ?*const fn (*GlobalSt, *GlobalFn) callconv(.C) void,
     };
 }
@@ -102,6 +103,9 @@ const PluginExportFn = enum(u32) {
     //OnEnable,
     //OnDisable,
     OnSettingsLoad,
+    //OnPluginInit,
+    //OnPluginInitLate,
+    OnPluginDeinit, // when any plugin unloads, e.g. to hotload
 
     // Hook Functions
     GameLoopB,
@@ -187,6 +191,18 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     return &c.callback;
 }
 
+// TODO: generalize for OnPluginInit etc.
+fn PluginFnOnPluginDeinit(owner: u16) void {
+    for (PluginState.core.items) |p| {
+        PluginState.working_owner = p.OwnerId;
+        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+    }
+    for (PluginState.plugin.items) |p| {
+        PluginState.working_owner = p.OwnerId;
+        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+    }
+}
+
 fn PluginFnCallback1_stub(_: u32) void {}
 
 // MISC
@@ -237,6 +253,7 @@ fn ensureDirectoryExists(alloc: std.mem.Allocator, path: []const u8) bool {
 // TODO: OnLoad, OnUnload, OnEnable, OnDisable
 // TODO: also stuff for loading and unloading based on watching the directory, outside of
 // updating already loaded plugins
+// TODO: allow OnPluginDeinit for user-plugins; needs protections and to communicate which plugin
 // NOTE: assumes index is allocated and initialized, to allow different
 // ways of handling the backing data
 /// @return     null = no change, true = (re)loaded, false = rejected
@@ -278,6 +295,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
     // do we need to unload anything
     if (p.Handle) |h| {
         p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+        PluginFnOnPluginDeinit(p.OwnerId);
         _ = w32ll.FreeLibrary(h);
     }
 
@@ -301,7 +319,8 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
         p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
         p.OnInit == null or
         p.OnInitLate == null or
-        p.OnDeinit == null)
+        p.OnDeinit == null or
+        p.OnPluginDeinit != null)
     {
         _ = w32ll.FreeLibrary(p.Handle);
         p.Initialized = false;

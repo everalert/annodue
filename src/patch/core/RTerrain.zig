@@ -16,8 +16,7 @@ const ModelMesh_GetBehavior = r.Model.Mesh_GetBehavior;
 
 // TERRAIN
 
-// TODO: integrate with core
-//   owner autoremove on plugin deinit
+// TODO: move 'bit' arg before 'group' on insert()/RRequest()?
 
 const CustomTerrainDef = extern struct {
     slot: u16,
@@ -135,4 +134,8 @@ pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     CustomTerrain.deinit();
+}
+
+pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+    CustomTerrain.removeAll(owner);
 }

@@ -19,3 +19,4 @@ pub const Freeze = @import("Freeze.zig");
 
 // plugin-facing resources
 pub const RTerrain = @import("RTerrain.zig");
+pub const RTrigger = @import("RTrigger.zig");

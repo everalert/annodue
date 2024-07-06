@@ -12,6 +12,7 @@ const input = @import("Input.zig");
 const settings = @import("Settings.zig");
 const s = settings.SettingsState;
 const rterrain = @import("RTerrain.zig");
+const rtrigger = @import("RTrigger.zig");
 
 const st = @import("../util/active_state.zig");
 const xinput = @import("../util/xinput.zig");
@@ -105,6 +106,9 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .RTerrainRequest = &rterrain.RRequest,
     .RTerrainRelease = &rterrain.RRelease,
     .RTerrainReleaseAll = &rterrain.RReleaseAll,
+    .RTriggerRequest = &rtrigger.RRequest,
+    .RTriggerRelease = &rtrigger.RRelease,
+    .RTriggerReleaseAll = &rtrigger.RReleaseAll,
 };
 
 // UTIL

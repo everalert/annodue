@@ -2,20 +2,23 @@ const std = @import("std");
 
 const HWND = std.os.windows.HWND;
 const HINSTANCE = std.os.windows.HINSTANCE;
+const BOOL = std.os.windows.BOOL;
 
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const POINT = w32.foundation.POINT;
 
 const ActiveState = @import("../util/active_state.zig").ActiveState;
+const Handle = @import("../util/handle_map.zig").Handle;
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
-const HandleMapStatic = @import("../util/handle_map_static.zig").HandleMapStatic;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
+const Trig = r.Entity.Trig.Trig;
+const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 
 const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
@@ -68,7 +71,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 16;
+pub const GLOBAL_FUNCTION_VERSION = 17;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -92,7 +95,20 @@ pub const GlobalFunction = extern struct {
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources
-    RTerrainRequest: *const fn (group: u16, bit: u16, fnTerrain: *const fn (*Test) callconv(.C) void) callconv(.C) HandleStatic(u16),
+    RTerrainRequest: *const fn (
+        group: u16,
+        bit: u16,
+        fnTerrain: *const fn (*Test) callconv(.C) void,
+    ) callconv(.C) HandleStatic(u16),
     RTerrainRelease: *const fn (h: HandleStatic(u16)) callconv(.C) void,
     RTerrainReleaseAll: *const fn () callconv(.C) void,
+    RTriggerRequest: *const fn (
+        id: u16,
+        fnTrigger: *const fn (*Trig, *Test, BOOL, u16) callconv(.C) void,
+        fnInit: ?*const fn (*ModelTriggerDescription, u32, u16) callconv(.C) void,
+        fnDestroy: ?*const fn (*Trig, u16) callconv(.C) bool,
+        fnUpdate: ?*const fn (*Trig, u16) callconv(.C) void,
+    ) callconv(.C) Handle(u16),
+    RTriggerRelease: *const fn (h: Handle(u16)) callconv(.C) void,
+    RTriggerReleaseAll: *const fn () callconv(.C) void,
 };

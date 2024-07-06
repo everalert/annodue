@@ -10,9 +10,9 @@ pub fn Handle(comptime T: type) type {
     std.debug.assert(@typeInfo(T).Int.bits % 8 == 0);
 
     return extern struct {
-        owner: T = 0,
-        generation: T = 0,
-        index: T = 0,
+        owner: T = std.math.maxInt(T),
+        generation: T = std.math.maxInt(T),
+        index: T = std.math.maxInt(T),
     };
 }
 
@@ -22,15 +22,16 @@ pub fn SparseIndex(comptime T: type) type {
     std.debug.assert(@typeInfo(T).Int.bits % 8 == 0);
 
     return extern struct {
-        owner: T = 0,
-        generation: T = 0,
-        index_or_next: T = 0,
+        owner: T = std.math.maxInt(T),
+        generation: T = std.math.maxInt(T),
+        index_or_next: T = std.math.maxInt(T),
     };
 }
 
 pub fn HandleMap(comptime T: type, comptime I: type) type {
     return struct {
         const Self = @This();
+        const MAX_VALUE = std.math.maxInt(I) - 1;
         handles: ArrayList(Handle(I)),
         values: ArrayList(T),
         sparse_indices: ArrayList(SparseIndex(I)),
@@ -81,7 +82,7 @@ pub fn HandleMap(comptime T: type, comptime I: type) type {
             var handle: Handle(I) = undefined;
             if (self.next < @as(I, @intCast(self.sparse_indices.items.len))) {
                 var entry = &self.sparse_indices.items[self.next];
-                std.debug.assert(entry.generation < std.math.maxInt(I)); // "Generation sparse indices overflow"
+                std.debug.assert(entry.generation < MAX_VALUE); // "Generation sparse indices overflow"
 
                 entry.owner = owner;
                 entry.generation += 1;
@@ -95,7 +96,7 @@ pub fn HandleMap(comptime T: type, comptime I: type) type {
                 try self.handles.append(handle);
                 try self.values.append(value);
             } else {
-                std.debug.assert(self.next < std.math.maxInt(I)); // "Index sparse indices overflow"
+                std.debug.assert(self.next < MAX_VALUE); // "Index sparse indices overflow"
 
                 handle = Handle(I){
                     .owner = owner,

@@ -116,9 +116,6 @@ const CustomTrigger = struct {
     // - basic cleanup will be done for you if EntityDestroy or EntityUpdate not defined
     // - else flags |= 1 will be set
     fn hookTrigger(tr: *Trig, te: *Test, is_local: BOOL) callconv(.C) void {
-        // FIXME: remove, debug stuff
-        t.DrawText(0, 8, "Trigger {d}", .{tr.pTrigDesc.Type}, null, null) catch {};
-
         if (tr.Type < TRIGGER_LIMIT_GAME) {
             Trig_HandleTriggers(tr, te, is_local);
             return;

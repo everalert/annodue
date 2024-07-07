@@ -10,9 +10,18 @@ pub fn Handle(comptime T: type) type {
     std.debug.assert(@typeInfo(T).Int.bits % 8 == 0);
 
     return extern struct {
-        owner: T = std.math.maxInt(T),
-        generation: T = std.math.maxInt(T),
-        index: T = std.math.maxInt(T),
+        const Self = @This();
+        owner: T = 0,
+        generation: T = 0,
+        index: T = 0,
+
+        pub fn getNull() Self {
+            return .{
+                .owner = std.math.maxInt(T),
+                .generation = std.math.maxInt(T),
+                .index = std.math.maxInt(T),
+            };
+        }
     };
 }
 
@@ -22,9 +31,18 @@ pub fn SparseIndex(comptime T: type) type {
     std.debug.assert(@typeInfo(T).Int.bits % 8 == 0);
 
     return extern struct {
-        owner: T = std.math.maxInt(T),
-        generation: T = std.math.maxInt(T),
-        index_or_next: T = std.math.maxInt(T),
+        const Self = @This();
+        owner: T = 0,
+        generation: T = 0,
+        index_or_next: T = 0,
+
+        pub fn getNull() Self {
+            return .{
+                .owner = std.math.maxInt(T),
+                .generation = std.math.maxInt(T),
+                .index_or_next = std.math.maxInt(T),
+            };
+        }
     };
 }
 

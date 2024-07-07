@@ -289,13 +289,13 @@ pub fn RReleaseAll() callconv(.C) void {
 
 // HOOKS
 
-export fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     CustomTrigger.init(coreAllocator());
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     CustomTrigger.deinit();
 }
 

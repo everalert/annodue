@@ -18,13 +18,17 @@ const ModelMesh_GetBehavior = r.Model.Mesh_GetBehavior;
 
 // TODO: move 'bit' arg before 'group' on insert()/RRequest()?
 
+pub const THandle = HandleStatic(u16);
+pub const THandleMap = HandleMapStatic(CustomTerrainDef, u16, 44);
+const TNullHandle = THandle.getNull();
+
 const CustomTerrainDef = extern struct {
     slot: u16,
     fnTerrain: *const fn (*Test) callconv(.C) void,
 };
 
 const CustomTerrain = struct {
-    var data: HandleMapStatic(CustomTerrainDef, u16, 44) = undefined;
+    var data: THandleMap = undefined;
 
     inline fn find(slot: u16) ?*CustomTerrainDef {
         for (data.values.slice()) |*def|
@@ -32,7 +36,7 @@ const CustomTerrain = struct {
         return null;
     }
 
-    pub fn remove(h: HandleStatic(u16)) void {
+    pub fn remove(h: THandle) void {
         _ = data.remove(h);
     }
 
@@ -46,7 +50,7 @@ const CustomTerrain = struct {
         bit: u16,
         fnTerrain: *const fn (*Test) callconv(.C) void,
         user: bool,
-    ) ?HandleStatic(u16) {
+    ) ?THandle {
         std.debug.assert(group <= 3);
         std.debug.assert(bit >= 18 and bit < 29);
         if (!user and group < 3) return null;
@@ -84,7 +88,7 @@ const CustomTerrain = struct {
     }
 
     pub fn init() void {
-        data = HandleMapStatic(CustomTerrainDef, u16, 44).init() catch unreachable;
+        data = THandleMap.init() catch unreachable;
         // terrain
         // 0x47B8AF -> 0x47B8B8 (0x09)
         // 0x47B8B0 = the actual call instruction
@@ -108,14 +112,14 @@ pub fn RRequest(
     group: u16,
     bit: u16,
     fnTerrain: *const fn (*Test) callconv(.C) void,
-) callconv(.C) HandleStatic(u16) {
-    if (group > 2) return .{};
-    if (bit < 18 or bit >= 29) return .{};
-    return CustomTerrain.insert(workingOwner(), group, bit, fnTerrain, true) orelse .{};
+) callconv(.C) THandle {
+    if (group > 2) return TNullHandle;
+    if (bit < 18 or bit >= 29) return TNullHandle;
+    return CustomTerrain.insert(workingOwner(), group, bit, fnTerrain, true) orelse TNullHandle;
 }
 
 /// release a single handle
-pub fn RRelease(h: HandleStatic(u16)) callconv(.C) void {
+pub fn RRelease(h: THandle) callconv(.C) void {
     CustomTerrain.remove(h);
 }
 
@@ -139,3 +143,13 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
     CustomTerrain.removeAll(owner);
 }
+
+// TODO: reintroduce when 'debug readout' thing is done
+//const rt = r.Text;
+//pub fn Draw2DB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+//    rt.DrawText(320, 0, "TERRAINS: {d}", .{CustomTerrain.data.values.len}, null, null) catch {};
+//    for (CustomTerrain.data.handles.constSlice(), 0..) |h, i|
+//        rt.DrawText(320, @intCast(8 + 8 * i), "{X:0>4} o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{
+//            i, h.owner, h.generation, h.index,
+//        }, null, null) catch {};
+//}

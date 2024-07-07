@@ -38,6 +38,10 @@ const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 //   - shifted down to bits 0..9, with bits 10..15 zeroed out
 //   - use it however you like, as bitfield, packed struct, int/float, etc.
 
+pub const THandle = Handle(u16);
+pub const THandleMap = HandleMap(CustomTriggerDef, u16);
+const TNullHandle = THandle.getNull();
+
 const TRIGGER_LIMIT_GAME: usize = 1 << 10;
 const TRIGGER_LIMIT_INTERNAL: usize = 1 << 12;
 const TRIGGER_LIMIT_USER: usize = (1 << 16) - 1;
@@ -54,7 +58,7 @@ const CustomTriggerDef = extern struct {
 };
 
 const CustomTrigger = struct {
-    var data: HandleMap(CustomTriggerDef, u16) = undefined;
+    var data: THandleMap = undefined;
 
     // based on loc_47D138 in HandleTriggers
     inline fn basicCleanup(tr: *Trig) void {
@@ -77,7 +81,7 @@ const CustomTrigger = struct {
         return null;
     }
 
-    pub fn remove(h: Handle(u16)) void {
+    pub fn remove(h: THandle) void {
         _ = data.remove(h);
     }
 
@@ -93,7 +97,7 @@ const CustomTrigger = struct {
         fnDestroy: ?*const fn (*Trig, u16) callconv(.C) bool,
         fnUpdate: ?*const fn (*Trig, u16) callconv(.C) void,
         user: bool,
-    ) ?Handle(u16) {
+    ) ?THandle {
         if (id < TRIGGER_LIMIT_GAME) return null;
         if (!user and id >= TRIGGER_LIMIT_INTERNAL) return null;
         if (user and id < TRIGGER_LIMIT_INTERNAL) return null;
@@ -184,7 +188,7 @@ const CustomTrigger = struct {
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
     // fine since it has the same pattern as destroy; may also want save_esi on destroy
     pub fn init(alloc: Allocator) void {
-        data = HandleMap(CustomTriggerDef, u16).init(alloc);
+        data = THandleMap.init(alloc);
 
         // triggers
         // 0x476E7C -> 0x476E88 (0x0C)
@@ -272,13 +276,13 @@ pub fn RRequest(
     fnInit: ?*const fn (*ModelTriggerDescription, u32, u16) callconv(.C) void,
     fnDestroy: ?*const fn (*Trig, u16) callconv(.C) bool,
     fnUpdate: ?*const fn (*Trig, u16) callconv(.C) void,
-) callconv(.C) Handle(u16) {
-    if (id < TRIGGER_LIMIT_INTERNAL) return .{};
-    return CustomTrigger.insert(workingOwner(), id, fnTrigger, fnInit, fnDestroy, fnUpdate, true) orelse .{};
+) callconv(.C) THandle {
+    if (id < TRIGGER_LIMIT_INTERNAL) return TNullHandle;
+    return CustomTrigger.insert(workingOwner(), id, fnTrigger, fnInit, fnDestroy, fnUpdate, true) orelse TNullHandle;
 }
 
 /// release a single handle
-pub fn RRelease(h: Handle(u16)) callconv(.C) void {
+pub fn RRelease(h: THandle) callconv(.C) void {
     CustomTrigger.remove(h);
 }
 
@@ -302,3 +306,13 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
     CustomTrigger.removeAll(owner);
 }
+
+// TODO: reintroduce when 'debug readout' thing is done
+//const rt = r.Text;
+//pub fn Draw2DB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+//    rt.DrawText(0, 0, "TRIGGERS: {d}", .{CustomTrigger.data.values.items.len}, null, null) catch {};
+//    for (CustomTrigger.data.handles.items, 0..) |h, i|
+//        rt.DrawText(0, @intCast(8 + 8 * i), "{X:0>4} o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{
+//            i, h.owner, h.generation, h.index,
+//        }, null, null) catch {};
+//}

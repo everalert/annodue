@@ -78,7 +78,26 @@ export fn OnDeinit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn EarlyEngineUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    _ = gf;
+    // FIXME: remove, for testing
+    //if (gf.InputGetKbRaw(.J) == .JustOn)
+    //    gf.RTerrainReleaseAll();
+    //if (gf.InputGetKbRaw(.Y) == .JustOn)
+    //    gf.RTriggerReleaseAll();
+    //if (TriggerHandle1) |t|
+    //    rt.DrawText(0, 480 - 16, "TRIG o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{
+    //        t.owner, t.generation, t.index,
+    //    }, null, null) catch {};
+    //if (TriggerHandle2) |t|
+    //    rt.DrawText(0, 480 - 24, "TRIG o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{
+    //        t.owner, t.generation, t.index,
+    //    }, null, null) catch {};
+    //if (TerrainHandle) |t|
+    //    rt.DrawText(0, 480 - 32, "TERR o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{
+    //        t.owner, t.generation, t.index,
+    //    }, null, null) catch {};
+
     //rt.DrawText(16, 16, "{s} {s}", .{
     //    PLUGIN_NAME,
     //    PLUGIN_VERSION,

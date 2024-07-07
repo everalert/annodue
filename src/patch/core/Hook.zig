@@ -371,8 +371,11 @@ pub fn init() void {
             }
         }
         if (this_p) |plug| {
-            if (plug.OnInit == null or plug.OnInitLate == null or plug.OnDeinit == null)
-                @panic("core plugin missing OnInit, OnInitLate or OnDeinit");
+            if (plug.OnInit == null or plug.OnInitLate == null or plug.OnDeinit == null) {
+                var buf: [512]u8 = undefined;
+                const buf_o = std.fmt.bufPrint(&buf, "core plugin '{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name}) catch @panic("core plugin missing OnInit, OnInitLate or OnDeinit");
+                @panic(buf_o);
+            }
             plug.OwnerId = PluginState.owners_core;
             PluginState.owners_core += 1;
             PluginState.working_owner = plug.OwnerId;

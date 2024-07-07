@@ -23,6 +23,7 @@ const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
+const dbg = @import("../util/debug.zig");
 
 const r = @import("racer");
 const reh = r.Entity.Hang;
@@ -356,26 +357,26 @@ pub fn init() void {
     // TODO: (after hot-reloading core) run OnLateInit immediately on hot-reload like plugins
     // TODO: filtering/error-checking the fields to make sure they're actually objects, not functions etc.
     const fn_fields = comptime std.enums.values(PluginExportFn);
-    const core_decls = @typeInfo(core).Struct.decls;
+    const core_decls = comptime @typeInfo(core).Struct.decls;
     inline for (core_decls) |cd| {
-        const this_decl = @field(core, cd.name);
+        const decl = @field(core, cd.name);
         var this_p: ?*Plugin = null;
         inline for (fn_fields) |ff| {
-            if (@hasDecl(this_decl, @tagName(ff))) {
+            if (@hasDecl(decl, @tagName(ff))) {
                 if (this_p == null) {
                     p = PluginState.core.addOne() catch @panic("failed to add core plugin to arraylist");
                     p.* = std.mem.zeroInit(Plugin, .{});
                     this_p = p;
                 }
-                @field(this_p.?, @tagName(ff)) = &@field(this_decl, @tagName(ff));
+                @field(this_p.?, @tagName(ff)) = &@field(decl, @tagName(ff));
+
+                comptime if (!@hasDecl(decl, "OnInit") or
+                    !@hasDecl(decl, "OnInitLate") or
+                    !@hasDecl(decl, "OnDeinit"))
+                    dbg.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
             }
         }
         if (this_p) |plug| {
-            if (plug.OnInit == null or plug.OnInitLate == null or plug.OnDeinit == null) {
-                var buf: [512]u8 = undefined;
-                const buf_o = std.fmt.bufPrint(&buf, "core plugin '{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name}) catch @panic("core plugin missing OnInit, OnInitLate or OnDeinit");
-                @panic(buf_o);
-            }
             plug.OwnerId = PluginState.owners_core;
             PluginState.owners_core += 1;
             PluginState.working_owner = plug.OwnerId;

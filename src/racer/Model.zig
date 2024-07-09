@@ -56,21 +56,21 @@ pub const ModelAnimation = extern struct {};
 // size 0x40
 pub const ModelBehavior = extern struct {
     _unk_00_02: [2]u8,
-    FogFlags: u8,
+    FogFlags: u8, // TODO: typedef
     FogColor: [3]u8, // TODO: typedef
-    FogStart: u16,
-    FogEnd: u16,
+    FogStart: i16,
+    FogEnd: i16,
     LightFlags: u16,
     AmbientColor: [3]u8, // TODO: typedef
     LightColor: [3]u8, // TODO: typedef
     _unk_12_14: [2]u8,
-    _unk_14_lightVec3: Vec3,
-    _unk_20_lightVec3: Vec3,
+    LightPosition: Vec3, // position
+    LightLocation: Vec3, // rotation
     TerrainFlags: u32, // TODO: enum
     _unk_30_32: [2]u8,
     _unk_32_34: [2]u8,
-    _unk_34_flags: u32,
-    _unk_38_flags: u32,
+    VisualLayersDisable: u32,
+    VisualLayersEnable: u32,
     pTriggers: *ModelTriggerDescription,
 };
 

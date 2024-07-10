@@ -13,6 +13,7 @@ const msg = @import("util/message.zig");
 
 const r = @import("racer");
 const rt = r.Text;
+const rq = r.Quad;
 
 // FIXME: remove or whatever, testing
 const Handle = @import("util/handle_map.zig").Handle;
@@ -78,8 +79,37 @@ export fn OnDeinit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
+// FIXME: remove, for testing
+//export fn Draw2DA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+//    for (0..40) |i| {
+//        for (0..40) |j| {
+//            const k = (40 * j + i) % 3;
+//            rt.RenderSetColor(
+//                @intCast(127 + 127 * @as(u8, @intFromBool(k == 0))),
+//                @intCast(127 + 127 * @as(u8, @intFromBool(k == 1))),
+//                @intCast(127 + 127 * @as(u8, @intFromBool(k == 2))),
+//                255,
+//            );
+//            rt.RenderSetPosition(@intCast(320 - 200 + 10 * i), @intCast(240 - 200 + 10 * j));
+//            rt.RenderString("~F0o");
+//        }
+//    }
+//
+//    rq.DrawQuad(@ptrFromInt(0xE9BA80), -1, 0.5, 0.5);
+//}
+
 export fn EarlyEngineUpdateA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = gf;
+
+    // FIXME: remove, for testing
+    //for (0..30) |i| {
+    //    for (0..30) |j| {
+    //        rt.RenderSetColor(255, 0, 0, 255);
+    //        rt.RenderSetPosition(@intCast(8 + 12 * i), @intCast(8 + 12 * j));
+    //        rt.RenderString("o");
+    //    }
+    //}
+
     // FIXME: remove, for testing
     //if (gf.InputGetKbRaw(.J) == .JustOn)
     //    gf.RTerrainReleaseAll();

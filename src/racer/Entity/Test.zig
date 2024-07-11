@@ -5,8 +5,22 @@ const mat = @import("../Matrix.zig");
 const Mat4x4 = mat.Mat4x4;
 const vec = @import("../Vector.zig");
 const Vec3 = vec.Vec3;
+const model = @import("../Model.zig");
+const ModelMesh = model.ModelMesh;
 
 const TestStats = @import("../Stats.zig").TestStats;
+
+// GAME FUNCTIONS
+
+pub const HandleTerrain: *fn (*Test) callconv(.C) void = @ptrFromInt(0x476EA0);
+
+pub const fnStage14: *fn (*Test) callconv(.C) void = @ptrFromInt(0x46D170);
+pub const fnStage18: *fn (*Test) callconv(.C) void = @ptrFromInt(0x47AB40);
+pub const fnStage1C: *fn (*Test) callconv(.C) void = @ptrFromInt(0x47B520);
+pub const fnStage20: *fn (*Test) callconv(.C) void = @ptrFromInt(0x470610);
+pub const fnEvent: *fn (*Test, magic: *e.MAGIC_EVENT, payload: u32) callconv(.C) void = @ptrFromInt(0x474D80);
+
+// GAME CONSTANTS
 
 pub const SIZE: usize = e.EntitySize(.Test);
 
@@ -15,6 +29,8 @@ pub const PLAYER_PTR: *usize = @ptrFromInt(PLAYER_PTR_ADDR);
 // TODO: double pointer; original data probably game state struct holding the ptr
 pub const PLAYER: **Test = @ptrFromInt(PLAYER_PTR_ADDR);
 pub const PLAYER_SLICE: **[SIZE]u8 = @ptrFromInt(PLAYER_PTR_ADDR); // TODO: convert to many-item pointer
+
+// GAME TYPEDEFS
 
 // TODO: testing to assert entity size
 // TODO: finish filling in this
@@ -37,7 +53,7 @@ pub const Test = extern struct {
     moveTick: i32, // resets to 0 when going backward on track, and tick up to max 200 when moving fwd
     _unk_0118_013B: [0x13C - 0x118]u8,
     _unkptr_013C: *anyopaque, // collision-related?
-    _unkptr_0140: *anyopaque, // terrain-related struct
+    _unk_0140_terrainModel: *ModelMesh, // terrain-related struct
     _unkvec3_0144: Vec3,
     speedLoss: f32,
     _unkvec3_0154: Vec3,
@@ -230,3 +246,7 @@ pub const Test = extern struct {
 //	1<<29  ??? ref in 47AB40, 47B520, 479E10, 47B000_DeathSpeedHandler
 //	1<<30
 //	1<<31  ??? called from 4783E0_ApplyAcceleration()
+
+// HELPERS
+
+// ...

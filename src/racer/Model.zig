@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const vec = @import("Vector.zig");
+const Vec3 = vec.Vec3;
 const mat = @import("Matrix.zig");
 const Mat4x3 = mat.Mat4x3;
 const Mat4x4 = mat.Mat4x4;
@@ -10,7 +12,11 @@ pub const Node_SetTransform: *fn (*ModelNodeXf, *Mat4x4) callconv(.C) void = @pt
 pub const Node_SetFlags: *fn (*ModelNode, i32, i32, i8, i32) callconv(.C) void = @ptrFromInt(0x431A50);
 pub const Node_SetColorsOnAllMaterials: *fn (*ModelNode, unk2: u8, unk1: u8, R: u8, G: u8, B: u8, A: u8) callconv(.C) void = @ptrFromInt(0x42B640);
 
+pub const Mesh_GetBehavior: *fn (*ModelMesh) callconv(.C) *ModelBehavior = @ptrFromInt(0x4318B0);
+
 pub const MeshMaterial_SetColors: *fn (*ModelMeshMaterial, unk2: i16, unk1: i16, R: i16, G: i16, B: i16, A: i16) callconv(.C) void = @ptrFromInt(0x42B640);
+
+pub const TriggerDescription_AddItem: *fn (*ModelTriggerDescription) callconv(.C) void = @ptrFromInt(0x47E760);
 
 // GAME CONSTANTS
 
@@ -43,6 +49,42 @@ pub const ModelMesh = extern struct {};
 
 // TODO
 pub const ModelMeshMaterial = extern struct {};
+
+// TODO
+pub const ModelAnimation = extern struct {};
+
+// size 0x40
+pub const ModelBehavior = extern struct {
+    _unk_00_02: [2]u8,
+    FogFlags: u8, // TODO: typedef
+    FogColor: [3]u8, // TODO: typedef
+    FogStart: i16,
+    FogEnd: i16,
+    LightFlags: u16,
+    AmbientColor: [3]u8, // TODO: typedef
+    LightColor: [3]u8, // TODO: typedef
+    _unk_12_14: [2]u8,
+    LightPosition: Vec3, // position
+    LightLocation: Vec3, // rotation
+    TerrainFlags: u32, // TODO: enum
+    _unk_30_32: [2]u8,
+    _unk_32_34: [2]u8,
+    VisualLayersDisable: u32,
+    VisualLayersEnable: u32,
+    pTriggers: *ModelTriggerDescription,
+};
+
+// size 0x2C
+pub const ModelTriggerDescription = extern struct {
+    Center: Vec3,
+    Direction: Vec3, // orientation?
+    SizeXY: f32,
+    SizeZ: f32,
+    pModelNode: *ModelNode,
+    Type: u16,
+    Flags: u16,
+    pNext: *ModelTriggerDescription,
+};
 
 // HELPERS
 

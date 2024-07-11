@@ -111,10 +111,10 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
     const cave_memory_offset: usize = off;
 
     // Patches the arguments for the texture loader
-    off = x86.push_u32(off, height);
-    off = x86.push_u32(off, width);
-    off = x86.push_u32(off, height);
-    off = x86.push_u32(off, width);
+    off = x86.push(off, .{ .imm32 = height });
+    off = x86.push(off, .{ .imm32 = width });
+    off = x86.push(off, .{ .imm32 = height });
+    off = x86.push(off, .{ .imm32 = width });
     off = x86.jmp(off, code_end_offset);
 
     // Detour original code to ours
@@ -254,15 +254,15 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = x86.mov_edx_esp(off);
 
     // Generate the path, keep sprite_index on stack as we'll keep using it
-    off = x86.push_eax(off); // (sprite_index)
-    off = x86.push_u32(off, offset_tga_path); // (fmt)
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .r32 = .eax }); // (sprite_index)
+    off = x86.push(off, .{ .imm32 = offset_tga_path }); // (fmt)
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
-    off = x86.pop_edx(off); // (buffer)
+    off = x86.pop(off, .{ .r32 = .edx }); // (buffer)
     off = x86.add_esp32(off, 0x4);
 
     // Attempt to load the TGA, then remove path from stack
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x4114D0); // load_sprite_from_tga_and_add_loaded_sprite
     off = x86.add_esp32(off, 0x4);
 
@@ -277,66 +277,6 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
 
     // Install it by jumping from 0x446FB0 (and we'll return directly)
     _ = x86.jmp(0x446FB0, offset_tga_loader_code);
-
-    return off;
-}
-
-// TODO: might be able to just ditch the function hooking and use our own toast system
-fn PatchTriggerDisplay(memory: usize) usize {
-    var off = memory;
-
-    // Display triggers
-    const trigger_string = "Trigger %d activated";
-    const trigger_string_display_duration: f32 = 3.0;
-
-    var offset_trigger_string = off;
-    off = mem.write(off, @TypeOf(trigger_string.*), trigger_string.*);
-
-    var offset_trigger_code: u32 = off;
-
-    // Read the trigger from stack
-    off = mem.write(off, u8, 0x8B); // mov    eax, [esp+4]
-    off = mem.write(off, u8, 0x44);
-    off = mem.write(off, u8, 0x24);
-    off = mem.write(off, u8, 0x04);
-
-    // Get pointer to section 8
-    off = mem.write(off, u8, 0x8B); // 8b 40 4c  ->  mov    eax,DWORD PTR [eax+0x4c]
-    off = mem.write(off, u8, 0x40);
-    off = mem.write(off, u8, 0x4C);
-
-    // Read the section8.trigger_action field
-    off = mem.write(off, u8, 0x0F); // 0f b7 40 24  ->  movzx    eax, WORD PTR [eax+0x24]
-    off = mem.write(off, u8, 0xB7);
-    off = mem.write(off, u8, 0x40);
-    off = mem.write(off, u8, 0x24);
-
-    // Make room for sprintf buffer and keep the pointer in edx
-    off = x86.add_esp32(off, @bitCast(@as(i32, -0x400))); // add    esp, -400h
-    off = x86.mov_edx_esp(off);
-
-    // Generate the string we'll display
-    off = x86.push_eax(off); // (trigger index)
-    off = x86.push_u32(off, offset_trigger_string); // (fmt)
-    off = x86.push_edx(off); // (buffer)
-    off = x86.call(off, 0x49EB80); // sprintf
-    off = x86.pop_edx(off); // (buffer)
-    off = x86.add_esp32(off, 0x8);
-
-    // Display a message
-    off = x86.push_u32(off, @bitCast(trigger_string_display_duration));
-    off = x86.push_edx(off); // (buffer)
-    off = x86.call(off, 0x44FCE0);
-    off = x86.add_esp32(off, 0x8);
-
-    // Pop the string buffer off of the stack
-    off = x86.add_esp32(off, 0x400);
-
-    // Jump to the real function to run the trigger
-    off = x86.jmp(off, 0x47CE60);
-
-    // Install it by replacing the call destination (we'll jump to the real one)
-    _ = x86.call(0x476E80, offset_trigger_code);
 
     return off;
 }
@@ -379,9 +319,6 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     //if (gf.SettingGetB("cosmetic", "patch_tga_loader").?) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
-    if (gf.SettingGetB("cosmetic", "patch_trigger_display").?) {
-        off = PatchTriggerDisplay(off);
-    }
     gs.patch_offset = off;
 }
 

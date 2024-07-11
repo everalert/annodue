@@ -19,15 +19,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Option to remove 1px gap at screen edge
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
+- Backend(Core): Global Function version `15` to `17`
 - Backend(Core): `appinfo` module for externally-facing defs
+- Backend(Core): custom triggers via `RTrigger` module/api
+- Backend(Core): custom terrain via `RTerrain` module/api
+- Backend(Core): added `RTerrainRequest` `RTerrainRelease` `RTerrainReleaseAll` to global functions
+- Backend(Core): added `RTriggerRequest` `RTriggerRelease` `RTriggerReleaseAll` to global functions
 - Backend(Core): enforcing semantic versioning for plugins
+- Backend(Core): enforcing minimum implemented functions for core-side plugins
+- Backend(Core): `OnPluginDeinit` hook function, usable by core-side plugins
+- Backend(Core): plugin identity tracking, for use with handle-based resources
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
+- Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`
+- Backend(RacerLib): Added new defs to `entity`, `entity/Test`, `entity/Toss`, `entity/Trig`
+- Backent(Util): Added `handle_map` and `handle_map_static` for handle-based resource management
+- Backent(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
+- Backent(Util): x86 - helper functions and defs
 
 ### Changed
 
 - Backend(Build): release versioning now based on `appinfo` module
+- Backend(Core): moved `cosmetic->show_trigger_display` functionality to `RTrigger`
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
+- Backent(Util): x86 - migrate `push_*`, `pop_*` functions to generalized `push`, `pop`
 
 ### Removed
 

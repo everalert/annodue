@@ -1,3 +1,5 @@
+// TODO: revisit organisation, ordering
+
 // this stuff was outside core and hooked in this order before making this file
 pub const Hook = @import("Hook.zig");
 pub const Input = @import("Input.zig");
@@ -14,3 +16,7 @@ pub const Testing = @import("Testing.zig");
 pub const Allocator = @import("Allocator.zig");
 pub const Debug = @import("Debug.zig");
 pub const Freeze = @import("Freeze.zig");
+
+// plugin-facing resources
+pub const RTerrain = @import("RTerrain.zig");
+pub const RTrigger = @import("RTrigger.zig");

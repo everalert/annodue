@@ -11,6 +11,8 @@ const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const settings = @import("Settings.zig");
 const s = settings.SettingsState;
+const rterrain = @import("RTerrain.zig");
+const rtrigger = @import("RTrigger.zig");
 
 const st = @import("../util/active_state.zig");
 const xinput = @import("../util/xinput.zig");
@@ -100,6 +102,13 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .GameFreezeIsFrozen = &freeze.Freeze.is_frozen,
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
+    // Resources
+    .RTerrainRequest = &rterrain.RRequest,
+    .RTerrainRelease = &rterrain.RRelease,
+    .RTerrainReleaseAll = &rterrain.RReleaseAll,
+    .RTriggerRequest = &rtrigger.RRequest,
+    .RTriggerRelease = &rtrigger.RRelease,
+    .RTriggerReleaseAll = &rtrigger.RReleaseAll,
 };
 
 // UTIL
@@ -133,9 +142,13 @@ pub fn init() bool {
 
 // HOOK CALLS
 
+pub fn OnInit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
+
 pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     gs.init_late_passed = true;
 }
+
+pub fn OnDeinit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
 
 pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;

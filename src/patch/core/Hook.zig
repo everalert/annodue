@@ -23,6 +23,7 @@ const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
+const dbg = @import("../util/debug.zig");
 
 const r = @import("racer");
 const reh = r.Entity.Hang;
@@ -48,6 +49,7 @@ const Plugin = plugin: {
         .{ "WriteTime", ?w32f.FILETIME },
         .{ "Initialized", bool },
         .{ "Filename", [127:0]u8 },
+        .{ "OwnerId", u16 },
     };
     const ev = std.enums.values(PluginExportFn);
     var fields: [stdf.len + ev.len]std.builtin.Type.StructField = undefined;
@@ -84,6 +86,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginName, .PluginVersion => ?*const fn () callconv(.C) [*:0]const u8,
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
+        .OnPluginDeinit => ?*const fn (u16) callconv(.C) void,
         else => ?*const fn (*GlobalSt, *GlobalFn) callconv(.C) void,
     };
 }
@@ -101,6 +104,9 @@ const PluginExportFn = enum(u32) {
     //OnEnable,
     //OnDisable,
     OnSettingsLoad,
+    //OnPluginInit,
+    //OnPluginInitLate,
+    OnPluginDeinit, // when any plugin unloads, e.g. to hotload
 
     // Hook Functions
     GameLoopB,
@@ -155,24 +161,49 @@ const PluginExportFn = enum(u32) {
     MapRenderA,
 };
 
-const PluginState = struct {
+pub const PluginState = struct {
     const check_freq: u32 = 1000 / 24; // in lieu of every frame
     var last_check: u32 = 0;
     var core: std.ArrayList(Plugin) = undefined;
     var plugin: std.ArrayList(Plugin) = undefined;
     var hot_reload_i: usize = 0;
+    var owners_core: u16 = 0x0000;
+    var owners_user: u16 = 0x0800;
+    var working_owner: u16 = 0;
+
+    pub fn workingOwner() u16 {
+        return working_owner;
+    }
 };
 
 pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
         fn callback() void {
-            for (PluginState.core.items) |p|
+            for (PluginState.core.items) |p| {
+                PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
-            for (PluginState.plugin.items) |p|
+            }
+            for (PluginState.plugin.items) |p| {
+                PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
+            }
         }
     };
     return &c.callback;
+}
+
+// TODO: generalize for OnPluginInit etc.
+fn PluginFnOnPluginDeinit(owner: u16) void {
+    for (PluginState.core.items) |p| {
+        if (p.OwnerId == owner) continue;
+        PluginState.working_owner = p.OwnerId;
+        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+    }
+    for (PluginState.plugin.items) |p| {
+        if (p.OwnerId == owner) continue;
+        PluginState.working_owner = p.OwnerId;
+        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+    }
 }
 
 fn PluginFnCallback1_stub(_: u32) void {}
@@ -225,6 +256,7 @@ fn ensureDirectoryExists(alloc: std.mem.Allocator, path: []const u8) bool {
 // TODO: OnLoad, OnUnload, OnEnable, OnDisable
 // TODO: also stuff for loading and unloading based on watching the directory, outside of
 // updating already loaded plugins
+// TODO: allow OnPluginDeinit for user-plugins; needs protections and to communicate which plugin
 // NOTE: assumes index is allocated and initialized, to allow different
 // ways of handling the backing data
 /// @return     null = no change, true = (re)loaded, false = rejected
@@ -266,6 +298,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
     // do we need to unload anything
     if (p.Handle) |h| {
         p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+        PluginFnOnPluginDeinit(p.OwnerId);
         _ = w32ll.FreeLibrary(h);
     }
 
@@ -289,13 +322,17 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
         p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
         p.OnInit == null or
         p.OnInitLate == null or
-        p.OnDeinit == null)
+        p.OnDeinit == null or
+        p.OnPluginDeinit != null)
     {
         _ = w32ll.FreeLibrary(p.Handle);
         p.Initialized = false;
         return false;
     }
 
+    p.OwnerId = PluginState.owners_user;
+    PluginState.owners_user += 1;
+    PluginState.working_owner = p.OwnerId;
     p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
     if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION);
     p.Initialized = true;
@@ -317,24 +354,33 @@ pub fn init() void {
     // TODO: hot-reloading core (i.e. all of annodue)
 
     // TODO: move to LoadPlugin equivalent?
-    // TODO: require OnInit, OnLateInit, OnDeinit?
-    // TODO: run OnInit immediately like plugins
     // TODO: (after hot-reloading core) run OnLateInit immediately on hot-reload like plugins
     // TODO: filtering/error-checking the fields to make sure they're actually objects, not functions etc.
     const fn_fields = comptime std.enums.values(PluginExportFn);
-    const core_decls = @typeInfo(core).Struct.decls;
+    const core_decls = comptime @typeInfo(core).Struct.decls;
     inline for (core_decls) |cd| {
-        const this_decl = @field(core, cd.name);
+        const decl = @field(core, cd.name);
         var this_p: ?*Plugin = null;
         inline for (fn_fields) |ff| {
-            if (@hasDecl(this_decl, @tagName(ff))) {
+            if (@hasDecl(decl, @tagName(ff))) {
                 if (this_p == null) {
                     p = PluginState.core.addOne() catch @panic("failed to add core plugin to arraylist");
                     p.* = std.mem.zeroInit(Plugin, .{});
                     this_p = p;
                 }
-                @field(this_p.?, @tagName(ff)) = &@field(this_decl, @tagName(ff));
+                @field(this_p.?, @tagName(ff)) = &@field(decl, @tagName(ff));
+
+                comptime if (!@hasDecl(decl, "OnInit") or
+                    !@hasDecl(decl, "OnInitLate") or
+                    !@hasDecl(decl, "OnDeinit"))
+                    dbg.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
             }
+        }
+        if (this_p) |plug| {
+            plug.OwnerId = PluginState.owners_core;
+            PluginState.owners_core += 1;
+            PluginState.working_owner = plug.OwnerId;
+            plug.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
         }
     }
 
@@ -374,6 +420,14 @@ pub fn init() void {
     //off = HookLoadSprite(off);
     GLOBAL_STATE.patch_offset = off;
 }
+
+// HOOKS
+
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {

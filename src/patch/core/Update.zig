@@ -82,6 +82,8 @@ fn updateToastAvailable(alloc: Allocator, gf: *GlobalFn, ver: []const u8) void {
 
 // HOOK FUNCTIONS
 
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
 pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const s = struct {
         const retry_delay: u32 = 5 * 60 * 1000; // 5min
@@ -171,6 +173,8 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{update.tag.?});
     _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
 }
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // FIXME: remove, or convert to proper system for manual updating
 pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {

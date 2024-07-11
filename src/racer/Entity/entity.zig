@@ -8,11 +8,19 @@ pub const Elmo = @import("Elmo.zig");
 pub const Smok = @import("Smok.zig");
 pub const cMan = @import("cMan.zig");
 
-// MANAGER
+// GAME FUNCTIONS
+
+pub const CallFreeEvent: *fn (*anyopaque) callconv(.C) void = @ptrFromInt(0x450E30);
+
+// GAME CONSTANTS
 
 pub const MANAGER_JUMPTABLE_PTR_ADDR: usize = 0x4BFEC0;
 pub const MANAGER_JUMPTABLE: *[*]*Manager = @ptrFromInt(MANAGER_JUMPTABLE_PTR_ADDR);
 pub const MANAGER_SIZE: usize = 0x28;
+
+// GAME TYPEDEFS
+
+// MANAGER
 
 // TODO: comptime generic that takes an actual entity id or something
 // TODO: testing to assert the shape of the manager
@@ -139,3 +147,7 @@ pub const MAGIC_EVENT = enum(u32) {
 pub const M_ABRT: u32 = @intFromEnum(MAGIC_EVENT.Abrt);
 pub const M_RSTR: u32 = @intFromEnum(MAGIC_EVENT.RStr);
 pub const M_FINI: u32 = @intFromEnum(MAGIC_EVENT.Fini);
+
+// HELPERS
+
+// ...

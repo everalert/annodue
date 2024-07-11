@@ -1,5 +1,3 @@
-const Self = @This();
-
 const std = @import("std");
 
 const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
@@ -10,6 +8,8 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 const debug = @import("core/Debug.zig");
 
 const msg = @import("util/message.zig");
+
+const r = @import("racer");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;

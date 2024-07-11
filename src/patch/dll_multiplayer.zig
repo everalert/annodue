@@ -112,16 +112,16 @@ fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_he
 
     // Construct our code
     const off_upgrade_code: usize = offset;
-    offset = x86.push_edx(offset);
-    offset = x86.push_eax(offset);
-    offset = x86.push_u32(offset, off_up_hp);
-    offset = x86.push_u32(offset, off_up_lv);
-    offset = x86.push_esi(offset);
-    offset = x86.push_edi(offset);
+    offset = x86.push(offset, .{ .r32 = .edx });
+    offset = x86.push(offset, .{ .r32 = .eax });
+    offset = x86.push(offset, .{ .imm32 = off_up_hp });
+    offset = x86.push(offset, .{ .imm32 = off_up_lv });
+    offset = x86.push(offset, .{ .r32 = .esi });
+    offset = x86.push(offset, .{ .r32 = .edi });
     offset = x86.call(offset, 0x449D00); // ???
     offset = x86.add_esp8(offset, 0x10);
-    offset = x86.pop_eax(offset);
-    offset = x86.pop_edx(offset);
+    offset = x86.pop(offset, .{ .r32 = .eax });
+    offset = x86.pop(offset, .{ .r32 = .edx });
     offset = x86.retn(offset);
 
     // Install it by jumping from 0x45B765 and returning to 0x45B76C
@@ -144,10 +144,10 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     const memory_offset_collision_code: usize = memory_offset;
 
     // Inject new code
-    offset = x86.push_edx(offset);
+    offset = x86.push(offset, .{ .r32 = .edx });
     offset = x86.mov_edx(offset, 0x4D5E00); // _dword_4D5E00_is_multiplayer
     offset = x86.test_edx_edx(offset);
-    offset = x86.pop_edx(offset);
+    offset = x86.pop(offset, .{ .r32 = .edx });
     offset = x86.jz(offset, 0x47B0C0);
     offset = x86.retn(offset);
 

@@ -210,12 +210,9 @@ fn LoadSettings() bool {
 
 // HOOK FUNCTIONS
 
-pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (gs.timestamp > SettingsState.last_check + SettingsState.check_freq)
-        if (LoadSettings())
-            SettingsState.load_callback();
-    SettingsState.last_check = gs.timestamp;
-}
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     defer SettingsState.manager.deinit();
@@ -230,4 +227,11 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     defer SettingsState.cosmetic.deinit();
     defer SettingsState.developer.deinit();
     defer SettingsState.collisionviewer.deinit();
+}
+
+pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    if (gs.timestamp > SettingsState.last_check + SettingsState.check_freq)
+        if (LoadSettings())
+            SettingsState.load_callback();
+    SettingsState.last_check = gs.timestamp;
 }

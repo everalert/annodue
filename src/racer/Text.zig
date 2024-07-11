@@ -35,6 +35,10 @@ pub const swrText_DrawTime2: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8
 pub const swrText_DrawTime3: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
 pub const swrText_NewNotification: *fn (str: [*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
 
+pub const RenderSetColor: *fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x42D950);
+pub const RenderSetPosition: *fn (x: i16, y: i16) callconv(.C) void = @ptrFromInt(0x42D910);
+pub const RenderString: *fn (str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x42EC50);
+
 // GAME CONSTANTS
 
 pub const TEXT_COLOR_PRESET = [10]u32{

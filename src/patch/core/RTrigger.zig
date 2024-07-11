@@ -8,6 +8,7 @@ const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
 const coreAllocator = @import("Allocator.zig").allocator;
+const SettingGetB = @import("Settings.zig").get_bool;
 
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
@@ -120,6 +121,13 @@ const CustomTrigger = struct {
     // - basic cleanup will be done for you if EntityDestroy or EntityUpdate not defined
     // - else flags |= 1 will be set
     fn hookTrigger(tr: *Trig, te: *Test, is_local: BOOL) callconv(.C) void {
+        // TODO: move to internal Toast system; spam queueing an issue
+        if (SettingGetB("cosmetic", "patch_trigger_display").?) {
+            var b: [127:0]u8 = undefined;
+            _ = std.fmt.bufPrintZ(&b, "Trigger {d} activated", .{tr.Type}) catch {};
+            t.swrText_NewNotification(&b, 3.0);
+        }
+
         if (tr.Type < TRIGGER_LIMIT_GAME) {
             Trig_HandleTriggers(tr, te, is_local);
             return;

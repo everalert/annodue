@@ -96,11 +96,11 @@ pub const GlobalFunction = extern struct {
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources
     RTerrainRequest: *const fn (
-        group: u16,
         bit: u16,
+        group: u16,
         fnTerrain: *const fn (*Test) callconv(.C) void,
     ) callconv(.C) HandleStatic(u16),
-    RTerrainRelease: *const fn (h: HandleStatic(u16)) callconv(.C) void,
+    RTerrainRelease: *const fn (HandleStatic(u16)) callconv(.C) void,
     RTerrainReleaseAll: *const fn () callconv(.C) void,
     RTriggerRequest: *const fn (
         id: u16,
@@ -109,6 +109,6 @@ pub const GlobalFunction = extern struct {
         fnDestroy: ?*const fn (*Trig, u16) callconv(.C) bool,
         fnUpdate: ?*const fn (*Trig, u16) callconv(.C) void,
     ) callconv(.C) Handle(u16),
-    RTriggerRelease: *const fn (h: Handle(u16)) callconv(.C) void,
+    RTriggerRelease: *const fn (Handle(u16)) callconv(.C) void,
     RTriggerReleaseAll: *const fn () callconv(.C) void,
 };

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
-const workingOwner = &@import("Hook.zig").PluginState.workingOwner;
+const workingOwner = @import("Hook.zig").PluginState.workingOwner;
 
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 const HandleMapStatic = @import("../util/handle_map_static.zig").HandleMapStatic;
@@ -15,8 +15,6 @@ const Test_HandleTerrain = r.Entity.Test.HandleTerrain;
 const ModelMesh_GetBehavior = r.Model.Mesh_GetBehavior;
 
 // TERRAIN
-
-// TODO: move 'bit' arg before 'group' on insert()/RRequest()?
 
 pub const THandle = HandleStatic(u16);
 pub const THandleMap = HandleMapStatic(CustomTerrainDef, u16, 44);
@@ -46,8 +44,8 @@ const CustomTerrain = struct {
 
     pub fn insert(
         owner: u16,
-        group: u16,
         bit: u16,
+        group: u16,
         fnTerrain: *const fn (*Test) callconv(.C) void,
         user: bool,
     ) ?THandle {
@@ -109,13 +107,13 @@ const CustomTerrain = struct {
 /// @bit        18..28
 /// @fnTerrain
 pub fn RRequest(
-    group: u16,
     bit: u16,
+    group: u16,
     fnTerrain: *const fn (*Test) callconv(.C) void,
 ) callconv(.C) THandle {
     if (group > 2) return TNullHandle;
     if (bit < 18 or bit >= 29) return TNullHandle;
-    return CustomTerrain.insert(workingOwner(), group, bit, fnTerrain, true) orelse TNullHandle;
+    return CustomTerrain.insert(workingOwner(), bit, group, fnTerrain, true) orelse TNullHandle;
 }
 
 /// release a single handle

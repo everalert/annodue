@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: cycle smoothing instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons
 - Cam7: return movement or rotation to default by pressing both up+down together
 - Cam7: toggle hiding ui with `6`
+- Cam7: toggle disabling pod input with `7`
 - Core: notify on plugin reload
 - CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'default_rotation_smoothing'
 - Setting: 'cam7' -> 'default_planar_movement'
 - Setting: 'cam7' -> 'default_hide_ui'
+- Setting: 'cam7' -> 'default_disable_input'
 - Setting: 'cam7' -> 'flip_look_x_inverted'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'

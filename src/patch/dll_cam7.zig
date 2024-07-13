@@ -27,6 +27,7 @@ const rm = @import("racer").Matrix;
 const rv = @import("racer").Vector;
 const rte = @import("racer").Text;
 const rmo = @import("racer").Model;
+const rin = @import("racer").Input;
 const Vec2 = rv.Vec2;
 const Vec3 = rv.Vec3;
 const Vec4 = rv.Vec4;
@@ -59,6 +60,7 @@ pub const panic = debug.annodue_panic;
 //                                                          damping instead of speed
 //   toggle planar movement     Tab             B
 //   toggle hide ui             6
+//   toggle disable input       7                           pod will not drive when on
 //   pan and orbit mode         RCtrl           X           hold
 // - SETTINGS:
 //   enable                     bool
@@ -73,6 +75,7 @@ pub const panic = debug.annodue_panic;
 //   default_rotation_smoothing u32     0..3
 //   default_planar_movement    bool    level motion vs view angle-based motion
 //   default_hide_ui            bool
+//   default_disable_input      bool
 //   mouse_dpi                  u32     reference for mouse sensitivity calculations;
 //                                      does not change mouse
 //   mouse_cm360                f32     physical centimeters of motion for one 360° rotation
@@ -122,6 +125,7 @@ const Cam7 = extern struct {
     var move_spd_i: usize = 3;
     var move_planar: bool = false;
     var hide_ui: bool = false;
+    var disable_input: bool = false;
 
     const rot_damp_val = [_]?f32{ null, 36, 24, 12, 6 };
     var rot_damp: ?f32 = null;
@@ -174,6 +178,7 @@ const Cam7 = extern struct {
     var input_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .B };
     var input_sweep_data = ButtonInputMap{ .kb = .RCONTROL, .xi = .X };
     var input_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
+    var input_disable_input_data = ButtonInputMap{ .kb = .@"7" };
     //var input_mpan_data = ButtonInputMap{ .kb = .LBUTTON };
     //var input_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
     var input_toggle = input_toggle_data.inputMap();
@@ -190,6 +195,7 @@ const Cam7 = extern struct {
     var input_planar = input_planar_data.inputMap();
     var input_sweep = input_sweep_data.inputMap();
     var input_hide_ui = input_hide_ui_data.inputMap();
+    var input_disable_input = input_disable_input_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -209,6 +215,7 @@ const Cam7 = extern struct {
         input_planar.update(gf);
         input_sweep.update(gf);
         input_hide_ui.update(gf);
+        input_disable_input.update(gf);
 
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
@@ -486,6 +493,7 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
     Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
 
+    Cam7.disable_input = gf.SettingGetB("cam7", "default_disable_input") orelse false;
     Cam7.hide_ui = gf.SettingGetB("cam7", "default_hide_ui") orelse false;
     UpdateHideUI(gf);
 }
@@ -521,6 +529,9 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         Cam7.hide_ui = !Cam7.hide_ui;
         UpdateHideUI(gf);
     }
+
+    if (Cam7.input_disable_input.gets() == .JustOn)
+        Cam7.disable_input = !Cam7.disable_input;
 
     // input
 
@@ -748,6 +759,13 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     Cam7.update_input(gf);
+}
+
+export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    if (Cam7.cam_state == .FreeCam and Cam7.disable_input) { // kill race input
+        @memset(@as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE], 0);
+        @memset(@as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE], 0);
+    }
 }
 
 export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {

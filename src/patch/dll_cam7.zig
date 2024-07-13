@@ -58,6 +58,7 @@ pub const panic = debug.annodue_panic;
 //   damping                    X               Y           hold to edit movement/rotation
 //                                                          damping instead of speed
 //   toggle planar movement     Tab             B
+//   toggle hide ui             6
 //   pan and orbit mode         RCtrl           X           hold
 // - SETTINGS:
 //   enable                     bool
@@ -71,6 +72,7 @@ pub const panic = debug.annodue_panic;
 //   default_rotation_speed     u32     0..4
 //   default_rotation_smoothing u32     0..3
 //   default_planar_movement    bool    level motion vs view angle-based motion
+//   default_hide_ui            bool
 //   mouse_dpi                  u32     reference for mouse sensitivity calculations;
 //                                      does not change mouse
 //   mouse_cm360                f32     physical centimeters of motion for one 360° rotation
@@ -119,6 +121,7 @@ const Cam7 = extern struct {
     var move_damp_i: usize = 2;
     var move_spd_i: usize = 3;
     var move_planar: bool = false;
+    var hide_ui: bool = false;
 
     const rot_damp_val = [_]?f32{ null, 36, 24, 12, 6 };
     var rot_damp: ?f32 = null;
@@ -170,6 +173,7 @@ const Cam7 = extern struct {
     var input_damp_data = ButtonInputMap{ .kb = .X, .xi = .Y };
     var input_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .B };
     var input_sweep_data = ButtonInputMap{ .kb = .RCONTROL, .xi = .X };
+    var input_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
     //var input_mpan_data = ButtonInputMap{ .kb = .LBUTTON };
     //var input_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
     var input_toggle = input_toggle_data.inputMap();
@@ -185,6 +189,7 @@ const Cam7 = extern struct {
     var input_damp = input_damp_data.inputMap();
     var input_planar = input_planar_data.inputMap();
     var input_sweep = input_sweep_data.inputMap();
+    var input_hide_ui = input_hide_ui_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -203,6 +208,8 @@ const Cam7 = extern struct {
         input_damp.update(gf);
         input_planar.update(gf);
         input_sweep.update(gf);
+        input_hide_ui.update(gf);
+
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
             // TODO: move to InputMap
@@ -406,13 +413,14 @@ inline fn CamTransitionOut() void {
     Cam7.saved_camstate_index = null;
 }
 
-fn CheckAndResetSavedCam() void {
+fn CheckAndResetSavedCam(gf: *GlobalFn) void {
     if (Cam7.saved_camstate_index == null) return;
     if (mem.read(camstate_ref_addr, u32) == 31) return;
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 7;
     CamTransitionOut();
     Cam7.cam_state = .None;
+    _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
 }
 
 fn RestoreSavedCam() void {
@@ -477,22 +485,41 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.move_spd_i_dflt = Cam7.move_spd_i;
     Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
     Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
+
+    Cam7.hide_ui = gf.SettingGetB("cam7", "default_hide_ui") orelse false;
+    UpdateHideUI(gf);
+}
+
+fn UpdateHideUI(gf: *GlobalFn) void {
+    if (Cam7.hide_ui and Cam7.cam_state == .FreeCam) {
+        _ = gf.GameHideRaceUIEnable(PLUGIN_NAME);
+        return;
+    }
+
+    _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
 }
 
 // STATE MACHINE
 
-fn DoStateNone(_: *GlobalSt, _: *GlobalFn) CamState {
+fn DoStateNone(_: *GlobalSt, gf: *GlobalFn) CamState {
     if (Cam7.input_toggle.gets() == .JustOn and Cam7.enable) {
         SaveSavedCam();
+        if (Cam7.hide_ui) _ = gf.GameHideRaceUIEnable(PLUGIN_NAME);
         return .FreeCam;
     }
     return .None;
 }
 
-fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
+fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     if (Cam7.input_toggle.gets() == .JustOn or !Cam7.enable) {
         RestoreSavedCam();
+        _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
         return .None;
+    }
+
+    if (Cam7.input_hide_ui.gets() == .JustOn) {
+        Cam7.hide_ui = !Cam7.hide_ui;
+        UpdateHideUI(gf);
     }
 
     // input
@@ -656,11 +683,11 @@ fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
     return .FreeCam;
 }
 
-fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
-    CheckAndResetSavedCam();
+fn UpdateState(gs: *GlobalSt, gf: *GlobalFn) void {
+    CheckAndResetSavedCam(gf); // handle transition in and out of race scene
     Cam7.cam_state = switch (Cam7.cam_state) {
-        .None => DoStateNone(gs, gv),
-        .FreeCam => DoStateFreeCam(gs, gv),
+        .None => DoStateNone(gs, gf),
+        .FreeCam => DoStateFreeCam(gs, gf),
     };
 }
 

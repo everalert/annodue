@@ -887,7 +887,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
 // however, the text flushing DOES run on those frames, apparently from a different callsite
-export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
 
@@ -917,7 +917,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
         }
 
-        if (gs.race_state == .PostRace) {
+        if (gs.race_state == .PostRace and !gf.GameHideRaceUIIsHidden()) {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,

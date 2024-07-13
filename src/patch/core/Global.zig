@@ -7,6 +7,7 @@ const std = @import("std");
 const win = std.os.windows;
 
 const freeze = @import("Freeze.zig");
+const hide_race_ui = @import("HideRaceUI.zig");
 const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const settings = @import("Settings.zig");
@@ -98,6 +99,9 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .GameFreezeEnable = &freeze.Freeze.freeze,
     .GameFreezeDisable = &freeze.Freeze.unfreeze,
     .GameFreezeIsFrozen = &freeze.Freeze.is_frozen,
+    .GameHideRaceUIEnable = &hide_race_ui.HideRaceUI.hide,
+    .GameHideRaceUIDisable = &hide_race_ui.HideRaceUI.unhide,
+    .GameHideRaceUIIsHidden = &hide_race_ui.HideRaceUI.isHidden,
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
 };

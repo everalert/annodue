@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: cycle rotation speed with `Z or LSB` and `C or RSB`
 - Cam7: cycle smoothing instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons
 - Cam7: return movement or rotation to default by pressing both up+down together
+- Cam7: toggle hiding ui with `6`
 - Core: notify on plugin reload
 - CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers
@@ -31,13 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'default_rotation_speed'
 - Setting: 'cam7' -> 'default_rotation_smoothing'
 - Setting: 'cam7' -> 'default_planar_movement'
+- Setting: 'cam7' -> 'default_hide_ui'
 - Setting: 'cam7' -> 'flip_look_x_inverted'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): `appinfo` module for externally-facing defs
 - Backend(Core): enforcing semantic versioning for plugins
+- Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
+- Backend(Core): `GameHideRaceUIEnable` `GameHideRaceUIDisable` `GameHideRaceUIIsHidden` global functions
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
-- Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
+- Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`, `Quad`
 
 ### Changed
 
@@ -47,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: movement speed curve - `quadratic` -> `quartic` 
 - Cam7: rotation speed - `360` -> `80..810`
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
+- Backend(Core): Global Function version `15` -> `16`
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
 

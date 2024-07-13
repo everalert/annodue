@@ -21,6 +21,7 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
 const rti = @import("racer").Time;
 const rc = @import("racer").Camera;
+const rs = @import("racer").Sound;
 const re = @import("racer").Entity;
 const rg = @import("racer").Global;
 const rm = @import("racer").Matrix;
@@ -126,6 +127,8 @@ const Cam7 = extern struct {
     var move_planar: bool = false;
     var hide_ui: bool = false;
     var disable_input: bool = false;
+    var sfx_volume: f32 = 0.7;
+    var sfx_volume_scale: f32 = 0; // derived
 
     const rot_damp_val = [_]?f32{ null, 36, 24, 12, 6 };
     var rot_damp: ?f32 = null;
@@ -496,6 +499,8 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.disable_input = gf.SettingGetB("cam7", "default_disable_input") orelse false;
     Cam7.hide_ui = gf.SettingGetB("cam7", "default_hide_ui") orelse false;
     UpdateHideUI(gf);
+
+    Cam7.sfx_volume = m.clamp(gf.SettingGetF("cam7", "sfx_volume") orelse 0.7, 0, 1);
 }
 
 fn UpdateHideUI(gf: *GlobalFn) void {
@@ -690,6 +695,14 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     //        rmo.Node_SetColorsOnAllMaterials(&mark.Node, 0, 0, 255, 63, 63, 0);
     //    }
     //}
+
+    // SOUND EFFECTS
+
+    const vol_speed_max: f32 = @max(Cam7.move_spd_xy, 1000);
+    const vol_scale: f32 = nt.pow2(@min(rv.Vec3_Mag(&Cam7.xcam_motion) / vol_speed_max, 1));
+    Cam7.sfx_volume_scale = f32_damp(Cam7.sfx_volume_scale, vol_scale, 6, gs.dt_f);
+    const volume = Cam7.sfx_volume * Cam7.sfx_volume_scale;
+    rs.swrSound_PlaySound(28, 6, 0.35, volume, 1); // sfx_amb_wind_tat_a_loop.wav
 
     return .FreeCam;
 }

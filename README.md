@@ -1,5 +1,7 @@
 # Annodue
 
+![Ben Quadinaros](assets/images/ben.png)
+
 **A universal extension platform for *STAR WARS Episode I Racer* oriented toward speedrunning.**
 
 Annodue adds new features, quality of life adjustments and cosmetic changes, as well as a plugin system for user-made extensions.

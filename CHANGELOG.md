@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'default_disable_input'
 - Setting: 'cam7' -> 'flip_look_x_inverted'
 - Setting: 'cam7' -> 'sfx_volume'
+- Setting: 'cam7' -> 'fog_patch'
+- Setting: 'cam7' -> 'fog_disable'
+- Setting: 'cam7' -> 'visuals_patch'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): `appinfo` module for externally-facing defs

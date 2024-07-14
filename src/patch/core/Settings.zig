@@ -104,6 +104,9 @@ pub fn init() void {
 
     SettingsState.cam7 = SettingsGroup.init(alloc, "cam7");
     SettingsState.cam7.add("enable", bool, true);
+    SettingsState.cam7.add("fog_patch", bool, true);
+    SettingsState.cam7.add("fog_remove", bool, false);
+    SettingsState.cam7.add("visuals_patch", bool, true);
     SettingsState.cam7.add("flip_look_x", bool, false);
     SettingsState.cam7.add("flip_look_y", bool, false);
     SettingsState.cam7.add("flip_look_x_inverted", bool, true);

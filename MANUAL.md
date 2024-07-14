@@ -6,7 +6,7 @@
 
 #### Key Information & Notes
 
-Hold `Shift` while launching the game to launch it without any modifications.
+Hold `Shift` while launching the game to run it in vanilla mode (no Annodue modifications).
 
 Press `P` to toggle Practice Mode. This mode is required to use certain features, and cannot be toggled off during a race.
 
@@ -80,6 +80,10 @@ Configured under `[cam7]`
 |Option|Type|Note|
 |:---|:---|:---|
 |`enable`                    |`bool`|&nbsp;
+|`fog_patch`                 |`bool`|override normal fog
+|`fog_disable`               |`bool`|infinite draw distance (needs 'fog_patch' on)
+|`visuals_patch`             |`bool`|show entire track
+|`sfx_volume`                |`f32` |0.0 to 1.0
 |`flip_look_x`               |`bool`|Invert x-axis rotation
 |`flip_look_y`               |`bool`|Invert y-axis rotation
 |`flip_look_x_inverted`      |`bool`|Invert x-axis rotation while upside-down

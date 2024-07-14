@@ -65,6 +65,10 @@ pub const panic = debug.annodue_panic;
 //   pan and orbit mode         RCtrl           X           hold
 // - SETTINGS:
 //   enable                     bool
+//   fog_patch                  bool
+//   fog_remove                 bool
+//   visuals_patch              bool
+//   sfx_vol                    f32     0.0..1.0
 //   flip_look_x                bool
 //   flip_look_y                bool
 //   flip_look_x_inverted       bool
@@ -126,6 +130,9 @@ const Cam7 = extern struct {
     var disable_input: bool = false;
     var sfx_volume: f32 = 0.7;
     var sfx_volume_scale: f32 = 0; // derived
+    var fog_patch: bool = true;
+    var fog_remove: bool = false;
+    var visuals_patch: bool = true;
 
     const rot_damp_val = [_]?f32{ null, 36, 24, 12, 6 };
     var rot_damp: ?f32 = null;
@@ -410,31 +417,32 @@ inline fn f32_applyDeadzoneSq(out: *f32) void {
 
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
 
-inline fn CamTransitionOut() void {
-    _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
+inline fn patchFlags(on: bool) void {
+    if (on) {
+        _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
+    } else {
+        _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
+    }
+}
+
+inline fn patchFog(on: bool) void {
+    if (on) {
+        const dist = if (Cam7.fog_remove) comptime m.pow(f32, 10, 10) else Cam7.fog_dist;
+        var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(dist))); // fog dist, normal case
+        _ = x86.nop_until(o, 0x4539A6);
+        _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @bitCast(dist)); // fog dist, flags @0=1 case
+        return;
+    }
     _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
+}
+
+inline fn CamTransitionOut() void {
+    patchFlags(false);
+    patchFog(false);
     Cam7.xcam_motion_tgt = .{};
     Cam7.xcam_motion = .{};
     Cam7.saved_camstate_index = null;
-}
-
-fn CheckAndResetSavedCam(gf: *GlobalFn) void {
-    if (Cam7.saved_camstate_index == null) return;
-    if (mem.read(camstate_ref_addr, u32) == 31) return;
-
-    re.Manager.entity(.cMan, 0).CamStateIndex = 7;
-    CamTransitionOut();
-    Cam7.cam_state = .None;
-    _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
-}
-
-fn RestoreSavedCam() void {
-    if (Cam7.saved_camstate_index) |i| {
-        _ = mem.write(camstate_ref_addr, u32, i);
-        re.Manager.entity(.cMan, 0).CamStateIndex = i;
-        CamTransitionOut();
-    }
 }
 
 fn SaveSavedCam() void {
@@ -449,17 +457,41 @@ fn SaveSavedCam() void {
     //mat4x4_getQuaternion(@ptrFromInt(mat4_addr), &Cam7.v2_quat);
     //rm.Mat4x4_GetLocation(@ptrFromInt(mat4_addr), &Cam7.v2_loc);
 
-    _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
-    var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, normal case
-    _ = x86.nop_until(o, 0x4539A6);
-    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, flags @0=1 case
+    patchFlags(Cam7.visuals_patch);
+    patchFog(Cam7.fog_patch);
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 31;
     _ = mem.write(camstate_ref_addr, u32, 31);
 }
 
+fn RestoreSavedCam() void {
+    if (Cam7.saved_camstate_index) |i| {
+        _ = mem.write(camstate_ref_addr, u32, i);
+        re.Manager.entity(.cMan, 0).CamStateIndex = i;
+        CamTransitionOut();
+    }
+}
+
+fn CheckAndResetSavedCam(gf: *GlobalFn) void {
+    if (Cam7.saved_camstate_index == null) return;
+    if (mem.read(camstate_ref_addr, u32) == 31) return;
+
+    re.Manager.entity(.cMan, 0).CamStateIndex = 7;
+    CamTransitionOut();
+    Cam7.cam_state = .None;
+    _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
+}
+
 fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.enable = gf.SettingGetB("cam7", "enable") orelse false;
+
+    Cam7.fog_patch = gf.SettingGetB("cam7", "fog_patch") orelse true;
+    Cam7.fog_remove = gf.SettingGetB("cam7", "fog_remove") orelse false;
+    Cam7.visuals_patch = gf.SettingGetB("cam7", "visuals_patch") orelse true;
+    if (Cam7.cam_state == .FreeCam) {
+        patchFog(Cam7.fog_patch);
+        patchFlags(Cam7.visuals_patch);
+    }
 
     Cam7.flip_look_x = gf.SettingGetB("cam7", "flip_look_x") orelse false;
     Cam7.flip_look_y = gf.SettingGetB("cam7", "flip_look_y") orelse false;

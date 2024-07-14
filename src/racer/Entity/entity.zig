@@ -33,6 +33,12 @@ pub const Manager = extern struct {
         return &@as([*]ENTITY.t(E), @ptrCast(manager.array))[i];
     }
 
+    // TODO: rename to entitySlice, and rename old entitySlice* to entityByteSlice*
+    pub fn entitySliceAllObj(comptime E: ENTITY) []ENTITY.t(E) {
+        const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
+        return @as([*]ENTITY.t(E), @ptrCast(manager.array))[0..manager.count];
+    }
+
     pub fn entitySlice(comptime E: ENTITY, i: usize) []u8 {
         const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
         const st = i * manager.stride;

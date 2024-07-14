@@ -1,6 +1,17 @@
 const std = @import("std");
 const e = @import("entity.zig");
 
+// GAME FUNCTIONS
+
+pub const DoFirstPersonCamera: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x4528B0);
+pub const DoPreRaceSweep: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x451EF0);
+
+// GAME CONSTANTS
+
+// ...
+
+// GAME TYPEDEFS
+
 pub const SIZE: usize = e.EntitySize(.cMan);
 
 // TODO: testing assertion of size correctness
@@ -36,7 +47,7 @@ pub const cMan = extern struct {
     _unk_0AC: u32,
     _unk_0B0: u32,
     _unkmat44_0B4: [16]f32, // TODO: typedef
-    pTest: *e.Test,
+    pTest: ?*e.Test,
     _unk_0F8: u32,
     _unk_0FC: u32,
     _unk_100: u32,

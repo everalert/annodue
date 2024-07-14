@@ -8,6 +8,16 @@ const Vec3 = vec.Vec3;
 
 const TestStats = @import("../Stats.zig").TestStats;
 
+// GAME FUNCTIONS
+
+pub const DoRespawn: *fn (*Test, spline_offset: f32) callconv(.C) void = @ptrFromInt(0x473F40);
+
+// GAME CONSTANTS
+
+// ...
+
+// GAME TYPEDEFS
+
 pub const SIZE: usize = e.EntitySize(.Test);
 
 pub const PLAYER_PTR_ADDR: usize = 0x4D78A8;
@@ -230,3 +240,7 @@ pub const Test = extern struct {
 //	1<<29  ??? ref in 47AB40, 47B520, 479E10, 47B000_DeathSpeedHandler
 //	1<<30
 //	1<<31  ??? called from 4783E0_ApplyAcceleration()
+
+// HELPERS
+
+// ...

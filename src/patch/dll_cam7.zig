@@ -63,6 +63,7 @@ pub const panic = debug.annodue_panic;
 //   toggle hide ui             6
 //   toggle disable input       7                           pod will not drive when on
 //   pan and orbit mode         RCtrl           X           hold
+//   move pod to camera         Bksp            A           hold while exiting free-cam
 // - SETTINGS:
 //   enable                     bool
 //   fog_patch                  bool
@@ -183,10 +184,11 @@ const Cam7 = extern struct {
     var input_damp_data = ButtonInputMap{ .kb = .X, .xi = .Y };
     var input_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .B };
     var input_sweep_data = ButtonInputMap{ .kb = .RCONTROL, .xi = .X };
-    var input_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
-    var input_disable_input_data = ButtonInputMap{ .kb = .@"7" };
     //var input_mpan_data = ButtonInputMap{ .kb = .LBUTTON };
     //var input_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
+    var input_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
+    var input_disable_input_data = ButtonInputMap{ .kb = .@"7" };
+    var input_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .A };
     var input_toggle = input_toggle_data.inputMap();
     var input_look_x = input_look_x_data.inputMap();
     var input_look_y = input_look_y_data.inputMap();
@@ -202,6 +204,7 @@ const Cam7 = extern struct {
     var input_sweep = input_sweep_data.inputMap();
     var input_hide_ui = input_hide_ui_data.inputMap();
     var input_disable_input = input_disable_input_data.inputMap();
+    var input_move_vehicle = input_move_vehicle_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -222,6 +225,7 @@ const Cam7 = extern struct {
         input_sweep.update(gf);
         input_hide_ui.update(gf);
         input_disable_input.update(gf);
+        input_move_vehicle.update(gf);
 
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
@@ -552,6 +556,24 @@ fn DoStateNone(_: *GlobalSt, gf: *GlobalFn) CamState {
 
 fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     if (Cam7.input_toggle.gets() == .JustOn or !Cam7.enable) {
+        if (gs.race_state != .None and Cam7.input_move_vehicle.gets().on()) {
+            re.Test.DoRespawn(re.Test.PLAYER.*, 0);
+            re.Test.PLAYER.*._collision_toggles = 0xFFFFFFFF;
+            re.Test.PLAYER.*.transform = Cam7.xf;
+            var fwd: Vec3 = .{ .x = 0, .y = 11, .z = 0 };
+            rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+            rv.Vec3_Add(@ptrCast(&re.Test.PLAYER.*.transform.T), @ptrCast(&re.Test.PLAYER.*.transform.T), &fwd);
+
+            for (re.Manager.entitySliceAllObj(.cMan)) |*cman| {
+                if (cman.pTest != null) {
+                    const anim_mode = cman.mode;
+                    cman.animTimer = 8;
+                    re.cMan.DoPreRaceSweep(cman);
+                    cman.mode = anim_mode;
+                }
+            }
+        }
+
         RestoreSavedCam();
         _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
         return .None;

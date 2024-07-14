@@ -794,7 +794,7 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (Cam7.cam_state == .FreeCam and Cam7.disable_input) { // kill race input
+    if (Cam7.cam_state == .FreeCam and Cam7.disable_input and rg.PAUSE_STATE.* == 0) { // kill race input
         @memset(@as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE], 0);
         @memset(@as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE], 0);
     }

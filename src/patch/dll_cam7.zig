@@ -83,12 +83,9 @@ pub const panic = debug.annodue_panic;
 //                                      if you don't know what that means, just treat
 //                                      this value as a sensitivity scale
 
-// FIXME: cam seems to not always correct itself upright when switching?
 // TODO: controls = ???
 //   - option: drone-style controls, including Z-rotate
-//   - option: z-control moving along view axis rather than world axis
 //   - dinput controls
-//   - speed toggles; infinite accel toggle
 //   - control mapping
 // TODO: fog
 // - option: disable fog entirely
@@ -156,9 +153,8 @@ const Cam7 = extern struct {
     var saved_camstate_index: ?u32 = null;
     var xf: Mat4x4 = .{};
     var xf_look: Mat4x4 = .{};
-    var xcam_rot: Vec3 = .{};
-    var xcam_rot_tgt: Vec3 = .{};
-    var xcam_rotation: Vec3 = .{};
+    var xcam_rot: Vec3 = .{}; // overall
+    var xcam_rotation: Vec3 = .{}; // per-frame offset
     var xcam_rotation_tgt: Vec3 = .{};
     var xcam_motion: Vec3 = .{};
     var xcam_motion_tgt: Vec3 = .{};
@@ -449,7 +445,6 @@ fn SaveSavedCam() void {
         Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
     @memcpy(@as(*[16]f32, @ptrCast(&Cam7.xf)), @as([*]f32, @ptrFromInt(mat4_addr)));
     mat4x4_getEuler(&Cam7.xf, &Cam7.xcam_rot);
-    @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_tgt)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
     // FIXME: new, quaternion stuff
     //mat4x4_getQuaternion(@ptrFromInt(mat4_addr), &Cam7.v2_quat);
     //rm.Mat4x4_GetLocation(@ptrFromInt(mat4_addr), &Cam7.v2_loc);
@@ -616,6 +611,7 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         rv.Vec3_Copy(&Cam7.xcam_rotation_tgt, &Cam7.xcam_rotation);
         rv.Vec3_AddScale1(&Cam7.xcam_rot, &Cam7.xcam_rot, rot_scale, &Cam7.xcam_rotation);
     }
+    Cam7.xcam_rot.z = f32_damp(Cam7.xcam_rot.z, 0, 16, gs.dt_f); // NOTE: straighten out, not needed for drone
 
     if (move_sweep) {
         var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
@@ -719,16 +715,7 @@ fn UpdateState(gs: *GlobalSt, gf: *GlobalFn) void {
 
 const rot: f32 = m.pi * 2;
 
-//// TODO: move to lib, or replace with real lib
-//const Vec3 = extern struct {
-//    x: f32,
-//    y: f32,
-//    z: f32,
-//
-//
-//};
-//
-//// TODO: move to vec lib, or find glm equivalent
+// TODO: move to vec lib, or find glm equivalent
 //fn mmul(comptime n: u32, in1: *[n][n]f32, in2: *[n][n]f32, out: *[n][n]f32) void {
 //    inline for (0..n) |i| {
 //        inline for (0..n) |j| {

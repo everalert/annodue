@@ -441,9 +441,15 @@ inline fn patchFog(on: bool) void {
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
 }
 
+inline fn patchFOV(on: bool) void {
+    const fov: f32 = if (on) 100 else 120; // first-person internal cam fov
+    _ = mem.write(0x4528EF, f32, fov); // instruction at 0x4528E9
+}
+
 inline fn CamTransitionOut() void {
     patchFlags(false);
     patchFog(false);
+    patchFOV(false);
     Cam7.xcam_motion_tgt = .{};
     Cam7.xcam_motion = .{};
     Cam7.saved_camstate_index = null;
@@ -463,6 +469,7 @@ fn SaveSavedCam() void {
 
     patchFlags(Cam7.visuals_patch);
     patchFog(Cam7.fog_patch);
+    patchFOV(true);
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 31;
     _ = mem.write(camstate_ref_addr, u32, 31);

@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: Minimap lagging behind camera motion while in free cam
 - Cam7: Faster rotation toward diagonals with keyboard input
 - Cam7: Z-orientation not straightening out when transitioning into free-cam
+- Cam7: Main camera being in first-person internal (cam5) changing free-cam FOV
 - Savestate: Rewind ignoring saved inputs
 - Savestate: Rewind not restoring UI correctly
 - Savestate: Stuttering during rewind scrubbing

@@ -577,6 +577,7 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
                     cman.animTimer = 8;
                     re.cMan.DoPreRaceSweep(cman);
                     cman.mode = anim_mode;
+                    cman.visualFlags = 0xFFFFFF00;
                 }
             }
         }

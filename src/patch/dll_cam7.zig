@@ -64,6 +64,7 @@ pub const panic = debug.annodue_panic;
 //   toggle disable input       7                           pod will not drive when on
 //   pan and orbit mode         RCtrl           X           hold
 //   move pod to camera         Bksp            A           hold while exiting free-cam
+//   orient camera to pod       \
 // - SETTINGS:
 //   enable                     bool
 //   fog_patch                  bool
@@ -189,6 +190,7 @@ const Cam7 = extern struct {
     var input_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
     var input_disable_input_data = ButtonInputMap{ .kb = .@"7" };
     var input_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .A };
+    var input_look_at_vehicle_data = ButtonInputMap{ .kb = .OEM_5 }; // backslash
     var input_toggle = input_toggle_data.inputMap();
     var input_look_x = input_look_x_data.inputMap();
     var input_look_y = input_look_y_data.inputMap();
@@ -205,6 +207,7 @@ const Cam7 = extern struct {
     var input_hide_ui = input_hide_ui_data.inputMap();
     var input_disable_input = input_disable_input_data.inputMap();
     var input_move_vehicle = input_move_vehicle_data.inputMap();
+    var input_look_at_vehicle = input_look_at_vehicle_data.inputMap();
     var input_mouse_d_x: f32 = 0;
     var input_mouse_d_y: f32 = 0;
 
@@ -226,6 +229,7 @@ const Cam7 = extern struct {
         input_hide_ui.update(gf);
         input_disable_input.update(gf);
         input_move_vehicle.update(gf);
+        input_look_at_vehicle.update(gf);
 
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
@@ -352,6 +356,38 @@ fn mat4x4_getRow(in: *const Mat4x4, out: *Vec3, row: usize) void {
 
 fn mat4x4_setRotation(out: *Mat4x4, in: *const Vec3) void {
     rm.Mat4x4_SetRotation(out, rad2deg(f32, in.x), rad2deg(f32, in.y), rad2deg(f32, in.z));
+}
+
+// TODO: fix assertion
+const UP: Vec3 = .{ .x = 0, .y = 0, .z = -1 };
+fn vec3_dirToEuler(out: *Vec3, in: *const Vec3) void {
+    //std.debug.assert(m.fabs(1.0 - rv.Vec3_Mag(in)) < m.floatEps(f32));
+    const H: f32 = m.atan2(f32, -in.x, in.y); // heading; X
+    const P: f32 = m.asin(in.z); // pitch; Y
+    const W0 = Vec3{ .x = -in.y, .y = in.x }; // wings; 'right'?
+    var U0: Vec3 = undefined;
+    rv.Vec3_Cross(&U0, &W0, in);
+    const B: f32 = m.atan2(f32, rv.Vec3_Dot(&W0, &UP), rv.Vec3_Dot(&U0, &UP)); // banking; Z
+    out.* = .{ .x = H, .y = P, .z = B };
+}
+
+// TODO: fix assertion
+fn vec3_dirToEulerXY(out: *Vec3, in: *const Vec3) void {
+    //std.debug.assert(m.fabs(1.0 - rv.Vec3_Mag(in)) < m.floatEps(f32));
+    const H: f32 = m.atan2(f32, -in.x, in.y); // heading; X
+    const P: f32 = m.asin(in.z); // pitch; Y
+    out.* = .{ .x = H, .y = P };
+}
+
+/// @return true if normalization possible
+inline fn vec3_norm(out: *Vec3) bool {
+    const mag: f32 = rv.Vec3_Mag(out);
+    if (m.fabs(mag) >= m.floatEps(f32)) {
+        const scale = 1 / mag;
+        rv.Vec3_Scale(out, scale, out);
+        return true;
+    }
+    return false;
 }
 
 inline fn vec3_mul3(out: *Vec3, x: f32, y: f32, z: f32) void {
@@ -736,6 +772,17 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     }
 
     rv.Vec3_AddScale1(@ptrCast(&Cam7.xf.T), @ptrCast(&Cam7.xf.T), gs.dt_f, &Cam7.xcam_motion);
+
+    if (Cam7.input_look_at_vehicle.gets().on()) blk: {
+        var dir: Vec3 = undefined;
+        rv.Vec3_Sub(&dir, @ptrCast(&re.Test.PLAYER.*.transform.T), @ptrCast(&Cam7.xf.T));
+        if (!vec3_norm(&dir)) break :blk;
+
+        var dirEulerXY: Vec3 = undefined;
+        vec3_dirToEulerXY(&dirEulerXY, &dir);
+        mat4x4_setRotation(&Cam7.xf, &dirEulerXY);
+        Cam7.xcam_rot = dirEulerXY;
+    }
 
     //// FIXME: remove, debug
     //rte.DrawText(0, 0, "ORBIT DIST {d:5.3}", .{Cam7.orbit_dist}, null, null) catch {};

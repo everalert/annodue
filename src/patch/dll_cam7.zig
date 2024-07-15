@@ -817,7 +817,9 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (Cam7.cam_state == .FreeCam and Cam7.disable_input and rg.PAUSE_STATE.* == 0) { // kill race input
-        @memset(@as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE], 0);
+        // NOTE: unk block starting at 0xEC8820 still written to, but no observable ill-effects
+        @memset(@as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..0x70], 0);
+        @memset(@as([*]u8, @ptrFromInt(rin.RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR))[0..0x40], 0);
         @memset(@as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE], 0);
     }
 }

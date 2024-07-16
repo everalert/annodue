@@ -138,6 +138,7 @@ pub fn mov_ecx_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
     offset = mem.write(offset, T, imm32);
     return offset;
 }
+
 pub fn mov_eax_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
     std.debug.assert(T == u8 or T == u32);
     var offset = memory_offset;

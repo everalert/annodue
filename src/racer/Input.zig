@@ -104,7 +104,7 @@ pub const RACE_AXIS_KEYBOARD_BASE_ADDR: usize = 0x4D5E50;
 pub const RACE_AXIS_KEYBOARD: *RaceInputs(AXIS, f32) = @ptrFromInt(RACE_AXIS_KEYBOARD_BASE_ADDR);
 pub const RACE_BUTTON_FLOAT_BASE_ADDR: usize = 0xEC8840;
 pub const RACE_BUTTON_FLOAT: *RaceInputs(BUTTON, f32) = @ptrFromInt(RACE_BUTTON_FLOAT_BASE_ADDR);
-pub const RACE_UNK_EC8880: usize = 0xEC8880;
+pub const RACE_UNK_EC8880: usize = 0xEC8880; // likely settings
 pub const RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR: usize = 0xEC88A0;
 pub const RACE_BUTTON_FLOAT_HOLD_TIME: *RaceInputs(BUTTON, f32) = @ptrFromInt(RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR);
 

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cam7: analog deadzone customization via settings
+- Cam7: ability to toggle planar movement with `TAB(kb) or B(xinput)`
+- Cam7: pan and orbit with `RCtrl(kb) or X(xinput)`
+- Cam7: cycle movement speed with `Q or LB` and `E or RB`
+- Cam7: cycle rotation speed with `Z or LSB` and `C or RSB`
+- Cam7: cycle smoothing instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons
+- Cam7: return movement or rotation to default by pressing both up+down together
+- Cam7: toggle hiding ui with `6`
+- Cam7: toggle disabling pod input with `7`
+- Cam7: orient camera to pod with `\`
+- Cam7: move pod to camera by holding `BKSP(kb) or A(xinput)` when exiting free-cam
+- Cam7: sfx during camera motion
 - Core: notify on plugin reload
 - CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers
@@ -17,6 +29,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - InputDisplay: Now shows inputs from savestate rewind
 - QOL: Option to skip podium cutscene
 - QOL: Option to remove 1px gap at screen edge
+- Setting: 'cam7' -> 'stick_deadzone_inner'
+- Setting: 'cam7' -> 'stick_deadzone_outer'
+- Setting: 'cam7' -> 'default_move_speed'
+- Setting: 'cam7' -> 'default_move_smoothing'
+- Setting: 'cam7' -> 'default_rotation_speed'
+- Setting: 'cam7' -> 'default_rotation_smoothing'
+- Setting: 'cam7' -> 'default_planar_movement'
+- Setting: 'cam7' -> 'default_hide_ui'
+- Setting: 'cam7' -> 'default_disable_input'
+- Setting: 'cam7' -> 'flip_look_x_inverted'
+- Setting: 'cam7' -> 'sfx_volume'
+- Setting: 'cam7' -> 'fog_patch'
+- Setting: 'cam7' -> 'fog_disable'
+- Setting: 'cam7' -> 'visuals_patch'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): Global Function version `15` to `17`
@@ -29,16 +55,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): enforcing minimum implemented functions for core-side plugins
 - Backend(Core): `OnPluginDeinit` hook function, usable by core-side plugins
 - Backend(Core): plugin identity tracking, for use with handle-based resources
+- Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
+- Backend(Core): `GameHideRaceUIEnable` `GameHideRaceUIDisable` `GameHideRaceUIIsHidden` global functions
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
 - Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`
 - Backend(RacerLib): Added new defs to `entity`, `entity/Test`, `entity/Toss`, `entity/Trig`
-- Backent(Util): Added `handle_map` and `handle_map_static` for handle-based resource management
-- Backent(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
-- Backent(Util): x86 - helper functions and defs
+- Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
+- Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`, `Quad`
+- Backend(Util): Added `handle_map` and `handle_map_static` for handle-based resource management
+- Backend(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
+- Backend(Util): x86 - helper functions and defs
 
 ### Changed
 
+- Cam7: lateral movement speed - `650` -> `125..16000`
+- Cam7: vertical movement speed - `350` -> `62.5..8000`
+- Cam7: movement smoothing - `8` -> `none,16,8,4`
+- Cam7: movement speed curve - `quadratic` -> `quartic` 
+- Cam7: rotation speed - `360` -> `80..810`
+- Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
+- Backend(Core): Global Function version `15` -> `16`
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Core): moved `cosmetic->show_trigger_display` functionality to `RTrigger`
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
@@ -51,12 +88,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cam7: Corrected steering while upside-down to be more intuitive
+- Cam7: Corrected Y/Z movement while upside-down in planar movement mode
+- Cam7: Minimap lagging behind camera motion while in free cam
+- Cam7: Faster rotation toward diagonals with keyboard input
+- Cam7: Z-orientation not straightening out when transitioning into free-cam
+- Cam7: Main camera being in first-person internal (cam5) changing free-cam FOV
 - Savestate: Rewind ignoring saved inputs
 - Savestate: Rewind not restoring UI correctly
 - Savestate: Stuttering during rewind scrubbing
 - Savestate: Delayed camera when rewind scrubbing
 - Backend(Build): compile error building without hashfile present when build doesn't use hashfile
 - Backend(Core): slowdown due to excessively opening search handles during plugin hot reloading
+- Backend(Core): XInput state not clearing when controller unplugged
 
 ## [0.1.5] - 2024-05-12
 

@@ -5,6 +5,7 @@ const re = @import("racer").Entity;
 
 const mem = @import("../util/memory.zig");
 
+// FIXME: convert to internal owner IDs once merged with custom trigger branch
 // TODO: turn off race HUD when freezing
 // TODO: turn off/fade out other displays when freezing? e.g. savestate, overlay
 

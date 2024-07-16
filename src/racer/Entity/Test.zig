@@ -22,6 +22,10 @@ pub const fnEvent: *fn (*Test, magic: *e.MAGIC_EVENT, payload: u32) callconv(.C)
 
 // GAME CONSTANTS
 
+pub const DoRespawn: *fn (*Test, spline_offset: f32) callconv(.C) void = @ptrFromInt(0x473F40);
+
+// GAME TYPEDEFS
+
 pub const SIZE: usize = e.EntitySize(.Test);
 
 pub const PLAYER_PTR_ADDR: usize = 0x4D78A8;

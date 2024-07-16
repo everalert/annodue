@@ -379,7 +379,7 @@ export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // TODO: probably cleaner with a state machine
 //export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-export fn Draw2DB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (InputDisplay.enable and !InputDisplay.initialized)
             InputDisplay.Init();
@@ -387,6 +387,7 @@ export fn Draw2DB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         if (InputDisplay.enable and
             InputDisplay.initialized and
             rg.PAUSE_STATE.* != 1 and
+            !gf.GameHideRaceUIIsHidden() and
             (gs.race_state == .Countdown or gs.race_state == .Racing))
         {
             const a: f32 = 1 - rg.PAUSE_SCROLLINOUT.*;

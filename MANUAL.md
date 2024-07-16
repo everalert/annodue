@@ -6,7 +6,7 @@
 
 #### Key Information & Notes
 
-Hold `Shift` while launching the game to launch it without any modifications.
+Hold `Shift` while launching the game to run it in vanilla mode (no Annodue modifications).
 
 Press `P` to toggle Practice Mode. This mode is required to use certain features, and cannot be toggled off during a race.
 
@@ -56,13 +56,24 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 
 ##### Controls
 
-|Action|Keyboard|XInput|
-|:---|:---|:---|
-|Toggle     |`0`                 |`Back`
-|XY-move    |`W A S D`           |`L Stick`
-|XY-rotate  |`Mouse` or `↑ ↓ ← →`|`R Stick`
-|Z-move up  |`Space`             |`L Trigger`
-|Z-move down|`Shift`             |`R Trigger`
+|Action|Keyboard|XInput|Note|
+|:---|:---|:---|:---|
+|Toggle                 |`0`                 |`Back`     |&nbsp;
+|XY-move                |`W A S D`           |`L Stick`  |&nbsp;
+|XY-rotate              |`Mouse` or `↑ ↓ ← →`|`R Stick`  |&nbsp;
+|Z-move up              |`Space`             |`L Trigger`|&nbsp;
+|Z-move down            |`Shift`             |`R Trigger`|&nbsp;
+|movement up            |`E`                 |`RB`       |&nbsp;
+|movement down          |`Q`                 |`LB`       |up+down to return to default
+|rotation up            |`Z`                 |`RSB`      |&nbsp;
+|rotation down          |`C`                 |`LSB`      |up+down to return to default
+|damping                |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
+|toggle planar movement |`Tab`               |`B`        |&nbsp;
+|toggle hide ui         |`6`                 |&nbsp;     |&nbsp;
+|toggle disable input   |`7`                 |&nbsp;     |pod will not drive when on
+|pan and orbit mode     |`RCtrl`             |`X`        |hold
+|move pod to camera     |`Bksp`              |`A`        |hold while exiting free-cam
+|orient camera to pod   |`\`                 |&nbsp;     |&nbsp;
 
 ##### Settings
 
@@ -70,11 +81,25 @@ Configured under `[cam7]`
 
 |Option|Type|Note|
 |:---|:---|:---|
-|`enable`     |`bool`|&nbsp;
-|`flip_look_x`|`bool`|Invert x-axis rotation
-|`flip_look_y`|`bool`|Invert y-axis rotation
-|`mouse_dpi`  |`u32` |reference for mouse sensitivity calculations; does not change mouse
-|`mouse_cm360`|`f32` |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
+|`enable`                    |`bool`|&nbsp;
+|`fog_patch`                 |`bool`|override normal fog
+|`fog_disable`               |`bool`|infinite draw distance (needs 'fog_patch' on)
+|`visuals_patch`             |`bool`|show entire track
+|`sfx_volume`                |`f32` |0.0 to 1.0
+|`flip_look_x`               |`bool`|Invert x-axis rotation
+|`flip_look_y`               |`bool`|Invert y-axis rotation
+|`flip_look_x_inverted`      |`bool`|Invert x-axis rotation while upside-down
+|`stick_deadzone_inner`      |`f32` |0.0 to 0.5
+|`stick_deadzone_outer`      |`f32` |0.5 to 1.0
+|`default_move_speed`        |`u32` |0 to 6
+|`default_move_smoothing`    |`u32` |0 to 3
+|`default_rotation_speed`    |`u32` |0 to 4
+|`default_rotation_smoothing`|`u32` |0 to 3
+|`default_planar_movement`   |`bool`|movement is always level; turn off to move based on the view angle
+|`default_hide_ui`           |`bool`|&nbsp;
+|`default_disable_input`     |`bool`|&nbsp;
+|`mouse_dpi`                 |`u32` |reference for mouse sensitivity calculations; does not change mouse
+|`mouse_cm360`               |`f32` |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
 
 ### Savestates & Rewind
 

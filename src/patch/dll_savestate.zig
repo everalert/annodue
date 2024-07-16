@@ -309,10 +309,6 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-//pub fn MenuStartRaceB(gs: *GlobalState,gv:*GlobalFn, initialized: bool) callconv(.C) void {
-//    state.reset();
-//}
-
 export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.handle_settings(gf);
 }
@@ -324,48 +320,21 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.save_input_ld.update(gf);
 }
 
-// FIXME: if UpdateState runs in EngineUpdateStage20A:
-//  - the camera is frozen
-//  - the pod is shaky and acts 1 frame ahead of the cam
-// if it runs in EarlyEngineUpdateA instead
-//  - the camera is shaky
-//      - pod 'not' being shaky is probably because they are both shaky now
-//  - the pod acts on the same frame as the camera
-// the problem is, there is only 1 extra function running in-engine in the 2nd case
-// and that seems to only deal with the camera (metacam update fn)
-// FIXME: other unresolved issue - inputs still have some effect on the final rendering
-// no matter where in the loop we have tried to save the data so far; they have less
-// effect if run at EarlyEngineUpdateA, but UI elements etc still do not respect input.
-// possibly need to add the 'other'  input stuff to savestates
-// FIXME: UI rendering timer wrong with respect to loaded savestates, due to making the
-// CreateText call before the savestate load point. challenge here is that we can't just
-// make the savestate happen earlier, because state is still being changed at the same
-// entity stage
-//  - reason seems to be that, even though the state is being restored, the engine still
-//    needs to do work on the data to transfer state to the rest of the engine, e.g. the
-//    boost meter progress being sent to a global to be used in a specific boost meter
-//    renderer in the draw function. when you restore the state, you basically skip
-//    all those outward transfers, so the engine thinks they don't happen, unless you
-//    keep holding the buttons to make them proc on the next frame
-//  - idea: update savestates right before Stage14, so that the input of the NEXT frame
-//    is captured, then when you restore it may rerun all the stuff with your restored inputs
-//      - this seems to resolve most issues, but still need to manually press accel
-//        for some stuff (exhaust flame size, meter mid-charging, correct speed on
-//        speedo, etc.). however, being no longer able to influence steering, showing
-//        the correct boost readiness status, overlay timer being mismatched from
-//        UI, etc. without input all fixed
-//      - next step is to figure out the rest of SerializeInput and add that to savestates
-
 export fn EngineEntityUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    //export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
-    UpdateState(gs, gf);
 
+    UpdateState(gs, gf);
+}
+
+export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (!state.savestate_enable) return;
+
+    // TODO: build checks for GameHideRaceUIIsHidden into drawtext api when that's done
     // TODO: show during whole race scene? esp. if recording from count
     // TODO: experiment with positioning
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
-    if (gs.practice_mode and gs.race_state == .Racing) {
+    if (gs.practice_mode and gs.race_state == .Racing and !gf.GameHideRaceUIIsHidden()) {
         rt.DrawText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch {};
         rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
         if (state.load_count > 0)

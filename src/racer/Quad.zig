@@ -1,4 +1,6 @@
 /// Screen-space sprite drawing
+const std = @import("std");
+const BOOL = std.os.windows.BOOL;
 
 // GAME FUNCTIONS
 
@@ -22,6 +24,8 @@ pub const QUAD_INITIALIZED_INDEX_ADDR: usize = 0x4B91B8;
 pub const QUAD_INITIALIZED_INDEX: *u16 = @ptrFromInt(QUAD_INITIALIZED_INDEX_ADDR);
 pub const QUAD_STAT_BAR_INDEX_ADDR: usize = 0x50C928;
 pub const QUAD_STAT_BAR_INDEX: *u16 = @ptrFromInt(QUAD_STAT_BAR_INDEX_ADDR);
+pub const QUAD_SKIP_RENDERING_ADDR: usize = 0x50C058;
+pub const QUAD_SKIP_RENDERING: *BOOL = @ptrFromInt(QUAD_SKIP_RENDERING_ADDR);
 
 // GAME TYPEDEFS
 

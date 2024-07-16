@@ -71,7 +71,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 17;
+pub const GLOBAL_FUNCTION_VERSION = 18;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -89,9 +89,13 @@ pub const GlobalFunction = extern struct {
     InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) ActiveState,
     InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) f32,
     // Game
+    // TODO: change prefix to G (analogous to R for Resource)
     GameFreezeEnable: *const fn (o: [*:0]const u8) bool,
     GameFreezeDisable: *const fn (o: [*:0]const u8) bool,
     GameFreezeIsFrozen: *const fn () bool,
+    GameHideRaceUIEnable: *const fn (o: [*:0]const u8) bool,
+    GameHideRaceUIDisable: *const fn (o: [*:0]const u8) bool,
+    GameHideRaceUIIsHidden: *const fn () bool,
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources

@@ -80,6 +80,7 @@ pub const AxisInputMap = struct {
 
         self.state = std.math.clamp(xi_inc - xi_dec + (kb_inc - kb_dec) * self.kb_scale, -1, 1);
 
+        // NOTE: device-dominant version
         //const kb: f32 = std.math.clamp((kb_inc - kb_dec) * self.kb_scale, -1, 1);
         //const xi: f32 = std.math.clamp(xi_inc - xi_dec, -1, 1);
         //self.state = if (@fabs(kb) > @fabs(xi)) kb else xi;

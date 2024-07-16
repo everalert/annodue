@@ -5,6 +5,7 @@ const e = @import("entity.zig");
 
 pub const DoFirstPersonCamera: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x4528B0);
 pub const DoPreRaceSweep: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x451EF0);
+pub const DoPreRaceSweepEnd: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x4525D0);
 
 // GAME CONSTANTS
 

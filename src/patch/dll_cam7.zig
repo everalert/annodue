@@ -443,7 +443,7 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     }
     Cam7.rot_spd = sp.f32_damp(Cam7.rot_spd, Cam7.rot_spd_tgt, Cam7.rot_change_damp, gs.dt_f);
 
-    const upside_down: bool = @mod(Cam7.rot.y / m.pi * 2 - 0.25, 1) < 0.5;
+    const upside_down: bool = @mod(Cam7.rot.y / (m.pi * 2) - 0.25, 1) < 0.5;
 
     // rotation
 

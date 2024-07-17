@@ -335,9 +335,18 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
     if (gs.practice_mode and gs.race_state == .Racing and !gf.GHideRaceUIIsHidden()) {
-        rt.DrawText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch {};
-        rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
+        _ = gf.GDrawText(
+            .Default,
+            rt.MakeText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch null,
+        );
+        _ = gf.GDrawText(
+            .Default,
+            rt.MakeText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch null,
+        );
         if (state.load_count > 0)
-            rt.DrawText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch {};
+            _ = gf.GDrawText(
+                .Default,
+                rt.MakeText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch null,
+            );
     }
 }

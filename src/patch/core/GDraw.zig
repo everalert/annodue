@@ -30,6 +30,7 @@ const GDrawTextDef = extern struct {
 };
 
 // TODO: menu, overlay, practice mode overlay, (other modes overlay), system, etc.
+// also layer/s below the in-game layer?
 pub const GDrawLayer = enum(u32) { Default };
 
 // TODO: insertPanel, insertButton, etc. (after adding sprite drawing)

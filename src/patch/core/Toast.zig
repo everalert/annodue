@@ -54,7 +54,7 @@ pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-pub fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const r_start: u32 = @intCast(ToastSystem.buffer.b);
     const r_end: u32 = r_start + ToastSystem.buffer.len;
     const len: u32 = ToastSystem.buffer.len;
@@ -97,6 +97,6 @@ pub fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         }
         const color: u32 = fl.flash_color(item.color, item.timer, ToastSystem.dur_flash) | a;
 
-        rt.DrawText(16, 8 + y_off + ToastSystem.row_h * i, "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text");
+        _ = gf.GDrawText(.Default, rt.MakeText(16, 8 + y_off + ToastSystem.row_h * i, "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text"));
     }
 }

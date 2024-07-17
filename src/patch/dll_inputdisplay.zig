@@ -78,10 +78,10 @@ const InputDisplay = struct {
         return InputDisplay.digital[@intFromEnum(input)];
     }
 
-    fn UpdateIcons() void {
-        UpdateIconSteering(&icons[0], &icons[1], .Steering);
-        UpdateIconPitch(&icons[2], &icons[3], .Pitch);
-        UpdateIconThrust(&icons[2 + ri.BUTTON_ACCELERATION], &icons[2 + ri.BUTTON_BRAKE], .Thrust, .Acceleration, .Brake);
+    fn UpdateIcons(gf: *GlobalFn) void {
+        UpdateIconSteering(gf, &icons[0], &icons[1], .Steering);
+        UpdateIconPitch(gf, &icons[2], &icons[3], .Pitch);
+        UpdateIconThrust(gf, &icons[2 + ri.BUTTON_ACCELERATION], &icons[2 + ri.BUTTON_BRAKE], .Thrust, .Acceleration, .Brake);
         UpdateIconButton(&icons[2 + ri.BUTTON_BOOST], .Boost);
         UpdateIconButton(&icons[2 + ri.BUTTON_SLIDE], .Slide);
         UpdateIconButton(&icons[2 + ri.BUTTON_ROLL_LEFT], .RollLeft);
@@ -225,7 +225,7 @@ const InputDisplay = struct {
         InitSingle(&i.bg_idx, p_square.?, i.x, i.y, x_scale, y_scale, true);
     }
 
-    fn UpdateIconSteering(left: *InputIcon, right: *InputIcon, input: ri.AXIS) void {
+    fn UpdateIconSteering(gf: *GlobalFn, left: *InputIcon, right: *InputIcon, input: ri.AXIS) void {
         const axis = InputDisplay.GetStick(input);
         const side = if (axis < 0) left else if (axis > 0) right else null;
 
@@ -249,13 +249,16 @@ const InputDisplay = struct {
             const txo: i16 = @divFloor(s.w, 2) - @as(i16, @intFromFloat(m.sign(axis) * text_xoff));
             const col: u32 = 0xFFFFFF00 |
                 @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
-            rt.DrawText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
-                std.math.fabs(axis * 100),
-            }, col, style_center) catch {};
+            _ = gf.GDrawText(
+                .Default,
+                rt.MakeText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
+                    std.math.fabs(axis * 100),
+                }, col, style_center) catch null,
+            );
         }
     }
 
-    fn UpdateIconPitch(top: *InputIcon, bot: *InputIcon, input: ri.AXIS) void {
+    fn UpdateIconPitch(gf: *GlobalFn, top: *InputIcon, bot: *InputIcon, input: ri.AXIS) void {
         const axis = InputDisplay.GetStick(input);
         const side = if (axis < 0) top else if (axis > 0) bot else null;
 
@@ -279,13 +282,16 @@ const InputDisplay = struct {
             const tyo: i16 = (if (axis < 0) s.h - text_yoff else text_yoff) - 3;
             const col: u32 = 0xFFFFFF00 |
                 @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
-            rt.DrawText(s.x + 2, s.y + tyo, "{d:1.0}", .{
-                std.math.fabs(axis * 100),
-            }, col, style_left) catch {};
+            _ = gf.GDrawText(
+                .Default,
+                rt.MakeText(s.x + 2, s.y + tyo, "{d:1.0}", .{
+                    std.math.fabs(axis * 100),
+                }, col, style_left) catch null,
+            );
         }
     }
 
-    fn UpdateIconThrust(top: *InputIcon, bot: *InputIcon, in_thrust: ri.AXIS, in_accel: ri.BUTTON, in_brake: ri.BUTTON) void {
+    fn UpdateIconThrust(gf: *GlobalFn, top: *InputIcon, bot: *InputIcon, in_thrust: ri.AXIS, in_accel: ri.BUTTON, in_brake: ri.BUTTON) void {
         const thrust: f32 = InputDisplay.GetStick(in_thrust);
         const accel: bool = InputDisplay.GetButton(in_accel) > 0;
         const brake: bool = InputDisplay.GetButton(in_brake) > 0;
@@ -313,9 +319,12 @@ const InputDisplay = struct {
             if (thrust < 1) {
                 const col: u32 = 0xFFFFFF00 |
                     @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
-                rt.DrawText(top.x + 8, top.y - 8, "{d:1.0}", .{
-                    std.math.fabs(thrust * 100),
-                }, col, style_center) catch {};
+                _ = gf.GDrawText(
+                    .Default,
+                    rt.MakeText(top.x + 8, top.y - 8, "{d:1.0}", .{
+                        std.math.fabs(thrust * 100),
+                    }, col, style_center) catch null,
+                );
             }
         }
         if (brake) {
@@ -392,7 +401,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         {
             const a: f32 = 1 - rg.PAUSE_SCROLLINOUT.*;
             InputDisplay.ReadInputs();
-            InputDisplay.UpdateIcons();
+            InputDisplay.UpdateIcons(gf);
             InputDisplay.SetOpacityAll(a);
         } else {
             InputDisplay.HideAll();

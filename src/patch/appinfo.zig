@@ -6,7 +6,8 @@ pub const GLOBAL_STATE = shared.GlobalState;
 pub const GLOBAL_FUNCTION = shared.GlobalFunction;
 pub const COMPATIBILITY_VERSION =
     shared.GLOBAL_STATE_VERSION +
-    shared.GLOBAL_FUNCTION_VERSION;
+    shared.GLOBAL_FUNCTION_VERSION +
+    @import("core/GDraw.zig").GDRAW_VERSION;
 
 pub const VERSION = SemVer{
     .major = 0,

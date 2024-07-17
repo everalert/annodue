@@ -54,8 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): enforcing minimum implemented functions for core-side plugins
 - Backend(Core): `OnPluginDeinit` hook function, usable by core-side plugins
 - Backend(Core): plugin identity tracking, for use with handle-based resources
+- Backend(Core): `GDraw` global api, for unrestricted drawing
+- Backend(Core): `GDrawText` to global functions
 - Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
-- Backend(Core): `GameHideRaceUIEnable` `GameHideRaceUIDisable` `GameHideRaceUIIsHidden` global functions
+- Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
 - Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`
@@ -63,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`, `Quad`
 - Backend(Util): Added `handle_map` and `handle_map_static` for handle-based resource management
+- Backend(Util): Added `deadzone` util, `spatial` util defs
 - Backend(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
 - Backend(Util): x86 - helper functions and defs
 

@@ -14,11 +14,13 @@ const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
+const GDrawLayer = @import("GDraw.zig").GDrawLayer;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
 const Trig = r.Entity.Trig.Trig;
 const ModelTriggerDescription = r.Model.ModelTriggerDescription;
+const TextDef = r.Text.TextDef;
 
 const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
@@ -71,7 +73,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 19;
+pub const GLOBAL_FUNCTION_VERSION = 20;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -89,7 +91,7 @@ pub const GlobalFunction = extern struct {
     InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) ActiveState,
     InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) f32,
     // Game
-    // TODO: change prefix to G (analogous to R for Resource)
+    GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) bool,
     GFreezeEnable: *const fn (o: [*:0]const u8) bool,
     GFreezeDisable: *const fn (o: [*:0]const u8) bool,
     GFreezeIsFrozen: *const fn () bool,

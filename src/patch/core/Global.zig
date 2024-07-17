@@ -6,6 +6,7 @@ const GlobalFunction = @import("SharedDef.zig").GlobalFunction;
 const std = @import("std");
 const win = std.os.windows;
 
+const draw = @import("GDraw.zig");
 const freeze = @import("GFreeze.zig");
 const hide_race_ui = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
@@ -98,6 +99,7 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .InputGetXInputButton = &input.get_xinput_button,
     .InputGetXInputAxis = &input.get_xinput_axis,
     // Game
+    .GDrawText = &draw.GDrawText,
     .GFreezeEnable = &freeze.Freeze.freeze,
     .GFreezeDisable = &freeze.Freeze.unfreeze,
     .GFreezeIsFrozen = &freeze.Freeze.is_frozen,

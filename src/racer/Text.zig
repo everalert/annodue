@@ -2,6 +2,8 @@ const Self = @This();
 
 const std = @import("std");
 
+// TODO: merge with Quad
+
 // NOTE: original idea notes
 // swrText_CreateEntry helper ideas
 //
@@ -176,7 +178,8 @@ pub inline fn MakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype)
     return buf[0..i];
 }
 
-pub const Text = extern struct {
+// TODO: assert/test sizeof = 1024 bytes
+pub const TextDef = extern struct {
     x: i16,
     y: i16,
     color: u32, // alpha 0 = default color (i.e. 0 = no color)
@@ -184,10 +187,10 @@ pub const Text = extern struct {
 };
 
 /// format text in racer format, without forwarding to the engine for rendering
-pub fn MakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !*Text {
+pub fn MakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !*TextDef {
     const state = struct {
         var buf: [1015:0]u8 = undefined;
-        var data: Text = std.mem.zeroes(Text);
+        var data: TextDef = std.mem.zeroes(TextDef);
     };
     state.data.x = x;
     state.data.y = y;

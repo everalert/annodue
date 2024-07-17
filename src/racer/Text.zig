@@ -176,22 +176,41 @@ pub inline fn MakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype)
     return buf[0..i];
 }
 
-pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !void {
+pub const Text = extern struct {
+    x: i16,
+    y: i16,
+    color: u32, // alpha 0 = default color (i.e. 0 = no color)
+    string: [1015:0]u8, // fit to 64-byte cache line boundary
+};
+
+/// format text in racer format, without forwarding to the engine for rendering
+pub fn MakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !*Text {
     const state = struct {
-        var buf1: [127:0]u8 = undefined;
-        var buf2: [127:0]u8 = undefined;
+        var buf: [1015:0]u8 = undefined;
+        var data: Text = std.mem.zeroes(Text);
     };
-    const color: u32 = rgba orelse DEFAULT_COLOR;
+    state.data.x = x;
+    state.data.y = y;
+    state.data.color = rgba orelse DEFAULT_COLOR;
     const head: []const u8 = style orelse DEFAULT_STYLE;
-    const body = try std.fmt.bufPrintZ(state.buf1[head.len..], fmt, args);
-    _ = try std.fmt.bufPrintZ(&state.buf2, "{s}{s}", .{ head, body });
+    const body = try std.fmt.bufPrintZ(state.buf[head.len..], fmt, args);
+    _ = try std.fmt.bufPrintZ(&state.data.string, "{s}{s}", .{ head, body });
+
+    return &state.data;
+}
+
+/// format text in racer format, and send to engine text render queue
+/// resulting string must be within 127 characters to fit into engine buffer
+pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !void {
+    const text = try MakeText(x, y, fmt, args, rgba, style);
+    std.debug.assert(std.mem.len(@as([*:0]u8, @ptrCast(&text.string))) <= 127);
     swrText_CreateEntry1(
-        x,
-        y,
-        @as(u8, @truncate(color >> 24)),
-        @as(u8, @truncate(color >> 16)),
-        @as(u8, @truncate(color >> 8)),
-        @as(u8, @truncate(color >> 0)),
-        &state.buf2,
+        text.x,
+        text.y,
+        @as(u8, @truncate(text.color >> 24)),
+        @as(u8, @truncate(text.color >> 16)),
+        @as(u8, @truncate(text.color >> 8)),
+        @as(u8, @truncate(text.color >> 0)),
+        &text.string,
     );
 }

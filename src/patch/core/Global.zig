@@ -6,8 +6,8 @@ const GlobalFunction = @import("SharedDef.zig").GlobalFunction;
 const std = @import("std");
 const win = std.os.windows;
 
-const freeze = @import("Freeze.zig");
-const hide_race_ui = @import("HideRaceUI.zig");
+const freeze = @import("GFreeze.zig");
+const hide_race_ui = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const settings = @import("Settings.zig");
@@ -98,12 +98,12 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .InputGetXInputButton = &input.get_xinput_button,
     .InputGetXInputAxis = &input.get_xinput_axis,
     // Game
-    .GameFreezeEnable = &freeze.Freeze.freeze,
-    .GameFreezeDisable = &freeze.Freeze.unfreeze,
-    .GameFreezeIsFrozen = &freeze.Freeze.is_frozen,
-    .GameHideRaceUIEnable = &hide_race_ui.HideRaceUI.hide,
-    .GameHideRaceUIDisable = &hide_race_ui.HideRaceUI.unhide,
-    .GameHideRaceUIIsHidden = &hide_race_ui.HideRaceUI.isHidden,
+    .GFreezeEnable = &freeze.Freeze.freeze,
+    .GFreezeDisable = &freeze.Freeze.unfreeze,
+    .GFreezeIsFrozen = &freeze.Freeze.is_frozen,
+    .GHideRaceUIEnable = &hide_race_ui.HideRaceUI.hide,
+    .GHideRaceUIDisable = &hide_race_ui.HideRaceUI.unhide,
+    .GHideRaceUIIsHidden = &hide_race_ui.HideRaceUI.isHidden,
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
     // Resources

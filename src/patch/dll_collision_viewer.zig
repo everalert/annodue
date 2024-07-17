@@ -260,14 +260,14 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
-        if (!gf.GameFreezeEnable(menu_key)) return;
+        if (!gf.GFreezeEnable(menu_key)) return;
         rs.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
-        if (!gf.GameFreezeDisable(menu_key)) return;
+        if (!gf.GFreezeDisable(menu_key)) return;
         rs.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         menu_active = false;
     }

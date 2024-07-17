@@ -45,7 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'visuals_patch'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
-- Backend(Core): Global Function version `15` to `17`
 - Backend(Core): `appinfo` module for externally-facing defs
 - Backend(Core): custom triggers via `RTrigger` module/api
 - Backend(Core): custom terrain via `RTerrain` module/api
@@ -75,8 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: movement speed curve - `quadratic` -> `quartic` 
 - Cam7: rotation speed - `360` -> `80..810`
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
-- Backend(Core): Global Function version `15` -> `16`
 - Backend(Build): release versioning now based on `appinfo` module
+- Backend(Core): Global Function version `15` to `19`
+- Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
 - Backend(Core): moved `cosmetic->show_trigger_display` functionality to `RTrigger`
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
 - Backent(Util): x86 - migrate `push_*`, `pop_*` functions to generalized `push`, `pop`

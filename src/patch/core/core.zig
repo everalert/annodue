@@ -15,8 +15,8 @@ pub const Testing = @import("Testing.zig");
 // this stuff was inside core before making this file, but didn't have any hook stuff
 pub const Allocator = @import("Allocator.zig");
 pub const Debug = @import("Debug.zig");
-pub const Freeze = @import("Freeze.zig");
-pub const HideRaceUI = @import("HideRaceUI.zig");
+pub const Freeze = @import("GFreeze.zig");
+pub const HideRaceUI = @import("GHideRaceUI.zig");
 
 // plugin-facing resources
 pub const RTerrain = @import("RTerrain.zig");

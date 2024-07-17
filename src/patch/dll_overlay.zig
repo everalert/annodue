@@ -69,7 +69,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     //export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
-    if (gs.in_race.on() and !gf.GameHideRaceUIIsHidden()) {
+    if (gs.in_race.on() and !gf.GHideRaceUIIsHidden()) {
         const lap: u32 = rrd.PLAYER.*.lap;
         const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
 

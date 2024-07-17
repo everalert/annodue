@@ -329,12 +329,12 @@ export fn EngineEntityUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!state.savestate_enable) return;
 
-    // TODO: build checks for GameHideRaceUIIsHidden into drawtext api when that's done
+    // TODO: build checks for GHideRaceUIIsHidden into drawtext api when that's done
     // TODO: show during whole race scene? esp. if recording from count
     // TODO: experiment with positioning
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
-    if (gs.practice_mode and gs.race_state == .Racing and !gf.GameHideRaceUIIsHidden()) {
+    if (gs.practice_mode and gs.race_state == .Racing and !gf.GHideRaceUIIsHidden()) {
         rt.DrawText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch {};
         rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
         if (state.load_count > 0)

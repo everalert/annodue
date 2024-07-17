@@ -612,14 +612,14 @@ const QuickRaceMenu = extern struct {
 
     fn open() void {
         rg.PAUSE_SCROLLINOUT.* = open_threshold;
-        if (!gf.GameFreezeEnable(menu_key)) return;
+        if (!gf.GFreezeEnable(menu_key)) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active.update(true);
     }
 
     fn close() void {
-        if (!gf.GameFreezeDisable(menu_key)) return;
+        if (!gf.GFreezeDisable(menu_key)) return;
         rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rg.PAUSE_STATE.* = 3;
         menu_active.update(false);
@@ -917,7 +917,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
         }
 
-        if (gs.race_state == .PostRace and !gf.GameHideRaceUIIsHidden()) {
+        if (gs.race_state == .PostRace and !gf.GHideRaceUIIsHidden()) {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,

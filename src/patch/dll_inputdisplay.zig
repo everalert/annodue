@@ -57,8 +57,8 @@ const InputDisplay = struct {
     var initialized: bool = false;
     var analog: [ri.AXIS_LENGTH]f32 = undefined;
     var digital: [ri.BUTTON_LENGTH]u8 = undefined;
-    var p_triangle: ?u32 = null;
-    var p_square: ?u32 = null;
+    var p_triangle: ?*rq.Sprite = null;
+    var p_square: ?*rq.Sprite = null;
     var icons: [12]InputIcon = undefined;
     var x_base: i16 = 420;
     var y_base: i16 = 432;
@@ -139,7 +139,7 @@ const InputDisplay = struct {
         }
     }
 
-    fn InitSingle(i: *?u16, spr: u32, x: i16, y: i16, xs: f32, ys: f32, bg: bool) void {
+    fn InitSingle(i: *?u16, spr: *rq.Sprite, x: i16, y: i16, xs: f32, ys: f32, bg: bool) void {
         i.* = rq.InitNewQuad(spr) catch return; // FIXME: actual error handling
         rq.swrQuad_SetFlags(i.*.?, 1 << 16);
         if (bg) rq.swrQuad_SetColor(i.*.?, 0x28, 0x28, 0x28, 0x80);
@@ -387,7 +387,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         if (InputDisplay.enable and
             InputDisplay.initialized and
             rg.PAUSE_STATE.* != 1 and
-            !gf.GameHideRaceUIIsHidden() and
+            !gf.GHideRaceUIIsHidden() and
             (gs.race_state == .Countdown or gs.race_state == .Racing))
         {
             const a: f32 = 1 - rg.PAUSE_SCROLLINOUT.*;

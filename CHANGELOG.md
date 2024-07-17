@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: movement speed curve - `quadratic` -> `quartic` 
 - Cam7: rotation speed - `360` -> `80..810`
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
+- Core: reworked toast animation/aesthetics
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Core): Global Function version `15` to `19`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)

@@ -66,7 +66,7 @@ const lby: i16 = 480 - 32;
 const sty: i16 = -10;
 
 export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    //export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    // TODO: change practice mode check to 'show overlay' (core setting, not plugin) check
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
     if (gs.in_race.on() and !gf.GHideRaceUIIsHidden()) {
@@ -80,7 +80,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             const heat_timer: f32 = if (gs.player.boosting.on()) heat_s else cool_s;
             const heat_style = if (gs.player.boosting.on()) style_heat_up else if (gs.player.heat < 100) style_heat_dn else style_heat;
             _ = gf.GDrawText(
-                .Default,
+                .OverlayP,
                 rt.MakeText(256, 170, "{d:0>5.3}", .{heat_timer}, null, heat_style) catch null,
             );
 
@@ -91,22 +91,22 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 const x2: u8 = 64;
                 const y: u8 = 128 + @as(u8, @truncate(i)) * 16;
                 const col: u32 = if (lap == i) 0xFFFFFFBE else 0xAAAAAABE;
-                _ = gf.GDrawText(.Default, rt.MakeText(x1, y + 6, "{d}", .{i + 1}, col, null) catch null);
+                _ = gf.GDrawText(.Overlay, rt.MakeText(x1, y + 6, "{d}", .{i + 1}, col, null) catch null);
                 const lt = timing.RaceTimeFromFloat(lap_times[i]);
-                _ = gf.GDrawText(.Default, rt.MakeText(x2, y, "{d}:{d:0>2}.{d:0>3}", .{
+                _ = gf.GDrawText(.Overlay, rt.MakeText(x2, y, "{d}:{d:0>2}.{d:0>3}", .{
                     lt.min, lt.sec, lt.ms,
                 }, col, style_laptime) catch null);
             }
 
             // FPS
-            _ = gf.GDrawText(.Default, rt.MakeText(lbx, lby + sty * 0, "{d:>2.0}  {d:>5.2}  {d:>5.3}~rFPS  ", .{
+            _ = gf.GDrawText(.Overlay, rt.MakeText(lbx, lby + sty * 0, "{d:>2.0}  {d:>5.2}  {d:>5.3}~rFPS  ", .{
                 gs.fps_avg, gs.fps, gs.dt_f,
             }, null, null) catch null);
 
             // DEATH counter
             if (gs.player.deaths > 0)
                 _ = gf.GDrawText(
-                    .Default,
+                    .Overlay,
                     rt.MakeText(lbx, lby + sty * 1, "{d}~rDETH  ", .{gs.player.deaths}, null, null) catch null,
                 );
 
@@ -115,7 +115,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             const oob_timer = rete.PLAYER.*.fallTimer;
             if (oob_timer > 0)
                 _ = gf.GDrawText(
-                    .Default,
+                    .OverlayP,
                     rt.MakeText(lbx, lby + sty * 2, "{d:0>5.3}~rFall  ", .{oob_timer}, null, null) catch null,
                 );
         }

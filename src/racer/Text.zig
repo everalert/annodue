@@ -187,6 +187,7 @@ pub const TextDef = extern struct {
 };
 
 /// format text in racer format, without forwarding to the engine for rendering
+/// result must be used before the next MakeText call, as the pointer will become stale quickly
 pub fn MakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !*TextDef {
     const state = struct {
         var buf: [1015:0]u8 = undefined;

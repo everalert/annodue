@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 
 const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
 
 const coreAllocator = @import("Allocator.zig").allocator;
 
@@ -16,7 +17,7 @@ const rq = r.Quad;
 const TextDef = rt.TextDef;
 const ResetMaterial = r.Quad.ResetMaterial;
 
-pub const GDRAW_VERSION: usize = 1;
+pub const GDRAW_VERSION: usize = 2;
 
 // NOTE: anything above around 256 characters seems pointless even with excessive formatting
 // characters, but may be worth reconsidering down the line if e.g. higher res viewport
@@ -29,9 +30,8 @@ const GDrawTextDef = extern struct {
     string: [247:0]u8, // fit to 64-byte cache line boundary
 };
 
-// TODO: menu, overlay, practice mode overlay, (other modes overlay), system, etc.
-// also layer/s below the in-game layer?
-pub const GDrawLayer = enum(u32) { Default };
+// NOTE: system always last (on top)
+pub const GDrawLayer = enum(u32) { Default, DefaultP, Overlay, OverlayP, System, SystemP };
 
 // TODO: insertPanel, insertButton, etc. (after adding sprite drawing)
 const GDraw = struct {
@@ -103,6 +103,7 @@ const GDraw = struct {
 /// @return     true if text successfully added to queue
 pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) bool {
     if (text == null) return false;
+    if ((layer == .System or layer == .SystemP) and !workingOwnerIsSystem()) return false;
     GDraw.insertText(layer, text.?) catch return false;
     return true;
 }
@@ -119,7 +120,16 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     GDraw.deinit();
 }
 
-pub fn Draw2DA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn Draw2DA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     GDraw.drawLayer(.Default, rt.DEFAULT_COLOR);
+    if (gs.practice_mode) GDraw.drawLayer(.DefaultP, rt.DEFAULT_COLOR);
+
+    // TODO: 'show overlay' user setting
+    GDraw.drawLayer(.Overlay, rt.DEFAULT_COLOR);
+    if (gs.practice_mode) GDraw.drawLayer(.OverlayP, rt.DEFAULT_COLOR);
+
+    GDraw.drawLayer(.System, rt.DEFAULT_COLOR);
+    if (gs.practice_mode) GDraw.drawLayer(.SystemP, rt.DEFAULT_COLOR);
+
     GDraw.clear();
 }

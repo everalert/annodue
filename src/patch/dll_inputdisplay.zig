@@ -250,7 +250,7 @@ const InputDisplay = struct {
             const col: u32 = 0xFFFFFF00 |
                 @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
             _ = gf.GDrawText(
-                .Default,
+                .Overlay,
                 rt.MakeText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
                     std.math.fabs(axis * 100),
                 }, col, style_center) catch null,
@@ -283,7 +283,7 @@ const InputDisplay = struct {
             const col: u32 = 0xFFFFFF00 |
                 @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
             _ = gf.GDrawText(
-                .Default,
+                .Overlay,
                 rt.MakeText(s.x + 2, s.y + tyo, "{d:1.0}", .{
                     std.math.fabs(axis * 100),
                 }, col, style_left) catch null,
@@ -320,7 +320,7 @@ const InputDisplay = struct {
                 const col: u32 = 0xFFFFFF00 |
                     @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
                 _ = gf.GDrawText(
-                    .Default,
+                    .Overlay,
                     rt.MakeText(top.x + 8, top.y - 8, "{d:1.0}", .{
                         std.math.fabs(thrust * 100),
                     }, col, style_center) catch null,

@@ -161,6 +161,7 @@ const PluginExportFn = enum(u32) {
     MapRenderA,
 };
 
+// TODO: owner range limiting
 pub const PluginState = struct {
     const check_freq: u32 = 1000 / 24; // in lieu of every frame
     var last_check: u32 = 0;
@@ -173,6 +174,10 @@ pub const PluginState = struct {
 
     pub fn workingOwner() u16 {
         return working_owner;
+    }
+
+    pub fn workingOwnerIsSystem() bool {
+        return working_owner < 0x0800;
     }
 };
 

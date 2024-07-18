@@ -1,25 +1,27 @@
 const std = @import("std");
 
-const rg = @import("racer").Global;
-const re = @import("racer").Entity;
+const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
+const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const workingOwner = @import("Hook.zig").PluginState.workingOwner;
 
 const mem = @import("../util/memory.zig");
 
-// FIXME: convert to internal owner IDs once merged with custom trigger branch
+const rg = @import("racer").Global;
+const re = @import("racer").Entity;
+
 // TODO: turn off race HUD when freezing
 // TODO: turn off/fade out other displays when freezing? e.g. savestate, overlay
 
 pub const Freeze = extern struct {
     const pausebit: u32 = 1 << 28;
     var frozen: bool = false;
-    var owner: ?[*:0]const u8 = null;
+    var owner: ?u16 = null;
     var saved_pausebit: usize = undefined;
     var saved_pausepage: u8 = undefined;
     var saved_pausestate: u8 = undefined;
     var saved_pausescroll: f32 = undefined;
 
-    /// @return request processed successfully
-    pub fn freeze(o: [*:0]const u8) bool {
+    pub fn freeze(o: u16) bool {
         if (frozen or owner != null) return false;
         var jdge = re.Manager.entity(.Jdge, 0);
 
@@ -38,10 +40,8 @@ pub const Freeze = extern struct {
         return true;
     }
 
-    /// @return request processed successfully
-    pub fn unfreeze(o: [*:0]const u8) bool {
-        const o_len = std.mem.len(o);
-        if (!frozen or !std.mem.eql(u8, owner.?[0..o_len], o[0..o_len])) return false;
+    pub fn unfreeze(o: u16) bool {
+        if (!frozen or owner != o) return false;
         var jdge = re.Manager.entity(.Jdge, 0);
 
         jdge.EntityFlags |= saved_pausebit;
@@ -53,9 +53,37 @@ pub const Freeze = extern struct {
         frozen = false;
         return true;
     }
-
-    /// @return game currently frozen via api
-    pub fn is_frozen() bool {
-        return frozen or owner != null;
-    }
 };
+
+// GLOBAL EXPORTS
+
+/// @return request processed successfully
+pub fn GFreezeOn() bool {
+    return Freeze.freeze(workingOwner());
+}
+
+/// @return request processed successfully
+pub fn GFreezeOff() bool {
+    return Freeze.unfreeze(workingOwner());
+}
+
+/// @return game currently frozen via api
+pub fn GFreezeIsOn() bool {
+    return Freeze.frozen or Freeze.owner != null;
+}
+
+// HOOKS
+
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    if (Freeze.owner) |o|
+        _ = Freeze.unfreeze(o);
+}
+
+pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+    if (Freeze.owner == owner)
+        _ = Freeze.unfreeze(owner);
+}

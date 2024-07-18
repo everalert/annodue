@@ -81,8 +81,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
 - Core: reworked toast animation/aesthetics
 - Backend(Build): release versioning now based on `appinfo` module
-- Backend(Core): Global Function version `15` to `20`
+- Backend(Core): Global Function version `15` to `22`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
+- Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`
+- Backend(Core): Global Functions `GHideRaceUIEnable->GHideRaceUIOn` `GHideRaceUIDisable->GHideRaceUIOff` `GHideRaceUIIsHidden->GHideRaceUIIsOn`
+- Backend(Core): GFreeze switched from plugin-defined identifiers to internal ids
+- Backend(Core): GHideRaceUI switched from plugin-defined identifiers to internal ids
 - Backend(Core): moved `cosmetic->show_trigger_display` functionality to `RTrigger`
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
 - Backent(Util): x86 - migrate `push_*`, `pop_*` functions to generalized `push`, `pop`

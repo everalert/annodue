@@ -154,7 +154,6 @@ const ConvertedMenuItem = struct {
 };
 
 const QuickRaceMenu = extern struct {
-    const menu_key: [*:0]const u8 = "CollisionViewerMenu";
     var menu_active: bool = false;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
@@ -260,14 +259,14 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
-        if (!gf.GFreezeEnable(menu_key)) return;
+        if (!gf.GFreezeOn()) return;
         rs.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
-        if (!gf.GFreezeDisable(menu_key)) return;
+        if (!gf.GFreezeOff()) return;
         rs.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         menu_active = false;
     }

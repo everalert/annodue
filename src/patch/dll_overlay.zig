@@ -69,7 +69,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: change practice mode check to 'show overlay' (core setting, not plugin) check
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
-    if (gs.in_race.on() and !gf.GHideRaceUIIsHidden()) {
+    if (gs.in_race.on() and !gf.GHideRaceUIIsOn()) {
         const lap: u32 = rrd.PLAYER.*.lap;
         const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
 

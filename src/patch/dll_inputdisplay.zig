@@ -396,7 +396,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         if (InputDisplay.enable and
             InputDisplay.initialized and
             rg.PAUSE_STATE.* != 1 and
-            !gf.GHideRaceUIIsHidden() and
+            !gf.GHideRaceUIIsOn() and
             (gs.race_state == .Countdown or gs.race_state == .Racing))
         {
             const a: f32 = 1 - rg.PAUSE_SCROLLINOUT.*;

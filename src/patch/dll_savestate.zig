@@ -334,7 +334,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: experiment with positioning
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
-    if (gs.race_state == .Racing and !gf.GHideRaceUIIsHidden()) {
+    if (gs.race_state == .Racing and !gf.GHideRaceUIIsOn()) {
         _ = gf.GDrawText(
             .OverlayP,
             rt.MakeText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch null,

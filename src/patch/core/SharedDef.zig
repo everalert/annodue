@@ -73,7 +73,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 20;
+pub const GLOBAL_FUNCTION_VERSION = 22;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -94,12 +94,12 @@ pub const GlobalFunction = extern struct {
     GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) bool,
     //GDrawTextBox: *const fn (layer: GDrawLayer, text: ?*TextDef, pad_x: i16, pad_y: i16, rect_color: u32) bool,
     GDrawRect: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) bool,
-    GFreezeEnable: *const fn (o: [*:0]const u8) bool,
-    GFreezeDisable: *const fn (o: [*:0]const u8) bool,
-    GFreezeIsFrozen: *const fn () bool,
-    GHideRaceUIEnable: *const fn (o: [*:0]const u8) bool,
-    GHideRaceUIDisable: *const fn (o: [*:0]const u8) bool,
-    GHideRaceUIIsHidden: *const fn () bool,
+    GFreezeOn: *const fn () bool,
+    GFreezeOff: *const fn () bool,
+    GFreezeIsOn: *const fn () bool,
+    GHideRaceUIOn: *const fn () bool,
+    GHideRaceUIOff: *const fn () bool,
+    GHideRaceUIIsOn: *const fn () bool,
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources

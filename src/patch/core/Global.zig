@@ -102,12 +102,12 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .GDrawText = &draw.GDrawText,
     //.GDrawTextBox = &draw.GDrawTextBox,
     .GDrawRect = &draw.GDrawRect,
-    .GFreezeEnable = &freeze.Freeze.freeze,
-    .GFreezeDisable = &freeze.Freeze.unfreeze,
-    .GFreezeIsFrozen = &freeze.Freeze.is_frozen,
-    .GHideRaceUIEnable = &hide_race_ui.HideRaceUI.hide,
-    .GHideRaceUIDisable = &hide_race_ui.HideRaceUI.unhide,
-    .GHideRaceUIIsHidden = &hide_race_ui.HideRaceUI.isHidden,
+    .GFreezeOn = &freeze.GFreezeOn,
+    .GFreezeOff = &freeze.GFreezeOff,
+    .GFreezeIsOn = &freeze.GFreezeIsOn,
+    .GHideRaceUIOn = &hide_race_ui.GHideRaceUIOn,
+    .GHideRaceUIOff = &hide_race_ui.GHideRaceUIOff,
+    .GHideRaceUIIsOn = &hide_race_ui.GHideRaceUIIsOn,
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
     // Resources

@@ -110,7 +110,7 @@ const GDraw = struct {
         //    }
         //}
 
-        if (rect_refs[@intFromEnum(layer)] > 0) {
+        if (rect_sprite != null and rect_refs[@intFromEnum(layer)] > 0) {
             ResetMaterial();
             for (rect_layers.items, rect_data.items) |l, *rect| {
                 if (l != layer) continue;

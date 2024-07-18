@@ -92,6 +92,8 @@ pub const GlobalFunction = extern struct {
     InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) f32,
     // Game
     GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) bool,
+    //GDrawTextBox: *const fn (layer: GDrawLayer, text: ?*TextDef, pad_x: i16, pad_y: i16, rect_color: u32) bool,
+    GDrawRect: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) bool,
     GFreezeEnable: *const fn (o: [*:0]const u8) bool,
     GFreezeDisable: *const fn (o: [*:0]const u8) bool,
     GFreezeIsFrozen: *const fn () bool,

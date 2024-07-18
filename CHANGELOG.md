@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): `appinfo` module for externally-facing defs
-- Backend(Core): `GDRAW_VERSION` (now `2`) added to Compatibility Version sum
+- Backend(Core): `GDRAW_VERSION` (now `3`) added to Compatibility Version sum
 - Backend(Core): custom triggers via `RTrigger` module/api
 - Backend(Core): custom terrain via `RTerrain` module/api
 - Backend(Core): added `RTerrainRequest` `RTerrainRelease` `RTerrainReleaseAll` to global functions
@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): plugin identity tracking, for use with handle-based resources
 - Backend(Core): `GDraw` global api, for unrestricted drawing
 - Backend(Core): `GDraw` layers `Default`, `DefaultP`, `Overlay`, `OverlayP`, `System`, `SystemP`
-- Backend(Core): `GDrawText` to global functions
+- Backend(Core): `GDrawText`, `GDrawRect` to global functions
 - Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
 - Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
 - Core: reworked toast animation/aesthetics
 - Backend(Build): release versioning now based on `appinfo` module
-- Backend(Core): Global Function version `15` to `19`
+- Backend(Core): Global Function version `15` to `20`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
 - Backend(Core): moved `cosmetic->show_trigger_display` functionality to `RTrigger`
 - Backend(Util): make rewind compression logic available in `temporal_compression` util

@@ -100,6 +100,8 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .InputGetXInputAxis = &input.get_xinput_axis,
     // Game
     .GDrawText = &draw.GDrawText,
+    //.GDrawTextBox = &draw.GDrawTextBox,
+    .GDrawRect = &draw.GDrawRect,
     .GFreezeEnable = &freeze.Freeze.freeze,
     .GFreezeDisable = &freeze.Freeze.unfreeze,
     .GFreezeIsFrozen = &freeze.Freeze.is_frozen,

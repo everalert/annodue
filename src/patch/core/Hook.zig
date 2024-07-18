@@ -436,9 +436,9 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
+        PluginState.last_check = gs.timestamp;
+        PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
         const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];
-        defer PluginState.last_check = gs.timestamp;
-        defer PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
 
         const len = for (p.Filename, 0..) |c, j| {
             if (c == 0) break j;

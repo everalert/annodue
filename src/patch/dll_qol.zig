@@ -446,35 +446,35 @@ const race = struct {
 
 const s_head = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultHeader(i: i16, comptime fmt: []const u8, args: anytype) void {
-    rt.DrawText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch {};
+fn RenderRaceResultHeader(gf: *GlobalFn, i: i16, comptime fmt: []const u8, args: anytype) void {
+    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch null);
 }
 
 const s_stat = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultStat(i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
-    rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch {};
-    rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch {};
+fn RenderRaceResultStat(gf: *GlobalFn, i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
+    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch null);
+    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch null);
 }
 
-fn RenderRaceResultStatU(i: i16, label: [*:0]const u8, value: u32) void {
-    RenderRaceResultStat(i, label, "{d: <7}", .{value});
+fn RenderRaceResultStatU(gf: *GlobalFn, i: i16, label: [*:0]const u8, value: u32) void {
+    RenderRaceResultStat(gf, i, label, "{d: <7}", .{value});
 }
 
-fn RenderRaceResultStatF(i: i16, label: [*:0]const u8, value: f32) void {
-    RenderRaceResultStat(i, label, "{d:4.3}", .{value});
+fn RenderRaceResultStatF(gf: *GlobalFn, i: i16, label: [*:0]const u8, value: f32) void {
+    RenderRaceResultStat(gf, i, label, "{d:4.3}", .{value});
 }
 
-fn RenderRaceResultStatTime(i: i16, label: [*:0]const u8, time: f32) void {
+fn RenderRaceResultStatTime(gf: *GlobalFn, i: i16, label: [*:0]const u8, time: f32) void {
     const t = timing.RaceTimeFromFloat(time);
-    RenderRaceResultStat(i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
+    RenderRaceResultStat(gf, i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
 
 const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
 const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
 
-fn RenderRaceResultStatUpgrade(i: i16, cat: u8, lv: u8, hp: u8) void {
-    RenderRaceResultStat(i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
+fn RenderRaceResultStatUpgrade(gf: *GlobalFn, i: i16, cat: u8, lv: u8, hp: u8) void {
+    RenderRaceResultStat(gf, i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
         if (hp < 255) s_upg_dmg else s_upg_full, hp, rv.PartNameS(cat)[lv],
     });
 }
@@ -496,7 +496,6 @@ const QuickRaceMenuInput = extern struct {
 };
 
 const QuickRaceMenu = extern struct {
-    const menu_key: [*:0]const u8 = "QuickRaceMenu";
     const open_threshold: f32 = 0.75;
     var menu_active: st.ActiveState = .Off;
     var initialized: bool = false;
@@ -612,14 +611,14 @@ const QuickRaceMenu = extern struct {
 
     fn open() void {
         rg.PAUSE_SCROLLINOUT.* = open_threshold;
-        if (!gf.GameFreezeEnable(menu_key)) return;
+        if (!gf.GFreezeOn()) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active.update(true);
     }
 
     fn close() void {
-        if (!gf.GameFreezeDisable(menu_key)) return;
+        if (!gf.GFreezeOff()) return;
         rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rg.PAUSE_STATE.* = 3;
         menu_active.update(false);
@@ -917,35 +916,36 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
         }
 
-        if (gs.race_state == .PostRace and !gf.GameHideRaceUIIsHidden()) {
+        if (gs.race_state == .PostRace and !gf.GHideRaceUIIsOn()) {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
-            RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
+            RenderRaceResultHeader(gf, 0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
                 rv.PartNamesShort[gs.player.upgrades_lv[0]],
                 upg_postfix,
             });
 
             for (0..7) |i| RenderRaceResultStatUpgrade(
+                gf,
                 2 + @as(u8, @truncate(i)),
                 @as(u8, @truncate(i)),
                 gs.player.upgrades_lv[i],
                 gs.player.upgrades_hp[i],
             );
 
-            RenderRaceResultStatF(10, "Top Speed", race.top_speed);
-            RenderRaceResultStatF(11, "Avg. Speed", race.avg_speed);
-            RenderRaceResultStatF(12, "Distance", race.total_distance);
-            RenderRaceResultStatU(13, "Deaths", gs.player.deaths);
-            RenderRaceResultStatTime(20, "First Boost", race.first_boost_time);
-            RenderRaceResultStatTime(21, "Underheat Time", race.total_underheat);
-            RenderRaceResultStatTime(22, "Fire Finish", race.fire_finish_duration);
-            RenderRaceResultStatTime(23, "Overheat Time", race.total_overheat);
-            RenderRaceResultStatU(14, "Boosts", race.total_boosts);
-            RenderRaceResultStatTime(15, "Boost Time", race.total_boost_duration);
-            RenderRaceResultStatTime(16, "Avg. Boost Time", race.avg_boost_duration);
-            RenderRaceResultStatF(17, "Boost Distance", race.total_boost_distance);
-            RenderRaceResultStatF(18, "Avg. Boost Distance", race.avg_boost_distance);
-            RenderRaceResultStatF(19, "Boost Ratio", race.total_boost_ratio);
+            RenderRaceResultStatF(gf, 10, "Top Speed", race.top_speed);
+            RenderRaceResultStatF(gf, 11, "Avg. Speed", race.avg_speed);
+            RenderRaceResultStatF(gf, 12, "Distance", race.total_distance);
+            RenderRaceResultStatU(gf, 13, "Deaths", gs.player.deaths);
+            RenderRaceResultStatTime(gf, 20, "First Boost", race.first_boost_time);
+            RenderRaceResultStatTime(gf, 21, "Underheat Time", race.total_underheat);
+            RenderRaceResultStatTime(gf, 22, "Fire Finish", race.fire_finish_duration);
+            RenderRaceResultStatTime(gf, 23, "Overheat Time", race.total_overheat);
+            RenderRaceResultStatU(gf, 14, "Boosts", race.total_boosts);
+            RenderRaceResultStatTime(gf, 15, "Boost Time", race.total_boost_duration);
+            RenderRaceResultStatTime(gf, 16, "Avg. Boost Time", race.avg_boost_duration);
+            RenderRaceResultStatF(gf, 17, "Boost Distance", race.total_boost_distance);
+            RenderRaceResultStatF(gf, 18, "Avg. Boost Distance", race.avg_boost_distance);
+            RenderRaceResultStatF(gf, 19, "Boost Ratio", race.total_boost_ratio);
         }
     }
 }

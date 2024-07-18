@@ -4,16 +4,20 @@ const BOOL = std.os.windows.BOOL;
 
 // GAME FUNCTIONS
 
-pub const swrQuad_InitQuad: *fn (i: u16, spr: u32) callconv(.C) void = @ptrFromInt(0x4282F0);
-pub const swrQuad_LoadSprite: *fn (i: u32) callconv(.C) u32 = @ptrFromInt(0x446FB0);
-pub const swrQuad_LoadTga: *fn (filename: [*:0]const u8, i: u32) callconv(.C) u32 = @ptrFromInt(0x4114D0);
+pub const swrQuad_InitQuad: *fn (i: u16, spr: *Sprite) callconv(.C) void = @ptrFromInt(0x4282F0);
+pub const swrQuad_LoadSprite: *fn (i: u32) callconv(.C) *Sprite = @ptrFromInt(0x446CA0);
+pub const swrQuad_LoadSprite2: *fn (i: u32) callconv(.C) *Sprite = @ptrFromInt(0x446FB0);
+pub const swrQuad_LoadTga: *fn (filename: [*:0]const u8, i: u32) callconv(.C) *Sprite = @ptrFromInt(0x4114D0);
+pub const MapLoad: *fn (i: u32, filename: ?[*:0]const u8) callconv(.C) BOOL = @ptrFromInt(0x412E90);
+pub const MapGet: *fn (i: u32) callconv(.C) ?*Sprite = @ptrFromInt(0x417010);
+pub const MapBatchFree: *fn () callconv(.C) void = @ptrFromInt(0x417090);
 pub const swrQuad_SetActive: *fn (i: u16, on: u32) callconv(.C) void = @ptrFromInt(0x4285D0);
 pub const swrQuad_SetFlags: *fn (i: u16, flags: u32) callconv(.C) void = @ptrFromInt(0x4287E0);
 pub const swrQuad_ClearFlagsExcept: *fn (i: u16, flags: u32) callconv(.C) void = @ptrFromInt(0x4287E0);
 pub const swrQuad_SetPosition: *fn (i: u16, x: i16, y: i16) callconv(.C) void = @ptrFromInt(0x428660);
 pub const swrQuad_SetScale: *fn (i: u16, w: f32, h: f32) callconv(.C) void = @ptrFromInt(0x4286F0);
 pub const swrQuad_SetColor: *fn (i: u16, r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x428740);
-pub const DrawSprite: *fn (sprite: ?*anyopaque, x: i16, y: i16, w: f32, h: f32, ang: f32, unk7: i16, unk8: i16, unk9: i32, r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x44F670);
+pub const DrawSprite: *fn (sprite: ?*Sprite, x: i16, y: i16, scale_x: f32, scale_y: f32, unk6: f32, unk7: i16, unk8: i16, flags: u32, r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x44F670);
 pub const DrawQuad: *fn (quad: *Quad, flags: i32, px_size_x: f32, px_size_y: f32) callconv(.C) void = @ptrFromInt(0x428030);
 pub const ResetMaterial: *fn () callconv(.C) void = @ptrFromInt(0x44F5F0); // FIXME: move? also for text etc.
 
@@ -30,17 +34,17 @@ pub const QUAD_SKIP_RENDERING: *BOOL = @ptrFromInt(QUAD_SKIP_RENDERING_ADDR);
 // GAME TYPEDEFS
 
 // size=0x20
-const Quad = extern struct {
+pub const Quad = extern struct {
     PosX: i16,
     PosY: i16,
-    _unk_04_06: [2]u8,
-    _unk_06_08: [2]u8,
+    _unk_04_06: i16,
+    _unk_06_08: i16,
     ScaleX: f32,
     ScaleY: f32,
-    _unk_10_14: [4]u8,
-    Flags: i32, // TODO: enum
+    _unk_10_14: f32, // apparently angle?
+    Flags: u32, // TODO: enum
     Color: u32, // TODO: color_u8 typedef
-    pSprite: *anyopaque, // TODO: typedef
+    pSprite: ?*Sprite, // TODO: typedef
 };
 
 // 0x14 flags
@@ -77,9 +81,11 @@ const Quad = extern struct {
 //1<<30
 //1<<31
 
+pub const Sprite = extern struct {};
+
 // HELPER FUNCTIONS
 
-pub fn InitNewQuad(spr: u32) !u16 {
+pub fn InitNewQuad(spr: *Sprite) !u16 {
     if (QUAD_INITIALIZED_INDEX.* >= 400) return error.QueueFull;
 
     const index = QUAD_INITIALIZED_INDEX.*;

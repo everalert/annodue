@@ -288,7 +288,7 @@ fn CheckAndResetSavedCam(gf: *GlobalFn) void {
     re.Manager.entity(.cMan, 0).CamStateIndex = 7;
     CamTransitionOut();
     Cam7.cam_state = .None;
-    _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
+    _ = gf.GHideRaceUIOff();
 }
 
 // TODO: rethink default -> live setting flow during settings reload, for the relevant settings
@@ -341,11 +341,11 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 fn UpdateHideUI(gf: *GlobalFn) void {
     if (Cam7.s_hide_ui and Cam7.cam_state == .FreeCam) {
-        _ = gf.GameHideRaceUIEnable(PLUGIN_NAME);
+        _ = gf.GHideRaceUIOn();
         return;
     }
 
-    _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
+    _ = gf.GHideRaceUIOff();
 }
 
 // STATE MACHINE
@@ -353,7 +353,7 @@ fn UpdateHideUI(gf: *GlobalFn) void {
 fn DoStateNone(_: *GlobalSt, gf: *GlobalFn) CamState {
     if (Cam7.i_toggle.gets() == .JustOn and Cam7.s_enable) {
         SaveSavedCam();
-        if (Cam7.s_hide_ui) _ = gf.GameHideRaceUIEnable(PLUGIN_NAME);
+        if (Cam7.s_hide_ui) _ = gf.GHideRaceUIOn();
         return .FreeCam;
     }
     return .None;
@@ -381,7 +381,7 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         }
 
         RestoreSavedCam();
-        _ = gf.GameHideRaceUIDisable(PLUGIN_NAME);
+        _ = gf.GHideRaceUIOff();
         return .None;
     }
 

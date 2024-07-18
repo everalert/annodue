@@ -45,8 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'visuals_patch'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
-- Backend(Core): Global Function version `15` to `17`
 - Backend(Core): `appinfo` module for externally-facing defs
+- Backend(Core): `GDRAW_VERSION` (now `3`) added to Compatibility Version sum
 - Backend(Core): custom triggers via `RTrigger` module/api
 - Backend(Core): custom terrain via `RTerrain` module/api
 - Backend(Core): added `RTerrainRequest` `RTerrainRelease` `RTerrainReleaseAll` to global functions
@@ -55,8 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): enforcing minimum implemented functions for core-side plugins
 - Backend(Core): `OnPluginDeinit` hook function, usable by core-side plugins
 - Backend(Core): plugin identity tracking, for use with handle-based resources
+- Backend(Core): `GDraw` global api, for unrestricted drawing
+- Backend(Core): `GDraw` layers `Default`, `DefaultP`, `Overlay`, `OverlayP`, `System`, `SystemP`
+- Backend(Core): `GDrawText`, `GDrawRect` to global functions
 - Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
-- Backend(Core): `GameHideRaceUIEnable` `GameHideRaceUIDisable` `GameHideRaceUIIsHidden` global functions
+- Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
 - Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`
@@ -64,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`, `Quad`
 - Backend(Util): Added `handle_map` and `handle_map_static` for handle-based resource management
+- Backend(Util): Added `deadzone` util, `spatial` util defs
 - Backend(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
 - Backend(Util): x86 - helper functions and defs
 
@@ -75,8 +79,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: movement speed curve - `quadratic` -> `quartic` 
 - Cam7: rotation speed - `360` -> `80..810`
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
-- Backend(Core): Global Function version `15` -> `16`
+- Core: reworked toast animation/aesthetics
 - Backend(Build): release versioning now based on `appinfo` module
+- Backend(Core): Global Function version `15` to `22`
+- Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
+- Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`
+- Backend(Core): Global Functions `GHideRaceUIEnable->GHideRaceUIOn` `GHideRaceUIDisable->GHideRaceUIOff` `GHideRaceUIIsHidden->GHideRaceUIIsOn`
+- Backend(Core): GFreeze switched from plugin-defined identifiers to internal ids
+- Backend(Core): GHideRaceUI switched from plugin-defined identifiers to internal ids
 - Backend(Core): moved `cosmetic->show_trigger_display` functionality to `RTrigger`
 - Backend(Util): make rewind compression logic available in `temporal_compression` util
 - Backent(Util): x86 - migrate `push_*`, `pop_*` functions to generalized `push`, `pop`

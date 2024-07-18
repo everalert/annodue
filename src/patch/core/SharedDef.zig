@@ -14,11 +14,13 @@ const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
+const GDrawLayer = @import("GDraw.zig").GDrawLayer;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
 const Trig = r.Entity.Trig.Trig;
 const ModelTriggerDescription = r.Model.ModelTriggerDescription;
+const TextDef = r.Text.TextDef;
 
 const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
@@ -71,7 +73,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 18;
+pub const GLOBAL_FUNCTION_VERSION = 22;
 
 pub const GlobalFunction = extern struct {
     // Settings
@@ -89,13 +91,15 @@ pub const GlobalFunction = extern struct {
     InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) ActiveState,
     InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) f32,
     // Game
-    // TODO: change prefix to G (analogous to R for Resource)
-    GameFreezeEnable: *const fn (o: [*:0]const u8) bool,
-    GameFreezeDisable: *const fn (o: [*:0]const u8) bool,
-    GameFreezeIsFrozen: *const fn () bool,
-    GameHideRaceUIEnable: *const fn (o: [*:0]const u8) bool,
-    GameHideRaceUIDisable: *const fn (o: [*:0]const u8) bool,
-    GameHideRaceUIIsHidden: *const fn () bool,
+    GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) bool,
+    //GDrawTextBox: *const fn (layer: GDrawLayer, text: ?*TextDef, pad_x: i16, pad_y: i16, rect_color: u32) bool,
+    GDrawRect: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) bool,
+    GFreezeOn: *const fn () bool,
+    GFreezeOff: *const fn () bool,
+    GFreezeIsOn: *const fn () bool,
+    GHideRaceUIOn: *const fn () bool,
+    GHideRaceUIOff: *const fn () bool,
+    GHideRaceUIIsOn: *const fn () bool,
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources

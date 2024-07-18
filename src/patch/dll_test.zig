@@ -10,6 +10,7 @@ const debug = @import("core/Debug.zig");
 const msg = @import("util/message.zig");
 
 const r = @import("racer");
+const rt = r.Text;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -46,9 +47,10 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
+const s = struct {
+    var pSprite: ?*r.Quad.Sprite = null;
+};
+
 export fn EarlyEngineUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    //rt.DrawText(16, 16, "{s} {s}", .{
-    //    PLUGIN_NAME,
-    //    PLUGIN_VERSION,
-    //}, null, null) catch {};
+    //_ = gf.GDrawText(.Default, rt.MakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
 }

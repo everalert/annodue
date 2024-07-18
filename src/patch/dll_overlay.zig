@@ -66,10 +66,10 @@ const lby: i16 = 480 - 32;
 const sty: i16 = -10;
 
 export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    //export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    // TODO: change practice mode check to 'show overlay' (core setting, not plugin) check
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
-    if (gs.in_race.on() and !gf.GameHideRaceUIIsHidden()) {
+    if (gs.in_race.on() and !gf.GHideRaceUIIsOn()) {
         const lap: u32 = rrd.PLAYER.*.lap;
         const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
 
@@ -79,7 +79,10 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             const cool_s: f32 = (100 - gs.player.heat) / gs.player.cool_rate;
             const heat_timer: f32 = if (gs.player.boosting.on()) heat_s else cool_s;
             const heat_style = if (gs.player.boosting.on()) style_heat_up else if (gs.player.heat < 100) style_heat_dn else style_heat;
-            rt.DrawText(256, 170, "{d:0>5.3}", .{heat_timer}, null, heat_style) catch {};
+            _ = gf.GDrawText(
+                .OverlayP,
+                rt.MakeText(256, 170, "{d:0>5.3}", .{heat_timer}, null, heat_style) catch null,
+            );
 
             // draw lap times
             for (lap_times, 0..) |t, i| {
@@ -88,27 +91,33 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 const x2: u8 = 64;
                 const y: u8 = 128 + @as(u8, @truncate(i)) * 16;
                 const col: u32 = if (lap == i) 0xFFFFFFBE else 0xAAAAAABE;
-                rt.DrawText(x1, y + 6, "{d}", .{i + 1}, col, null) catch {};
+                _ = gf.GDrawText(.Overlay, rt.MakeText(x1, y + 6, "{d}", .{i + 1}, col, null) catch null);
                 const lt = timing.RaceTimeFromFloat(lap_times[i]);
-                rt.DrawText(x2, y, "{d}:{d:0>2}.{d:0>3}", .{
+                _ = gf.GDrawText(.Overlay, rt.MakeText(x2, y, "{d}:{d:0>2}.{d:0>3}", .{
                     lt.min, lt.sec, lt.ms,
-                }, col, style_laptime) catch {};
+                }, col, style_laptime) catch null);
             }
 
             // FPS
-            rt.DrawText(lbx, lby + sty * 0, "{d:>2.0}  {d:>5.2}  {d:>5.3}~rFPS  ", .{
+            _ = gf.GDrawText(.Overlay, rt.MakeText(lbx, lby + sty * 0, "{d:>2.0}  {d:>5.2}  {d:>5.3}~rFPS  ", .{
                 gs.fps_avg, gs.fps, gs.dt_f,
-            }, null, null) catch {};
+            }, null, null) catch null);
 
             // DEATH counter
             if (gs.player.deaths > 0)
-                rt.DrawText(lbx, lby + sty * 1, "{d}~rDETH  ", .{gs.player.deaths}, null, null) catch {};
+                _ = gf.GDrawText(
+                    .Overlay,
+                    rt.MakeText(lbx, lby + sty * 1, "{d}~rDETH  ", .{gs.player.deaths}, null, null) catch null,
+                );
 
             // FALL timer
             //const oob_timer = r.ReadPlayerValue(0x2C8, f32);
             const oob_timer = rete.PLAYER.*.fallTimer;
             if (oob_timer > 0)
-                rt.DrawText(lbx, lby + sty * 2, "{d:0>5.3}~rFall  ", .{oob_timer}, null, null) catch {};
+                _ = gf.GDrawText(
+                    .OverlayP,
+                    rt.MakeText(lbx, lby + sty * 2, "{d:0>5.3}~rFall  ", .{oob_timer}, null, null) catch null,
+                );
         }
     }
 }

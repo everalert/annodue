@@ -6,8 +6,9 @@ const GlobalFunction = @import("SharedDef.zig").GlobalFunction;
 const std = @import("std");
 const win = std.os.windows;
 
-const freeze = @import("Freeze.zig");
-const hide_race_ui = @import("HideRaceUI.zig");
+const draw = @import("GDraw.zig");
+const freeze = @import("GFreeze.zig");
+const hide_race_ui = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const settings = @import("Settings.zig");
@@ -98,12 +99,15 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .InputGetXInputButton = &input.get_xinput_button,
     .InputGetXInputAxis = &input.get_xinput_axis,
     // Game
-    .GameFreezeEnable = &freeze.Freeze.freeze,
-    .GameFreezeDisable = &freeze.Freeze.unfreeze,
-    .GameFreezeIsFrozen = &freeze.Freeze.is_frozen,
-    .GameHideRaceUIEnable = &hide_race_ui.HideRaceUI.hide,
-    .GameHideRaceUIDisable = &hide_race_ui.HideRaceUI.unhide,
-    .GameHideRaceUIIsHidden = &hide_race_ui.HideRaceUI.isHidden,
+    .GDrawText = &draw.GDrawText,
+    //.GDrawTextBox = &draw.GDrawTextBox,
+    .GDrawRect = &draw.GDrawRect,
+    .GFreezeOn = &freeze.GFreezeOn,
+    .GFreezeOff = &freeze.GFreezeOff,
+    .GFreezeIsOn = &freeze.GFreezeIsOn,
+    .GHideRaceUIOn = &hide_race_ui.GHideRaceUIOn,
+    .GHideRaceUIOff = &hide_race_ui.GHideRaceUIOff,
+    .GHideRaceUIIsOn = &hide_race_ui.GHideRaceUIIsOn,
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
     // Resources
@@ -120,13 +124,17 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
 const style_practice_label = rt.MakeTextHeadStyle(.Default, true, .Yellow, .Right, .{rto.ToggleShadow}) catch "";
 
 fn DrawMenuPracticeModeLabel() void {
-    if (GLOBAL_STATE.practice_mode) {
-        rt.DrawText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch {};
-    }
+    _ = GLOBAL_FUNCTION.GDrawText(
+        .SystemP,
+        rt.MakeText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch null,
+    );
 }
 
 fn DrawVersionString() void {
-    rt.DrawText(36, 480 - 24, "{s}", .{VERSION_STR}, 0xFFFFFFFF, null) catch {};
+    _ = GLOBAL_FUNCTION.GDrawText(
+        .System,
+        rt.MakeText(36, 480 - 24, "{s}", .{VERSION_STR}, 0xFFFFFFFF, null) catch null,
+    );
 }
 
 // INIT
@@ -191,30 +199,6 @@ pub fn MenuTitleScreenB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     // TODO: make text only appear on the actual title screen, i.e. remove from file select etc.
     DrawVersionString();
     DrawMenuPracticeModeLabel();
-
-    //var buf: [127:0]u8 = undefined;
-    //const xa_fields = comptime std.enums.values(input.XINPUT_GAMEPAD_AXIS_INDEX);
-    //for (xa_fields, 0..) |a, i| {
-    //    const axis: f32 = gv.InputGetXInputAxis(a);
-    //    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s} {d:0<7.3}", .{ @tagName(a), axis }) catch return;
-    //    rt.DrawText(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
-    //}
-    //const xb_fields = comptime std.enums.values(input.XINPUT_GAMEPAD_BUTTON_INDEX);
-    //for (xb_fields, xa_fields.len..) |b, i| {
-    //    const on: bool = gv.InputGetXInputButton(b).on();
-    //    _ = std.fmt.bufPrintZ(&buf, "~F0~s{s} {any}", .{ @tagName(b), on }) catch return;
-    //    rt.DrawText(16, 16 + @as(u16, @truncate(i)) * 8, 255, 255, 255, 255, &buf);
-    //}
-
-    //const vk_fields = comptime std.enums.values(win32kb.VIRTUAL_KEY);
-    //for (vk_fields) |vk| {
-    //    if (gv.InputGetKbDown(vk)) {
-    //        var buf: [127:0]u8 = undefined;
-    //        _ = std.fmt.bufPrintZ(&buf, "~F0~s{s}", .{@tagName(vk)}) catch return;
-    //        rt.DrawText(16, 16, 255, 255, 255, 255, &buf);
-    //        break;
-    //    }
-    //}
 }
 
 pub fn MenuStartRaceB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {

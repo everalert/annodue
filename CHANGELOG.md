@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): plugin identity tracking, for use with handle-based resources
 - Backend(Core): `GDraw` global api, for unrestricted drawing
 - Backend(Core): `GDraw` layers `Default`, `DefaultP`, `Overlay`, `OverlayP`, `System`, `SystemP`
-- Backend(Core): `GDrawText`, `GDrawRect` to global functions
+- Backend(Core): `GDrawText`, `GDrawRect`, `GDrawRectBdr` to global functions
 - Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
 - Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
 - Core: reworked toast animation/aesthetics
 - Backend(Build): release versioning now based on `appinfo` module
-- Backend(Core): Global Function version `15` to `22`
+- Backend(Core): Global Function version `15` to `23`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
 - Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`
 - Backend(Core): Global Functions `GHideRaceUIEnable->GHideRaceUIOn` `GHideRaceUIDisable->GHideRaceUIOff` `GHideRaceUIIsHidden->GHideRaceUIIsOn`

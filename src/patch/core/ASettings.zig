@@ -229,7 +229,7 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: remove, for testing
 // TODO: maybe adapt for debug/testing
 pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf.GDrawRect(.Debug, 0, 0, 320, 480, 0x000000C0);
+    _ = gf.GDrawRect(.Debug, 0, 0, 320, 480, 0x000000A0);
     var y: i16 = 0;
 
     for (0..ASettings.data_settings.values.len) |i| {

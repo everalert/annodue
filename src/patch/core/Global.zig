@@ -102,6 +102,7 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .GDrawText = &draw.GDrawText,
     //.GDrawTextBox = &draw.GDrawTextBox,
     .GDrawRect = &draw.GDrawRect,
+    .GDrawRectBdr = &draw.GDrawRectBdr,
     .GFreezeOn = &freeze.GFreezeOn,
     .GFreezeOff = &freeze.GFreezeOff,
     .GFreezeIsOn = &freeze.GFreezeIsOn,

@@ -203,6 +203,30 @@ pub fn GDrawRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) 
     return true;
 }
 
+/// queue rect with border into Annodue render queue
+/// will be drawn under text of the same layer
+/// - set color 0 for default
+/// @return     true if rect successfully added to queue
+pub fn GDrawRectBdr(
+    layer: GDrawLayer,
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
+    color: u32,
+    bdr_w: i16,
+    bdr_col: u32,
+) bool {
+    if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
+    const bw = bdr_w;
+    GDraw.insertRect(layer, x + bw, y + bw, w - bw * 2, h - bw * 2, color) catch return false;
+    GDraw.insertRect(layer, x, y, w, bw, bdr_col) catch return false; // T
+    GDraw.insertRect(layer, x, y + h - bw, w, bw, bdr_col) catch return false; // B
+    GDraw.insertRect(layer, x, y + bw, bw, h - bw * 2, bdr_col) catch return false; // L
+    GDraw.insertRect(layer, x + w - bw, y + bw, bw, h - bw * 2, bdr_col) catch return false; // R
+    return true;
+}
+
 // HOOKS
 
 pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {

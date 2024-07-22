@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Backend(Core): `appinfo` module for externally-facing defs
-- Backend(Core): `GDRAW_VERSION` (now `3`) added to Compatibility Version sum
+- Backend(Core): `GDRAW_VERSION` (now `4`) added to Compatibility Version sum
 - Backend(Core): custom triggers via `RTrigger` module/api
 - Backend(Core): custom terrain via `RTerrain` module/api
 - Backend(Core): added `RTerrainRequest` `RTerrainRelease` `RTerrainReleaseAll` to global functions

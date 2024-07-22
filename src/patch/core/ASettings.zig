@@ -229,21 +229,21 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: remove, for testing
 // TODO: maybe adapt for debug/testing
 pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf.GDrawRect(.System, 0, 0, 320, 480, 0x000000C0);
+    _ = gf.GDrawRect(.Debug, 0, 0, 320, 480, 0x000000C0);
     var y: i16 = 0;
 
     for (0..ASettings.data_settings.values.len) |i| {
         const value = ASettings.data_settings.values.get(i);
         if (value.section != null) continue;
-        _ = gf.GDrawText(.System, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
-        _ = gf.GDrawText(.System, rt.MakeText(128, y, "{s}", .{value.value.str}, null, null) catch null);
+        _ = gf.GDrawText(.Debug, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
+        _ = gf.GDrawText(.Debug, rt.MakeText(128, y, "{s}", .{value.value.str}, null, null) catch null);
         y += 8;
     }
 
     for (0..ASettings.data_sections.values.len) |i| {
         const value = ASettings.data_sections.values.get(i);
         const handle = ASettings.data_sections.handles.items[i];
-        _ = gf.GDrawText(.System, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
+        _ = gf.GDrawText(.Debug, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
         y += 8;
 
         for (0..ASettings.data_settings.values.len) |j| {
@@ -251,8 +251,8 @@ pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             const section = s_value.section;
             if (section == null or handle.generation != section.?.generation or handle.index != section.?.index)
                 continue;
-            _ = gf.GDrawText(.System, rt.MakeText(12, y, "{s}", .{s_value.name}, null, null) catch null);
-            _ = gf.GDrawText(.System, rt.MakeText(128, y, "{s}", .{s_value.value.str}, null, null) catch null);
+            _ = gf.GDrawText(.Debug, rt.MakeText(12, y, "{s}", .{s_value.name}, null, null) catch null);
+            _ = gf.GDrawText(.Debug, rt.MakeText(128, y, "{s}", .{s_value.value.str}, null, null) catch null);
             y += 8;
         }
     }

@@ -83,44 +83,21 @@ const ASettings = struct {
         data_settings.deinit();
     }
 
-    // FIXME: merge with settingExists as comptime fn
-    pub inline fn sectionExists(
-        section: ?Section.Handle,
+    pub inline fn nodeExists(
+        map: anytype, // handle_map_*
+        parent: ?Section.Handle,
         name: [*:0]const u8,
     ) bool {
-        if (section != null and !data_sections.hasHandle(section.?)) return false;
+        if (parent != null and !data_sections.hasHandle(parent.?)) return false;
 
-        const name_len = std.mem.len(name);
-        const slices = data_sections.values.slice();
+        const name_len = std.mem.len(name) + 1; // include sentinel
+        const slices = map.values.slice();
         const slices_names = slices.items(.name);
         const slices_sections = slices.items(.section);
         for (slices_names, slices_sections) |s_name, *s_section| {
-            if (section == null and s_section.* != null)
+            if (parent == null and s_section.* != null)
                 continue;
-            if (section != null and !std.mem.eql(u8, std.mem.asBytes(s_section), std.mem.asBytes(&section)))
-                continue;
-            if (!std.mem.eql(u8, s_name[0..name_len], name[0..name_len]))
-                continue;
-            return true;
-        }
-
-        return false;
-    }
-
-    pub inline fn settingExists(
-        section: ?Section.Handle,
-        name: [*:0]const u8,
-    ) bool {
-        if (section != null and !data_sections.hasHandle(section.?)) return false;
-
-        const name_len = std.mem.len(name);
-        const slices = data_settings.values.slice();
-        const slices_names = slices.items(.name);
-        const slices_sections = slices.items(.section);
-        for (slices_names, slices_sections) |s_name, *s_section| {
-            if (section == null and s_section.* != null)
-                continue;
-            if (section != null and !std.mem.eql(u8, std.mem.asBytes(s_section), std.mem.asBytes(&section)))
+            if (parent != null and !std.mem.eql(u8, std.mem.asBytes(s_section), std.mem.asBytes(&parent)))
                 continue;
             if (!std.mem.eql(u8, s_name[0..name_len], name[0..name_len]))
                 continue;
@@ -139,7 +116,7 @@ const ASettings = struct {
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
-        if (sectionExists(section, name)) return error.NameTaken;
+        if (nodeExists(data_sections, section, name)) return error.NameTaken;
 
         var section_new = Section{};
         if (section) |s| section_new.section = .{ .generation = s.generation, .index = s.index };
@@ -159,7 +136,7 @@ const ASettings = struct {
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
-        if (settingExists(section, name)) return error.NameTaken;
+        if (nodeExists(data_settings, section, name)) return error.NameTaken;
 
         const value_len = std.mem.len(value);
         if (value_len == 0 or value_len > 63) return error.ValueLengthInvalid;

@@ -18,12 +18,30 @@ const rt = r.Text;
 const dbg = @import("../util/debug.zig");
 
 const Handle = HandleSOA(u16);
+const NullHandle = Handle.getNull();
 
 const SentSetting = extern struct {
     name: [*:0]u8,
     value: Value,
 
-    const Value = extern union { str: [*:0]u8, f: f32, u: u32, i: i32, b: bool };
+    const Value = extern union {
+        str: [*:0]u8,
+        f: f32,
+        u: u32,
+        i: i32,
+        b: bool,
+
+        pub inline fn fromSetting(setting: *Setting.Value, t: Setting.Type) Value {
+            return switch (t) {
+                .Str => .{ .str = &setting.str },
+                .F => .{ .f = setting.f },
+                .U => .{ .u = setting.u },
+                .I => .{ .i = setting.i },
+                .B => .{ .b = setting.b },
+                else => @panic("setting value type must not be None"),
+            };
+        }
+    };
 };
 
 const Setting = struct {
@@ -44,6 +62,17 @@ const Setting = struct {
         u: u32,
         i: i32,
         b: bool,
+
+        pub inline fn set(self: *Value, v: SentSetting.Value, t: Type) !void {
+            switch (t) {
+                .Str => _ = try bufPrintZ(&self.str, "{s}", .{v.str}),
+                .F => self.f = v.f,
+                .U => self.u = v.u,
+                .I => self.i = v.i,
+                .B => self.b = v.b,
+                else => @panic("setting value type must not be None"),
+            }
+        }
 
         pub inline fn get(self: *Value, t: Type) Value {
             return switch (t) {
@@ -75,10 +104,10 @@ const Setting = struct {
         // value to raw (string)
         pub inline fn type2raw(self: *Value, t: Type) !void {
             switch (t) {
-                .B => try bufPrintZ(&self.str, "{s}", .{if (self.b) "on" else "off"}),
-                .I => try bufPrintZ(&self.str, "{d}", .{self.i}),
-                .U => try bufPrintZ(&self.str, "{d}", .{self.u}),
-                .F => try bufPrintZ(&self.str, "{d:4.2}", .{self.f}),
+                .B => _ = try bufPrintZ(&self.str, "{s}", .{if (self.b) "on" else "off"}),
+                .I => _ = try bufPrintZ(&self.str, "{d}", .{self.i}),
+                .U => _ = try bufPrintZ(&self.str, "{d}", .{self.u}),
+                .F => _ = try bufPrintZ(&self.str, "{d:4.2}", .{self.f}),
                 .Str => {},
                 else => @panic("setting input value type must not be None"),
             }
@@ -91,12 +120,16 @@ const Setting = struct {
     };
 
     const Flags = enum(u32) {
-        InFile,
         FileUpdated,
         ChangedSinceLastRead,
         ProcessedSinceLastRead, // marker to let you know, e.g. don't unset ChangedSinceLastRead
         HasOwner,
         ValueIsSet,
+        ValueNotConverted,
+        SavedValueIsSet,
+        SavedValueNotConverted,
+        DefaultValueIsSet,
+        DefaultValueNotConverted,
     };
 
     inline fn sent2setting(setting: SentSetting.Value) Value {
@@ -139,6 +172,8 @@ const ASettings = struct {
         data_settings.deinit();
     }
 
+    // FIXME: review how the handle map is being manipulated with respect to index
+    // to make sure it's not messing with the mapping
     pub inline fn nodeFind(
         map: anytype, // handle_map_*
         parent: ?Handle,
@@ -184,6 +219,8 @@ const ASettings = struct {
         return try data_sections.insert(owner, section_new);
     }
 
+    // FIXME: review how the handle map is being manipulated with respect to index
+    // to make sure it's not messing with the mapping
     pub fn settingNew(
         section: ?Handle,
         name: [*:0]const u8,
@@ -207,12 +244,14 @@ const ASettings = struct {
         setting.flags.insert(.ValueIsSet);
         if (from_file) {
             _ = try bufPrintZ(&setting.value_saved.str, "{s}", .{value});
-            setting.flags.insert(.InFile);
+            setting.flags.insert(.SavedValueIsSet);
         }
 
         return try data_settings.insert(owner, setting);
     }
 
+    // FIXME: review how the handle map is being manipulated with respect to index
+    // to make sure it's not messing with the mapping
     pub fn settingOccupy(
         owner: u16,
         section: ?Handle,
@@ -234,23 +273,25 @@ const ASettings = struct {
             _ = try bufPrintZ(&data.name, "{s}", .{name});
         }
 
-        // NOTE: existing data assumed to be raw (new or unprocessed from file)
+        // NOTE: existing data assumed to be raw (new, unprocessed or released)
         if (data.flags.contains(.ValueIsSet)) {
             data.value.raw2type(value_type) catch {
                 data.value = value_default; // invalid data = use default, will be cleaned next file write
             };
-            if (data.flags.contains(.InFile))
-                // FIXME: may cause issue when converting back to raw (file write,
-                // setting release) and trying to convert unprocessed data; track
-                // value fields processed state via flags? (all of them)
-                data.value_saved.raw2type(value_type) catch {};
+            if (data.flags.contains(.SavedValueIsSet))
+                data.value_saved.raw2type(value_type) catch {
+                    data.flags.insert(.SavedValueNotConverted);
+                };
         } else {
             data.value = value_default;
             data.flags.insert(.ValueIsSet);
         }
         data.value_type = value_type;
         data.value_default = value_default;
+        data.flags.insert(.DefaultValueIsSet);
         data.fnOnChange = fnOnChange;
+        if (fnOnChange) |f|
+            f(SentSetting.Value.fromSetting(&data.value, data.value_type));
 
         if (existing_i) |i| {
             data_settings.values.set(i, data);
@@ -262,21 +303,48 @@ const ASettings = struct {
         }
     }
 
+    // FIXME: review how the handle map is being manipulated with respect to index
+    // to make sure it's not messing with the mapping
     pub fn settingRelease(
         handle: Handle,
-    ) !void {
-        _ = handle;
-        return error.NotImpl;
-        // TODO:
-        // - transfer ownership to ASettings
-        // - convert values back to raw (string)
-        // - remove callback etc
+    ) void {
+        var data: Setting = data_settings.get(handle) orelse return;
+        std.debug.assert(data.flags.contains(.ValueIsSet));
+
+        data.fnOnChange = null;
+
+        data.value_default = .{ .str = std.mem.zeroes([63:0]u8) };
+        data.flags.remove(.DefaultValueIsSet);
+
+        data.value.type2raw(data.value_type) catch @panic("settingRelease: 'value' invalid");
+        if (!data.flags.contains(.SavedValueNotConverted))
+            data.value_saved.type2raw(data.value_type) catch @panic("settingRelease: 'value_saved' invalid");
+        data.flags.remove(.SavedValueNotConverted);
+
+        data.value_type = .None;
+
+        data_settings.handles.items[handle.index].owner = 0xFFFF;
+        data_settings.sparse_indices.items[handle.index].owner = 0xFFFF;
+        data_settings.values.set(handle.index, data);
     }
 
+    // TODO: ValueUpdated flag?
+    pub fn settingUpdate(
+        handle: Handle,
+        value: SentSetting.Value,
+    ) void {
+        var data: Setting = data_settings.get(handle) orelse return;
+        data.value.set(value, data.value_type) catch return;
+        data_settings.values.set(handle.index, data);
+        if (data.fnOnChange) |f|
+            f(value);
+    }
+
+    // TODO: dumping stuff i might need here
     pub fn iniParse() void {}
     pub fn iniWrite() void {}
-    //pub fn jsonParse() void {}
-    //pub fn jsonWrite() void {}
+    pub fn jsonParse() void {}
+    pub fn jsonWrite() void {}
     pub fn cleanupSave() void {} // remove settings from file not defined by a plugin etc.
     pub fn cleanupSaveOccupiedSectionsOnly() void {} // leave 'junk' data on file for unloaded sections
     pub fn saveAuto(_: ?Handle) void {}
@@ -289,6 +357,11 @@ const ASettings = struct {
 // ...
 
 // HOOKS
+
+// TODO: add global st/fn ptrs to fnOnChange def?
+fn updateSet1(value: SentSetting.Value) callconv(.C) void {
+    dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
+}
 
 pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.init(coreAllocator());
@@ -307,11 +380,13 @@ pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     _ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
     _ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
 
-    // FIXME: not setting default, type, etc. for existing nodes
-    _ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null) catch {};
-    _ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null) catch {};
-    _ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 987.654 }, null) catch {};
-    _ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 876.543 }, null) catch {};
+    const occ1 = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, updateSet1) catch NullHandle;
+    _ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null) catch {}; // expect: ignored
+    const occ2 = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 987.654 }, null) catch NullHandle;
+    _ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 876.543 }, null) catch {}; // export: ignored
+
+    ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
+    ASettings.settingRelease(occ2); // expect: undefined default, etc.
 }
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

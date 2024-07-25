@@ -17,8 +17,12 @@ const rt = r.Text;
 // FIXME: remove, for testing
 const dbg = @import("../util/debug.zig");
 
+// DEFS
+
 const Handle = HandleSOA(u16);
 const NullHandle = Handle.getNull();
+
+const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
 
 const SentSetting = extern struct {
     name: [*:0]u8,
@@ -44,6 +48,7 @@ const SentSetting = extern struct {
     };
 };
 
+// TODO: add global st/fn ptrs to fnOnChange def?
 const Setting = struct {
     section: ?struct { generation: u16, index: u16 } = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
@@ -85,7 +90,7 @@ const Setting = struct {
             };
         }
 
-        // raw (string) to value
+        /// raw (string) to value
         pub inline fn raw2type(self: *Value, t: Type) !void {
             const len = std.mem.len(@as([*:0]u8, @ptrCast(&self.str)));
             switch (t) {
@@ -101,7 +106,7 @@ const Setting = struct {
         }
 
         // FIXME: could overflow buffer
-        // value to raw (string)
+        /// value to raw (string)
         pub inline fn type2raw(self: *Value, t: Type) !void {
             switch (t) {
                 .B => _ = try bufPrintZ(&self.str, "{s}", .{if (self.b) "on" else "off"}),
@@ -120,10 +125,10 @@ const Setting = struct {
     };
 
     const Flags = enum(u32) {
+        HasOwner,
         FileUpdated,
         ChangedSinceLastRead,
         ProcessedSinceLastRead, // marker to let you know, e.g. don't unset ChangedSinceLastRead
-        HasOwner,
         ValueIsSet,
         ValueNotConverted,
         SavedValueIsSet,
@@ -138,15 +143,19 @@ const Setting = struct {
 };
 
 // reserved settings: AutoSave, UseGlobalAutoSave
+// TODO: add global st/fn ptrs to fnOnChange def?
+// FIXME: section->index may become invalid when handle expires due to swapRemove
+// in handle_map; same problem with Setting->section too
+// need to confirm if this is an issue, and maybe rework how connecting parents works
 const Section = struct {
     section: ?struct { generation: u16, index: u16 } = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
     flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
-    fnOnChange: ?*const fn (changed: [*]SentSetting) callconv(.C) void = null,
+    fnOnChange: ?*const fn (changed: [*]SentSetting) callconv(.C) void = null, // null-terminated
 
     const Flags = enum(u32) {
-        AutoSave,
         HasOwner,
+        AutoSave,
     };
 };
 
@@ -206,7 +215,6 @@ const ASettings = struct {
         name: [*:0]const u8,
     ) !Handle {
         if (section != null and !data_sections.hasHandle(section.?)) return error.SectionDoesNotExist;
-        const owner: u16 = if (section) |s| s.owner else 0xFFFF; // TODO: change default to ASettings' id?
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
@@ -216,7 +224,69 @@ const ASettings = struct {
         if (section) |s| section_new.section = .{ .generation = s.generation, .index = s.index };
         _ = try bufPrintZ(&section_new.name, "{s}", .{name});
 
-        return try data_sections.insert(owner, section_new);
+        return try data_sections.insert(DEFAULT_ID, section_new);
+    }
+
+    // FIXME: review how the handle map is being manipulated with respect to index
+    // to make sure it's not messing with the mapping
+    pub fn sectionOccupy(
+        owner: u16,
+        section: ?Handle,
+        name: [*:0]const u8,
+        fnOnChange: ?*const fn ([*]SentSetting) callconv(.C) void,
+    ) !Handle {
+        const existing_i = nodeFind(data_sections, section, name);
+
+        var data: Section = Section{};
+        if (existing_i) |i| {
+            if (data_sections.handles.items[i].owner != DEFAULT_ID) return error.SectionAlreadyOwned;
+            data = data_sections.values.get(i);
+        } else {
+            data.section = if (section) |s| .{ .generation = s.generation, .index = s.index } else null;
+            _ = try bufPrintZ(&data.name, "{s}", .{name});
+        }
+
+        data.fnOnChange = fnOnChange;
+
+        if (existing_i) |i| {
+            data_sections.values.set(i, data);
+            data_sections.handles.items[i].owner = owner;
+            data_sections.sparse_indices.items[i].owner = owner;
+            return data_sections.handles.items[i];
+        } else {
+            return data_sections.insert(owner, data);
+        }
+    }
+
+    // FIXME: review how the handle map is being manipulated with respect to index
+    // to make sure it's not messing with the mapping
+    /// release ownership of a section node, and all of the children below it
+    pub fn sectionRelease(
+        handle: Handle,
+    ) void {
+        var data: Section = data_sections.get(handle) orelse return;
+
+        const sec_slice_sections = data_sections.values.items(.section);
+        for (sec_slice_sections, 0..) |*s, i| {
+            if (s.* != null and s.*.?.generation == handle.generation and s.*.?.index == handle.index) {
+                const h: Handle = data_sections.handles.items[i];
+                if (h.owner != DEFAULT_ID and h.owner == handle.owner) sectionRelease(h);
+            }
+        }
+
+        const set_slice_sections = data_settings.values.items(.section);
+        for (set_slice_sections, 0..) |*s, i| {
+            if (s.* != null and s.*.?.generation == handle.generation and s.*.?.index == handle.index) {
+                const h: Handle = data_settings.handles.items[i];
+                if (h.owner != DEFAULT_ID and h.owner == handle.owner) settingRelease(h);
+            }
+        }
+
+        data.fnOnChange = null;
+
+        data_sections.handles.items[handle.index].owner = DEFAULT_ID;
+        data_sections.sparse_indices.items[handle.index].owner = DEFAULT_ID;
+        data_sections.values.set(handle.index, data);
     }
 
     // FIXME: review how the handle map is being manipulated with respect to index
@@ -228,7 +298,6 @@ const ASettings = struct {
         from_file: bool,
     ) !Handle {
         if (section != null and !data_sections.hasHandle(section.?)) return error.SectionDoesNotExist;
-        const owner: u16 = if (section) |s| s.owner else 0xFFFF; // TODO: change default to ASettings' id?
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
@@ -247,7 +316,7 @@ const ASettings = struct {
             setting.flags.insert(.SavedValueIsSet);
         }
 
-        return try data_settings.insert(owner, setting);
+        return try data_settings.insert(DEFAULT_ID, setting);
     }
 
     // FIXME: review how the handle map is being manipulated with respect to index
@@ -261,12 +330,16 @@ const ASettings = struct {
         fnOnChange: ?*const fn (SentSetting.Value) callconv(.C) void,
     ) !Handle {
         std.debug.assert(value_type != .None);
+        if (section) |s| {
+            if (s.owner != owner) @panic("owner and handle owner must match");
+            if (!data_sections.hasHandle(s)) return NullHandle;
+        }
 
         const existing_i = nodeFind(data_settings, section, name);
 
         var data: Setting = Setting{};
         if (existing_i) |i| {
-            if (data_settings.handles.items[i].owner != 0xFFFF) return error.SettingAlreadyOwned;
+            if (data_settings.handles.items[i].owner != DEFAULT_ID) return error.SettingAlreadyOwned;
             data = data_settings.values.get(i);
         } else {
             data.section = if (section) |s| .{ .generation = s.generation, .index = s.index } else null;
@@ -323,8 +396,8 @@ const ASettings = struct {
 
         data.value_type = .None;
 
-        data_settings.handles.items[handle.index].owner = 0xFFFF;
-        data_settings.sparse_indices.items[handle.index].owner = 0xFFFF;
+        data_settings.handles.items[handle.index].owner = DEFAULT_ID;
+        data_settings.sparse_indices.items[handle.index].owner = DEFAULT_ID;
         data_settings.values.set(handle.index, data);
     }
 
@@ -354,11 +427,16 @@ const ASettings = struct {
 
 // GLOBAL EXPORTS
 
-// ...
+// TODO: impl
+pub fn ASectionOccupy() callconv(.C) void {}
+pub fn ASectionRelease() callconv(.C) void {}
+pub fn ASettingOccupy() callconv(.C) void {}
+pub fn ASettingRelease() callconv(.C) void {}
+pub fn ASettingUpdate() callconv(.C) void {}
 
 // HOOKS
 
-// TODO: add global st/fn ptrs to fnOnChange def?
+// FIXME: remove, for testing (or move to commented test block)
 fn updateSet1(value: SentSetting.Value) callconv(.C) void {
     dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
 }
@@ -366,11 +444,13 @@ fn updateSet1(value: SentSetting.Value) callconv(.C) void {
 pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.init(coreAllocator());
 
-    // TODO: move below to testing
+    // TODO: move below to commented test block
 
-    const sec1 = ASettings.sectionNew(null, "Sec1") catch Handle.getNull();
-    const sec2 = ASettings.sectionNew(null, "Sec2") catch Handle.getNull();
+    _ = ASettings.sectionNew(null, "Sec1") catch {};
+    _ = ASettings.sectionNew(null, "Sec2") catch {};
     _ = ASettings.sectionNew(null, "Sec2") catch {}; // expect: NameTaken error -> skipped
+    const sec1 = ASettings.sectionOccupy(0x0000, null, "Sec1", null) catch Handle.getNull();
+    const sec2 = ASettings.sectionOccupy(0x0000, null, "Sec2", null) catch Handle.getNull();
 
     _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
     _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
@@ -387,6 +467,11 @@ pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
     ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
     ASettings.settingRelease(occ2); // expect: undefined default, etc.
+
+    const sec3 = ASettings.sectionOccupy(0x0000, null, "Sec3", null) catch Handle.getNull();
+    _ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
+    _ = ASettings.settingOccupy(0x0000, sec3, "Set8", .F, .{ .f = 987.654 }, null) catch NullHandle;
+    ASettings.sectionRelease(sec3);
 }
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
@@ -400,7 +485,7 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: remove, for testing
 // TODO: maybe adapt for debug/testing
 pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf.GDrawRect(.Debug, 0, 0, 400, 480, 0x000000A0);
+    _ = gf.GDrawRect(.Debug, 0, 0, 400, 480, 0x000020E0);
     var y: i16 = 0;
 
     for (0..ASettings.data_settings.values.len) |i| {
@@ -429,6 +514,7 @@ pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     for (0..ASettings.data_sections.values.len) |i| {
         const value = ASettings.data_sections.values.get(i);
         const handle = ASettings.data_sections.handles.items[i];
+        y += 4;
         _ = gf.GDrawText(.Debug, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
         y += 8;
 

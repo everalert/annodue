@@ -23,6 +23,12 @@ pub fn Handle(comptime T: type) type {
                 .index = std.math.maxInt(T),
             };
         }
+
+        pub fn isNull(self: *const Self) bool {
+            return self.owner == std.math.maxInt(T) and
+                self.generation == std.math.maxInt(T) and
+                self.index == std.math.maxInt(T);
+        }
     };
 }
 
@@ -43,6 +49,12 @@ pub fn SparseIndex(comptime T: type) type {
                 .generation = std.math.maxInt(T),
                 .index_or_next = std.math.maxInt(T),
             };
+        }
+
+        pub fn isNull(self: *const Self) bool {
+            return self.owner == std.math.maxInt(T) and
+                self.generation == std.math.maxInt(T) and
+                self.index_or_next == std.math.maxInt(T);
         }
     };
 }

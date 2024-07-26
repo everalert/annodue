@@ -11,9 +11,13 @@ const POINT = w32.foundation.POINT;
 const ActiveState = @import("../util/active_state.zig").ActiveState;
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
+const HandleSOA = @import("../util/handle_map_soa.zig").Handle;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
+const ASettingSent = @import("ASettings.zig").ASettingSent;
+const ASetting = @import("ASettings.zig").Setting;
+const ASettingSection = @import("ASettings.zig").Section;
 const GDrawLayer = @import("GDraw.zig").GDrawLayer;
 
 const r = @import("racer");
@@ -73,10 +77,27 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 23;
+pub const GLOBAL_FUNCTION_VERSION = 24;
 
+// TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
     // Settings
+    ASettingOccupy: *const fn (
+        section: HandleSOA(u16), // originally nullable
+        name: [*:0]const u8,
+        value_type: ASetting.Type,
+        value_default: ASetting.Value,
+        fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
+    ) callconv(.C) HandleSOA(u16),
+    ASettingVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ASettingUpdate: *const fn (handle: HandleSOA(u16), value: ASettingSent.Value) callconv(.C) void,
+    ASettingSectionOccupy: *const fn (
+        section: HandleSOA(u16), // originally nullable
+        name: [*:0]const u8,
+        fnOnChange: ?*const fn ([*]ASettingSent) callconv(.C) void,
+    ) callconv(.C) HandleSOA(u16),
+    ASettingSectionVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ASettingVacateAll: *const fn () callconv(.C) void,
     SettingGetB: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?bool,
     SettingGetI: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?i32,
     SettingGetU: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?u32,

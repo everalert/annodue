@@ -11,6 +11,7 @@ const freeze = @import("GFreeze.zig");
 const hide_race_ui = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
 const input = @import("Input.zig");
+const asettings = @import("ASettings.zig");
 const settings = @import("Settings.zig");
 const s = settings.SettingsState;
 const rterrain = @import("RTerrain.zig");
@@ -85,6 +86,12 @@ pub var GLOBAL_STATE: GlobalState = .{};
 
 pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Settings
+    .ASettingOccupy = &asettings.ASettingOccupy,
+    .ASettingVacate = &asettings.ASettingVacate,
+    .ASettingUpdate = &asettings.ASettingUpdate,
+    .ASettingSectionOccupy = &asettings.ASectionOccupy,
+    .ASettingSectionVacate = &asettings.ASectionVacate,
+    .ASettingVacateAll = &asettings.AVacateAll,
     .SettingGetB = &settings.get_bool,
     .SettingGetI = &settings.get_i32,
     .SettingGetU = &settings.get_u32,

@@ -39,7 +39,24 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+// FIXME: remove, for testing
+const h = @import("core/ASettings.zig").Handle;
+const nh = @import("core/ASettings.zig").NullHandle;
+const s = struct {
+    var hsec: ?h = null;
+    var hset1: ?h = null;
+    var hset2: ?h = null;
+    var hset3: ?h = null;
+    var hset4: ?h = null;
+};
+
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    s.hsec = gf.ASettingSectionOccupy(nh, "test", null);
+    s.hset1 = gf.ASettingOccupy(s.hsec.?, "valueb", .B, .{ .b = true }, null);
+    s.hset2 = gf.ASettingOccupy(s.hsec.?, "valuef", .F, .{ .f = 135.79 }, null);
+    s.hset3 = gf.ASettingOccupy(s.hsec.?, "valueu", .U, .{ .u = 97531 }, null);
+    s.hset4 = gf.ASettingOccupy(s.hsec.?, "valuestr", .Str, .{ .str = "stringlmao" }, null);
+}
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 

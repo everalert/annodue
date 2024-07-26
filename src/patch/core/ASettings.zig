@@ -21,8 +21,8 @@ const dbg = @import("../util/debug.zig");
 
 // DEFS
 
-const Handle = HandleSOA(u16);
-const NullHandle = Handle.getNull();
+pub const Handle = HandleSOA(u16);
+pub const NullHandle = Handle.getNull();
 
 const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
 
@@ -31,13 +31,13 @@ pub const ASettingSent = extern struct {
     value: Value,
 
     pub const Value = extern union {
-        str: [*:0]u8,
+        str: [*:0]const u8,
         f: f32,
         u: u32,
         i: i32,
         b: bool,
 
-        pub inline fn fromSetting(setting: *Setting.Value, t: Setting.Type) Value {
+        pub inline fn fromSetting(setting: *const Setting.Value, t: Setting.Type) Value {
             return switch (t) {
                 .Str => .{ .str = &setting.str },
                 .F => .{ .f = setting.f },
@@ -330,7 +330,7 @@ const ASettings = struct {
         section: ?Handle,
         name: [*:0]const u8,
         value_type: Setting.Type,
-        value_default: Setting.Value,
+        value_default: ASettingSent.Value,
         fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
     ) !Handle {
         std.debug.assert(value_type != .None);
@@ -353,18 +353,19 @@ const ASettings = struct {
         // NOTE: existing data assumed to be raw (new, unprocessed or released)
         if (data.flags.contains(.ValueIsSet)) {
             data.value.raw2type(value_type) catch {
-                data.value = value_default; // invalid data = use default, will be cleaned next file write
+                // invalid data = use default, will be cleaned next file write
+                data.value.set(value_default, value_type) catch unreachable;
             };
             if (data.flags.contains(.SavedValueIsSet))
                 data.value_saved.raw2type(value_type) catch {
                     data.flags.insert(.SavedValueNotConverted);
                 };
         } else {
-            data.value = value_default;
+            data.value.set(value_default, value_type) catch unreachable;
             data.flags.insert(.ValueIsSet);
         }
         data.value_type = value_type;
-        data.value_default = value_default;
+        data.value_default.set(value_default, value_type) catch unreachable;
         data.flags.insert(.DefaultValueIsSet);
         data.fnOnChange = fnOnChange;
         if (fnOnChange) |f|
@@ -464,7 +465,7 @@ pub fn ASettingOccupy(
     section: Handle,
     name: [*:0]const u8,
     value_type: Setting.Type,
-    value_default: Setting.Value,
+    value_default: ASettingSent.Value,
     fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
 ) callconv(.C) Handle {
     return ASettings.settingOccupy(
@@ -491,7 +492,7 @@ pub fn AVacateAll() callconv(.C) void {
 
 // HOOKS
 
-// FIXME: remove, for testing (or move to commented test block)
+// TODO: move below to commented test block
 fn updateSet1(value: ASettingSent.Value) callconv(.C) void {
     dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
 }
@@ -500,35 +501,36 @@ pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.init(coreAllocator());
 
     // TODO: move below to commented test block
+    // TODO: add setting occupy -> string type test
 
-    _ = ASettings.sectionNew(null, "Sec1") catch {};
-    _ = ASettings.sectionNew(null, "Sec2") catch {};
-    _ = ASettings.sectionNew(null, "Sec2") catch {}; // expect: NameTaken error -> skipped
-    const sec1 = ASettings.sectionOccupy(0x0000, null, "Sec1", null) catch Handle.getNull();
-    const sec2 = ASettings.sectionOccupy(0x0001, null, "Sec2", null) catch Handle.getNull();
+    //_ = ASettings.sectionNew(null, "Sec1") catch {};
+    //_ = ASettings.sectionNew(null, "Sec2") catch {};
+    //_ = ASettings.sectionNew(null, "Sec2") catch {}; // expect: NameTaken error -> skipped
+    //const sec1 = ASettings.sectionOccupy(0x0000, null, "Sec1", null) catch Handle.getNull();
+    //const sec2 = ASettings.sectionOccupy(0x0001, null, "Sec2", null) catch Handle.getNull();
 
-    _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
-    _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
-    _ = ASettings.settingNew(null, "Set2", "Val2", false) catch {};
-    _ = ASettings.settingNew(sec2, "Set3", "Val3", false) catch {};
-    _ = ASettings.settingNew(null, "Set4", "Val4", false) catch {};
-    _ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
-    _ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
+    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.settingNew(null, "Set2", "Val2", false) catch {};
+    //_ = ASettings.settingNew(sec2, "Set3", "Val3", false) catch {};
+    //_ = ASettings.settingNew(null, "Set4", "Val4", false) catch {};
+    //_ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
+    //_ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
 
-    const occ1 = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, updateSet1) catch NullHandle;
-    _ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null) catch {}; // expect: ignored
-    const occ2 = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 987.654 }, null) catch NullHandle;
-    _ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 876.543 }, null) catch {}; // export: ignored
+    //const occ1 = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, updateSet1) catch NullHandle;
+    //_ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null) catch {}; // expect: ignored
+    //const occ2 = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 987.654 }, null) catch NullHandle;
+    //_ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 876.543 }, null) catch {}; // export: ignored
 
-    ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
-    ASettings.settingVacate(occ2); // expect: undefined default, etc.
+    //ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
+    //ASettings.settingVacate(occ2); // expect: undefined default, etc.
 
-    const sec3 = ASettings.sectionOccupy(0x0000, null, "Sec3", null) catch Handle.getNull();
-    _ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
-    _ = ASettings.settingOccupy(0x0000, sec3, "Set8", .F, .{ .f = 987.654 }, null) catch NullHandle;
-    ASettings.sectionVacate(sec3);
+    //const sec3 = ASettings.sectionOccupy(0x0000, null, "Sec3", null) catch Handle.getNull();
+    //_ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
+    //_ = ASettings.settingOccupy(0x0000, sec3, "Set8", .F, .{ .f = 987.654 }, null) catch NullHandle;
+    //ASettings.sectionVacate(sec3);
 
-    ASettings.vacateOwner(0x0000); // expect: everything undefined default, etc.
+    //ASettings.vacateOwner(0x0000); // expect: everything undefined default, etc.
 }
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
@@ -544,6 +546,8 @@ pub fn OnPluginDeinit(_: u16) callconv(.C) void {
 // FIXME: remove, for testing
 // TODO: maybe adapt for debug/testing
 pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
+
     _ = gf.GDrawRect(.Debug, 0, 0, 400, 480, 0x000020E0);
     var y: i16 = 0;
 

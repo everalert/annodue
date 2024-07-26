@@ -86,7 +86,7 @@ pub const GlobalFunction = extern struct {
         section: HandleSOA(u16), // originally nullable
         name: [*:0]const u8,
         value_type: ASetting.Type,
-        value_default: ASetting.Value,
+        value_default: ASettingSent.Value,
         fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
     ) callconv(.C) HandleSOA(u16),
     ASettingVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,

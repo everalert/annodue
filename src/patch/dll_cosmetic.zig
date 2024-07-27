@@ -298,22 +298,22 @@ fn settingsInit(gf: *GlobalFn) void {
     CosmeticState.h_s_section = section;
 
     CosmeticState.h_s_rb_enable =
-        gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .b = false }, null, null);
     CosmeticState.h_s_rb_value_enable =
-        gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .b = false }, null, null);
     CosmeticState.h_s_rb_label_enable =
-        gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .b = false }, null, null);
     CosmeticState.h_s_rb_speed_enable =
-        gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .b = false }, null, null);
 
     CosmeticState.h_s_rb_patch_tga_loader = // FIXME: need tga files to verify with
-        gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, null, null);
     CosmeticState.h_s_rb_patch_trigger_display =
-        gf.ASettingOccupy(section, "patch_trigger_display", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "patch_trigger_display", .B, .{ .b = false }, null, null);
     CosmeticState.h_s_rb_patch_audio = // FIXME: crashes
-        gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, null, null);
     CosmeticState.h_s_rb_patch_fonts =
-        gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, null, null);
 }
 
 // HOUSEKEEPING

@@ -57,11 +57,11 @@ fn settingsInit(gf: *GlobalFn) void {
     MpState.h_s_section = section;
 
     MpState.h_s_enable = // working? TODO: check collisions
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
     MpState.h_s_patch_guid = // working?
-        gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, null, null);
     MpState.h_s_patch_r100 = // working
-        gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, null, null);
 }
 
 // PATCHES

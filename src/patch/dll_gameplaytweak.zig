@@ -46,14 +46,14 @@ fn settingsInit(gf: *GlobalFn) void {
     GameplayTweak.h_s_section = section;
 
     GameplayTweak.h_s_enable =
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
 
     GameplayTweak.h_s_death_speed_mod_enable =
-        gf.ASettingOccupy(section, "death_speed_mod_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "death_speed_mod_enable", .B, .{ .b = false }, null, null);
     GameplayTweak.h_s_death_speed_min =
-        gf.ASettingOccupy(section, "death_speed_min", .F, .{ .f = 325 }, null);
+        gf.ASettingOccupy(section, "death_speed_min", .F, .{ .f = 325 }, null, null);
     GameplayTweak.h_s_death_speed_drop =
-        gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .f = 140 }, null);
+        gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .f = 140 }, null, null);
 }
 
 // DEATHSPEED

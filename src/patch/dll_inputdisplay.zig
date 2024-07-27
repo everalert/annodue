@@ -360,11 +360,11 @@ fn settingsInit(gf: *GlobalFn) void {
     InputDisplay.h_s_section = section;
 
     InputDisplay.h_s_enable =
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
     InputDisplay.h_s_pos_x =
-        gf.ASettingOccupy(section, "pos_x", .I, .{ .i = 420 }, null);
+        gf.ASettingOccupy(section, "pos_x", .I, .{ .i = 420 }, null, null);
     InputDisplay.h_s_pos_y =
-        gf.ASettingOccupy(section, "pos_y", .I, .{ .i = 432 }, null);
+        gf.ASettingOccupy(section, "pos_y", .I, .{ .i = 432 }, null, null);
 }
 
 // HOUSEKEEPING

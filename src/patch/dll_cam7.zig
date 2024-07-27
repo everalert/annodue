@@ -362,53 +362,53 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 }
 
 fn settingsInit(gf: *GlobalFn) void {
-    Cam7.h_s_section =
-        gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", null);
+    Cam7.h_s_section = section;
 
     Cam7.h_s_enable =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
 
     Cam7.h_s_fog_patch =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "fog_patch", .B, .{ .b = true }, null);
+        gf.ASettingOccupy(section, "fog_patch", .B, .{ .b = true }, null, null);
     Cam7.h_s_fog_remove =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "fog_remove", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "fog_remove", .B, .{ .b = false }, null, null);
     Cam7.h_s_visuals_patch =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "visuals_patch", .B, .{ .b = true }, null);
+        gf.ASettingOccupy(section, "visuals_patch", .B, .{ .b = true }, null, null);
 
     Cam7.h_s_flip_look_x =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "flip_look_x", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "flip_look_x", .B, .{ .b = false }, null, null);
     Cam7.h_s_flip_look_y =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "flip_look_y", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "flip_look_y", .B, .{ .b = false }, null, null);
     Cam7.h_s_flip_look_x_inverted =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "flip_look_x_inverted", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "flip_look_x_inverted", .B, .{ .b = false }, null, null);
 
     Cam7.h_s_dz_i =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "stick_deadzone_inner", .F, .{ .f = 0.05 }, null);
+        gf.ASettingOccupy(section, "stick_deadzone_inner", .F, .{ .f = 0.05 }, null, null);
     Cam7.h_s_dz_o =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "stick_deadzone_outer", .F, .{ .f = 0.95 }, null);
+        gf.ASettingOccupy(section, "stick_deadzone_outer", .F, .{ .f = 0.95 }, null, null);
 
     Cam7.h_s_i_mouse_dpi =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "mouse_dpi", .U, .{ .u = 1600 }, null);
+        gf.ASettingOccupy(section, "mouse_dpi", .U, .{ .u = 1600 }, null, null);
     Cam7.h_s_i_mouse_cm360 =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "mouse_cm360", .F, .{ .f = 24 }, null);
+        gf.ASettingOccupy(section, "mouse_cm360", .F, .{ .f = 24 }, null, null);
 
     Cam7.h_s_rot_damp_i_dflt =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "default_rot_smoothing", .U, .{ .u = 0 }, null);
+        gf.ASettingOccupy(section, "default_rot_smoothing", .U, .{ .u = 0 }, null, null);
     Cam7.h_s_rot_spd_i_dflt =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "default_rot_speed", .U, .{ .u = 3 }, null);
+        gf.ASettingOccupy(section, "default_rot_speed", .U, .{ .u = 3 }, null, null);
     Cam7.h_s_move_damp_i_dflt =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "default_move_smoothing", .U, .{ .u = 2 }, null);
+        gf.ASettingOccupy(section, "default_move_smoothing", .U, .{ .u = 2 }, null, null);
     Cam7.h_s_move_spd_i_dflt =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "default_move_speed", .U, .{ .u = 3 }, null);
+        gf.ASettingOccupy(section, "default_move_speed", .U, .{ .u = 3 }, null, null);
     Cam7.h_s_move_planar =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "default_planar_movement", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "default_planar_movement", .B, .{ .b = false }, null, null);
 
     Cam7.h_s_hide_ui =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "default_hide_ui", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "default_hide_ui", .B, .{ .b = false }, null, null);
     Cam7.h_s_disable_input =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "default_disable_input", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "default_disable_input", .B, .{ .b = false }, null, null);
     Cam7.h_s_sfx_volume =
-        gf.ASettingOccupy(Cam7.h_s_section.?, "sfx_volume", .F, .{ .f = 0.7 }, null);
+        gf.ASettingOccupy(section, "sfx_volume", .F, .{ .f = 0.7 }, null, null);
 }
 
 // TODO: impl

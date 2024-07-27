@@ -134,9 +134,9 @@ fn settingsInit(gf: *GlobalFn) void {
     GameplayTweak.h_s_section = section;
 
     GameplayTweak.h_s_dump_fonts = // working?
-        gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, null, null);
     GameplayTweak.h_s_visualize_matrices =
-        gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .b = false }, null, null);
 }
 
 // HOUSEKEEPING

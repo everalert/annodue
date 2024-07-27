@@ -48,7 +48,7 @@ fn settingsInit(gf: *GlobalFn) void {
     Overlay.h_s_section = section;
 
     Overlay.h_s_enable =
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
 }
 
 // HOUSEKEEPING

@@ -360,7 +360,7 @@ fn settingsInit(gf: *GlobalFn) void {
     AnnodueSettings.h_s_section = section;
 
     AnnodueSettings.h_s_depth_bias =
-        gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, null);
+        gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, null, null);
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {

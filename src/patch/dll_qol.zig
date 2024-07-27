@@ -800,31 +800,31 @@ fn settingsInit(gf: *GlobalFn) void {
     QolState.h_s_section = section;
 
     QolState.h_s_quickstart =
-        gf.ASettingOccupy(section, "quick_restart_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "quick_restart_enable", .B, .{ .b = false }, null, null);
     QolState.h_s_quickrace =
-        gf.ASettingOccupy(section, "quick_race_menu_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "quick_race_menu_enable", .B, .{ .b = false }, null, null);
     QolState.h_s_default_racers =
-        gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null);
+        gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null, null);
     QolState.h_s_default_laps =
-        gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null);
+        gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null, null);
     QolState.h_s_ms_timer =
-        gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, null, null);
     QolState.h_s_fps_limiter =
-        gf.ASettingOccupy(section, "fps_limiter_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "fps_limiter_enable", .B, .{ .b = false }, null, null);
     QolState.h_s_skip_planet_cutscenes =
-        gf.ASettingOccupy(section, "skip_planet_cutscenes", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "skip_planet_cutscenes", .B, .{ .b = false }, null, null);
     QolState.h_s_skip_podium_cutscene =
-        gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .b = false }, null, null);
     QolState.h_s_fix_viewport_edges =
-        gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, null, null);
 
     FastCountdown.h_s_enable =
-        gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, null);
+        gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, null, null);
     FastCountdown.h_s_duration =
-        gf.ASettingOccupy(section, "fast_countdown_duration", .F, .{ .f = 1.0 }, null);
+        gf.ASettingOccupy(section, "fast_countdown_duration", .F, .{ .f = 1.0 }, null, null);
 
     QuickRaceMenu.h_s_fps_default =
-        gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, null);
+        gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, null, null);
 }
 
 // HOUSEKEEPING

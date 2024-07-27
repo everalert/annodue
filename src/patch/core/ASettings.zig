@@ -62,6 +62,7 @@ pub const Setting = struct {
     value_default: Value = .{ .str = std.mem.zeroes([63:0]u8) },
     value_saved: Value = .{ .str = std.mem.zeroes([63:0]u8) },
     value_type: Type = .None,
+    value_ptr: ?*anyopaque = null,
     flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
     fnOnChange: ?*const fn (value: ASettingSent.Value) callconv(.C) void = null,
 
@@ -92,6 +93,17 @@ pub const Setting = struct {
                 .U => self.u,
                 .I => self.i,
                 .B => self.b,
+                else => @panic("setting value type must not be None"),
+            };
+        }
+
+        pub inline fn getToPtr(self: *Value, p: *anyopaque, t: Type) void {
+            return switch (t) {
+                .Str => @as(*[63:0]u8, @alignCast(@ptrCast(p))).* = @as(*[63:0]u8, @ptrCast(&self.str)).*,
+                .F => @as(*f32, @alignCast(@ptrCast(p))).* = @as(*f32, @ptrCast(&self.f)).*,
+                .U => @as(*u32, @alignCast(@ptrCast(p))).* = @as(*u32, @ptrCast(&self.u)).*,
+                .I => @as(*i32, @alignCast(@ptrCast(p))).* = @as(*i32, @ptrCast(&self.i)).*,
+                .B => @as(*bool, @alignCast(@ptrCast(p))).* = @as(*bool, @ptrCast(&self.b)).*,
                 else => @panic("setting value type must not be None"),
             };
         }
@@ -342,6 +354,7 @@ const ASettings = struct {
         name: [*:0]const u8,
         value_type: Setting.Type,
         value_default: ASettingSent.Value,
+        value_ptr: ?*anyopaque,
         fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
     ) !Handle {
         std.debug.assert(value_type != .None);
@@ -378,6 +391,9 @@ const ASettings = struct {
         data.value_type = value_type;
         data.value_default.set(value_default, value_type) catch unreachable;
         data.flags.insert(.DefaultValueIsSet);
+        data.value_ptr = value_ptr;
+        if (value_ptr) |p|
+            data.value.getToPtr(p, data.value_type);
         data.fnOnChange = fnOnChange;
         if (fnOnChange) |f|
             f(ASettingSent.Value.fromSetting(&data.value, data.value_type));
@@ -427,6 +443,8 @@ const ASettings = struct {
         var data: Setting = data_settings.get(handle) orelse return;
         data.value.set(value, data.value_type) catch return;
         data_settings.values.set(handle.index, data);
+        if (data.value_ptr) |p|
+            data.value.getToPtr(p, data.value_type);
         if (data.fnOnChange) |f|
             f(value);
     }
@@ -479,6 +497,7 @@ pub fn ASettingOccupy(
     name: [*:0]const u8,
     value_type: Setting.Type,
     value_default: ASettingSent.Value,
+    value_ptr: ?*anyopaque,
     fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
 ) callconv(.C) Handle {
     return ASettings.settingOccupy(
@@ -487,6 +506,7 @@ pub fn ASettingOccupy(
         name,
         value_type,
         value_default,
+        value_ptr,
         fnOnChange,
     ) catch NullHandle;
 }

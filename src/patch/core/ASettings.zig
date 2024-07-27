@@ -194,7 +194,9 @@ const ASettings = struct {
         parent: ?Handle,
         name: [*:0]const u8,
     ) ?u16 {
-        if (parent != null and !data_sections.hasHandle(parent.?)) return null;
+        if (parent != null and
+            (parent.?.isNull() or
+            !data_sections.hasHandle(parent.?))) return null;
 
         const name_len = std.mem.len(name) + 1; // include sentinel
         const slices = map.values.slice();
@@ -206,7 +208,6 @@ const ASettings = struct {
             if (parent != null and
                 (parent.?.generation != s_section.*.?.generation or
                 parent.?.index != s_section.*.?.index))
-                //if (parent != null and !std.mem.eql(u8, std.mem.asBytes(s_section), std.mem.asBytes(&parent)))
                 continue;
             if (!std.mem.eql(u8, s_name[0..name_len], name[0..name_len]))
                 continue;
@@ -220,7 +221,9 @@ const ASettings = struct {
         section: ?Handle,
         name: [*:0]const u8,
     ) !Handle {
-        if (section != null and !data_sections.hasHandle(section.?)) return error.SectionDoesNotExist;
+        if (section != null and
+            (section.?.isNull() or
+            !data_sections.hasHandle(section.?))) return error.SectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
@@ -303,7 +306,9 @@ const ASettings = struct {
         value: [*:0]const u8, // -> value_saved
         from_file: bool,
     ) !Handle {
-        if (section != null and !data_sections.hasHandle(section.?)) return error.SectionDoesNotExist;
+        if (section != null and
+            (section.?.isNull() or
+            !data_sections.hasHandle(section.?))) return error.SectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
@@ -545,10 +550,8 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.deinit();
 }
 
-// FIXME: not vacating properly, causing re-occupied settings to have 'null' parent
-// after the plugin loads again
-pub fn OnPluginDeinit(_: u16) callconv(.C) void {
-    ASettings.vacateOwner(workingOwner());
+pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+    ASettings.vacateOwner(owner);
 }
 
 // FIXME: remove, for testing

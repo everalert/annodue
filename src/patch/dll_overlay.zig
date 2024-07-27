@@ -17,6 +17,9 @@ const rto = rt.TextStyleOpts;
 const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -34,6 +37,20 @@ pub const panic = debug.annodue_panic;
 const PLUGIN_NAME: [*:0]const u8 = "Overlay";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
+const Overlay = struct {
+    var h_s_section: ?SettingHandle = null;
+    var h_s_enable: ?SettingHandle = null;
+    var s_enable: bool = false;
+};
+
+fn settingsInit(gf: *GlobalFn) void {
+    const section = gf.ASettingSectionOccupy("overlay", null);
+    Overlay.h_s_section = section;
+
+    Overlay.h_s_enable =
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null);
+}
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -48,7 +65,9 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    settingsInit(gf);
+}
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
@@ -67,6 +86,7 @@ const sty: i16 = -10;
 
 export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: change practice mode check to 'show overlay' (core setting, not plugin) check
+    // FIXME: port setting to new system
     if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
 
     if (gs.in_race.on() and !gf.GHideRaceUIIsOn()) {

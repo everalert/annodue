@@ -13,6 +13,9 @@ const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -45,10 +48,19 @@ const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const CosmeticState = struct {
-    var rb_enable: bool = false;
-    var rb_value_enable: bool = false;
-    var rb_label_enable: bool = false;
-    var rb_speed_enable: bool = false;
+    var h_s_section: ?SettingHandle = null;
+    var h_s_rb_enable: ?SettingHandle = null;
+    var h_s_rb_value_enable: ?SettingHandle = null;
+    var h_s_rb_label_enable: ?SettingHandle = null;
+    var h_s_rb_speed_enable: ?SettingHandle = null;
+    var h_s_rb_patch_tga_loader: ?SettingHandle = null;
+    var h_s_rb_patch_trigger_display: ?SettingHandle = null;
+    var h_s_rb_patch_audio: ?SettingHandle = null;
+    var h_s_rb_patch_fonts: ?SettingHandle = null;
+    var s_rb_enable: bool = false;
+    var s_rb_value_enable: bool = false;
+    var s_rb_label_enable: bool = false;
+    var s_rb_speed_enable: bool = false;
     var rb_value = crot.RotatingRGB.new(95, 255, 0);
     var rb_label = crot.RotatingRGB.new(95, 255, 1);
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
@@ -76,24 +88,24 @@ fn PatchHudColRotate(v: bool, l: bool, s: bool) void {
 }
 
 fn HandleColorSettings(gf: *GlobalFn) callconv(.C) void {
-    CosmeticState.rb_enable = gf.SettingGetB("cosmetic", "rainbow_enable").?;
+    CosmeticState.s_rb_enable = gf.SettingGetB("cosmetic", "rainbow_enable").?;
 
-    CosmeticState.rb_value_enable = gf.SettingGetB("cosmetic", "rainbow_value_enable").?;
-    if (!CosmeticState.rb_enable or !CosmeticState.rb_value_enable) {
+    CosmeticState.s_rb_value_enable = gf.SettingGetB("cosmetic", "rainbow_value_enable").?;
+    if (!CosmeticState.s_rb_enable or !CosmeticState.s_rb_value_enable) {
         crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
         crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
         crot.PatchRgbArgs(0x461045, 0xFFFFFF);
     }
 
-    CosmeticState.rb_label_enable = gf.SettingGetB("cosmetic", "rainbow_label_enable").?;
-    if (!CosmeticState.rb_enable or !CosmeticState.rb_label_enable) {
+    CosmeticState.s_rb_label_enable = gf.SettingGetB("cosmetic", "rainbow_label_enable").?;
+    if (!CosmeticState.s_rb_enable or !CosmeticState.s_rb_label_enable) {
         crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
         crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
         crot.PatchRgbArgs(0x461069, 0xFFFFFF);
     }
 
-    CosmeticState.rb_speed_enable = gf.SettingGetB("cosmetic", "rainbow_speed_enable").?;
-    if (!CosmeticState.rb_enable or !CosmeticState.rb_speed_enable) {
+    CosmeticState.s_rb_speed_enable = gf.SettingGetB("cosmetic", "rainbow_speed_enable").?;
+    if (!CosmeticState.s_rb_enable or !CosmeticState.s_rb_speed_enable) {
         crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
     }
 }
@@ -281,6 +293,29 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     return off;
 }
 
+fn settingsInit(gf: *GlobalFn) void {
+    const section = gf.ASettingSectionOccupy("cosmetic", null);
+    CosmeticState.h_s_section = section;
+
+    CosmeticState.h_s_rb_enable =
+        gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .b = false }, null);
+    CosmeticState.h_s_rb_value_enable =
+        gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .b = false }, null);
+    CosmeticState.h_s_rb_label_enable =
+        gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .b = false }, null);
+    CosmeticState.h_s_rb_speed_enable =
+        gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .b = false }, null);
+
+    CosmeticState.h_s_rb_patch_tga_loader = // FIXME: need tga files to verify with
+        gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, null);
+    CosmeticState.h_s_rb_patch_trigger_display =
+        gf.ASettingOccupy(section, "patch_trigger_display", .B, .{ .b = false }, null);
+    CosmeticState.h_s_rb_patch_audio = // FIXME: crashes
+        gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, null);
+    CosmeticState.h_s_rb_patch_fonts =
+        gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, null);
+}
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -296,7 +331,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleColorSettings(gf);
+    settingsInit(gf);
+    HandleColorSettings(gf); // FIXME: migrate to new settings system (also the freestanding settings)
 
     // TODO: convert to use global allocator once it is part of the GlobalFn interface;
     // then we can properly deinit it when the plugin unloads or the user setting changes.
@@ -341,11 +377,11 @@ export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn TextRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (CosmeticState.rb_enable) {
+    if (CosmeticState.s_rb_enable) {
         PatchHudColRotate(
-            CosmeticState.rb_value_enable,
-            CosmeticState.rb_label_enable,
-            CosmeticState.rb_speed_enable,
+            CosmeticState.s_rb_value_enable,
+            CosmeticState.s_rb_label_enable,
+            CosmeticState.s_rb_speed_enable,
         );
     }
 }

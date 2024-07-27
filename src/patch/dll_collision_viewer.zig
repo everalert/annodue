@@ -42,6 +42,9 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
 var input_enable_data = ButtonInputMap{ .kb = .@"8", .xi = null };
 var input_enable = input_enable_data.inputMap();
 
@@ -338,14 +341,31 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 extern fn init_collision_viewer(gs: *CollisionViewerState) callconv(.C) void;
 extern fn deinit_collision_viewer() callconv(.C) void;
 
+// FIXME: migrate to new settings system
 fn handle_settings(gf: *GlobalFn) callconv(.C) void {
     var biasInt: i32 = gf.SettingGetI("collisionviewer", "depth_bias") orelse 10;
     var biasFloat: f32 = @floatFromInt(biasInt);
     state.depth_bias = biasFloat / 100.0;
 }
 
+// FIXME: merge with existing setting setup, just like this cuz i cbf before
+const AnnodueSettings = struct {
+    var h_s_section: ?SettingHandle = null;
+    var h_s_depth_bias: ?SettingHandle = null;
+    var s_depth_bias: i32 = 10;
+};
+
+fn settingsInit(gf: *GlobalFn) void {
+    const section = gf.ASettingSectionOccupy("collisionviewer", null);
+    AnnodueSettings.h_s_section = section;
+
+    AnnodueSettings.h_s_depth_bias =
+        gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, null);
+}
+
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    handle_settings(gf);
+    handle_settings(gf); // FIXME: migrate to new settings system
+    settingsInit(gf);
 
     init_collision_viewer(&state);
 

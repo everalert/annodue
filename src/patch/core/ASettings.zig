@@ -19,6 +19,10 @@ const rt = r.Text;
 // FIXME: remove, for testing
 const dbg = @import("../util/debug.zig");
 
+// TODO: remove OnSettingsLoad from hooks after all settings ported to new system
+// TODO: param for ptr to affected setting in settingOccupy, and auto-set the variable on update
+// to cut down on the plugin-side helper functions that are exclusively setting the value
+
 // DEFS
 
 pub const Handle = HandleSOA(u16);
@@ -443,15 +447,17 @@ const ASettings = struct {
 
 // GLOBAL EXPORTS
 
-// TODO: impl
+// TODO: generally - make the plugin-facing stuff operate under 'plugin' section,
+// which is initialized internally
+
+// FIXME: add parent section param again, to allow for nested stuff; null input = 'plugin' internal parent
 pub fn ASectionOccupy(
-    section: Handle,
     name: [*:0]const u8,
     fnOnChange: ?*const fn ([*]ASettingSent) callconv(.C) void,
 ) callconv(.C) Handle {
     return ASettings.sectionOccupy(
         workingOwner(),
-        if (section.isNull()) null else section,
+        null, // TODO: internal 'plugin' section
         name,
         fnOnChange,
     ) catch NullHandle;
@@ -539,38 +545,46 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.deinit();
 }
 
+// FIXME: not vacating properly, causing re-occupied settings to have 'null' parent
+// after the plugin loads again
 pub fn OnPluginDeinit(_: u16) callconv(.C) void {
     ASettings.vacateOwner(workingOwner());
 }
 
 // FIXME: remove, for testing
-// TODO: maybe adapt for debug/testing
+// TODO: maybe adapt for test script
 pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 
+    const s = struct {
+        var y_off: i16 = 0;
+    };
+    if (gf.InputGetKbRaw(.PRIOR).on()) s.y_off += 2;
+    if (gf.InputGetKbRaw(.NEXT).on()) s.y_off -= 2;
+
     _ = gf.GDrawRect(.Debug, 0, 0, 400, 480, 0x000020E0);
-    var y: i16 = 0;
+    var y: i16 = 0 + s.y_off;
 
     for (0..ASettings.data_settings.values.len) |i| {
         const value: Setting = ASettings.data_settings.values.get(i);
         if (value.section != null) continue;
         _ = gf.GDrawText(.Debug, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
         _ = gf.GDrawText(.Debug, switch (value.value_type) {
-            .B => rt.MakeText(100, y, "{any}", .{value.value.b}, null, null) catch null,
-            .F => rt.MakeText(100, y, "{d:4.2}", .{value.value.f}, null, null) catch null,
-            .U => rt.MakeText(100, y, "{d}", .{value.value.u}, null, null) catch null,
-            .I => rt.MakeText(100, y, "{d}", .{value.value.i}, null, null) catch null,
-            else => rt.MakeText(100, y, "{s}", .{value.value.str}, null, null) catch null,
+            .B => rt.MakeText(256, y, "{any}", .{value.value.b}, null, null) catch null,
+            .F => rt.MakeText(256, y, "{d:4.2}", .{value.value.f}, null, null) catch null,
+            .U => rt.MakeText(256, y, "{d}", .{value.value.u}, null, null) catch null,
+            .I => rt.MakeText(256, y, "{d}", .{value.value.i}, null, null) catch null,
+            else => rt.MakeText(256, y, "{s}", .{value.value.str}, null, null) catch null,
         });
         _ = gf.GDrawText(.Debug, switch (value.value_type) {
-            .B => rt.MakeText(200, y, "{any}", .{value.value_default.b}, null, null) catch null,
-            .F => rt.MakeText(200, y, "{d:4.2}", .{value.value_default.f}, null, null) catch null,
-            .U => rt.MakeText(200, y, "{d}", .{value.value_default.u}, null, null) catch null,
-            .I => rt.MakeText(200, y, "{d}", .{value.value_default.i}, null, null) catch null,
-            .Str => rt.MakeText(200, y, "{s}", .{value.value_default.str}, null, null) catch null,
-            .None => rt.MakeText(200, y, "{s}", .{"undefined"}, null, null) catch null,
+            .B => rt.MakeText(312, y, "{any}", .{value.value_default.b}, null, null) catch null,
+            .F => rt.MakeText(312, y, "{d:4.2}", .{value.value_default.f}, null, null) catch null,
+            .U => rt.MakeText(312, y, "{d}", .{value.value_default.u}, null, null) catch null,
+            .I => rt.MakeText(312, y, "{d}", .{value.value_default.i}, null, null) catch null,
+            .Str => rt.MakeText(312, y, "{s}", .{value.value_default.str}, null, null) catch null,
+            .None => rt.MakeText(312, y, "{s}", .{"undefined"}, null, null) catch null,
         });
-        _ = gf.GDrawText(.Debug, rt.MakeText(300, y, "{s}", .{@tagName(value.value_type)}, null, null) catch null);
+        _ = gf.GDrawText(.Debug, rt.MakeText(368, y, "{s}", .{@tagName(value.value_type)}, null, null) catch null);
         y += 8;
     }
 
@@ -588,21 +602,21 @@ pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 continue;
             _ = gf.GDrawText(.Debug, rt.MakeText(12, y, "{s}", .{s_value.name}, null, null) catch null);
             _ = gf.GDrawText(.Debug, switch (s_value.value_type) {
-                .B => rt.MakeText(100, y, "{any}", .{s_value.value.b}, null, null) catch null,
-                .F => rt.MakeText(100, y, "{d:4.2}", .{s_value.value.f}, null, null) catch null,
-                .U => rt.MakeText(100, y, "{d}", .{s_value.value.u}, null, null) catch null,
-                .I => rt.MakeText(100, y, "{d}", .{s_value.value.i}, null, null) catch null,
-                else => rt.MakeText(100, y, "{s}", .{s_value.value.str}, null, null) catch null,
+                .B => rt.MakeText(256, y, "{any}", .{s_value.value.b}, null, null) catch null,
+                .F => rt.MakeText(256, y, "{d:4.2}", .{s_value.value.f}, null, null) catch null,
+                .U => rt.MakeText(256, y, "{d}", .{s_value.value.u}, null, null) catch null,
+                .I => rt.MakeText(256, y, "{d}", .{s_value.value.i}, null, null) catch null,
+                else => rt.MakeText(256, y, "{s}", .{s_value.value.str}, null, null) catch null,
             });
             _ = gf.GDrawText(.Debug, switch (s_value.value_type) {
-                .B => rt.MakeText(200, y, "{any}", .{s_value.value_default.b}, null, null) catch null,
-                .F => rt.MakeText(200, y, "{d:4.2}", .{s_value.value_default.f}, null, null) catch null,
-                .U => rt.MakeText(200, y, "{d}", .{s_value.value_default.u}, null, null) catch null,
-                .I => rt.MakeText(200, y, "{d}", .{s_value.value_default.i}, null, null) catch null,
-                .Str => rt.MakeText(200, y, "{s}", .{s_value.value_default.str}, null, null) catch null,
-                .None => rt.MakeText(200, y, "{s}", .{"undefined"}, null, null) catch null,
+                .B => rt.MakeText(312, y, "{any}", .{s_value.value_default.b}, null, null) catch null,
+                .F => rt.MakeText(312, y, "{d:4.2}", .{s_value.value_default.f}, null, null) catch null,
+                .U => rt.MakeText(312, y, "{d}", .{s_value.value_default.u}, null, null) catch null,
+                .I => rt.MakeText(312, y, "{d}", .{s_value.value_default.i}, null, null) catch null,
+                .Str => rt.MakeText(312, y, "{s}", .{s_value.value_default.str}, null, null) catch null,
+                .None => rt.MakeText(312, y, "{s}", .{"undefined"}, null, null) catch null,
             });
-            _ = gf.GDrawText(.Debug, rt.MakeText(300, y, "{s}", .{@tagName(s_value.value_type)}, null, null) catch null);
+            _ = gf.GDrawText(.Debug, rt.MakeText(368, y, "{s}", .{@tagName(s_value.value_type)}, null, null) catch null);
             y += 8;
         }
     }

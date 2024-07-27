@@ -21,6 +21,9 @@ const rt = @import("racer").Text;
 const ri = @import("racer").Input;
 const rto = rt.TextStyleOpts;
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -53,15 +56,19 @@ const InputIcon = struct {
 };
 
 const InputDisplay = struct {
-    var enable: bool = false;
+    var h_s_section: ?SettingHandle = null;
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_pos_x: ?SettingHandle = null;
+    var h_s_pos_y: ?SettingHandle = null;
+    var s_enable: bool = false;
+    var s_pos_x: i16 = 420;
+    var s_pos_y: i16 = 432;
     var initialized: bool = false;
     var analog: [ri.AXIS_LENGTH]f32 = undefined;
     var digital: [ri.BUTTON_LENGTH]u8 = undefined;
     var p_triangle: ?*rq.Sprite = null;
     var p_square: ?*rq.Sprite = null;
     var icons: [12]InputIcon = undefined;
-    var x_base: i16 = 420;
-    var y_base: i16 = 432;
     const style_center = rt.MakeTextHeadStyle(.Small, true, null, .Center, .{rto.ToggleShadow}) catch "";
     const style_left = rt.MakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
@@ -93,15 +100,15 @@ const InputDisplay = struct {
     fn Init() void {
         p_triangle = rq.swrQuad_LoadTga("annodue/images/triangle_48x64.tga", 8001);
         p_square = rq.swrQuad_LoadSprite(26);
-        InitIconSteering(&icons[0], &icons[1], x_base, y_base, 20);
-        InitIconPitch(&icons[2], &icons[3], x_base + 44, y_base + 10, 2);
-        InitIconThrust(&icons[2 + ri.BUTTON_ACCELERATION], &icons[2 + ri.BUTTON_BRAKE], x_base, y_base, 2);
-        InitIconButton(&icons[2 + ri.BUTTON_BOOST], x_base - 18, y_base + 19, 1, 1);
-        InitIconButton(&icons[2 + ri.BUTTON_SLIDE], x_base - 8, y_base + 19, 2, 1);
-        InitIconButton(&icons[2 + ri.BUTTON_ROLL_LEFT], x_base - 28, y_base + 19, 1, 1);
-        InitIconButton(&icons[2 + ri.BUTTON_ROLL_RIGHT], x_base + 20, y_base + 19, 1, 1);
-        //InitIconButton(&icons[2 + ri.BUTTON_TAUNT], x_base, y_base, 1);
-        InitIconButton(&icons[2 + ri.BUTTON_REPAIR], x_base + 10, y_base + 19, 1, 1);
+        InitIconSteering(&icons[0], &icons[1], s_pos_x, s_pos_y, 20);
+        InitIconPitch(&icons[2], &icons[3], s_pos_x + 44, s_pos_y + 10, 2);
+        InitIconThrust(&icons[2 + ri.BUTTON_ACCELERATION], &icons[2 + ri.BUTTON_BRAKE], s_pos_x, s_pos_y, 2);
+        InitIconButton(&icons[2 + ri.BUTTON_BOOST], s_pos_x - 18, s_pos_y + 19, 1, 1);
+        InitIconButton(&icons[2 + ri.BUTTON_SLIDE], s_pos_x - 8, s_pos_y + 19, 2, 1);
+        InitIconButton(&icons[2 + ri.BUTTON_ROLL_LEFT], s_pos_x - 28, s_pos_y + 19, 1, 1);
+        InitIconButton(&icons[2 + ri.BUTTON_ROLL_RIGHT], s_pos_x + 20, s_pos_y + 19, 1, 1);
+        //InitIconButton(&icons[2 + ri.BUTTON_TAUNT], s_pos_x, s_pos_y, 1);
+        InitIconButton(&icons[2 + ri.BUTTON_REPAIR], s_pos_x + 10, s_pos_y + 19, 1, 1);
 
         initialized = true;
     }
@@ -342,11 +349,23 @@ const InputDisplay = struct {
 
     // TODO: handle updating position without having to reload race
     fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
-        enable = gf.SettingGetB("inputdisplay", "enable") orelse false;
-        if (gf.SettingGetI("inputdisplay", "pos_x")) |x| x_base = @as(i16, @truncate(x));
-        if (gf.SettingGetI("inputdisplay", "pos_y")) |y| y_base = @as(i16, @truncate(y));
+        s_enable = gf.SettingGetB("inputdisplay", "enable") orelse false;
+        if (gf.SettingGetI("inputdisplay", "pos_x")) |x| s_pos_x = @as(i16, @truncate(x));
+        if (gf.SettingGetI("inputdisplay", "pos_y")) |y| s_pos_y = @as(i16, @truncate(y));
     }
 };
+
+fn settingsInit(gf: *GlobalFn) void {
+    const section = gf.ASettingSectionOccupy("inputdisplay", null);
+    InputDisplay.h_s_section = section;
+
+    InputDisplay.h_s_enable =
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null);
+    InputDisplay.h_s_pos_x =
+        gf.ASettingOccupy(section, "pos_x", .I, .{ .i = 420 }, null);
+    InputDisplay.h_s_pos_y =
+        gf.ASettingOccupy(section, "pos_y", .I, .{ .i = 432 }, null);
+}
 
 // HOUSEKEEPING
 
@@ -363,9 +382,10 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    InputDisplay.HandleSettings(gf);
+    settingsInit(gf);
+    InputDisplay.HandleSettings(gf); // FIXME: migrate to new settings system
 
-    if ((gs.race_state == .Countdown or gs.race_state == .Racing) and InputDisplay.enable)
+    if ((gs.race_state == .Countdown or gs.race_state == .Racing) and InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
@@ -382,7 +402,7 @@ export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (InputDisplay.enable)
+    if (InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
@@ -390,10 +410,10 @@ export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 //export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
-        if (InputDisplay.enable and !InputDisplay.initialized)
+        if (InputDisplay.s_enable and !InputDisplay.initialized)
             InputDisplay.Init();
 
-        if (InputDisplay.enable and
+        if (InputDisplay.s_enable and
             InputDisplay.initialized and
             rg.PAUSE_STATE.* != 1 and
             !gf.GHideRaceUIIsOn() and

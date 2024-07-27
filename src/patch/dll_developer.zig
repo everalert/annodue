@@ -22,6 +22,9 @@ const Mat4x4 = mat.Mat4x4;
 const vec = r.Vector;
 const Vec3 = vec.Vec3;
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -116,6 +119,26 @@ const MatVisState = struct {
     }
 };
 
+// SETTINGS
+
+const GameplayTweak = struct {
+    var h_s_section: ?SettingHandle = null;
+    var h_s_dump_fonts: ?SettingHandle = null;
+    var h_s_visualize_matrices: ?SettingHandle = null;
+    var s_dump_fonts: bool = false;
+    var s_visualize_matrices: bool = false;
+};
+
+fn settingsInit(gf: *GlobalFn) void {
+    const section = gf.ASettingSectionOccupy("developer", null);
+    GameplayTweak.h_s_section = section;
+
+    GameplayTweak.h_s_dump_fonts = // working?
+        gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, null);
+    GameplayTweak.h_s_visualize_matrices =
+        gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .b = false }, null);
+}
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -131,7 +154,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    MatVisState.doSettingsLoad(gf);
+    MatVisState.doSettingsLoad(gf); // FIXME: migrate to new settings system
+    settingsInit(gf);
 
     // TODO: make sure it only dumps once, even when hot reloading
     if (gf.SettingGetB("developer", "fonts_dump").?) {

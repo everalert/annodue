@@ -12,6 +12,9 @@ const debug = @import("core/Debug.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -34,15 +37,31 @@ const PLUGIN_NAME: [*:0]const u8 = "Multiplayer";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const MpState = struct {
-    var mp_enable: bool = false;
-    var patch_r100: bool = false;
-    var patch_guid: bool = false;
+    var h_s_section: ?SettingHandle = null;
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_patch_guid: ?SettingHandle = null;
+    var h_s_patch_r100: ?SettingHandle = null;
+    var s_enable: bool = false;
+    var s_patch_r100: bool = false;
+    var s_patch_guid: bool = false;
 };
 
 fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
-    MpState.mp_enable = gf.SettingGetB("multiplayer", "enable").?;
-    MpState.patch_r100 = gf.SettingGetB("multiplayer", "patch_r100").?;
-    MpState.patch_guid = gf.SettingGetB("multiplayer", "patch_guid").?;
+    MpState.s_enable = gf.SettingGetB("multiplayer", "enable").?;
+    MpState.s_patch_r100 = gf.SettingGetB("multiplayer", "patch_r100").?;
+    MpState.s_patch_guid = gf.SettingGetB("multiplayer", "patch_guid").?;
+}
+
+fn settingsInit(gf: *GlobalFn) void {
+    const section = gf.ASettingSectionOccupy("multiplayer", null);
+    MpState.h_s_section = section;
+
+    MpState.h_s_enable = // working? TODO: check collisions
+        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null);
+    MpState.h_s_patch_guid = // working?
+        gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, null);
+    MpState.h_s_patch_r100 = // working
+        gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, null);
 }
 
 // PATCHES
@@ -172,18 +191,19 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
+    settingsInit(gf);
+    HandleSettings(gf); // FIXME: port to new settings system
 
     // TODO: move this to settings handler, once global allocation figured out
     var off = gs.patch_offset;
-    if (MpState.mp_enable) {
-        const traction: u8 = if (MpState.patch_r100) 3 else 5;
+    if (MpState.s_enable) {
+        const traction: u8 = if (MpState.s_patch_r100) 3 else 5;
         var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
         var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
         const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
         const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
-        off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.patch_guid);
-        off = PatchNetworkCollisions(off, MpState.patch_guid);
+        off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.s_patch_guid);
+        off = PatchNetworkCollisions(off, MpState.s_patch_guid);
     }
     gs.patch_offset = off;
 }

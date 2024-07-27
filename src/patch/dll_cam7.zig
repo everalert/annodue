@@ -14,6 +14,8 @@ const debug = @import("core/Debug.zig");
 
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -91,6 +93,26 @@ const CamState = enum(u32) {
 
 const Cam7 = extern struct {
     // ini settings
+    var h_s_section: ?SettingHandle = null;
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_flip_look_x: ?SettingHandle = null;
+    var h_s_flip_look_y: ?SettingHandle = null;
+    var h_s_flip_look_x_inverted: ?SettingHandle = null;
+    var h_s_dz_i: ?SettingHandle = null;
+    var h_s_dz_o: ?SettingHandle = null;
+    var h_s_i_mouse_dpi: ?SettingHandle = null;
+    var h_s_i_mouse_cm360: ?SettingHandle = null;
+    var h_s_rot_damp_i_dflt: ?SettingHandle = null;
+    var h_s_rot_spd_i_dflt: ?SettingHandle = null;
+    var h_s_move_damp_i_dflt: ?SettingHandle = null;
+    var h_s_move_spd_i_dflt: ?SettingHandle = null;
+    var h_s_move_planar: ?SettingHandle = null;
+    var h_s_hide_ui: ?SettingHandle = null;
+    var h_s_disable_input: ?SettingHandle = null;
+    var h_s_sfx_volume: ?SettingHandle = null;
+    var h_s_fog_patch: ?SettingHandle = null;
+    var h_s_fog_remove: ?SettingHandle = null;
+    var h_s_visuals_patch: ?SettingHandle = null;
     var s_enable: bool = false;
     var s_flip_look_x: bool = false;
     var s_flip_look_y: bool = false;
@@ -339,6 +361,61 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.s_sfx_volume = m.clamp(gf.SettingGetF("cam7", "sfx_volume") orelse 0.7, 0, 1);
 }
 
+fn settingsInit(gf: *GlobalFn) void {
+    Cam7.h_s_section =
+        gf.ASettingSectionOccupy("cam7", null);
+
+    Cam7.h_s_enable =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "enable", .B, .{ .b = false }, null);
+
+    Cam7.h_s_fog_patch =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "fog_patch", .B, .{ .b = true }, null);
+    Cam7.h_s_fog_remove =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "fog_remove", .B, .{ .b = false }, null);
+    Cam7.h_s_visuals_patch =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "visuals_patch", .B, .{ .b = true }, null);
+
+    Cam7.h_s_flip_look_x =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "flip_look_x", .B, .{ .b = false }, null);
+    Cam7.h_s_flip_look_y =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "flip_look_y", .B, .{ .b = false }, null);
+    Cam7.h_s_flip_look_x_inverted =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "flip_look_x_inverted", .B, .{ .b = false }, null);
+
+    Cam7.h_s_dz_i =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "stick_deadzone_inner", .F, .{ .f = 0.05 }, null);
+    Cam7.h_s_dz_o =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "stick_deadzone_outer", .F, .{ .f = 0.95 }, null);
+
+    Cam7.h_s_i_mouse_dpi =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "mouse_dpi", .U, .{ .u = 1600 }, null);
+    Cam7.h_s_i_mouse_cm360 =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "mouse_cm360", .F, .{ .f = 24 }, null);
+
+    Cam7.h_s_rot_damp_i_dflt =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "default_rot_smoothing", .U, .{ .u = 0 }, null);
+    Cam7.h_s_rot_spd_i_dflt =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "default_rot_speed", .U, .{ .u = 3 }, null);
+    Cam7.h_s_move_damp_i_dflt =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "default_move_smoothing", .U, .{ .u = 2 }, null);
+    Cam7.h_s_move_spd_i_dflt =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "default_move_speed", .U, .{ .u = 3 }, null);
+    Cam7.h_s_move_planar =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "default_planar_movement", .B, .{ .b = false }, null);
+
+    Cam7.h_s_hide_ui =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "default_hide_ui", .B, .{ .b = false }, null);
+    Cam7.h_s_disable_input =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "default_disable_input", .B, .{ .b = false }, null);
+    Cam7.h_s_sfx_volume =
+        gf.ASettingOccupy(Cam7.h_s_section.?, "sfx_volume", .F, .{ .f = 0.7 }, null);
+}
+
+// TODO: impl
+//fn settingsUpdate(value: SettingValue) callconv(.C) void {
+//    _ = value;
+//}
+
 fn UpdateHideUI(gf: *GlobalFn) void {
     if (Cam7.s_hide_ui and Cam7.cam_state == .FreeCam) {
         _ = gf.GHideRaceUIOn();
@@ -580,7 +657,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
+    //HandleSettings(gf);
+    settingsInit(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -607,9 +685,9 @@ export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
-}
+//export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//    HandleSettings(gf);
+//}
 
 export fn EngineUpdateStage1CA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     UpdateState(gs, gf);

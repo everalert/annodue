@@ -37,6 +37,8 @@ const rto = rt.TextStyleOpts;
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -107,6 +109,16 @@ const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const QolState = struct {
+    var h_s_section: ?SettingHandle = null;
+    var h_s_quickstart: ?SettingHandle = null;
+    var h_s_quickrace: ?SettingHandle = null;
+    var h_s_default_racers: ?SettingHandle = null;
+    var h_s_default_laps: ?SettingHandle = null;
+    var h_s_ms_timer: ?SettingHandle = null;
+    var h_s_fps_limiter: ?SettingHandle = null;
+    var h_s_skip_planet_cutscenes: ?SettingHandle = null;
+    var h_s_skip_podium_cutscene: ?SettingHandle = null;
+    var h_s_fix_viewport_edges: ?SettingHandle = null;
     var quickstart: bool = false;
     var quickrace: bool = false;
     var default_racers: u32 = 12;
@@ -123,32 +135,32 @@ const QolState = struct {
     var input_pause = input_pause_data.inputMap();
     var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
+
+    fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
+        input_pause.update(gf);
+        input_unpause.update(gf);
+        input_quickstart.update(gf);
+    }
+
+    fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
+        quickstart = gf.SettingGetB("qol", "quick_restart_enable") orelse false;
+        quickrace = gf.SettingGetB("qol", "quick_race_menu_enable") orelse false;
+        default_racers = gf.SettingGetU("qol", "default_racers") orelse 12;
+        default_laps = gf.SettingGetU("qol", "default_laps") orelse 3;
+        ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
+        fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
+        skip_planet_cutscenes = gf.SettingGetB("qol", "skip_planet_cutscenes") orelse false;
+        skip_podium_cutscene = gf.SettingGetB("qol", "skip_podium_cutscene") orelse false;
+        fix_viewport_edges = gf.SettingGetB("qol", "fix_viewport_edges") orelse false;
+
+        if (!quickrace) QuickRaceMenu.close();
+        // FIXME: add these to deinit?
+        PatchHudTimerMs(ms_timer);
+        PatchPlanetCutscenes(skip_planet_cutscenes);
+        PatchPodiumCutscene(skip_podium_cutscene);
+        PatchViewportEdges(fix_viewport_edges);
+    }
 };
-
-fn QolUpdateInput(gf: *GlobalFn) callconv(.C) void {
-    QolState.input_pause.update(gf);
-    QolState.input_unpause.update(gf);
-    QolState.input_quickstart.update(gf);
-}
-
-fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
-    QolState.quickstart = gf.SettingGetB("qol", "quick_restart_enable") orelse false;
-    QolState.quickrace = gf.SettingGetB("qol", "quick_race_menu_enable") orelse false;
-    QolState.default_racers = gf.SettingGetU("qol", "default_racers") orelse 12;
-    QolState.default_laps = gf.SettingGetU("qol", "default_laps") orelse 3;
-    QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
-    QolState.fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
-    QolState.skip_planet_cutscenes = gf.SettingGetB("qol", "skip_planet_cutscenes") orelse false;
-    QolState.skip_podium_cutscene = gf.SettingGetB("qol", "skip_podium_cutscene") orelse false;
-    QolState.fix_viewport_edges = gf.SettingGetB("qol", "fix_viewport_edges") orelse false;
-
-    if (!QolState.quickrace) QuickRaceMenu.close();
-    // FIXME: add these to deinit?
-    PatchHudTimerMs(QolState.ms_timer);
-    PatchPlanetCutscenes(QolState.skip_planet_cutscenes);
-    PatchPodiumCutscene(QolState.skip_podium_cutscene);
-    PatchViewportEdges(QolState.fix_viewport_edges);
-}
 
 // HUD TIMER MS
 
@@ -306,6 +318,9 @@ fn PatchCyYungaCheatAudio(enable: bool) void {
 // TODO: settings for count length, enable
 
 const FastCountdown = struct {
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_duration: ?SettingHandle = null;
+
     var CountDuration: f32 = 1.0;
     var CountRatio: f32 = 3 / 1.0;
     var CountDif: f32 = 3 - 1.0;
@@ -496,6 +511,8 @@ const QuickRaceMenuInput = extern struct {
 };
 
 const QuickRaceMenu = extern struct {
+    var h_s_fps_default: ?SettingHandle = null;
+
     const open_threshold: f32 = 0.75;
     var menu_active: st.ActiveState = .Off;
     var initialized: bool = false;
@@ -778,6 +795,38 @@ fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
     return false;
 }
 
+fn settingsInit(gf: *GlobalFn) void {
+    const section = gf.ASettingSectionOccupy("qol", null);
+    QolState.h_s_section = section;
+
+    QolState.h_s_quickstart =
+        gf.ASettingOccupy(section, "quick_restart_enable", .B, .{ .b = false }, null);
+    QolState.h_s_quickrace =
+        gf.ASettingOccupy(section, "quick_race_menu_enable", .B, .{ .b = false }, null);
+    QolState.h_s_default_racers =
+        gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null);
+    QolState.h_s_default_laps =
+        gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null);
+    QolState.h_s_ms_timer =
+        gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, null);
+    QolState.h_s_fps_limiter =
+        gf.ASettingOccupy(section, "fps_limiter_enable", .B, .{ .b = false }, null);
+    QolState.h_s_skip_planet_cutscenes =
+        gf.ASettingOccupy(section, "skip_planet_cutscenes", .B, .{ .b = false }, null);
+    QolState.h_s_skip_podium_cutscene =
+        gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .b = false }, null);
+    QolState.h_s_fix_viewport_edges =
+        gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, null);
+
+    FastCountdown.h_s_enable =
+        gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, null);
+    FastCountdown.h_s_duration =
+        gf.ASettingOccupy(section, "fast_countdown_duration", .F, .{ .f = 1.0 }, null);
+
+    QuickRaceMenu.h_s_fps_default =
+        gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, null);
+}
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -794,18 +843,20 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = w32wm.ShowCursor(0); // cursor fix
-    QolHandleSettings(gf);
+    QolState.HandleSettings(gf); // FIXME: convert to settingsInit stuff
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
-    QuickRaceMenu.settingsLoad(gf);
+    QuickRaceMenu.settingsLoad(gf); // FIXME: convert to settingsInit stuff
     //QuickRaceMenu.FpsTimer.Start();
 
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
 
-    FastCountdown.settingsLoad(gf);
+    FastCountdown.settingsLoad(gf); // FIXME: convert to settingsInit stuff
+
+    settingsInit(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -834,12 +885,12 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // HOOKS
 
 export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    QolHandleSettings(gf);
+    QolState.HandleSettings(gf);
     FastCountdown.settingsLoad(gf);
 }
 
 export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    QolUpdateInput(gf);
+    QolState.UpdateInput(gf);
     QuickRaceMenu.update_input();
 }
 

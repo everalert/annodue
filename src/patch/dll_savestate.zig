@@ -194,7 +194,8 @@ const state = struct {
     //}
 
     fn settingsInit(gf: *GlobalFn) void {
-        s_h_section = gf.ASettingSectionOccupy("savestate", null);
+        s_h_section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "savestate", null);
+
         s_h_enable = gf.ASettingOccupy(s_h_section.?, "enable", .B, .{ .b = false }, sUpdEnable);
         s_h_load_delay = gf.ASettingOccupy(s_h_section.?, "load_delay", .U, .{ .u = 500 }, sUpdLoadDelay);
     }

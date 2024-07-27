@@ -42,7 +42,7 @@ const GameplayTweak = struct {
 };
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("gameplay", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", null);
     GameplayTweak.h_s_section = section;
 
     GameplayTweak.h_s_enable =

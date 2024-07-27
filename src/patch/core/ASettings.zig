@@ -169,7 +169,9 @@ pub const Section = struct {
 const ASettings = struct {
     var data_sections: HandleMapSOA(Section, u16) = undefined;
     var data_settings: HandleMapSOA(Setting, u16) = undefined;
-    flags: EnumSet(Flags),
+    var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
+    var h_section_plugin: ?Handle = null;
+    var h_section_core: ?Handle = null;
 
     const Flags = enum(u32) {
         AutoSave,
@@ -455,14 +457,14 @@ const ASettings = struct {
 // TODO: generally - make the plugin-facing stuff operate under 'plugin' section,
 // which is initialized internally
 
-// FIXME: add parent section param again, to allow for nested stuff; null input = 'plugin' internal parent
 pub fn ASectionOccupy(
+    section: Handle,
     name: [*:0]const u8,
     fnOnChange: ?*const fn ([*]ASettingSent) callconv(.C) void,
 ) callconv(.C) Handle {
     return ASettings.sectionOccupy(
         workingOwner(),
-        null, // TODO: internal 'plugin' section
+        if (section.isNull()) null else section, // TODO: internal 'plugin' section
         name,
         fnOnChange,
     ) catch NullHandle;
@@ -510,6 +512,8 @@ fn updateSet1(value: ASettingSent.Value) callconv(.C) void {
 
 pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.init(coreAllocator());
+    //ASettings.h_section_core = ASettings.sectionNew(null, "Core") catch NullHandle;
+    //ASettings.h_section_plugin = ASettings.sectionNew(null, "Plugin") catch NullHandle;
 
     // TODO: move below to commented test block
     // TODO: add setting occupy -> string type test

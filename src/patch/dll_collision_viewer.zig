@@ -356,7 +356,7 @@ const AnnodueSettings = struct {
 };
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("collisionviewer", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "collisionviewer", null);
     AnnodueSettings.h_s_section = section;
 
     AnnodueSettings.h_s_depth_bias =

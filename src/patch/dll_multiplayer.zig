@@ -53,7 +53,7 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 }
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("multiplayer", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "multiplayer", null);
     MpState.h_s_section = section;
 
     MpState.h_s_enable = // working? TODO: check collisions

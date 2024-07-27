@@ -363,7 +363,7 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
 
 fn settingsInit(gf: *GlobalFn) void {
     Cam7.h_s_section =
-        gf.ASettingSectionOccupy("cam7", null);
+        gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", null);
 
     Cam7.h_s_enable =
         gf.ASettingOccupy(Cam7.h_s_section.?, "enable", .B, .{ .b = false }, null);

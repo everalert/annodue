@@ -44,7 +44,7 @@ const Overlay = struct {
 };
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("overlay", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
     Overlay.h_s_section = section;
 
     Overlay.h_s_enable =

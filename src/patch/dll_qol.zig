@@ -796,7 +796,7 @@ fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
 }
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("qol", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "qol", null);
     QolState.h_s_section = section;
 
     QolState.h_s_quickstart =

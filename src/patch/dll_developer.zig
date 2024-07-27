@@ -130,7 +130,7 @@ const GameplayTweak = struct {
 };
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("developer", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "developer", null);
     GameplayTweak.h_s_section = section;
 
     GameplayTweak.h_s_dump_fonts = // working?

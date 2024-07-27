@@ -356,7 +356,7 @@ const InputDisplay = struct {
 };
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("inputdisplay", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "inputdisplay", null);
     InputDisplay.h_s_section = section;
 
     InputDisplay.h_s_enable =

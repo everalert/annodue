@@ -294,7 +294,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
 }
 
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy("cosmetic", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", null);
     CosmeticState.h_s_section = section;
 
     CosmeticState.h_s_rb_enable =

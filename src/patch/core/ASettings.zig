@@ -541,8 +541,8 @@ pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     //_ = ASettings.sectionNew(null, "Sec1") catch {};
     //_ = ASettings.sectionNew(null, "Sec2") catch {};
     //_ = ASettings.sectionNew(null, "Sec2") catch {}; // expect: NameTaken error -> skipped
-    //const sec1 = ASettings.sectionOccupy(0x0000, null, "Sec1", null) catch Handle.getNull();
-    //const sec2 = ASettings.sectionOccupy(0x0001, null, "Sec2", null) catch Handle.getNull();
+    //const sec1 = ASettings.sectionOccupy(0x0000, null, "Sec1", null) catch NullHandle;
+    //const sec2 = ASettings.sectionOccupy(0x0001, null, "Sec2", null) catch NullHandle;
 
     //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
     //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
@@ -552,17 +552,17 @@ pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     //_ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
     //_ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
 
-    //const occ1 = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, updateSet1) catch NullHandle;
-    //_ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null) catch {}; // expect: ignored
-    //const occ2 = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 987.654 }, null) catch NullHandle;
-    //_ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 876.543 }, null) catch {}; // export: ignored
+    //const occ1 = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null, updateSet1) catch NullHandle;
+    //_ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
+    //const occ2 = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    //_ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
 
     //ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
     //ASettings.settingVacate(occ2); // expect: undefined default, etc.
 
-    //const sec3 = ASettings.sectionOccupy(0x0000, null, "Sec3", null) catch Handle.getNull();
+    //const sec3 = ASettings.sectionOccupy(0x0000, sec2, "Sec3", null) catch NullHandle;
     //_ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
-    //_ = ASettings.settingOccupy(0x0000, sec3, "Set8", .F, .{ .f = 987.654 }, null) catch NullHandle;
+    //_ = ASettings.settingOccupy(0x0000, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
     //ASettings.sectionVacate(sec3);
 
     //ASettings.vacateOwner(0x0000); // expect: everything undefined default, etc.
@@ -579,73 +579,69 @@ pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
 }
 
 // FIXME: remove, for testing
-// TODO: maybe adapt for test script
-pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 
     const s = struct {
+        const rate: f32 = 300;
         var y_off: i16 = 0;
     };
-    if (gf.InputGetKbRaw(.PRIOR).on()) s.y_off += 2;
-    if (gf.InputGetKbRaw(.NEXT).on()) s.y_off -= 2;
 
     _ = gf.GDrawRect(.Debug, 0, 0, 400, 480, 0x000020E0);
+    var x: i16 = 0;
     var y: i16 = 0 + s.y_off;
+    drawSettings(gf, null, &x, &y);
 
+    var h: i16 = y - s.y_off;
+    var dif: i16 = @intFromFloat(gs.dt_f * s.rate);
+    if (gf.InputGetKbRaw(.PRIOR).on()) s.y_off = @min(s.y_off + dif, 0); // scroll up
+    if (gf.InputGetKbRaw(.NEXT).on()) s.y_off = std.math.clamp(s.y_off - dif, -h + 480, 0); // scroll dn
+}
+
+// TODO: maybe adapt for test script
+fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void {
     for (0..ASettings.data_settings.values.len) |i| {
         const value: Setting = ASettings.data_settings.values.get(i);
-        if (value.section != null) continue;
-        _ = gf.GDrawText(.Debug, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
+        if ((section == null) != (value.section == null)) continue;
+        if (section != null and
+            (value.section.?.generation != section.?.generation or
+            value.section.?.index != section.?.index)) continue;
+
+        _ = gf.GDrawText(.Debug, rt.MakeText(x_ref.*, y_ref.*, "{s}", .{value.name}, null, null) catch null);
         _ = gf.GDrawText(.Debug, switch (value.value_type) {
-            .B => rt.MakeText(256, y, "{any}", .{value.value.b}, null, null) catch null,
-            .F => rt.MakeText(256, y, "{d:4.2}", .{value.value.f}, null, null) catch null,
-            .U => rt.MakeText(256, y, "{d}", .{value.value.u}, null, null) catch null,
-            .I => rt.MakeText(256, y, "{d}", .{value.value.i}, null, null) catch null,
-            else => rt.MakeText(256, y, "{s}", .{value.value.str}, null, null) catch null,
+            .B => rt.MakeText(256, y_ref.*, "{any}", .{value.value.b}, null, null) catch null,
+            .F => rt.MakeText(256, y_ref.*, "{d:4.2}", .{value.value.f}, null, null) catch null,
+            .U => rt.MakeText(256, y_ref.*, "{d}", .{value.value.u}, null, null) catch null,
+            .I => rt.MakeText(256, y_ref.*, "{d}", .{value.value.i}, null, null) catch null,
+            else => rt.MakeText(256, y_ref.*, "{s}", .{value.value.str}, null, null) catch null,
         });
         _ = gf.GDrawText(.Debug, switch (value.value_type) {
-            .B => rt.MakeText(312, y, "{any}", .{value.value_default.b}, null, null) catch null,
-            .F => rt.MakeText(312, y, "{d:4.2}", .{value.value_default.f}, null, null) catch null,
-            .U => rt.MakeText(312, y, "{d}", .{value.value_default.u}, null, null) catch null,
-            .I => rt.MakeText(312, y, "{d}", .{value.value_default.i}, null, null) catch null,
-            .Str => rt.MakeText(312, y, "{s}", .{value.value_default.str}, null, null) catch null,
-            .None => rt.MakeText(312, y, "{s}", .{"undefined"}, null, null) catch null,
+            .B => rt.MakeText(312, y_ref.*, "{any}", .{value.value_default.b}, null, null) catch null,
+            .F => rt.MakeText(312, y_ref.*, "{d:4.2}", .{value.value_default.f}, null, null) catch null,
+            .U => rt.MakeText(312, y_ref.*, "{d}", .{value.value_default.u}, null, null) catch null,
+            .I => rt.MakeText(312, y_ref.*, "{d}", .{value.value_default.i}, null, null) catch null,
+            .Str => rt.MakeText(312, y_ref.*, "{s}", .{value.value_default.str}, null, null) catch null,
+            .None => rt.MakeText(312, y_ref.*, "{s}", .{"undefined"}, null, null) catch null,
         });
-        _ = gf.GDrawText(.Debug, rt.MakeText(368, y, "{s}", .{@tagName(value.value_type)}, null, null) catch null);
-        y += 8;
+        _ = gf.GDrawText(.Debug, rt.MakeText(368, y_ref.*, "{s}", .{@tagName(value.value_type)}, null, null) catch null);
+        y_ref.* += 10;
     }
 
     for (0..ASettings.data_sections.values.len) |i| {
-        const value = ASettings.data_sections.values.get(i);
-        const handle = ASettings.data_sections.handles.items[i];
-        y += 4;
-        _ = gf.GDrawText(.Debug, rt.MakeText(0, y, "{s}", .{value.name}, null, null) catch null);
-        y += 8;
+        const value: Section = ASettings.data_sections.values.get(i);
+        if ((section == null) != (value.section == null)) continue;
+        if (section != null and
+            (value.section.?.generation != section.?.generation or
+            value.section.?.index != section.?.index)) continue;
 
-        for (0..ASettings.data_settings.values.len) |j| {
-            const s_value = ASettings.data_settings.values.get(j);
-            const section = s_value.section;
-            if (section == null or handle.generation != section.?.generation or handle.index != section.?.index)
-                continue;
-            _ = gf.GDrawText(.Debug, rt.MakeText(12, y, "{s}", .{s_value.name}, null, null) catch null);
-            _ = gf.GDrawText(.Debug, switch (s_value.value_type) {
-                .B => rt.MakeText(256, y, "{any}", .{s_value.value.b}, null, null) catch null,
-                .F => rt.MakeText(256, y, "{d:4.2}", .{s_value.value.f}, null, null) catch null,
-                .U => rt.MakeText(256, y, "{d}", .{s_value.value.u}, null, null) catch null,
-                .I => rt.MakeText(256, y, "{d}", .{s_value.value.i}, null, null) catch null,
-                else => rt.MakeText(256, y, "{s}", .{s_value.value.str}, null, null) catch null,
-            });
-            _ = gf.GDrawText(.Debug, switch (s_value.value_type) {
-                .B => rt.MakeText(312, y, "{any}", .{s_value.value_default.b}, null, null) catch null,
-                .F => rt.MakeText(312, y, "{d:4.2}", .{s_value.value_default.f}, null, null) catch null,
-                .U => rt.MakeText(312, y, "{d}", .{s_value.value_default.u}, null, null) catch null,
-                .I => rt.MakeText(312, y, "{d}", .{s_value.value_default.i}, null, null) catch null,
-                .Str => rt.MakeText(312, y, "{s}", .{s_value.value_default.str}, null, null) catch null,
-                .None => rt.MakeText(312, y, "{s}", .{"undefined"}, null, null) catch null,
-            });
-            _ = gf.GDrawText(.Debug, rt.MakeText(368, y, "{s}", .{@tagName(s_value.value_type)}, null, null) catch null);
-            y += 8;
-        }
+        //y_ref.* += 4;
+        _ = gf.GDrawText(.Debug, rt.MakeText(x_ref.*, y_ref.*, "{s}", .{value.name}, null, null) catch null);
+        y_ref.* += 10;
+
+        x_ref.* += 12;
+        const handle: Handle = ASettings.data_sections.handles.items[i];
+        drawSettings(gf, handle, x_ref, y_ref);
+        x_ref.* -= 12;
     }
 }
 

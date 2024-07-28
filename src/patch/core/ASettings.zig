@@ -1,4 +1,9 @@
 const std = @import("std");
+const ini = @import("zigini");
+
+const w32 = @import("zigwin32");
+const w32f = w32.foundation;
+const w32fs = w32.storage.file_system;
 
 const EnumSet = std.EnumSet;
 const Allocator = std.mem.Allocator;
@@ -20,8 +25,11 @@ const rt = r.Text;
 const dbg = @import("../util/debug.zig");
 
 // TODO: remove OnSettingsLoad from hooks after all settings ported to new system
-// TODO: param for ptr to affected setting in settingOccupy, and auto-set the variable on update
-// to cut down on the plugin-side helper functions that are exclusively setting the value
+// TODO: ?? system watches for changes in values at stored ptrs? so you can just change
+// the var plugin-side and the system will store changes, run callbacks, save to
+// file, etc by itself. only within section scope or as config'd? don't run callbacks
+// except when loading from file (assumption that plugin will handle itself if
+// setting vars directly)?
 
 // DEFS
 
@@ -184,6 +192,8 @@ const ASettings = struct {
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
     var h_section_plugin: ?Handle = null;
     var h_section_core: ?Handle = null;
+    var last_check: u32 = 0;
+    var last_filetime: w32f.FILETIME = undefined;
 
     const Flags = enum(u32) {
         AutoSave,
@@ -459,16 +469,63 @@ const ASettings = struct {
     }
 
     // TODO: dumping stuff i might need here
-    pub fn iniParse() void {}
-    pub fn iniWrite() void {}
-    pub fn jsonParse() void {}
-    pub fn jsonWrite() void {}
-    pub fn cleanupSave() void {} // remove settings from file not defined by a plugin etc.
-    pub fn cleanupSaveOccupiedSectionsOnly() void {} // leave 'junk' data on file for unloaded sections
-    pub fn saveAuto(_: ?Handle) void {}
-    pub fn save(_: ?Handle) void {}
-    pub fn sort() void {}
+    //pub fn iniParse() void {}
+    //pub fn iniWrite() void {}
+    //pub fn jsonParse() void {}
+    //pub fn jsonWrite() void {}
+    //pub fn cleanupSave() void {} // remove settings from file not defined by a plugin etc.
+    //pub fn cleanupSaveOccupiedSectionsOnly() void {} // leave 'junk' data on file for unloaded sections
+    //pub fn saveAuto(_: ?Handle) void {}
+    //pub fn save(_: ?Handle) void {}
+    //pub fn sort() void {}
+
+    // TODO: update existing settings, run callbacks
+    pub fn iniRead(alloc: Allocator, filename: []const u8) !void {
+        const file = try std.fs.cwd().openFile(filename, .{});
+        defer file.close();
+
+        var parser = ini.parse(alloc, file.reader());
+        defer parser.deinit();
+
+        var section: ?Handle = null;
+        while (try parser.next()) |record| {
+            switch (record) {
+                .section => |name| {
+                    const section_i = nodeFind(data_sections, null, name);
+                    section = if (section_i) |i|
+                        data_sections.handles.items[i]
+                    else
+                        sectionNew(null, name) catch null;
+                },
+                .property => |kv| {
+                    _ = settingNew(section, kv.key, kv.value, true) catch {};
+                },
+                .enumeration => |value| { // FIXME: implement
+                    _ = value;
+                },
+            }
+        }
+    }
+
+    fn load() bool {
+        var fd: w32fs.WIN32_FIND_DATAA = undefined;
+        _ = w32fs.FindFirstFileA("annodue/settings.ini", &fd);
+        if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
+            return false;
+
+        const alloc = coreAllocator();
+        ASettings.iniRead(alloc, "annodue/settings.ini") catch return false;
+        ASettings.last_filetime = fd.ftLastWriteTime;
+
+        return true;
+    }
 };
+
+// FIXME: copied from hook.zig; move both to util?
+fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
+    return (t1.dwLowDateTime == t2.dwLowDateTime and
+        t1.dwHighDateTime == t2.dwHighDateTime);
+}
 
 // GLOBAL EXPORTS
 
@@ -532,6 +589,7 @@ fn updateSet1(value: ASettingSent.Value) callconv(.C) void {
 
 pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.init(coreAllocator());
+    _ = ASettings.load();
     //ASettings.h_section_core = ASettings.sectionNew(null, "Core") catch NullHandle;
     //ASettings.h_section_plugin = ASettings.sectionNew(null, "Plugin") catch NullHandle;
 

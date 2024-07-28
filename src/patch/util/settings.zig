@@ -1,5 +1,3 @@
-const settings = @This();
-
 const std = @import("std");
 const ini = @import("zigini");
 

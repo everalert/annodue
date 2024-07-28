@@ -393,9 +393,9 @@ fn settingsInit(gf: *GlobalFn) void {
         gf.ASettingOccupy(section, "mouse_cm360", .F, .{ .f = 24 }, null, null);
 
     Cam7.h_s_rot_damp_i_dflt =
-        gf.ASettingOccupy(section, "default_rot_smoothing", .U, .{ .u = 0 }, null, null);
+        gf.ASettingOccupy(section, "default_rotation_smoothing", .U, .{ .u = 0 }, null, null);
     Cam7.h_s_rot_spd_i_dflt =
-        gf.ASettingOccupy(section, "default_rot_speed", .U, .{ .u = 3 }, null, null);
+        gf.ASettingOccupy(section, "default_rotation_speed", .U, .{ .u = 3 }, null, null);
     Cam7.h_s_move_damp_i_dflt =
         gf.ASettingOccupy(section, "default_move_smoothing", .U, .{ .u = 2 }, null, null);
     Cam7.h_s_move_spd_i_dflt =

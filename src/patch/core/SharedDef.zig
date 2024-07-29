@@ -95,7 +95,7 @@ pub const GlobalFunction = extern struct {
     ASettingSectionOccupy: *const fn (
         section: HandleSOA(u16), // originally nullable
         name: [*:0]const u8,
-        fnOnChange: ?*const fn ([*]ASettingSent) callconv(.C) void,
+        fnOnChange: ?*const fn (arr: [*]ASettingSent, len: usize) callconv(.C) void,
     ) callconv(.C) HandleSOA(u16),
     ASettingSectionVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
     ASettingVacateAll: *const fn () callconv(.C) void,

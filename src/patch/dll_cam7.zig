@@ -15,6 +15,7 @@ const debug = @import("core/Debug.zig");
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const SettingHandle = @import("core/ASettings.zig").Handle;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
 const rin = @import("racer").Input;
@@ -32,6 +33,9 @@ const dz = @import("util/deadzone.zig");
 const nt = @import("util/normalized_transform.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -361,8 +365,13 @@ fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
     Cam7.s_sfx_volume = m.clamp(gf.SettingGetF("cam7", "sfx_volume") orelse 0.7, 0, 1);
 }
 
+fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    _ = len;
+    _ = changed;
+}
+
 fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", null);
+    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", settingsUpdate);
     Cam7.h_s_section = section;
 
     Cam7.h_s_enable =

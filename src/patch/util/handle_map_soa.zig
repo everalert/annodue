@@ -101,6 +101,16 @@ pub fn HandleMapSOA(comptime T: type, comptime I: type) type {
             return false;
         }
 
+        pub fn getIndex(self: *Self, h: Handle(I)) ?I {
+            if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
+                const entry = self.sparse_indices.items[h.index];
+                if (entry.generation == h.generation and entry.owner == h.owner) {
+                    return entry.index_or_next;
+                }
+            }
+            return null;
+        }
+
         pub fn get(self: *Self, h: Handle(I)) ?T {
             if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
                 const entry = self.sparse_indices.items[h.index];

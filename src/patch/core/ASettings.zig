@@ -1,6 +1,8 @@
 const std = @import("std");
-const ini = @import("zigini");
 
+const ArrayList = std.ArrayList;
+
+const ini = @import("zigini");
 const w32 = @import("zigwin32");
 const w32f = w32.foundation;
 const w32fs = w32.storage.file_system;
@@ -30,6 +32,9 @@ const dbg = @import("../util/debug.zig");
 // file, etc by itself. only within section scope or as config'd? don't run callbacks
 // except when loading from file (assumption that plugin will handle itself if
 // setting vars directly)?
+// FIXME: getting a index of handle/sparse_index by using nodeFind likely incorrect, but
+// just not an issue so far because no items have needed to be deleted/shuffled yet;
+// see iniRead->parse->.section for how to actually resolve handle to value
 
 // DEFS
 
@@ -39,7 +44,7 @@ pub const NullHandle = Handle.getNull();
 const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
 
 pub const ASettingSent = extern struct {
-    name: [*:0]u8,
+    name: [*:0]const u8,
     value: Value,
 
     pub const Value = extern union {
@@ -49,14 +54,28 @@ pub const ASettingSent = extern struct {
         i: i32,
         b: bool,
 
+        // TODO: decide if any need to error on None type
+        pub inline fn fromRaw(value: [*:0]const u8, t: Setting.Type) Value {
+            const len = std.mem.len(@as([*:0]const u8, @ptrCast(value)));
+            return switch (t) {
+                .B => .{ .b = std.mem.eql(u8, "on", value[0..2]) or
+                    std.mem.eql(u8, "true", value[0..4]) or
+                    value[0] == '1' },
+                .I => .{ .i = std.fmt.parseInt(i32, value[0..len], 10) catch @panic("value not i32") },
+                .U => .{ .u = std.fmt.parseInt(u32, value[0..len], 10) catch @panic("value not u32") },
+                .F => .{ .f = std.fmt.parseFloat(f32, value[0..len]) catch @panic("value not f32") },
+                else => .{ .str = value },
+            };
+        }
+
+        // TODO: decide if any need to error on None type
         pub inline fn fromSetting(setting: *const Setting.Value, t: Setting.Type) Value {
             return switch (t) {
-                .Str => .{ .str = &setting.str },
-                .F => .{ .f = setting.f },
-                .U => .{ .u = setting.u },
-                .I => .{ .i = setting.i },
                 .B => .{ .b = setting.b },
-                else => @panic("setting value type must not be None"),
+                .I => .{ .i = setting.i },
+                .U => .{ .u = setting.u },
+                .F => .{ .f = setting.f },
+                else => .{ .str = &setting.str },
             };
         }
     };
@@ -83,14 +102,14 @@ pub const Setting = struct {
         i: i32,
         b: bool,
 
+        // TODO: decide if any need to error on None type
         pub inline fn set(self: *Value, v: ASettingSent.Value, t: Type) !void {
             switch (t) {
-                .Str => _ = try bufPrintZ(&self.str, "{s}", .{v.str}),
                 .F => self.f = v.f,
                 .U => self.u = v.u,
                 .I => self.i = v.i,
                 .B => self.b = v.b,
-                else => @panic("setting value type must not be None"),
+                else => _ = try bufPrintZ(&self.str, "{s}", .{v.str}),
             }
         }
 
@@ -148,6 +167,19 @@ pub const Setting = struct {
             try self.type2raw(t1);
             try self.raw2type(t2);
         }
+
+        pub inline fn eql(self: *Value, other: ASettingSent.Value, t: Type) bool {
+            return switch (t) {
+                .B => self.b == other.b,
+                .I => self.i == other.i,
+                .U => self.u == other.u,
+                .F => self.f == other.f,
+                else => {
+                    const len = std.mem.len(@as([*:0]const u8, @ptrCast(&self.str)));
+                    return std.mem.eql(u8, @as([*:0]const u8, @ptrCast(&self.str))[0..len], other.str[0..len]);
+                },
+            };
+        }
     };
 
     const Flags = enum(u32) {
@@ -177,16 +209,18 @@ pub const Section = struct {
     section: ?struct { generation: u16, index: u16 } = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
     flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
-    fnOnChange: ?*const fn (changed: [*]ASettingSent) callconv(.C) void = null, // null-terminated
+    fnOnChange: ?*const fn (changed: [*]ASettingSent, len: usize) callconv(.C) void = null,
 
     const Flags = enum(u32) {
         HasOwner,
         AutoSave,
+        UpdateQueued,
     };
 };
 
 // reserved global settings: AutoSave
 const ASettings = struct {
+    const check_freq: u32 = 1000 / 24; // in lieu of every frame
     var data_sections: HandleMapSOA(Section, u16) = undefined;
     var data_settings: HandleMapSOA(Setting, u16) = undefined;
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
@@ -266,7 +300,7 @@ const ASettings = struct {
         owner: u16,
         section: ?Handle,
         name: [*:0]const u8,
-        fnOnChange: ?*const fn ([*]ASettingSent) callconv(.C) void,
+        fnOnChange: ?*const fn ([*]ASettingSent, usize) callconv(.C) void,
     ) !Handle {
         const existing_i = nodeFind(data_sections, section, name);
 
@@ -450,12 +484,18 @@ const ASettings = struct {
         handle: Handle,
         value: ASettingSent.Value,
     ) void {
-        var data: Setting = data_settings.get(handle) orelse return;
-        data.value.set(value, data.value_type) catch return;
-        data_settings.values.set(handle.index, data);
-        if (data.value_ptr) |p|
-            data.value.getToPtr(p, data.value_type);
-        if (data.fnOnChange) |f|
+        const i = data_settings.getIndex(handle) orelse return;
+        const slices = data_settings.values.slice();
+        const sl_type: []Setting.Type = slices.items(.value_type);
+        const sl_value: []Setting.Value = slices.items(.value);
+        const sl_ptr: []?*anyopaque = slices.items(.value_ptr);
+        const sl_fn = slices.items(.fnOnChange);
+
+        sl_value[i].set(value, sl_type[i]) catch return;
+
+        if (sl_ptr[i]) |p|
+            sl_value[i].getToPtr(p, sl_type[i]);
+        if (sl_fn[i]) |f|
             f(value);
     }
 
@@ -487,24 +527,59 @@ const ASettings = struct {
         var parser = ini.parse(alloc, file.reader());
         defer parser.deinit();
 
-        var section: ?Handle = null;
+        var sec_handle: ?Handle = null;
+        var sec_changes = ArrayList(ASettingSent).init(alloc);
+        defer sec_changes.deinit();
         while (try parser.next()) |record| {
             switch (record) {
                 .section => |name| {
+                    if (sec_handle != null and sec_changes.items.len > 0) blk: {
+                        const i = data_sections.getIndex(sec_handle.?) orelse break :blk;
+                        if (data_sections.values.items(.fnOnChange)[i]) |f|
+                            f(sec_changes.items.ptr, sec_changes.items.len);
+                    }
+                    sec_changes.clearRetainingCapacity();
+
                     const section_i = nodeFind(data_sections, null, name);
-                    section = if (section_i) |i|
+                    sec_handle = if (section_i) |i|
                         data_sections.handles.items[i]
                     else
                         sectionNew(null, name) catch null;
                 },
                 .property => |kv| {
-                    _ = settingNew(section, kv.key, kv.value, true) catch {};
+                    const setting_i = nodeFind(data_settings, sec_handle, kv.key);
+                    if (setting_i) |i| {
+                        const handle = data_settings.handles.items[i]; // WARN: could be invalid
+                        const set_slices = data_settings.values.slice();
+                        const set_types = set_slices.items(.value_type);
+                        const set_values: []Setting.Value = set_slices.items(.value);
+                        const set_saved: []Setting.Value = set_slices.items(.value_saved);
+
+                        const send_val = ASettingSent.Value.fromRaw(kv.value, set_types[i]);
+
+                        if (!set_saved[i].eql(send_val, set_types[i]))
+                            try set_saved[i].set(send_val, set_types[i]);
+
+                        if (!set_values[i].eql(send_val, set_types[i])) {
+                            const send_data = ASettingSent{ .name = kv.key, .value = send_val };
+                            try sec_changes.append(send_data);
+                            settingUpdate(handle, send_val);
+                        }
+                    } else {
+                        _ = try settingNew(sec_handle, kv.key, kv.value, true);
+                    }
                 },
-                .enumeration => |value| { // FIXME: implement
+                .enumeration => |value| { // FIXME: impl
                     _ = value;
                 },
             }
         }
+        if (sec_handle != null and sec_changes.items.len > 0) blk: {
+            const i = data_sections.getIndex(sec_handle.?) orelse break :blk;
+            if (data_sections.values.items(.fnOnChange)[i]) |f|
+                f(sec_changes.items.ptr, sec_changes.items.len);
+        }
+        sec_changes.clearRetainingCapacity();
     }
 
     fn load() bool {
@@ -513,8 +588,7 @@ const ASettings = struct {
         if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
             return false;
 
-        const alloc = coreAllocator();
-        ASettings.iniRead(alloc, "annodue/settings.ini") catch return false;
+        ASettings.iniRead(coreAllocator(), "annodue/settings.ini") catch return false;
         ASettings.last_filetime = fd.ftLastWriteTime;
 
         return true;
@@ -535,7 +609,7 @@ fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
 pub fn ASectionOccupy(
     section: Handle,
     name: [*:0]const u8,
-    fnOnChange: ?*const fn ([*]ASettingSent) callconv(.C) void,
+    fnOnChange: ?*const fn ([*]ASettingSent, usize) callconv(.C) void,
 ) callconv(.C) Handle {
     return ASettings.sectionOccupy(
         workingOwner(),
@@ -634,6 +708,12 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
     ASettings.vacateOwner(owner);
+}
+
+pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    if (gs.timestamp > ASettings.last_check + ASettings.check_freq)
+        _ = ASettings.load();
+    ASettings.last_check = gs.timestamp;
 }
 
 // FIXME: remove, for testing

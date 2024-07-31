@@ -193,6 +193,7 @@ pub const Setting = struct {
         SavedValueNotConverted,
         DefaultValueIsSet,
         DefaultValueNotConverted,
+        InSectionUpdateQueue,
     };
 
     inline fn sent2setting(setting: ASettingSent.Value) Value {
@@ -226,6 +227,7 @@ const ASettings = struct {
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
     var last_check: u32 = 0;
     var last_filetime: w32f.FILETIME = undefined;
+    var section_update_queue: ArrayList(ASettingSent) = undefined;
 
     var h_section_plugin: ?Handle = null;
     var h_section_core: ?Handle = null;
@@ -239,6 +241,7 @@ const ASettings = struct {
     pub fn init(alloc: Allocator) void {
         data_sections = HandleMapSOA(Section, u16).init(alloc);
         data_settings = HandleMapSOA(Setting, u16).init(alloc);
+        section_update_queue = ArrayList(ASettingSent).init(alloc);
         // TODO: load from file
     }
 
@@ -246,6 +249,7 @@ const ASettings = struct {
         // TODO: save to file if needed
         data_sections.deinit();
         data_settings.deinit();
+        section_update_queue.deinit();
     }
 
     // FIXME: review how the handle map is being manipulated with respect to index
@@ -359,6 +363,37 @@ const ASettings = struct {
         data_sections.values.set(handle.index, data);
     }
 
+    pub fn sectionRunUpdate(handle: Handle) void {
+        var section: Section = data_sections.get(handle) orelse return;
+        if (section.fnOnChange == null) return;
+
+        section_update_queue.clearRetainingCapacity();
+
+        const slices = data_settings.values.slice();
+        const sl_sections = slices.items(.section);
+        const sl_flags: []EnumSet(Setting.Flags) = slices.items(.flags);
+        const sl_names = slices.items(.name);
+        const sl_values = slices.items(.value);
+        const sl_types = slices.items(.value_type);
+
+        for (sl_sections, sl_flags, sl_names, sl_values, sl_types) |*s, *f, *n, *v, t| {
+            if (s.* == null or s.*.?.generation != handle.generation or s.*.?.index != handle.index) continue;
+            if (!f.contains(.InSectionUpdateQueue)) continue;
+            if (t == .None) continue;
+
+            f.remove(.InSectionUpdateQueue);
+            const send_data = ASettingSent{ .name = n, .value = ASettingSent.Value.fromSetting(v, t) };
+            section_update_queue.append(send_data) catch continue;
+        }
+
+        section.fnOnChange.?(section_update_queue.items.ptr, section_update_queue.items.len);
+    }
+
+    pub fn sectionRunUpdateAll() void {
+        for (data_sections.handles.items) |handle|
+            sectionRunUpdate(handle);
+    }
+
     // FIXME: review how the handle map is being manipulated with respect to index
     // to make sure it's not messing with the mapping
     pub fn settingNew(
@@ -393,6 +428,7 @@ const ASettings = struct {
 
     // FIXME: review how the handle map is being manipulated with respect to index
     // to make sure it's not messing with the mapping
+    // FIXME: error handling (catch unreachable)
     /// take ownership of a setting
     /// will cause callback to run on the initial value
     pub fn settingOccupy(
@@ -427,10 +463,10 @@ const ASettings = struct {
                 // invalid data = use default, will be cleaned next file write
                 data.value.set(value_default, value_type) catch unreachable;
             };
+            if (!data.value.eql(value_default, value_type))
+                data.flags.insert(.InSectionUpdateQueue);
             if (data.flags.contains(.SavedValueIsSet))
-                data.value_saved.raw2type(value_type) catch {
-                    data.flags.insert(.SavedValueNotConverted);
-                };
+                data.value_saved.raw2type(value_type) catch data.flags.insert(.SavedValueNotConverted);
         } else {
             data.value.set(value_default, value_type) catch unreachable;
             data.flags.insert(.ValueIsSet);
@@ -489,17 +525,16 @@ const ASettings = struct {
     ) void {
         const i = data_settings.getIndex(handle) orelse return;
         const slices = data_settings.values.slice();
-        const sl_type: []Setting.Type = slices.items(.value_type);
-        const sl_value: []Setting.Value = slices.items(.value);
-        const sl_ptr: []?*anyopaque = slices.items(.value_ptr);
-        const sl_fn = slices.items(.fnOnChange);
+        const t: Setting.Type = slices.items(.value_type)[i];
+        const value_out: *Setting.Value = &slices.items(.value)[i];
 
-        sl_value[i].set(value, sl_type[i]) catch return;
+        if (value_out.eql(value, t)) return;
 
-        if (sl_ptr[i]) |p|
-            sl_value[i].getToPtr(p, sl_type[i]);
-        if (sl_fn[i]) |f|
-            f(value);
+        value_out.set(value, t) catch return;
+
+        slices.items(.flags)[i].insert(.InSectionUpdateQueue);
+        if (slices.items(.value_ptr)[i]) |p| value_out.getToPtr(p, t);
+        if (slices.items(.fnOnChange)[i]) |f| f(value);
     }
 
     pub fn vacateOwner(owner: u16) void {
@@ -530,26 +565,10 @@ const ASettings = struct {
         var parser = ini.parse(alloc, file.reader());
         defer parser.deinit();
 
-        // FIXME: these could be invalidated partway through, if the arrays expand and ptr loc changes
-        var sec_changes = try ArrayList(ASettingSent).initCapacity(alloc, 128); // TODO: move to outer struct
-        var sec_changes_data = try ArrayList(struct {
-            name: [63:0]u8 = std.mem.zeroes([63:0]u8),
-            value: [63:0]u8 = std.mem.zeroes([63:0]u8),
-        }).initCapacity(alloc, 128); // TODO: move to outer struct
-        defer sec_changes.deinit();
-        defer sec_changes_data.deinit();
         var sec_handle: ?Handle = null;
         while (try parser.next()) |record| {
             switch (record) {
                 .section => |name| {
-                    if (sec_handle != null and sec_changes.items.len > 0) blk: {
-                        const i = data_sections.getIndex(sec_handle.?) orelse break :blk;
-                        if (data_sections.values.items(.fnOnChange)[i]) |f|
-                            f(sec_changes.items.ptr, sec_changes.items.len);
-                    }
-                    sec_changes.clearRetainingCapacity();
-                    sec_changes_data.clearRetainingCapacity();
-
                     const section_i = nodeFind(data_sections, null, name);
                     sec_handle = if (section_i) |i|
                         data_sections.handles.items[i]
@@ -565,20 +584,13 @@ const ASettings = struct {
                         const set_values: []Setting.Value = set_slices.items(.value);
                         const set_saved: []Setting.Value = set_slices.items(.value_saved);
 
-                        // FIXME: error handling
-                        var data = sec_changes_data.addOne() catch continue;
-                        _ = bufPrintZ(&data.name, "{s}", .{kv.key}) catch {};
-                        _ = bufPrintZ(&data.value, "{s}", .{@as([*:0]const u8, @ptrCast(kv.value))}) catch {};
-                        const send_val = ASettingSent.Value.fromRaw(&data.value, set_types[i]);
+                        const send_val = ASettingSent.Value.fromRaw(kv.value, set_types[i]);
 
                         if (!set_saved[i].eql(send_val, set_types[i]))
                             try set_saved[i].set(send_val, set_types[i]);
 
-                        if (!set_values[i].eql(send_val, set_types[i])) {
-                            const send_data = ASettingSent{ .name = &data.name, .value = send_val };
-                            try sec_changes.append(send_data);
+                        if (!set_values[i].eql(send_val, set_types[i]))
                             settingUpdate(handle, send_val);
-                        }
                     } else {
                         _ = try settingNew(sec_handle, kv.key, kv.value, true);
                     }
@@ -588,13 +600,8 @@ const ASettings = struct {
                 },
             }
         }
-        if (sec_handle != null and sec_changes.items.len > 0) blk: {
-            const i = data_sections.getIndex(sec_handle.?) orelse break :blk;
-            if (data_sections.values.items(.fnOnChange)[i]) |f|
-                f(sec_changes.items.ptr, sec_changes.items.len);
-        }
-        sec_changes.clearRetainingCapacity();
-        sec_changes_data.clearRetainingCapacity();
+
+        sectionRunUpdateAll();
     }
 
     fn load() bool {

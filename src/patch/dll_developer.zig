@@ -103,7 +103,6 @@ fn DumpTextureTable(offset: usize, unk0: u8, unk1: u8, width: u32, height: u32, 
 // MAT4X4 VISUALIZATION
 
 const MatVisState = struct {
-    var enabled: bool = false;
     var targets: [6]?*Mat4x4 = .{ null, null, null, null, null, null };
     var params: [6][6]u8 = .{
         .{ 0xFF, 0x80, 0xFF, 0x00, 0x00, 0xFF }, // red
@@ -113,31 +112,27 @@ const MatVisState = struct {
         .{ 0xFF, 0x80, 0xFF, 0x00, 0xFF, 0xFF }, // magenta
         .{ 0xFF, 0x80, 0x00, 0xFF, 0xFF, 0xFF }, // cyan
     };
-
-    fn doSettingsLoad(gf: *GlobalFn) void {
-        enabled = gf.SettingGetB("developer", "visualize_matrices").?;
-    }
 };
 
 // SETTINGS
 
-const GameplayTweak = struct {
+const Developer = struct {
     var h_s_section: ?SettingHandle = null;
     var h_s_dump_fonts: ?SettingHandle = null;
     var h_s_visualize_matrices: ?SettingHandle = null;
     var s_dump_fonts: bool = false;
     var s_visualize_matrices: bool = false;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "developer", null);
+        h_s_section = section;
+
+        h_s_dump_fonts = // working?
+            gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, &s_dump_fonts, null);
+        h_s_visualize_matrices =
+            gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .b = false }, &s_visualize_matrices, null);
+    }
 };
-
-fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "developer", null);
-    GameplayTweak.h_s_section = section;
-
-    GameplayTweak.h_s_dump_fonts = // working?
-        gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, null, null);
-    GameplayTweak.h_s_visualize_matrices =
-        gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .b = false }, null, null);
-}
 
 // HOUSEKEEPING
 
@@ -154,11 +149,10 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    MatVisState.doSettingsLoad(gf); // FIXME: migrate to new settings system
-    settingsInit(gf);
+    Developer.settingsInit(gf);
 
     // TODO: make sure it only dumps once, even when hot reloading
-    if (gf.SettingGetB("developer", "fonts_dump").?) {
+    if (Developer.s_dump_fonts) {
         // This is a debug feature to dump the original font textures
         _ = DumpTextureTable(0x4BF91C, 3, 0, 64, 128, "font0");
         _ = DumpTextureTable(0x4BF7E4, 3, 0, 64, 128, "font1");
@@ -174,13 +168,9 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    MatVisState.doSettingsLoad(gf);
-}
-
 export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     m44vis: {
-        if (!gs.in_race.on() or !MatVisState.enabled) break :m44vis;
+        if (!gs.in_race.on() or !Developer.s_visualize_matrices) break :m44vis;
 
         if (gs.race_state == .PreRace and gs.race_state_new) {
             MatVisState.targets[0] = &ret.PLAYER.*.EngineXfR;

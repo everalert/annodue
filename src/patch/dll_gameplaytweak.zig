@@ -13,6 +13,7 @@ const mem = @import("util/memory.zig");
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -35,26 +36,28 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 const GameplayTweak = struct {
     var h_s_section: ?SettingHandle = null;
     var h_s_enable: ?SettingHandle = null;
-    var h_s_death_speed_mod_enable: ?SettingHandle = null;
-    var h_s_death_speed_min: ?SettingHandle = null;
-    var h_s_death_speed_drop: ?SettingHandle = null;
+    var h_s_ds_mod_enable: ?SettingHandle = null;
+    var h_s_ds_min: ?SettingHandle = null;
+    var h_s_ds_drop: ?SettingHandle = null;
     var s_enable: bool = false;
+    var s_ds_mod_enable: bool = false;
+    var s_ds_min: f32 = 325;
+    var s_ds_drop: f32 = 140;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", null);
+        h_s_section = section;
+
+        //h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+
+        h_s_ds_mod_enable =
+            gf.ASettingOccupy(section, "death_speed_mod_enable", .B, .{ .b = false }, &s_ds_mod_enable, null);
+        h_s_ds_min =
+            gf.ASettingOccupy(section, "death_speed_min", .F, .{ .f = 325 }, &s_ds_min, null);
+        h_s_ds_drop =
+            gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .f = 140 }, &s_ds_drop, null);
+    }
 };
-
-fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", null);
-    GameplayTweak.h_s_section = section;
-
-    GameplayTweak.h_s_enable =
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
-
-    GameplayTweak.h_s_death_speed_mod_enable =
-        gf.ASettingOccupy(section, "death_speed_mod_enable", .B, .{ .b = false }, null, null);
-    GameplayTweak.h_s_death_speed_min =
-        gf.ASettingOccupy(section, "death_speed_min", .F, .{ .f = 325 }, null, null);
-    GameplayTweak.h_s_death_speed_drop =
-        gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .f = 140 }, null, null);
-}
 
 // DEATHSPEED
 
@@ -78,15 +81,11 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    settingsInit(gf);
+    GameplayTweak.settingsInit(gf);
 
     // TODO: add conditional thing for practice mode toggling
-    // FIXME: port to new settings system
-    if (gf.SettingGetB("gameplay", "death_speed_mod_enable").?) {
-        const dsm: f32 = gf.SettingGetF("gameplay", "death_speed_min") orelse 325;
-        const dsd: f32 = gf.SettingGetF("gameplay", "death_speed_drop") orelse 140;
-        PatchDeathSpeed(dsm, dsd);
-    }
+    if (GameplayTweak.s_ds_mod_enable)
+        PatchDeathSpeed(GameplayTweak.s_ds_min, GameplayTweak.s_ds_drop);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

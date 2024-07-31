@@ -41,15 +41,14 @@ const Overlay = struct {
     var h_s_section: ?SettingHandle = null;
     var h_s_enable: ?SettingHandle = null;
     var s_enable: bool = false;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
+        h_s_section = section;
+
+        h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+    }
 };
-
-fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
-    Overlay.h_s_section = section;
-
-    Overlay.h_s_enable =
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
-}
 
 // HOUSEKEEPING
 
@@ -66,7 +65,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    settingsInit(gf);
+    Overlay.settingsInit(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
@@ -87,7 +86,7 @@ const sty: i16 = -10;
 export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: change practice mode check to 'show overlay' (core setting, not plugin) check
     // FIXME: port setting to new system
-    if (!gs.practice_mode or !gf.SettingGetB("overlay", "enable").?) return;
+    if (!gs.practice_mode or !Overlay.s_enable) return;
 
     if (gs.in_race.on() and !gf.GHideRaceUIIsOn()) {
         const lap: u32 = rrd.PLAYER.*.lap;

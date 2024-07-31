@@ -1,32 +1,21 @@
-const Self = @This();
-
 const std = @import("std");
+
+const win = std.os.windows;
+const w32 = @import("zigwin32");
+const w32wm = w32.ui.windows_and_messaging;
+const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
+const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
 const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const rs = @import("racer").Sound;
-
-// FEATURES
-// - visualize collision faces
-// - visualize collision mesh
-// - visualize spline
-// - CONTROLS:              keyboard        xinput
-//   Open menu              9               ..
-//   Toggle visualization   8               ..
-// - SETTINGS:              type            note
-//   depth_bias             i32             for aligining collision models with ingame models correctly
-
-const PLUGIN_NAME: [*:0]const u8 = "PluginCollisionViewer";
-const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
-
-const win = std.os.windows;
-const w32 = @import("zigwin32");
-const w32wm = w32.ui.windows_and_messaging;
-const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
+const c = @cImport({
+    @cInclude("collision_viewer.h");
+});
+const CollisionViewerSettings = c.CollisionViewerSettings;
+const CollisionViewerState = c.CollisionViewerState;
 
 const debug = @import("core/Debug.zig");
 
@@ -45,17 +34,48 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
+const rs = @import("racer").Sound;
+
+extern fn init_collision_viewer(gs: *CollisionViewerState) callconv(.C) void;
+extern fn deinit_collision_viewer() callconv(.C) void;
+
+const PLUGIN_NAME: [*:0]const u8 = "PluginCollisionViewer";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
+// FEATURES
+// - visualize collision faces
+// - visualize collision mesh
+// - visualize spline
+// - CONTROLS:              keyboard        xinput
+//   Open menu              9               ..
+//   Toggle visualization   8               ..
+// - SETTINGS:              type            note
+//   depth_bias             i32             for aligining collision models with ingame models correctly
+
+// FIXME: merge with existing state, just like this cuz i cbf earlier
+const AnnodueSettings = struct {
+    var h_s_section: ?SettingHandle = null;
+    var h_s_depth_bias: ?SettingHandle = null;
+    var s_depth_bias: i32 = 10;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "collisionviewer", null);
+        h_s_section = section;
+
+        h_s_depth_bias =
+            gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, &s_depth_bias, updateDepthBias);
+    }
+
+    fn updateDepthBias(changed: SettingValue) callconv(.C) void {
+        state.depth_bias = @as(f32, @floatFromInt(changed.i)) / 100.0;
+    }
+};
+
 var input_enable_data = ButtonInputMap{ .kb = .@"8", .xi = null };
 var input_enable = input_enable_data.inputMap();
 
 var input_pause_data = ButtonInputMap{ .kb = .@"9", .xi = null };
 var input_pause = input_pause_data.inputMap();
-
-const c = @cImport({
-    @cInclude("collision_viewer.h");
-});
-const CollisionViewerSettings = c.CollisionViewerSettings;
-const CollisionViewerState = c.CollisionViewerState;
 
 var presets: [5]CollisionViewerSettings = .{
     .{
@@ -338,34 +358,8 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-extern fn init_collision_viewer(gs: *CollisionViewerState) callconv(.C) void;
-extern fn deinit_collision_viewer() callconv(.C) void;
-
-// FIXME: migrate to new settings system
-fn handle_settings(gf: *GlobalFn) callconv(.C) void {
-    var biasInt: i32 = gf.SettingGetI("collisionviewer", "depth_bias") orelse 10;
-    var biasFloat: f32 = @floatFromInt(biasInt);
-    state.depth_bias = biasFloat / 100.0;
-}
-
-// FIXME: merge with existing setting setup, just like this cuz i cbf before
-const AnnodueSettings = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_depth_bias: ?SettingHandle = null;
-    var s_depth_bias: i32 = 10;
-};
-
-fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "collisionviewer", null);
-    AnnodueSettings.h_s_section = section;
-
-    AnnodueSettings.h_s_depth_bias =
-        gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, null, null);
-}
-
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    handle_settings(gf); // FIXME: migrate to new settings system
-    settingsInit(gf);
+    AnnodueSettings.settingsInit(gf);
 
     init_collision_viewer(&state);
 
@@ -373,16 +367,11 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.gf = gf;
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.close();
     deinit_collision_viewer();
-    _ = gf;
-    _ = gs;
 }
 
 // HOOKS
@@ -393,7 +382,6 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.update_input();
 }
 
-export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn EarlyEngineUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.update();
 }

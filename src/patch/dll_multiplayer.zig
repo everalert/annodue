@@ -44,25 +44,19 @@ const MpState = struct {
     var s_enable: bool = false;
     var s_patch_r100: bool = false;
     var s_patch_guid: bool = false;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "multiplayer", null);
+        h_s_section = section;
+
+        h_s_enable = // working? TODO: check collisions
+            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+        h_s_patch_guid = // working?
+            gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, &s_patch_guid, null);
+        h_s_patch_r100 = // working
+            gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, &s_patch_r100, null);
+    }
 };
-
-fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
-    MpState.s_enable = gf.SettingGetB("multiplayer", "enable").?;
-    MpState.s_patch_r100 = gf.SettingGetB("multiplayer", "patch_r100").?;
-    MpState.s_patch_guid = gf.SettingGetB("multiplayer", "patch_guid").?;
-}
-
-fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "multiplayer", null);
-    MpState.h_s_section = section;
-
-    MpState.h_s_enable = // working? TODO: check collisions
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
-    MpState.h_s_patch_guid = // working?
-        gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, null, null);
-    MpState.h_s_patch_r100 = // working
-        gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, null, null);
-}
 
 // PATCHES
 
@@ -191,8 +185,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    settingsInit(gf);
-    HandleSettings(gf); // FIXME: port to new settings system
+    MpState.settingsInit(gf);
 
     // TODO: move this to settings handler, once global allocation figured out
     var off = gs.patch_offset;
@@ -213,7 +206,3 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
-
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
-}

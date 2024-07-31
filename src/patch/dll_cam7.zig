@@ -15,8 +15,8 @@ const debug = @import("core/Debug.zig");
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const SettingHandle = @import("core/ASettings.zig").Handle;
-const Setting = @import("core/ASettings.zig").ASettingSent;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -302,53 +302,59 @@ const Cam7 = extern struct {
         var update_deadzone: bool = false;
 
         for (changed, 0..len) |setting, _| {
-            if (std.mem.eql(u8, "fog_patch", setting.name[0..9]) and cam_state == .FreeCam) {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if (nlen == 9 and std.mem.eql(u8, "fog_patch", setting.name[0..nlen]) and
+                cam_state == .FreeCam)
+            {
                 patchFog(s_fog_patch);
                 continue;
             }
-            if (std.mem.eql(u8, "visuals_patch", setting.name[0..13]) and cam_state == .FreeCam) {
+            if (nlen == 13 and std.mem.eql(u8, "visuals_patch", setting.name[0..nlen]) and
+                cam_state == .FreeCam)
+            {
                 patchFlags(s_visuals_patch);
                 continue;
             }
 
-            if (std.mem.eql(u8, "mouse_dpi", setting.name[0..9]) or
-                std.mem.eql(u8, "mouse_cm360", setting.name[0..11]))
+            if (nlen == 9 and std.mem.eql(u8, "mouse_dpi", setting.name[0..nlen]) or
+                nlen == 11 and std.mem.eql(u8, "mouse_cm360", setting.name[0..nlen]))
             {
                 update_mouse_sens = true;
                 continue;
             }
 
-            if (std.mem.eql(u8, "stick_deadzone_inner", setting.name[0..20])) {
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_inner", setting.name[0..nlen])) {
                 s_dz_i = m.clamp(s_dz_i, 0.000, 0.495);
                 update_deadzone = true;
                 continue;
             }
-            if (std.mem.eql(u8, "stick_deadzone_outer", setting.name[0..20])) {
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_outer", setting.name[0..nlen])) {
                 s_dz_o = m.clamp(s_dz_o, 0.505, 1.000);
                 update_deadzone = true;
                 continue;
             }
 
             // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
-            if (std.mem.eql(u8, "default_rotation_smoothing", setting.name[0..26])) {
+            if (nlen == 26 and std.mem.eql(u8, "default_rotation_smoothing", setting.name[0..nlen])) {
                 s_rot_damp_i_dflt = m.clamp(s_rot_damp_i_dflt, 0, 4);
                 rot_damp_i = s_rot_damp_i_dflt;
                 rot_damp = rot_damp_val[rot_damp_i];
                 continue;
             }
-            if (std.mem.eql(u8, "default_rotation_speed", setting.name[0..22])) {
+            if (nlen == 22 and std.mem.eql(u8, "default_rotation_speed", setting.name[0..nlen])) {
                 s_rot_spd_i_dflt = m.clamp(s_rot_spd_i_dflt, 0, 5);
                 rot_spd_i = s_rot_spd_i_dflt;
                 rot_spd_tgt = rot_spd_val[rot_spd_i];
                 continue;
             }
-            if (std.mem.eql(u8, "default_move_smoothing", setting.name[0..22])) {
+            if (nlen == 22 and std.mem.eql(u8, "default_move_smoothing", setting.name[0..nlen])) {
                 s_move_damp_i_dflt = m.clamp(s_move_damp_i_dflt, 0, 3);
                 move_damp_i = s_move_damp_i_dflt;
                 move_damp = move_damp_val[move_damp_i];
                 continue;
             }
-            if (std.mem.eql(u8, "default_move_speed", setting.name[0..18])) {
+            if (nlen == 18 and std.mem.eql(u8, "default_move_speed", setting.name[0..nlen])) {
                 s_move_spd_i_dflt = m.clamp(s_move_spd_i_dflt, 0, 6);
                 move_spd_i = s_move_spd_i_dflt;
                 move_spd_xy_tgt = move_spd_xy_val[move_spd_i];
@@ -356,7 +362,9 @@ const Cam7 = extern struct {
                 continue;
             }
 
-            if (std.mem.eql(u8, "default_hide_ui", setting.name[0..15]) and cam_state == .FreeCam) {
+            if (nlen == 15 and std.mem.eql(u8, "default_hide_ui", setting.name[0..nlen]) and
+                cam_state == .FreeCam)
+            {
                 queue_update_hide_ui = true;
                 continue;
             }

@@ -224,10 +224,13 @@ const ASettings = struct {
     var data_sections: HandleMapSOA(Section, u16) = undefined;
     var data_settings: HandleMapSOA(Setting, u16) = undefined;
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
-    var h_section_plugin: ?Handle = null;
-    var h_section_core: ?Handle = null;
     var last_check: u32 = 0;
     var last_filetime: w32f.FILETIME = undefined;
+
+    var h_section_plugin: ?Handle = null;
+    var h_section_core: ?Handle = null;
+    var h_s_settings_version: ?Handle = null;
+    var s_settings_version: u32 = 1;
 
     const Flags = enum(u32) {
         AutoSave,
@@ -527,9 +530,15 @@ const ASettings = struct {
         var parser = ini.parse(alloc, file.reader());
         defer parser.deinit();
 
-        var sec_handle: ?Handle = null;
-        var sec_changes = ArrayList(ASettingSent).init(alloc);
+        // FIXME: these could be invalidated partway through, if the arrays expand and ptr loc changes
+        var sec_changes = try ArrayList(ASettingSent).initCapacity(alloc, 128); // TODO: move to outer struct
+        var sec_changes_data = try ArrayList(struct {
+            name: [63:0]u8 = std.mem.zeroes([63:0]u8),
+            value: [63:0]u8 = std.mem.zeroes([63:0]u8),
+        }).initCapacity(alloc, 128); // TODO: move to outer struct
         defer sec_changes.deinit();
+        defer sec_changes_data.deinit();
+        var sec_handle: ?Handle = null;
         while (try parser.next()) |record| {
             switch (record) {
                 .section => |name| {
@@ -539,6 +548,7 @@ const ASettings = struct {
                             f(sec_changes.items.ptr, sec_changes.items.len);
                     }
                     sec_changes.clearRetainingCapacity();
+                    sec_changes_data.clearRetainingCapacity();
 
                     const section_i = nodeFind(data_sections, null, name);
                     sec_handle = if (section_i) |i|
@@ -555,13 +565,17 @@ const ASettings = struct {
                         const set_values: []Setting.Value = set_slices.items(.value);
                         const set_saved: []Setting.Value = set_slices.items(.value_saved);
 
-                        const send_val = ASettingSent.Value.fromRaw(kv.value, set_types[i]);
+                        // FIXME: error handling
+                        var data = sec_changes_data.addOne() catch continue;
+                        _ = bufPrintZ(&data.name, "{s}", .{kv.key}) catch {};
+                        _ = bufPrintZ(&data.value, "{s}", .{@as([*:0]const u8, @ptrCast(kv.value))}) catch {};
+                        const send_val = ASettingSent.Value.fromRaw(&data.value, set_types[i]);
 
                         if (!set_saved[i].eql(send_val, set_types[i]))
                             try set_saved[i].set(send_val, set_types[i]);
 
                         if (!set_values[i].eql(send_val, set_types[i])) {
-                            const send_data = ASettingSent{ .name = kv.key, .value = send_val };
+                            const send_data = ASettingSent{ .name = &data.name, .value = send_val };
                             try sec_changes.append(send_data);
                             settingUpdate(handle, send_val);
                         }
@@ -580,6 +594,7 @@ const ASettings = struct {
                 f(sec_changes.items.ptr, sec_changes.items.len);
         }
         sec_changes.clearRetainingCapacity();
+        sec_changes_data.clearRetainingCapacity();
     }
 
     fn load() bool {
@@ -661,11 +676,13 @@ fn updateSet1(value: ASettingSent.Value) callconv(.C) void {
     dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
 }
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     ASettings.init(coreAllocator());
     _ = ASettings.load();
     //ASettings.h_section_core = ASettings.sectionNew(null, "Core") catch NullHandle;
     //ASettings.h_section_plugin = ASettings.sectionNew(null, "Plugin") catch NullHandle;
+    ASettings.h_s_settings_version =
+        gf.ASettingOccupy(NullHandle, "SETTINGS_VERSION", .U, .{ .u = 1 }, &ASettings.s_settings_version, null);
 
     // TODO: move below to commented test block
     // TODO: add setting occupy -> string type test

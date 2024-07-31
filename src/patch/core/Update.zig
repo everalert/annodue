@@ -22,12 +22,27 @@ const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
 const VERSION = app.VERSION;
 
+const SettingHandle = @import("ASettings.zig").Handle;
+const SettingValue = @import("ASettings.zig").ASettingSent.Value;
+const Setting = @import("ASettings.zig").ASettingSent;
+
 const r = @import("racer");
 const rt = r.Text;
 
 const msg = @import("../util/message.zig");
 
 // BUSINESS LOGIC
+
+const UpdateState = struct {
+    // ini settings
+    var h_s_auto_update: ?SettingHandle = null;
+    var s_auto_update: bool = true;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        h_s_auto_update =
+            gf.ASettingOccupy(SettingHandle.getNull(), "AUTO_UPDATE", .B, .{ .b = true }, &s_auto_update, null);
+    }
+};
 
 // https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28
 // https://docs.github.com/en/rest/releases/assets?apiVersion=2022-11-28
@@ -82,7 +97,9 @@ fn updateToastAvailable(alloc: Allocator, gf: *GlobalFn, ver: []const u8) void {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    UpdateState.settingsInit(gf);
+}
 
 pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const s = struct {
@@ -98,7 +115,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     // FIXME: remove early AUTO_UPDATE check in future version, once we verify
     // the update system is stable
-    if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) return;
+    if (!UpdateState.s_auto_update) return;
 
     if (s.init or gs.timestamp + s.retry_delay < s.last_try) return;
     s.last_try = gs.timestamp;
@@ -164,7 +181,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     updateToastAvailable(alloc, gf, update.tag.?);
 
-    if (gf.SettingGetB(null, "AUTO_UPDATE").? == false) return;
+    if (!UpdateState.s_auto_update) return;
 
     updateApplyFromNetwork(alloc, &update) catch return;
 

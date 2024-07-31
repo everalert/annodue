@@ -188,11 +188,6 @@ const state = struct {
         return race_ok and !tabbed_out and !paused and loading_ok;
     }
 
-    //fn handle_settings(gf: *GlobalFn) callconv(.C) void {
-    //    s_enable = gf.SettingGetB("savestate", "enable") orelse false;
-    //    s_load_delay = gf.SettingGetU("savestate", "load_delay") orelse 500;
-    //}
-
     fn settingsInit(gf: *GlobalFn) void {
         s_h_section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "savestate", null);
 

@@ -15,6 +15,7 @@ const x86 = @import("util/x86.zig");
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -53,10 +54,10 @@ const CosmeticState = struct {
     var h_s_rb_value_enable: ?SettingHandle = null;
     var h_s_rb_label_enable: ?SettingHandle = null;
     var h_s_rb_speed_enable: ?SettingHandle = null;
-    var h_s_rb_patch_tga_loader: ?SettingHandle = null;
-    var h_s_rb_patch_trigger_display: ?SettingHandle = null;
-    var h_s_rb_patch_audio: ?SettingHandle = null;
-    var h_s_rb_patch_fonts: ?SettingHandle = null;
+    var h_s_patch_tga_loader: ?SettingHandle = null;
+    var h_s_patch_trig_disp: ?SettingHandle = null;
+    var h_s_patch_audio: ?SettingHandle = null;
+    var h_s_patch_fonts: ?SettingHandle = null;
     var s_rb_enable: bool = false;
     var s_rb_value_enable: bool = false;
     var s_rb_label_enable: bool = false;
@@ -64,51 +65,100 @@ const CosmeticState = struct {
     var rb_value = crot.RotatingRGB.new(95, 255, 0);
     var rb_label = crot.RotatingRGB.new(95, 255, 1);
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
+    var s_patch_tga_loader: bool = false;
+    var s_patch_trig_disp: bool = false;
+    var s_patch_audio: bool = false;
+    var s_patch_fonts: bool = false;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", settingsUpdate);
+        h_s_section = section;
+
+        h_s_rb_enable =
+            gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .b = false }, &s_rb_enable, null);
+        h_s_rb_value_enable =
+            gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .b = false }, &s_rb_value_enable, null);
+        h_s_rb_label_enable =
+            gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .b = false }, &s_rb_label_enable, null);
+        h_s_rb_speed_enable =
+            gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .b = false }, &s_rb_speed_enable, null);
+
+        h_s_patch_tga_loader = // FIXME: need tga files to verify with
+            gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, &s_patch_tga_loader, null);
+        h_s_patch_trig_disp =
+            gf.ASettingOccupy(section, "patch_trigger_display", .B, .{ .b = false }, &s_patch_trig_disp, null);
+        h_s_patch_audio = // FIXME: crashes
+            gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, &s_patch_audio, null);
+        h_s_patch_fonts =
+            gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, &s_patch_fonts, null);
+    }
+
+    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+        var update_rb_value: bool = false;
+        var update_rb_label: bool = false;
+        var update_rb_speed: bool = false;
+
+        for (changed, 0..len) |setting, _| {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if (nlen == 14 and std.mem.eql(u8, "rainbow_enable", setting.name[0..nlen])) {
+                update_rb_value = true;
+                update_rb_label = true;
+                update_rb_speed = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_value_enable", setting.name[0..nlen])) {
+                update_rb_value = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_label_enable", setting.name[0..nlen])) {
+                update_rb_label = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_speed_enable", setting.name[0..nlen])) {
+                update_rb_speed = true;
+                continue;
+            }
+        }
+
+        if (update_rb_value and (!s_rb_enable or !s_rb_value_enable)) {
+            crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
+            crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
+            crot.PatchRgbArgs(0x461045, 0xFFFFFF);
+        }
+
+        if (update_rb_label and (!s_rb_enable or !s_rb_label_enable)) {
+            crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
+            crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
+            crot.PatchRgbArgs(0x461069, 0xFFFFFF);
+        }
+
+        if (update_rb_speed and (!s_rb_enable or !s_rb_speed_enable)) {
+            crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
+        }
+    }
+
+    // COLOR CHANGES
+
+    fn PatchHudColRotate(value: bool, label: bool, speed: bool) void {
+        rb_value.update();
+        rb_label.update();
+        rb_speed.update();
+        if (value) {
+            crot.PatchRgbArgs(0x460E5D, rb_value.get());
+            crot.PatchRgbArgs(0x460FB1, rb_value.get());
+            crot.PatchRgbArgs(0x461045, rb_value.get());
+        }
+        if (label) {
+            crot.PatchRgbArgs(0x460E8D, rb_label.get());
+            crot.PatchRgbArgs(0x460FE3, rb_label.get());
+            crot.PatchRgbArgs(0x461069, rb_label.get());
+        }
+        if (speed) {
+            crot.PatchRgbArgs(0x460A6E, rb_speed.get());
+        }
+    }
 };
-
-// COLOR CHANGES
-
-fn PatchHudColRotate(v: bool, l: bool, s: bool) void {
-    CosmeticState.rb_value.update();
-    CosmeticState.rb_label.update();
-    CosmeticState.rb_speed.update();
-    if (v) {
-        crot.PatchRgbArgs(0x460E5D, CosmeticState.rb_value.get());
-        crot.PatchRgbArgs(0x460FB1, CosmeticState.rb_value.get());
-        crot.PatchRgbArgs(0x461045, CosmeticState.rb_value.get());
-    }
-    if (l) {
-        crot.PatchRgbArgs(0x460E8D, CosmeticState.rb_label.get());
-        crot.PatchRgbArgs(0x460FE3, CosmeticState.rb_label.get());
-        crot.PatchRgbArgs(0x461069, CosmeticState.rb_label.get());
-    }
-    if (s) {
-        crot.PatchRgbArgs(0x460A6E, CosmeticState.rb_speed.get());
-    }
-}
-
-fn HandleColorSettings(gf: *GlobalFn) callconv(.C) void {
-    CosmeticState.s_rb_enable = gf.SettingGetB("cosmetic", "rainbow_enable").?;
-
-    CosmeticState.s_rb_value_enable = gf.SettingGetB("cosmetic", "rainbow_value_enable").?;
-    if (!CosmeticState.s_rb_enable or !CosmeticState.s_rb_value_enable) {
-        crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
-        crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
-        crot.PatchRgbArgs(0x461045, 0xFFFFFF);
-    }
-
-    CosmeticState.s_rb_label_enable = gf.SettingGetB("cosmetic", "rainbow_label_enable").?;
-    if (!CosmeticState.s_rb_enable or !CosmeticState.s_rb_label_enable) {
-        crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
-        crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
-        crot.PatchRgbArgs(0x461069, 0xFFFFFF);
-    }
-
-    CosmeticState.s_rb_speed_enable = gf.SettingGetB("cosmetic", "rainbow_speed_enable").?;
-    if (!CosmeticState.s_rb_enable or !CosmeticState.s_rb_speed_enable) {
-        crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
-    }
-}
 
 // SWE1R-PATCHER STUFF
 
@@ -293,29 +343,6 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     return off;
 }
 
-fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", null);
-    CosmeticState.h_s_section = section;
-
-    CosmeticState.h_s_rb_enable =
-        gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .b = false }, null, null);
-    CosmeticState.h_s_rb_value_enable =
-        gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .b = false }, null, null);
-    CosmeticState.h_s_rb_label_enable =
-        gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .b = false }, null, null);
-    CosmeticState.h_s_rb_speed_enable =
-        gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .b = false }, null, null);
-
-    CosmeticState.h_s_rb_patch_tga_loader = // FIXME: need tga files to verify with
-        gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, null, null);
-    CosmeticState.h_s_rb_patch_trigger_display =
-        gf.ASettingOccupy(section, "patch_trigger_display", .B, .{ .b = false }, null, null);
-    CosmeticState.h_s_rb_patch_audio = // FIXME: crashes
-        gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, null, null);
-    CosmeticState.h_s_rb_patch_fonts =
-        gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, null, null);
-}
-
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -331,28 +358,27 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    settingsInit(gf);
-    HandleColorSettings(gf); // FIXME: migrate to new settings system (also the freestanding settings)
+    CosmeticState.settingsInit(gf);
 
     // TODO: convert to use global allocator once it is part of the GlobalFn interface;
     // then we can properly deinit it when the plugin unloads or the user setting changes.
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
     var off = gs.patch_offset;
-    if (gf.SettingGetB("cosmetic", "patch_fonts").?) {
+    if (CosmeticState.s_patch_fonts) {
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
         off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
         off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
         off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
         off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
     }
-    //if (gf.SettingGetB("cosmetic", "patch_audio").?) {
+    //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
     //    const bits_per_sample: u8 = 16;
     //    const stereo: bool = true;
     //    PatchAudioStreamQuality(sample_rate, bits_per_sample, stereo);
     //}
-    //if (gf.SettingGetB("cosmetic", "patch_tga_loader").?) {
+    //if (CosmeticState.s_patch_tga_loader) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
     gs.patch_offset = off;
@@ -372,13 +398,9 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleColorSettings(gf);
-}
-
 export fn TextRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (CosmeticState.s_rb_enable) {
-        PatchHudColRotate(
+        CosmeticState.PatchHudColRotate(
             CosmeticState.s_rb_value_enable,
             CosmeticState.s_rb_label_enable,
             CosmeticState.s_rb_speed_enable,

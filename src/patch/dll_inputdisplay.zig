@@ -23,6 +23,7 @@ const rto = rt.TextStyleOpts;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -347,25 +348,32 @@ const InputDisplay = struct {
         rq.swrQuad_SetActive(i.fg_idx.?, InputDisplay.digital[@intFromEnum(input)]);
     }
 
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "inputdisplay", settingsUpdate);
+        h_s_section = section;
+
+        h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+        h_s_pos_x = gf.ASettingOccupy(section, "pos_x", .I, .{ .i = 420 }, null, null);
+        h_s_pos_y = gf.ASettingOccupy(section, "pos_y", .I, .{ .i = 432 }, null, null);
+    }
+
     // TODO: handle updating position without having to reload race
-    fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
-        s_enable = gf.SettingGetB("inputdisplay", "enable") orelse false;
-        if (gf.SettingGetI("inputdisplay", "pos_x")) |x| s_pos_x = @as(i16, @truncate(x));
-        if (gf.SettingGetI("inputdisplay", "pos_y")) |y| s_pos_y = @as(i16, @truncate(y));
+    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+        for (changed, 0..len) |setting, _| {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if (nlen == 5 and std.mem.eql(u8, "pos_x", setting.name[0..nlen])) {
+                s_pos_x = @as(i16, @truncate(setting.value.i));
+                continue;
+            }
+
+            if (nlen == 5 and std.mem.eql(u8, "pos_y", setting.name[0..nlen])) {
+                s_pos_y = @as(i16, @truncate(setting.value.i));
+                continue;
+            }
+        }
     }
 };
-
-fn settingsInit(gf: *GlobalFn) void {
-    const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "inputdisplay", null);
-    InputDisplay.h_s_section = section;
-
-    InputDisplay.h_s_enable =
-        gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, null, null);
-    InputDisplay.h_s_pos_x =
-        gf.ASettingOccupy(section, "pos_x", .I, .{ .i = 420 }, null, null);
-    InputDisplay.h_s_pos_y =
-        gf.ASettingOccupy(section, "pos_y", .I, .{ .i = 432 }, null, null);
-}
 
 // HOUSEKEEPING
 
@@ -382,8 +390,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    settingsInit(gf);
-    InputDisplay.HandleSettings(gf); // FIXME: migrate to new settings system
+    InputDisplay.settingsInit(gf);
 
     if ((gs.race_state == .Countdown or gs.race_state == .Racing) and InputDisplay.s_enable)
         InputDisplay.Init();
@@ -396,10 +403,6 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 // HOOK FUNCTIONS
-
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    InputDisplay.HandleSettings(gf);
-}
 
 export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (InputDisplay.s_enable)

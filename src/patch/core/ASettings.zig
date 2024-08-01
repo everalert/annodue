@@ -41,8 +41,10 @@ const dbg = @import("../util/debug.zig");
 pub const Handle = HandleSOA(u16);
 pub const NullHandle = Handle.getNull();
 
-const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
 const SETTINGS_VERSION: u32 = 1;
+const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
+const FILENAME = "annodue/settings.ini";
+const FILENAME_TEST = "annodue/settings_test.ini";
 
 pub const ASettingSent = extern struct {
     name: [*:0]const u8,
@@ -104,7 +106,7 @@ pub const Setting = struct {
         b: bool,
 
         // TODO: decide if any need to error on None type
-        pub fn set(self: *Value, v: ASettingSent.Value, t: Type) !void {
+        pub fn setSent(self: *Value, v: ASettingSent.Value, t: Type) !void {
             switch (t) {
                 .F => self.f = v.f,
                 .U => self.u = v.u,
@@ -212,7 +214,7 @@ pub const Setting = struct {
 
     const Flags = enum(u32) {
         HasOwner,
-        FileUpdated,
+        FileUpdatedLastWrite,
         ChangedSinceLastRead,
         ProcessedSinceLastRead, // marker to let you know, e.g. don't unset ChangedSinceLastRead
         ValueIsSet,
@@ -260,9 +262,11 @@ const ASettings = struct {
     var h_section_plugin: ?Handle = null;
     var h_section_core: ?Handle = null;
     var h_s_settings_version: ?Handle = null;
+    var h_s_save_auto: ?Handle = null;
     var h_s_save_defaults: ?Handle = null;
     // TODO: change to false once annodue stops releasing Safe builds (also in settingOccupy call)
     var s_settings_version: u32 = 1;
+    var s_save_auto: bool = true;
     var s_save_defaults: bool = true;
 
     const Flags = enum(u32) {
@@ -497,18 +501,18 @@ const ASettings = struct {
         if (data.flags.contains(.ValueIsSet)) {
             data.value.raw2type(value_type) catch {
                 // invalid data = use default, will be cleaned next file write
-                data.value.set(value_default, value_type) catch unreachable;
+                data.value.setSent(value_default, value_type) catch unreachable;
             };
             if (!data.value.eqlSent(value_default, value_type))
                 data.flags.insert(.InSectionUpdateQueue);
             if (data.flags.contains(.SavedValueIsSet))
                 data.value_saved.raw2type(value_type) catch data.flags.insert(.SavedValueNotConverted);
         } else {
-            data.value.set(value_default, value_type) catch unreachable;
+            data.value.setSent(value_default, value_type) catch unreachable;
             data.flags.insert(.ValueIsSet);
         }
         data.value_type = value_type;
-        data.value_default.set(value_default, value_type) catch unreachable;
+        data.value_default.setSent(value_default, value_type) catch unreachable;
         data.flags.insert(.DefaultValueIsSet);
         data.value_ptr = value_ptr;
         if (value_ptr) |p|
@@ -566,7 +570,7 @@ const ASettings = struct {
 
         if (value_out.eqlSent(value, t)) return;
 
-        value_out.set(value, t) catch return;
+        value_out.setSent(value, t) catch return;
 
         slices.items(.flags)[i].insert(.InSectionUpdateQueue);
         if (slices.items(.value_ptr)[i]) |p| value_out.getToPtr(p, t);
@@ -621,7 +625,7 @@ const ASettings = struct {
                         const send_val = ASettingSent.Value.fromRaw(kv.value, set_types[i]);
 
                         if (!set_saved[i].eqlSent(send_val, set_types[i]))
-                            try set_saved[i].set(send_val, set_types[i]);
+                            try set_saved[i].setSent(send_val, set_types[i]);
 
                         if (!set_values[i].eqlSent(send_val, set_types[i]))
                             settingUpdate(handle, send_val);
@@ -638,20 +642,27 @@ const ASettings = struct {
         sectionRunUpdateAll();
     }
 
-    pub fn iniWrite(filename: []const u8) !void {
-        const file = try std.fs.cwd().createFile(filename, .{}); // .exclusive=true for no file rewrite
-        defer file.close();
-        var file_w = file.writer();
+    fn load() bool {
+        var fd: w32fs.WIN32_FIND_DATAA = undefined;
+        _ = w32fs.FindFirstFileA("annodue/settings.ini", &fd);
+        if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
+            return false;
 
-        // TODO: sorting both settings and sections?
-        //const mitems = SettingsState.manager.global.sorted() catch return;
-        //defer mitems.deinit();
+        ASettings.iniRead(coreAllocator(), "annodue/settings.ini") catch return false;
+        ASettings.last_filetime = fd.ftLastWriteTime;
 
-        try iniWriteSection(file_w, null);
-        for (data_sections.handles.items) |h|
-            try iniWriteSection(file_w, h);
+        return true;
     }
 
+    // TODO: sorting both settings and sections?
+    // TODO: track and output whether file had changes
+    pub fn iniWrite(writer: anytype) !void {
+        try iniWriteSection(writer, null);
+        for (data_sections.handles.items) |h|
+            try iniWriteSection(writer, h);
+    }
+
+    // TODO: track and output whether file had changes
     fn iniWriteSection(writer: anytype, handle: ?Handle) !void {
         if (handle) |h| {
             const section: Section = data_sections.get(h).?;
@@ -663,41 +674,65 @@ const ASettings = struct {
 
         const set_slice = data_settings.values.slice();
         const sl_sec = set_slice.items(.section);
-        for (sl_sec, 0..) |sec, i| {
+        const sl_name: [][63:0]u8 = set_slice.items(.name);
+        const sl_val: []Setting.Value = set_slice.items(.value);
+        const sl_vald: []Setting.Value = set_slice.items(.value_default);
+        const sl_vals: []Setting.Value = set_slice.items(.value_saved);
+        const sl_f: []EnumSet(Setting.Flags) = set_slice.items(.flags);
+        const sl_t: []Setting.Type = set_slice.items(.value_type);
+        for (sl_sec, sl_name, sl_val, sl_vald, sl_vals, sl_f, sl_t) |sec, *name, *val, *vald, *vals, *fl, t| {
             if ((handle == null) != (sec == null)) continue;
             if (handle != null and
                 (handle.?.index != sec.?.index or
                 handle.?.generation != sec.?.generation)) continue;
 
-            const data: Setting = set_slice.get(i);
-
             // only keep uninitialized settings if they were already on file
-            if (!data.flags.contains(.DefaultValueIsSet) and
-                !data.flags.contains(.SavedValueIsSet)) continue;
+            if (!fl.contains(.DefaultValueIsSet) and
+                !fl.contains(.SavedValueIsSet)) continue;
 
             // only store initialized settings if they are not default
-            if (!s_save_defaults and data.flags.contains(.DefaultValueIsSet) and
-                data.value_default.eql(&data.value, data.value_type)) continue;
+            if (!s_save_defaults and fl.contains(.DefaultValueIsSet) and
+                vald.eql(val, t)) continue;
 
-            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&data.name)));
-            _ = try writer.write(data.name[0..nlen]);
+            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(name.ptr)));
+            _ = try writer.write(name[0..nlen]);
             _ = try writer.write(" = ");
-            try data.value.write(writer, data.value_type);
+            try val.write(writer, t);
             _ = try writer.write("\n");
+
+            vals.* = val.*;
+            fl.insert(.SavedValueIsSet);
+            fl.insert(.FileUpdatedLastWrite);
         }
         _ = writer.write("\n") catch {};
     }
 
-    fn load() bool {
-        var fd: w32fs.WIN32_FIND_DATAA = undefined;
-        _ = w32fs.FindFirstFileA("annodue/settings.ini", &fd);
-        if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
-            return false;
+    fn save(filename: []const u8) !void {
+        const file = try std.fs.cwd().createFile(filename, .{}); // .exclusive=true for no file rewrite
+        defer file.close();
+        var file_w = file.writer();
 
-        ASettings.iniRead(coreAllocator(), "annodue/settings.ini") catch return false;
-        ASettings.last_filetime = fd.ftLastWriteTime;
+        try iniWrite(file_w);
 
-        return true;
+        saveCleanup();
+    }
+
+    fn saveAuto(filename: []const u8) !void {
+        if (s_save_auto)
+            try save(filename);
+    }
+
+    /// post-processing of sections and settings, to make settings ready for next write
+    fn saveCleanup() void {
+        const set_slice = data_settings.values.slice();
+        const sl_f: []EnumSet(Setting.Flags) = set_slice.items(.flags);
+        for (sl_f) |*fl| {
+            //- edge case: removing 'on file' tag from settings which were taken out of file since initial load
+            if (!fl.contains(.FileUpdatedLastWrite))
+                fl.remove(.SavedValueIsSet);
+
+            fl.remove(.FileUpdatedLastWrite);
+        }
     }
 };
 
@@ -779,6 +814,8 @@ pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     ASettings.h_s_settings_version = // default 0 so that it's always saved to file
         gf.ASettingOccupy(NullHandle, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);
+    ASettings.h_s_save_auto =
+        gf.ASettingOccupy(NullHandle, "SETTINGS_SAVE_AUTO", .B, .{ .b = true }, &ASettings.s_save_auto, null);
     ASettings.h_s_save_defaults =
         gf.ASettingOccupy(NullHandle, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &ASettings.s_save_defaults, null);
 
@@ -838,7 +875,7 @@ pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: remove, for testing
 pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gf.InputGetKbRaw(.J) == .JustOn)
-        ASettings.iniWrite("annodue/settings_test_out.ini") catch {};
+        ASettings.save(FILENAME_TEST) catch {};
 
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 

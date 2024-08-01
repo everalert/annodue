@@ -42,6 +42,7 @@ pub const Handle = HandleSOA(u16);
 pub const NullHandle = Handle.getNull();
 
 const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
+const SETTINGS_VERSION: u32 = 1;
 
 pub const ASettingSent = extern struct {
     name: [*:0]const u8,
@@ -55,7 +56,7 @@ pub const ASettingSent = extern struct {
         b: bool,
 
         // TODO: decide if any need to error on None type
-        pub inline fn fromRaw(value: [*:0]const u8, t: Setting.Type) Value {
+        pub fn fromRaw(value: [*:0]const u8, t: Setting.Type) Value {
             const len = std.mem.len(@as([*:0]const u8, @ptrCast(value)));
             return switch (t) {
                 .B => .{ .b = std.mem.eql(u8, "on", value[0..2]) or
@@ -69,7 +70,7 @@ pub const ASettingSent = extern struct {
         }
 
         // TODO: decide if any need to error on None type
-        pub inline fn fromSetting(setting: *const Setting.Value, t: Setting.Type) Value {
+        pub fn fromSetting(setting: *const Setting.Value, t: Setting.Type) Value {
             return switch (t) {
                 .B => .{ .b = setting.b },
                 .I => .{ .i = setting.i },
@@ -103,7 +104,7 @@ pub const Setting = struct {
         b: bool,
 
         // TODO: decide if any need to error on None type
-        pub inline fn set(self: *Value, v: ASettingSent.Value, t: Type) !void {
+        pub fn set(self: *Value, v: ASettingSent.Value, t: Type) !void {
             switch (t) {
                 .F => self.f = v.f,
                 .U => self.u = v.u,
@@ -113,7 +114,7 @@ pub const Setting = struct {
             }
         }
 
-        pub inline fn get(self: *Value, t: Type) Value {
+        pub fn get(self: *Value, t: Type) Value {
             return switch (t) {
                 .Str => self.str,
                 .F => self.f,
@@ -124,7 +125,7 @@ pub const Setting = struct {
             };
         }
 
-        pub inline fn getToPtr(self: *Value, p: *anyopaque, t: Type) void {
+        pub fn getToPtr(self: *Value, p: *anyopaque, t: Type) void {
             return switch (t) {
                 .Str => @as(*[63:0]u8, @alignCast(@ptrCast(p))).* = @as(*[63:0]u8, @ptrCast(&self.str)).*,
                 .F => @as(*f32, @alignCast(@ptrCast(p))).* = @as(*f32, @ptrCast(&self.f)).*,
@@ -136,7 +137,7 @@ pub const Setting = struct {
         }
 
         /// raw (string) to value
-        pub inline fn raw2type(self: *Value, t: Type) !void {
+        pub fn raw2type(self: *Value, t: Type) !void {
             const len = std.mem.len(@as([*:0]u8, @ptrCast(&self.str)));
             switch (t) {
                 .B => self.b = std.mem.eql(u8, "on", self.str[0..2]) or
@@ -152,7 +153,7 @@ pub const Setting = struct {
 
         // FIXME: could overflow buffer
         /// value to raw (string)
-        pub inline fn type2raw(self: *Value, t: Type) !void {
+        pub fn type2raw(self: *Value, t: Type) !void {
             switch (t) {
                 .B => _ = try bufPrintZ(&self.str, "{s}", .{if (self.b) "on" else "off"}),
                 .I => _ = try bufPrintZ(&self.str, "{d}", .{self.i}),
@@ -163,12 +164,29 @@ pub const Setting = struct {
             }
         }
 
-        pub inline fn type2type(self: *Value, t1: Type, t2: type) !void {
+        pub fn type2type(self: *Value, t1: Type, t2: type) !void {
             try self.type2raw(t1);
             try self.raw2type(t2);
         }
 
-        pub inline fn eql(self: *Value, other: ASettingSent.Value, t: Type) bool {
+        pub fn eql(self: *const Value, other: *const Value, t: Type) bool {
+            return switch (t) {
+                .B => self.b == other.b,
+                .I => self.i == other.i,
+                .U => self.u == other.u,
+                .F => self.f == other.f,
+                else => {
+                    const len = std.mem.len(@as([*:0]const u8, @ptrCast(&self.str)));
+                    return std.mem.eql(
+                        u8,
+                        @as([*:0]const u8, @ptrCast(&self.str))[0..len],
+                        @as([*:0]const u8, @ptrCast(&other.str))[0..len],
+                    );
+                },
+            };
+        }
+
+        pub fn eqlSent(self: *const Value, other: ASettingSent.Value, t: Type) bool {
             return switch (t) {
                 .B => self.b == other.b,
                 .I => self.i == other.i,
@@ -179,6 +197,16 @@ pub const Setting = struct {
                     return std.mem.eql(u8, @as([*:0]const u8, @ptrCast(&self.str))[0..len], other.str[0..len]);
                 },
             };
+        }
+
+        pub fn write(self: *const Value, writer: anytype, t: Type) !void {
+            switch (t) {
+                .B => try std.fmt.format(writer, "{s}", .{if (self.b) "on" else "off"}),
+                .I => try std.fmt.format(writer, "{d}", .{self.i}),
+                .U => try std.fmt.format(writer, "{d}", .{self.u}),
+                .F => try std.fmt.format(writer, "{d:4.2}", .{self.f}),
+                else => try std.fmt.format(writer, "{s}", .{self.str}),
+            }
         }
     };
 
@@ -196,7 +224,7 @@ pub const Setting = struct {
         InSectionUpdateQueue,
     };
 
-    inline fn sent2setting(setting: ASettingSent.Value) Value {
+    fn sent2setting(setting: ASettingSent.Value) Value {
         _ = setting;
     }
 };
@@ -232,7 +260,10 @@ const ASettings = struct {
     var h_section_plugin: ?Handle = null;
     var h_section_core: ?Handle = null;
     var h_s_settings_version: ?Handle = null;
+    var h_s_save_defaults: ?Handle = null;
+    // TODO: change to false once annodue stops releasing Safe builds (also in settingOccupy call)
     var s_settings_version: u32 = 1;
+    var s_save_defaults: bool = true;
 
     const Flags = enum(u32) {
         AutoSave,
@@ -254,7 +285,7 @@ const ASettings = struct {
 
     // FIXME: review how the handle map is being manipulated with respect to index
     // to make sure it's not messing with the mapping
-    pub inline fn nodeFind(
+    pub fn nodeFind(
         map: anytype, // handle_map_*
         parent: ?Handle,
         name: [*:0]const u8,
@@ -468,7 +499,7 @@ const ASettings = struct {
                 // invalid data = use default, will be cleaned next file write
                 data.value.set(value_default, value_type) catch unreachable;
             };
-            if (!data.value.eql(value_default, value_type))
+            if (!data.value.eqlSent(value_default, value_type))
                 data.flags.insert(.InSectionUpdateQueue);
             if (data.flags.contains(.SavedValueIsSet))
                 data.value_saved.raw2type(value_type) catch data.flags.insert(.SavedValueNotConverted);
@@ -533,7 +564,7 @@ const ASettings = struct {
         const t: Setting.Type = slices.items(.value_type)[i];
         const value_out: *Setting.Value = &slices.items(.value)[i];
 
-        if (value_out.eql(value, t)) return;
+        if (value_out.eqlSent(value, t)) return;
 
         value_out.set(value, t) catch return;
 
@@ -552,7 +583,6 @@ const ASettings = struct {
     }
 
     // TODO: dumping stuff i might need here
-    //pub fn iniParse() void {}
     //pub fn iniWrite() void {}
     //pub fn jsonParse() void {}
     //pub fn jsonWrite() void {}
@@ -562,7 +592,6 @@ const ASettings = struct {
     //pub fn save(_: ?Handle) void {}
     //pub fn sort() void {}
 
-    // TODO: update existing settings, run callbacks
     pub fn iniRead(alloc: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
@@ -591,10 +620,10 @@ const ASettings = struct {
 
                         const send_val = ASettingSent.Value.fromRaw(kv.value, set_types[i]);
 
-                        if (!set_saved[i].eql(send_val, set_types[i]))
+                        if (!set_saved[i].eqlSent(send_val, set_types[i]))
                             try set_saved[i].set(send_val, set_types[i]);
 
-                        if (!set_values[i].eql(send_val, set_types[i]))
+                        if (!set_values[i].eqlSent(send_val, set_types[i]))
                             settingUpdate(handle, send_val);
                     } else {
                         _ = try settingNew(sec_handle, kv.key, kv.value, true);
@@ -607,6 +636,56 @@ const ASettings = struct {
         }
 
         sectionRunUpdateAll();
+    }
+
+    pub fn iniWrite(filename: []const u8) !void {
+        const file = try std.fs.cwd().createFile(filename, .{}); // .exclusive=true for no file rewrite
+        defer file.close();
+        var file_w = file.writer();
+
+        // TODO: sorting both settings and sections?
+        //const mitems = SettingsState.manager.global.sorted() catch return;
+        //defer mitems.deinit();
+
+        try iniWriteSection(file_w, null);
+        for (data_sections.handles.items) |h|
+            try iniWriteSection(file_w, h);
+    }
+
+    fn iniWriteSection(writer: anytype, handle: ?Handle) !void {
+        if (handle) |h| {
+            const section: Section = data_sections.get(h).?;
+            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&section.name)));
+            _ = try writer.write("[");
+            _ = try writer.write(section.name[0..nlen]);
+            _ = try writer.write("]\n");
+        }
+
+        const set_slice = data_settings.values.slice();
+        const sl_sec = set_slice.items(.section);
+        for (sl_sec, 0..) |sec, i| {
+            if ((handle == null) != (sec == null)) continue;
+            if (handle != null and
+                (handle.?.index != sec.?.index or
+                handle.?.generation != sec.?.generation)) continue;
+
+            const data: Setting = set_slice.get(i);
+
+            // only keep uninitialized settings if they were already on file
+            if (!data.flags.contains(.DefaultValueIsSet) and
+                !data.flags.contains(.SavedValueIsSet)) continue;
+
+            // only store initialized settings if they are not default
+            if (!s_save_defaults and data.flags.contains(.DefaultValueIsSet) and
+                data.value_default.eql(&data.value, data.value_type)) continue;
+
+            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&data.name)));
+            _ = try writer.write(data.name[0..nlen]);
+            _ = try writer.write(" = ");
+            try data.value.write(writer, data.value_type);
+            _ = try writer.write("\n");
+        }
+        _ = writer.write("\n") catch {};
     }
 
     fn load() bool {
@@ -695,11 +774,13 @@ fn updateSet1(value: ASettingSent.Value) callconv(.C) void {
 
 pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     ASettings.init(coreAllocator());
+
     _ = ASettings.load();
-    //ASettings.h_section_core = ASettings.sectionNew(null, "Core") catch NullHandle;
-    //ASettings.h_section_plugin = ASettings.sectionNew(null, "Plugin") catch NullHandle;
-    ASettings.h_s_settings_version =
-        gf.ASettingOccupy(NullHandle, "SETTINGS_VERSION", .U, .{ .u = 1 }, &ASettings.s_settings_version, null);
+
+    ASettings.h_s_settings_version = // default 0 so that it's always saved to file
+        gf.ASettingOccupy(NullHandle, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);
+    ASettings.h_s_save_defaults =
+        gf.ASettingOccupy(NullHandle, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &ASettings.s_save_defaults, null);
 
     // TODO: move below to commented test block
     // TODO: add setting occupy -> string type test
@@ -756,6 +837,9 @@ pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // FIXME: remove, for testing
 pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (gf.InputGetKbRaw(.J) == .JustOn)
+        ASettings.iniWrite("annodue/settings_test_out.ini") catch {};
+
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 
     const s = struct {
@@ -775,6 +859,7 @@ pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 // TODO: maybe adapt for test script
+// TODO: also maybe adapt for json settings (nesting, etc.)
 fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void {
     for (0..ASettings.data_settings.values.len) |i| {
         const value: Setting = ASettings.data_settings.values.get(i);

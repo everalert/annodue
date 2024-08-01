@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'visuals_patch'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
+- Setting: 'SETTING_SAVE_DEFAULTS'
 - Backend(Core): `appinfo` module for externally-facing defs
 - Backend(Core): `GDRAW_VERSION` (now `4`) added to Compatibility Version sum
 - Backend(Core): custom triggers via `RTrigger` module/api

@@ -35,6 +35,7 @@ const dbg = @import("../util/debug.zig");
 // FIXME: getting a index of handle/sparse_index by using nodeFind likely incorrect, but
 // just not an issue so far because no items have needed to be deleted/shuffled yet;
 // see iniRead->parse->.section for how to actually resolve handle to value
+// FIXME: not really sure handle maps needed to be SOA tbh
 
 // DEFS
 
@@ -855,6 +856,7 @@ pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    ASettings.saveAuto(FILENAME_TEST) catch {};
     ASettings.deinit();
 }
 
@@ -867,6 +869,9 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 }
 
 pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    if (gs.in_race.new())
+        ASettings.saveAuto(FILENAME_TEST) catch {};
+
     if (gs.timestamp > ASettings.last_check + ASettings.check_freq)
         _ = ASettings.load();
     ASettings.last_check = gs.timestamp;

@@ -389,6 +389,11 @@ const ASettings = struct {
         section.fnOnChange.?(section_update_queue.items.ptr, section_update_queue.items.len);
     }
 
+    pub fn sectionRunUpdateOwner(owner: u16) void {
+        for (data_sections.handles.items) |handle|
+            if (handle.owner == owner) sectionRunUpdate(handle);
+    }
+
     pub fn sectionRunUpdateAll() void {
         for (data_sections.handles.items) |handle|
             sectionRunUpdate(handle);
@@ -645,6 +650,11 @@ pub fn ASectionVacate(handle: Handle) callconv(.C) void {
     ASettings.sectionVacate(handle);
 }
 
+/// manually call fnOnChange section callback on any 'changed' settings
+pub fn ASectionRunUpdate(handle: Handle) callconv(.C) void {
+    ASettings.sectionRunUpdate(handle);
+}
+
 pub fn ASettingOccupy(
     section: Handle,
     name: [*:0]const u8,
@@ -730,7 +740,11 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.deinit();
 }
 
-pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+pub fn OnPluginInitA(owner: u16) callconv(.C) void {
+    ASettings.sectionRunUpdateOwner(owner);
+}
+
+pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     ASettings.vacateOwner(owner);
 }
 

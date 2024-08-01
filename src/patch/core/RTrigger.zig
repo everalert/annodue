@@ -311,7 +311,7 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     CustomTrigger.deinit();
 }
 
-pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     CustomTrigger.removeAll(owner);
 }
 

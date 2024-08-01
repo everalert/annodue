@@ -86,7 +86,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginName, .PluginVersion => ?*const fn () callconv(.C) [*:0]const u8,
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
-        .OnPluginDeinit => ?*const fn (u16) callconv(.C) void,
+        .OnPluginInitA, .OnPluginInitLateA, .OnPluginDeinitA => ?*const fn (u16) callconv(.C) void,
         else => ?*const fn (*GlobalSt, *GlobalFn) callconv(.C) void,
     };
 }
@@ -103,10 +103,12 @@ const PluginExportFn = enum(u32) {
     OnDeinit,
     //OnEnable,
     //OnDisable,
-    OnSettingsLoad,
-    //OnPluginInit,
-    //OnPluginInitLate,
-    OnPluginDeinit, // when any plugin unloads, e.g. to hotload
+    //OnPluginInitB,
+    OnPluginInitA,
+    //OnPluginInitLateB,
+    OnPluginInitLateA,
+    //OnPluginDeinitB,
+    OnPluginDeinitA,
 
     // Hook Functions
     GameLoopB,
@@ -186,29 +188,58 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
         fn callback() void {
             for (PluginState.core.items) |p| {
                 PluginState.working_owner = p.OwnerId;
-                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                if (@field(p, @tagName(ex))) |f| {
+                    f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                    switch (ex) {
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        else => {},
+                    }
+                }
             }
             for (PluginState.plugin.items) |p| {
                 PluginState.working_owner = p.OwnerId;
-                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                if (@field(p, @tagName(ex))) |f| {
+                    f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                    switch (ex) {
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        else => {},
+                    }
+                }
             }
         }
     };
     return &c.callback;
 }
 
-// TODO: generalize for OnPluginInit etc.
-fn PluginFnOnPluginDeinit(owner: u16) void {
+//// TODO: generalize for OnPluginInit etc.
+//fn PluginFnOnPluginDeinit(owner: u16) void {
+//    for (PluginState.core.items) |p| {
+//        if (p.OwnerId == owner) continue;
+//        PluginState.working_owner = p.OwnerId;
+//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+//    }
+//    for (PluginState.plugin.items) |p| {
+//        if (p.OwnerId == owner) continue;
+//        PluginState.working_owner = p.OwnerId;
+//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+//    }
+//}
+pub fn PluginFnOnPluginInit(comptime ex: PluginExportFn, owner: u16) void {
+    comptime if (ex != .OnPluginInitA and
+        ex != .OnPluginInitLateA and
+        ex != .OnPluginDeinitA) @compileError("invalid plugin export fn");
+
     for (PluginState.core.items) |p| {
         if (p.OwnerId == owner) continue;
         PluginState.working_owner = p.OwnerId;
-        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+        if (@field(p, @tagName(ex))) |f| f(owner);
     }
-    for (PluginState.plugin.items) |p| {
-        if (p.OwnerId == owner) continue;
-        PluginState.working_owner = p.OwnerId;
-        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
-    }
+    // TODO: system to allow any plugin to act on any other plugin's init-ing safely
+    //for (PluginState.plugin.items) |p| {
+    //    if (p.OwnerId == owner) continue;
+    //    PluginState.working_owner = p.OwnerId;
+    //    if (@field(p, @tagName(ex))) |f| f(owner);
+    //}
 }
 
 fn PluginFnCallback1_stub(_: u32) void {}
@@ -303,7 +334,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
     // do we need to unload anything
     if (p.Handle) |h| {
         p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
-        PluginFnOnPluginDeinit(p.OwnerId);
+        PluginFnOnPluginInit(.OnPluginDeinitA, p.OwnerId);
         _ = w32ll.FreeLibrary(h);
     }
 
@@ -328,7 +359,9 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
         p.OnInit == null or
         p.OnInitLate == null or
         p.OnDeinit == null or
-        p.OnPluginDeinit != null)
+        p.OnPluginInitA != null or
+        p.OnPluginInitLateA != null or
+        p.OnPluginDeinitA != null)
     {
         _ = w32ll.FreeLibrary(p.Handle);
         p.Initialized = false;
@@ -339,6 +372,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
     PluginState.owners_user += 1;
     PluginState.working_owner = p.OwnerId;
     p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+    PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
     if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION);
     p.Initialized = true;
     return true;
@@ -386,6 +420,7 @@ pub fn init() void {
             PluginState.owners_core += 1;
             PluginState.working_owner = plug.OwnerId;
             plug.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+            PluginFnOnPluginInit(.OnPluginInitA, PluginState.working_owner);
         }
     }
 

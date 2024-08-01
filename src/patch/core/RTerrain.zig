@@ -138,7 +138,7 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     CustomTerrain.deinit();
 }
 
-pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     CustomTerrain.removeAll(owner);
 }
 

@@ -89,7 +89,7 @@ pub fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     if (HideRaceUI.owner == owner)
         _ = HideRaceUI.unhide(owner);
 }

@@ -88,10 +88,11 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Settings
     .ASettingOccupy = &asettings.ASettingOccupy,
     .ASettingVacate = &asettings.ASettingVacate,
+    .ASettingVacateAll = &asettings.AVacateAll,
     .ASettingUpdate = &asettings.ASettingUpdate,
     .ASettingSectionOccupy = &asettings.ASectionOccupy,
     .ASettingSectionVacate = &asettings.ASectionVacate,
-    .ASettingVacateAll = &asettings.AVacateAll,
+    .ASettingSectionRunUpdate = &asettings.ASectionRunUpdate,
     .SettingGetB = &settings.get_bool,
     .SettingGetI = &settings.get_i32,
     .SettingGetU = &settings.get_u32,

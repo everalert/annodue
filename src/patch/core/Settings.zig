@@ -30,7 +30,7 @@ const SETTINGS_VERSION: u32 = 1;
 
 pub const SettingsState = struct {
     const check_freq: u32 = 1000 / 24; // in lieu of every frame
-    const load_callback: *const fn () void = hook.PluginFnCallback(.OnSettingsLoad);
+    //const load_callback: *const fn () void = hook.PluginFnCallback(.OnSettingsLoad);
     var last_check: u32 = 0;
     var last_filetime: w32f.FILETIME = undefined;
     pub var manager: SettingsManager = undefined;
@@ -245,7 +245,8 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.timestamp > SettingsState.last_check + SettingsState.check_freq)
-        if (LoadSettings())
-            SettingsState.load_callback();
+        _ = LoadSettings();
+    //if (LoadSettings())
+    //    SettingsState.load_callback();
     SettingsState.last_check = gs.timestamp;
 }

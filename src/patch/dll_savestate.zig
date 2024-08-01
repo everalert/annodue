@@ -307,7 +307,6 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    //state.handle_settings(gf);
     state.settingsInit(gf);
 }
 

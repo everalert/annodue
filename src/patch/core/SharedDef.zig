@@ -77,7 +77,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 24;
+pub const GLOBAL_FUNCTION_VERSION = 25;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -91,6 +91,7 @@ pub const GlobalFunction = extern struct {
         fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
     ) callconv(.C) HandleSOA(u16),
     ASettingVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ASettingVacateAll: *const fn () callconv(.C) void,
     ASettingUpdate: *const fn (handle: HandleSOA(u16), value: ASettingSent.Value) callconv(.C) void,
     ASettingSectionOccupy: *const fn (
         section: HandleSOA(u16), // originally nullable
@@ -98,7 +99,7 @@ pub const GlobalFunction = extern struct {
         fnOnChange: ?*const fn (arr: [*]ASettingSent, len: usize) callconv(.C) void,
     ) callconv(.C) HandleSOA(u16),
     ASettingSectionVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
-    ASettingVacateAll: *const fn () callconv(.C) void,
+    ASettingSectionRunUpdate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
     SettingGetB: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?bool,
     SettingGetI: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?i32,
     SettingGetU: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?u32,

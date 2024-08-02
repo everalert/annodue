@@ -86,6 +86,8 @@ pub var GLOBAL_STATE: GlobalState = .{};
 
 pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Settings
+    .ASettingSave = &asettings.ASave,
+    .ASettingSaveAuto = &asettings.ASaveAuto,
     .ASettingOccupy = &asettings.ASettingOccupy,
     .ASettingVacate = &asettings.ASettingVacate,
     .ASettingVacateAll = &asettings.AVacateAll,

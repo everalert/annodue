@@ -15,6 +15,7 @@ const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
+const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
 const coreAllocator = @import("Allocator.zig").allocator;
 
 const HandleMapSOA = @import("../util/handle_map_soa.zig").HandleMapSOA;
@@ -933,6 +934,19 @@ pub fn ASettingResetAllFile() callconv(.C) void {
 /// will be reflected in the settings file on the following save write
 pub fn ASettingCleanAll() callconv(.C) void {
     ASettings.settingRemoveAllVacant();
+}
+
+/// manually trigger write of settings file
+/// for internal use; will do nothing if caller is plugin
+pub fn ASave() callconv(.C) void {
+    if (!workingOwnerIsSystem()) return;
+    ASettings.save(FILENAME_ACTIVE) catch {};
+}
+
+/// create checkpoint for writing of settings file
+/// file will only be written if user has enabled autosave
+pub fn ASaveAuto() callconv(.C) void {
+    ASettings.saveAuto(FILENAME_ACTIVE) catch {};
 }
 
 // HOOKS

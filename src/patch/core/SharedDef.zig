@@ -77,11 +77,13 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 27;
+pub const GLOBAL_FUNCTION_VERSION = 28;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
     // Settings
+    ASettingSave: *const fn () callconv(.C) void,
+    ASettingSaveAuto: *const fn () callconv(.C) void,
     ASettingOccupy: *const fn (
         section: HandleSOA(u16), // originally nullable
         name: [*:0]const u8,

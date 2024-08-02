@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): custom terrain via `RTerrain` module/api
 - Backend(Core): added `RTerrainRequest` `RTerrainRelease` `RTerrainReleaseAll` to global functions
 - Backend(Core): added `RTriggerRequest` `RTriggerRelease` `RTriggerReleaseAll` to global functions
-- Backend(Core): added `ASettingSectionOccupy` `ASettingSectionVacate` `ASettingSectionRunUpdate` `ASettingOccupy` `ASettingVacate` `ASettingVacateAll` `ASettingUpdate` to global functions
+- Backend(Core): added `ASettingSectionOccupy` `ASettingSectionVacate` `ASettingSectionRunUpdate` `ASettingOccupy` `ASettingVacate` `ASettingVacateAll` `ASettingUpdate` `ASettingSectionResetDefault` `ASettingSectionResetFile` `ASettingSectionClean` `ASettingResetAllDefault` `ASettingResetAllFile` `ASettingCleanAll` to global functions
 - Backend(Core): enforcing semantic versioning for plugins
 - Backend(Core): enforcing minimum implemented functions for core-side plugins
 - Backend(Core): `OnPluginInit` `OnPluginLateInit` `OnPluginDeinitA` hook functions, usable by core-side plugins
@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
 - Core: reworked toast animation/aesthetics
 - Backend(Build): release versioning now based on `appinfo` module
-- Backend(Core): Global Function version `15` to `25`
+- Backend(Core): Global Function version `15` to `27`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
 - Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`
 - Backend(Core): Global Functions `GHideRaceUIEnable->GHideRaceUIOn` `GHideRaceUIDisable->GHideRaceUIOff` `GHideRaceUIIsHidden->GHideRaceUIIsOn`

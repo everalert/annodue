@@ -77,7 +77,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 25;
+pub const GLOBAL_FUNCTION_VERSION = 27;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -93,6 +93,9 @@ pub const GlobalFunction = extern struct {
     ASettingVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
     ASettingVacateAll: *const fn () callconv(.C) void,
     ASettingUpdate: *const fn (handle: HandleSOA(u16), value: ASettingSent.Value) callconv(.C) void,
+    ASettingResetAllDefault: *const fn () callconv(.C) void,
+    ASettingResetAllFile: *const fn () callconv(.C) void,
+    ASettingCleanAll: *const fn () callconv(.C) void,
     ASettingSectionOccupy: *const fn (
         section: HandleSOA(u16), // originally nullable
         name: [*:0]const u8,
@@ -100,6 +103,9 @@ pub const GlobalFunction = extern struct {
     ) callconv(.C) HandleSOA(u16),
     ASettingSectionVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
     ASettingSectionRunUpdate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ASettingSectionResetDefault: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ASettingSectionResetFile: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ASettingSectionClean: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
     SettingGetB: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?bool,
     SettingGetI: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?i32,
     SettingGetU: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?u32,

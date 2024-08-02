@@ -46,6 +46,7 @@ const SETTINGS_VERSION: u32 = 1;
 const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";
+const FILENAME_ACTIVE = FILENAME_TEST;
 
 pub const ASettingSent = extern struct {
     name: [*:0]const u8,
@@ -435,6 +436,66 @@ const ASettings = struct {
             sectionRunUpdate(handle);
     }
 
+    pub fn sectionResetToSaved(handle: ?Handle) void {
+        const slices = data_settings.values.slice();
+        const sl_sec = slices.items(.section);
+        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+        const sl_val = slices.items(.value);
+        const sl_vals = slices.items(.value_saved);
+
+        for (sl_sec, sl_fl, sl_val, sl_vals) |*s, *f, *v, *vs| {
+            if ((handle == null) != (s.* == null)) continue;
+            if (s.* != null and
+                (s.*.?.generation != handle.?.generation or
+                s.*.?.index != handle.?.index)) continue;
+            if (!f.contains(.SavedValueIsSet)) continue;
+
+            v.* = vs.*;
+            f.insert(.ValueIsSet);
+        }
+    }
+
+    pub fn sectionResetToDefaults(handle: ?Handle) void {
+        const slices = data_settings.values.slice();
+        const sl_sec = slices.items(.section);
+        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+        const sl_val = slices.items(.value);
+        const sl_vald = slices.items(.value_default);
+
+        for (sl_sec, sl_fl, sl_val, sl_vald) |*s, *f, *v, *vd| {
+            if ((handle == null) != (s.* == null)) continue;
+            if (s.* != null and
+                (s.*.?.generation != handle.?.generation or
+                s.*.?.index != handle.?.index)) continue;
+            if (!f.contains(.DefaultValueIsSet)) continue;
+
+            v.* = vd.*;
+            f.insert(.ValueIsSet);
+        }
+    }
+
+    pub fn sectionRemoveVacant(handle: ?Handle) void {
+        const slices = data_settings.values.slice();
+        const sl_sec = slices.items(.section);
+        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+
+        const len = data_settings.handles.items.len;
+        for (0..len) |j| {
+            const i = len - j - 1;
+            const h: Handle = data_settings.handles.items[i];
+            const set_i = data_settings.getIndex(h).?;
+            const s = &sl_sec[set_i];
+
+            if ((handle == null) != (s.* == null)) continue;
+            if (s.* != null and
+                (s.*.?.generation != handle.?.generation or
+                s.*.?.index != handle.?.index)) continue;
+            if (sl_fl[set_i].contains(.DefaultValueIsSet)) continue;
+
+            _ = data_settings.remove(h);
+        }
+    }
+
     // FIXME: review how the handle map is being manipulated with respect to index
     // to make sure it's not messing with the mapping
     pub fn settingNew(
@@ -578,6 +639,50 @@ const ASettings = struct {
         if (slices.items(.fnOnChange)[i]) |f| f(value);
     }
 
+    pub fn settingResetAllToSaved() void {
+        const slices = data_settings.values.slice();
+        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+        const sl_val = slices.items(.value);
+        const sl_vals = slices.items(.value_saved);
+
+        for (sl_fl, sl_val, sl_vals) |*f, *v, *vs| {
+            if (!f.contains(.SavedValueIsSet)) continue;
+
+            v.* = vs.*;
+            f.insert(.ValueIsSet);
+        }
+    }
+
+    pub fn settingResetAllToDefaults() void {
+        const slices = data_settings.values.slice();
+        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+        const sl_val = slices.items(.value);
+        const sl_vald = slices.items(.value_default);
+
+        for (sl_fl, sl_val, sl_vald) |*f, *v, *vd| {
+            if (!f.contains(.DefaultValueIsSet)) continue;
+
+            v.* = vd.*;
+            f.insert(.ValueIsSet);
+        }
+    }
+
+    pub fn settingRemoveAllVacant() void {
+        const slices = data_settings.values.slice();
+        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+
+        const len = data_settings.handles.items.len;
+        for (0..len) |j| {
+            const i = len - j - 1;
+            const h: Handle = data_settings.handles.items[i];
+            const set_i = data_settings.getIndex(h).?;
+
+            if (sl_fl[set_i].contains(.DefaultValueIsSet)) continue;
+
+            _ = data_settings.remove(h);
+        }
+    }
+
     pub fn vacateOwner(owner: u16) void {
         // settings first for better cache use of data_settings processes
         for (ASettings.data_settings.handles.items) |h|
@@ -588,11 +693,8 @@ const ASettings = struct {
     }
 
     // TODO: dumping stuff i might need here
-    //pub fn iniWrite() void {}
     //pub fn jsonParse() void {}
     //pub fn jsonWrite() void {}
-    //pub fn cleanupSave() void {} // remove settings from file not defined by a plugin etc.
-    //pub fn cleanupSaveOccupiedSectionsOnly() void {} // leave 'junk' data on file for unloaded sections
     //pub fn saveAuto(_: ?Handle) void {}
     //pub fn save(_: ?Handle) void {}
     //pub fn sort() void {}
@@ -645,11 +747,11 @@ const ASettings = struct {
 
     fn load() bool {
         var fd: w32fs.WIN32_FIND_DATAA = undefined;
-        _ = w32fs.FindFirstFileA("annodue/settings.ini", &fd);
+        _ = w32fs.FindFirstFileA(FILENAME_ACTIVE, &fd);
         if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
             return false;
 
-        ASettings.iniRead(coreAllocator(), "annodue/settings.ini") catch return false;
+        ASettings.iniRead(coreAllocator(), FILENAME_ACTIVE) catch return false;
         ASettings.last_filetime = fd.ftLastWriteTime;
 
         return true;
@@ -770,6 +872,22 @@ pub fn ASectionRunUpdate(handle: Handle) callconv(.C) void {
     ASettings.sectionRunUpdate(handle);
 }
 
+/// revert entries under the given section back to owner-defined defaults
+pub fn ASectionResetDefault(handle: Handle) callconv(.C) void {
+    ASettings.sectionResetToDefaults(handle);
+}
+
+/// revert entries under the given section back to values on file
+pub fn ASectionResetFile(handle: Handle) callconv(.C) void {
+    ASettings.sectionResetToSaved(handle);
+}
+
+/// remove superfluous entries loaded from file under the given section
+/// will be reflected in the settings file on the following save write
+pub fn ASectionClean(handle: Handle) callconv(.C) void {
+    ASettings.sectionResetToDefaults(handle);
+}
+
 pub fn ASettingOccupy(
     section: Handle,
     name: [*:0]const u8,
@@ -799,6 +917,22 @@ pub fn ASettingUpdate(handle: Handle, value: ASettingSent.Value) callconv(.C) vo
 
 pub fn AVacateAll() callconv(.C) void {
     ASettings.vacateOwner(workingOwner());
+}
+
+/// revert all entries back to owner-defined defaults
+pub fn ASettingResetAllDefault() callconv(.C) void {
+    ASettings.settingResetAllToDefaults();
+}
+
+/// revert all entries back to values on file
+pub fn ASettingResetAllFile() callconv(.C) void {
+    ASettings.settingResetAllToSaved();
+}
+
+/// remove all superfluous entries loaded from file
+/// will be reflected in the settings file on the following save write
+pub fn ASettingCleanAll() callconv(.C) void {
+    ASettings.settingRemoveAllVacant();
 }
 
 // HOOKS
@@ -856,7 +990,7 @@ pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    ASettings.saveAuto(FILENAME_TEST) catch {};
+    ASettings.saveAuto(FILENAME_ACTIVE) catch {};
     ASettings.deinit();
 }
 
@@ -870,7 +1004,7 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 
 pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.new())
-        ASettings.saveAuto(FILENAME_TEST) catch {};
+        ASettings.saveAuto(FILENAME_ACTIVE) catch {};
 
     if (gs.timestamp > ASettings.last_check + ASettings.check_freq)
         _ = ASettings.load();
@@ -880,7 +1014,11 @@ pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: remove, for testing
 pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gf.InputGetKbRaw(.J) == .JustOn)
-        ASettings.save(FILENAME_TEST) catch {};
+        ASettings.settingResetAllToSaved();
+    if (gf.InputGetKbRaw(.Y) == .JustOn)
+        ASettings.settingResetAllToDefaults();
+    if (gf.InputGetKbRaw(.K) == .JustOn)
+        ASettings.settingRemoveAllVacant();
 
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 

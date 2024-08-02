@@ -260,6 +260,7 @@ const ASettings = struct {
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
     var last_check: u32 = 0;
     var last_filetime: w32f.FILETIME = undefined;
+    var skip_next_load: bool = false;
     var section_update_queue: ArrayList(ASettingSent) = undefined;
 
     var h_section_plugin: ?Handle = null;
@@ -752,8 +753,14 @@ const ASettings = struct {
         if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
             return false;
 
-        ASettings.iniRead(coreAllocator(), FILENAME_ACTIVE) catch return false;
         ASettings.last_filetime = fd.ftLastWriteTime;
+
+        if (skip_next_load) {
+            skip_next_load = false;
+            return false;
+        }
+
+        ASettings.iniRead(coreAllocator(), FILENAME_ACTIVE) catch return false;
 
         return true;
     }
@@ -817,6 +824,7 @@ const ASettings = struct {
         var file_w = file.writer();
 
         try iniWrite(file_w);
+        skip_next_load = true;
 
         saveCleanup();
     }
@@ -1028,11 +1036,7 @@ pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: remove, for testing
 pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gf.InputGetKbRaw(.J) == .JustOn)
-        ASettings.settingResetAllToSaved();
-    if (gf.InputGetKbRaw(.Y) == .JustOn)
-        ASettings.settingResetAllToDefaults();
-    if (gf.InputGetKbRaw(.K) == .JustOn)
-        ASettings.settingRemoveAllVacant();
+        ASettings.saveAuto(FILENAME_ACTIVE) catch {};
 
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 

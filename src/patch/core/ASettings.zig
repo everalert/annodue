@@ -237,7 +237,8 @@ pub const Setting = struct {
         SavedValueNotConverted,
         DefaultValueIsSet,
         DefaultValueNotConverted,
-        InSectionUpdateQueue,
+        InSectionUpdateQueue, // marked to be added to array that is sent with section update callback
+        InFileWriteQueue, // marked during preprocessing
     };
 
     fn sent2setting(setting: ASettingSent.Value) Value {
@@ -287,6 +288,11 @@ const ASettings = struct {
     const Flags = enum(u32) {
         AutoSave,
     };
+
+    // TODO: dumping stuff i might need here
+    //pub fn jsonParse() void {}
+    //pub fn jsonWrite() void {}
+    //pub fn sort() void {}
 
     pub fn init(alloc: Allocator) void {
         data_sections = HandleMapSOA(Section, u16).init(alloc);
@@ -691,13 +697,6 @@ const ASettings = struct {
             if (h.owner == owner) ASettings.sectionVacate(h);
     }
 
-    // TODO: dumping stuff i might need here
-    //pub fn jsonParse() void {}
-    //pub fn jsonWrite() void {}
-    //pub fn saveAuto(_: ?Handle) void {}
-    //pub fn save(_: ?Handle) void {}
-    //pub fn sort() void {}
-
     pub fn iniRead(alloc: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
@@ -781,23 +780,13 @@ const ASettings = struct {
         }
 
         const set_slice = data_settings.values.slice();
-        const sl_sec = set_slice.items(.section);
+        const sl_sec: []?ParentHandle = set_slice.items(.section);
         const sl_name: [][63:0]u8 = set_slice.items(.name);
         const sl_val: []Setting.Value = set_slice.items(.value);
-        const sl_vald: []Setting.Value = set_slice.items(.value_default);
-        const sl_vals: []Setting.Value = set_slice.items(.value_saved);
         const sl_f: []EnumSet(Setting.Flags) = set_slice.items(.flags);
         const sl_t: []Setting.Type = set_slice.items(.value_type);
-        for (sl_sec, sl_name, sl_val, sl_vald, sl_vals, sl_f, sl_t) |sec, *name, *val, *vald, *vals, *fl, t| {
-            if (!ParentHandle.eql(sec, handle)) continue;
-
-            // only keep uninitialized settings if they were already on file
-            if (!fl.contains(.DefaultValueIsSet) and
-                !fl.contains(.SavedValueIsSet)) continue;
-
-            // only store initialized settings if they are not default
-            if (!s_save_defaults and fl.contains(.DefaultValueIsSet) and
-                vald.eql(val, t)) continue;
+        for (sl_sec, sl_name, sl_val, sl_f, sl_t) |*sec, *name, *val, *fl, t| {
+            if (!fl.contains(.InFileWriteQueue) or !ParentHandle.eql(sec.*, handle)) continue;
 
             const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(name.ptr)));
             _ = try writer.write(name[0..nlen]);
@@ -805,14 +794,19 @@ const ASettings = struct {
             try val.write(writer, t);
             _ = try writer.write("\n");
 
-            vals.* = val.*;
-            fl.insert(.SavedValueIsSet);
-            fl.insert(.FileUpdatedLastWrite);
+            fl.remove(.InFileWriteQueue);
         }
         _ = writer.write("\n") catch {};
     }
 
     fn save(filename: []const u8) !void {
+        dbg.ConsoleOut("save\n", .{}) catch {};
+
+        const changed_settings: u32 = savePrepare();
+        if (changed_settings == 0) return;
+
+        dbg.ConsoleOut(">> writing ({d} settings changed)\n", .{changed_settings}) catch {};
+
         const file = try std.fs.cwd().createFile(filename, .{}); // .exclusive=true for no file rewrite
         defer file.close();
         var file_w = file.writer();
@@ -833,12 +827,60 @@ const ASettings = struct {
         const set_slice = data_settings.values.slice();
         const sl_f: []EnumSet(Setting.Flags) = set_slice.items(.flags);
         for (sl_f) |*fl| {
-            //- edge case: removing 'on file' tag from settings which were taken out of file since initial load
+            // make sure system knows which settings are no longer on file
             if (!fl.contains(.FileUpdatedLastWrite))
                 fl.remove(.SavedValueIsSet);
 
             fl.remove(.FileUpdatedLastWrite);
         }
+    }
+
+    // TODO: convert to flattened version of savePrepareSection logic? OR only call prep
+    // on sections marked for saving? i.e. need to handle 'save only one section' case
+    /// pre-pass on settings to determine which settings need to be written and how
+    /// write functions assume settings are tagged correctly as a result of running this step
+    /// @return     number of settings that would actually change in the file as a result of writing
+    fn savePrepare() u32 {
+        var changed: u32 = 0;
+
+        changed += savePrepareSection(null);
+        for (data_sections.handles.items) |h|
+            changed += savePrepareSection(h);
+
+        return changed;
+    }
+
+    /// @return     number of settings that would actually change in the file as a result of writing
+    fn savePrepareSection(handle: ?Handle) u32 {
+        var changed: u32 = 0;
+        const set_slice = data_settings.values.slice();
+        const sl_sec = set_slice.items(.section);
+        const sl_val: []Setting.Value = set_slice.items(.value);
+        const sl_vald: []Setting.Value = set_slice.items(.value_default);
+        const sl_vals: []Setting.Value = set_slice.items(.value_saved);
+        const sl_f: []EnumSet(Setting.Flags) = set_slice.items(.flags);
+        const sl_t: []Setting.Type = set_slice.items(.value_type);
+        for (sl_sec, sl_val, sl_vald, sl_vals, sl_f, sl_t) |sec, *val, *vald, *vals, *fl, t| {
+            if (!ParentHandle.eql(sec, handle)) continue;
+
+            // only keep uninitialized settings if they were already on file
+            if (!fl.contains(.DefaultValueIsSet) and
+                !fl.contains(.SavedValueIsSet)) continue;
+
+            // only store initialized settings if they are not default
+            if (!s_save_defaults and fl.contains(.DefaultValueIsSet) and
+                vald.eql(val, t)) continue;
+
+            if (fl.contains(.SavedValueIsSet) and !vals.eql(val, t))
+                changed += 1;
+
+            vals.* = val.*;
+            fl.insert(.SavedValueIsSet);
+            fl.insert(.FileUpdatedLastWrite);
+
+            fl.insert(.InFileWriteQueue);
+        }
+        return changed;
     }
 };
 

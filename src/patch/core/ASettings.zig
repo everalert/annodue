@@ -40,14 +40,25 @@ const dbg = @import("../util/debug.zig");
 
 // DEFS
 
-pub const Handle = HandleSOA(u16);
-pub const NullHandle = Handle.getNull();
-
 const SETTINGS_VERSION: u32 = 1;
 const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";
 const FILENAME_ACTIVE = FILENAME_TEST;
+
+pub const Handle = HandleSOA(u16);
+pub const NullHandle = Handle.getNull();
+
+pub const ParentHandle = extern struct {
+    generation: u16,
+    index: u16,
+
+    fn eql(p: ?ParentHandle, h: ?Handle) bool {
+        if ((p == null) != (h == null)) return false;
+        if (p != null and (p.?.index != h.?.index or p.?.generation != h.?.generation)) return false;
+        return true;
+    }
+};
 
 pub const ASettingSent = extern struct {
     name: [*:0]const u8,
@@ -89,7 +100,7 @@ pub const ASettingSent = extern struct {
 
 // TODO: add global st/fn ptrs to fnOnChange def?
 pub const Setting = struct {
-    section: ?struct { generation: u16, index: u16 } = null,
+    section: ?ParentHandle = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
     value: Value = .{ .str = std.mem.zeroes([63:0]u8) },
     value_default: Value = .{ .str = std.mem.zeroes([63:0]u8) },
@@ -240,7 +251,7 @@ pub const Setting = struct {
 // in handle_map; same problem with Setting->section too
 // need to confirm if this is an issue, and maybe rework how connecting parents works
 pub const Section = struct {
-    section: ?struct { generation: u16, index: u16 } = null,
+    section: ?ParentHandle = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
     flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
     fnOnChange: ?*const fn (changed: [*]ASettingSent, len: usize) callconv(.C) void = null,
@@ -307,12 +318,7 @@ const ASettings = struct {
         const slices_names = slices.items(.name);
         const slices_sections = slices.items(.section);
         for (slices_names, slices_sections, 0..) |s_name, *s_section, i| {
-            if ((parent == null) != (s_section.* == null))
-                continue;
-            if (parent != null and
-                (parent.?.generation != s_section.*.?.generation or
-                parent.?.index != s_section.*.?.index))
-                continue;
+            if (!ParentHandle.eql(s_section.*, parent)) continue;
             if (!std.mem.eql(u8, s_name[0..name_len], name[0..name_len]))
                 continue;
             return @intCast(i);
@@ -381,7 +387,7 @@ const ASettings = struct {
 
         const sec_slice_sections = data_sections.values.items(.section);
         for (sec_slice_sections, 0..) |*s, i| {
-            if (s.* != null and s.*.?.generation == handle.generation and s.*.?.index == handle.index) {
+            if (s.* != null and ParentHandle.eql(s.*, handle)) {
                 const h: Handle = data_sections.handles.items[i];
                 if (h.owner != DEFAULT_ID and h.owner == handle.owner) sectionVacate(h);
             }
@@ -389,7 +395,7 @@ const ASettings = struct {
 
         const set_slice_sections = data_settings.values.items(.section);
         for (set_slice_sections, 0..) |*s, i| {
-            if (s.* != null and s.*.?.generation == handle.generation and s.*.?.index == handle.index) {
+            if (s.* != null and ParentHandle.eql(s.*, handle)) {
                 const h: Handle = data_settings.handles.items[i];
                 if (h.owner != DEFAULT_ID and h.owner == handle.owner) settingVacate(h);
             }
@@ -416,7 +422,7 @@ const ASettings = struct {
         const sl_types = slices.items(.value_type);
 
         for (sl_sections, sl_flags, sl_names, sl_values, sl_types) |*s, *f, *n, *v, t| {
-            if (s.* == null or s.*.?.generation != handle.generation or s.*.?.index != handle.index) continue;
+            if (s.* == null or !ParentHandle.eql(s.*, handle)) continue;
             if (!f.contains(.InSectionUpdateQueue)) continue;
             if (t == .None) continue;
 
@@ -446,10 +452,7 @@ const ASettings = struct {
         const sl_vals = slices.items(.value_saved);
 
         for (sl_sec, sl_fl, sl_val, sl_vals) |*s, *f, *v, *vs| {
-            if ((handle == null) != (s.* == null)) continue;
-            if (s.* != null and
-                (s.*.?.generation != handle.?.generation or
-                s.*.?.index != handle.?.index)) continue;
+            if (!ParentHandle.eql(s.*, handle)) continue;
             if (!f.contains(.SavedValueIsSet)) continue;
 
             v.* = vs.*;
@@ -465,10 +468,7 @@ const ASettings = struct {
         const sl_vald = slices.items(.value_default);
 
         for (sl_sec, sl_fl, sl_val, sl_vald) |*s, *f, *v, *vd| {
-            if ((handle == null) != (s.* == null)) continue;
-            if (s.* != null and
-                (s.*.?.generation != handle.?.generation or
-                s.*.?.index != handle.?.index)) continue;
+            if (!ParentHandle.eql(s.*, handle)) continue;
             if (!f.contains(.DefaultValueIsSet)) continue;
 
             v.* = vd.*;
@@ -488,10 +488,7 @@ const ASettings = struct {
             const set_i = data_settings.getIndex(h).?;
             const s = &sl_sec[set_i];
 
-            if ((handle == null) != (s.* == null)) continue;
-            if (s.* != null and
-                (s.*.?.generation != handle.?.generation or
-                s.*.?.index != handle.?.index)) continue;
+            if (!ParentHandle.eql(s.*, handle)) continue;
             if (sl_fl[set_i].contains(.DefaultValueIsSet)) continue;
 
             _ = data_settings.remove(h);
@@ -792,10 +789,7 @@ const ASettings = struct {
         const sl_f: []EnumSet(Setting.Flags) = set_slice.items(.flags);
         const sl_t: []Setting.Type = set_slice.items(.value_type);
         for (sl_sec, sl_name, sl_val, sl_vald, sl_vals, sl_f, sl_t) |sec, *name, *val, *vald, *vals, *fl, t| {
-            if ((handle == null) != (sec == null)) continue;
-            if (handle != null and
-                (handle.?.index != sec.?.index or
-                handle.?.generation != sec.?.generation)) continue;
+            if (!ParentHandle.eql(sec, handle)) continue;
 
             // only keep uninitialized settings if they were already on file
             if (!fl.contains(.DefaultValueIsSet) and

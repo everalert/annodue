@@ -509,11 +509,14 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
 
     if (Cam7.i_hide_ui.gets() == .JustOn) {
         Cam7.s_hide_ui = !Cam7.s_hide_ui;
+        if (Cam7.h_s_hide_ui) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_hide_ui });
         UpdateHideUI(gf);
     }
 
-    if (Cam7.i_disable_input.gets() == .JustOn)
+    if (Cam7.i_disable_input.gets() == .JustOn) {
         Cam7.s_disable_input = !Cam7.s_disable_input;
+        if (Cam7.h_s_disable_input) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_disable_input });
+    }
 
     const move_sweep: bool = Cam7.i_sweep.gets().on();
     if (Cam7.i_sweep.gets() == .JustOn) {

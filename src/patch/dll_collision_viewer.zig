@@ -218,7 +218,7 @@ const QuickRaceMenu = extern struct {
             },
             .len = 3,
         },
-        .callback = CollisionViewerCallback,
+        .callback = null,
         .y_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
@@ -248,7 +248,7 @@ const QuickRaceMenu = extern struct {
         mi.MenuItemSpacer(),
         mi.MenuItemToggle(&QuickRaceMenu.item_depth_test.input_converted, "Depth test"),
         mi.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces"),
-        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", -100, 100, false, null),
+        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", -100, 100, false, MenuDepthBiasCallback),
     };
 
     var item_enabled = ConvertedMenuItem{ .input_bool = &state.enabled };
@@ -338,10 +338,10 @@ const QuickRaceMenu = extern struct {
     }
 };
 
-fn CollisionViewerCallback(m: *Menu) callconv(.C) bool {
-    var result = false;
-    _ = m;
-    return result;
+fn MenuDepthBiasCallback(_: *Menu) callconv(.C) bool {
+    if (AnnodueSettings.h_s_depth_bias) |h|
+        QuickRaceMenu.gf.ASettingUpdate(h, .{ .i = @as(i32, @intFromFloat(state.depth_bias * 100.0)) });
+    return false;
 }
 
 // HOUSEKEEPING

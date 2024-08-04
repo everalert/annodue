@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
 - Setting: 'SETTING_SAVE_DEFAULTS' `SETTINGS_SAVE_AUTO`
+- Setting: some settings now saved between sessions by syncing settings file with game actions - `cam7->default_disable_input` `cam7->default_hide_ui` `collisionviewer->depth_bias` `qol->default_laps` `qol->default_racers` `qol->fps_limiter_default`
 - Backend(Core): `appinfo` module for externally-facing defs
 - Backend(Core): `GDRAW_VERSION` (now `4`) added to Compatibility Version sum
 - Backend(Core): custom triggers via `RTrigger` module/api

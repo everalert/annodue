@@ -657,6 +657,10 @@ const QuickRaceMenu = extern struct {
     };
 
     fn load_race() void {
+        if (h_s_fps_default) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
+        if (QolState.h_s_default_laps) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.laps) });
+        if (QolState.h_s_default_racers) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.racers) });
+
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
         var hang = re.Manager.entity(.Hang, 0);
@@ -816,6 +820,9 @@ fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
         // save without restarting
         if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
             QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
+            if (QuickRaceMenu.h_s_fps_default) |h|
+                QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = @intCast(QuickRaceMenu.values.fps) });
+
             rso.swrSound_PlaySoundMacro(0x2D);
         }
     }
@@ -931,6 +938,16 @@ export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     FastCountdown.update();
+}
+
+export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    const laps: u32 = @intCast(re.Manager.entity(.Hang, 0).Laps);
+    if (QolState.h_s_default_laps != null and laps != QolState.s_default_laps)
+        gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .u = laps });
+
+    const racers: u32 = @intCast(mem.read(0x50C558, i8));
+    if (QolState.h_s_default_racers != null and racers != QolState.s_default_racers)
+        gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .u = racers });
 }
 
 // FIXME: settings toggles for both of these

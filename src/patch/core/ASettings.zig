@@ -723,6 +723,11 @@ const ASettings = struct {
                         const set_types = set_slices.items(.value_type);
                         const set_values: []Setting.Value = set_slices.items(.value);
                         const set_saved: []Setting.Value = set_slices.items(.value_saved);
+                        const set_fl: []EnumSet(Setting.Flags) = set_slices.items(.flags);
+
+                        // don't override value that has already been changed by something else
+                        if (set_fl[i].contains(.SavedValueIsSet) and
+                            !set_values[i].eql(&set_saved[i], set_types[i])) continue;
 
                         const send_val = ASettingSent.Value.fromRaw(kv.value, set_types[i]);
 

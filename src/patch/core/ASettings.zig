@@ -272,6 +272,7 @@ const ASettings = struct {
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
     var last_check: u32 = 0;
     var last_filetime: w32f.FILETIME = undefined;
+    var file_exists: bool = false;
     var skip_next_load: bool = false;
     var section_update_queue: ArrayList(ASettingSent) = undefined;
 
@@ -745,7 +746,11 @@ const ASettings = struct {
 
     fn load() bool {
         var fd: w32fs.WIN32_FIND_DATAA = undefined;
-        _ = w32fs.FindFirstFileA(FILENAME_ACTIVE, &fd);
+
+        const find_handle = w32fs.FindFirstFileA(FILENAME_ACTIVE, &fd);
+        defer _ = w32fs.FindClose(find_handle);
+        if (-1 == find_handle) return false;
+
         if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
             return false;
 
@@ -758,6 +763,7 @@ const ASettings = struct {
 
         ASettings.iniRead(coreAllocator(), FILENAME_ACTIVE) catch return false;
 
+        file_exists = true;
         return true;
     }
 
@@ -803,7 +809,7 @@ const ASettings = struct {
         dbg.ConsoleOut("save\n", .{}) catch {};
 
         const changed_settings: u32 = savePrepare();
-        if (changed_settings == 0) return;
+        if (changed_settings == 0 and (s_save_defaults and file_exists)) return;
 
         dbg.ConsoleOut(">> writing ({d} settings changed)\n", .{changed_settings}) catch {};
 
@@ -813,6 +819,7 @@ const ASettings = struct {
 
         try iniWrite(file_w);
         skip_next_load = true;
+        file_exists = true;
 
         saveCleanup();
     }

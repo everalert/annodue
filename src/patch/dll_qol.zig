@@ -660,6 +660,7 @@ const QuickRaceMenu = extern struct {
         if (h_s_fps_default) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
         if (QolState.h_s_default_laps) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.laps) });
         if (QolState.h_s_default_racers) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.racers) });
+        gf.ASettingSaveAuto();
 
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character

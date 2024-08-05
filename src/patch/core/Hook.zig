@@ -25,6 +25,10 @@ const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
 const dbg = @import("../util/debug.zig");
 
+const SettingHandle = @import("ASettings.zig").Handle;
+const SettingValue = @import("ASettings.zig").ASettingSent.Value;
+const Setting = @import("ASettings.zig").ASettingSent;
+
 const r = @import("racer");
 const reh = r.Entity.Hang;
 
@@ -173,6 +177,9 @@ pub const PluginState = struct {
     var owners_core: u16 = 0x0000;
     var owners_user: u16 = 0x0800;
     var working_owner: u16 = 0;
+
+    var h_s_hot_reload: ?SettingHandle = null;
+    var s_hot_reload: bool = true;
 
     pub fn workingOwner() u16 {
         return working_owner;
@@ -463,14 +470,17 @@ pub fn init() void {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    PluginState.h_s_hot_reload =
+        gf.ASettingOccupy(SettingHandle.getNull(), "PLUGIN_HOT_RELOAD", .B, .{ .b = true }, &PluginState.s_hot_reload, null);
+}
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
+    if (PluginState.s_hot_reload and gs.timestamp > PluginState.last_check + PluginState.check_freq) {
         PluginState.last_check = gs.timestamp;
         PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
         const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];

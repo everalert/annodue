@@ -265,7 +265,7 @@ pub const Section = struct {
 };
 
 // reserved global settings: AutoSave
-const ASettings = struct {
+pub const ASettings = struct {
     const check_freq: u32 = 1000 / 24; // in lieu of every frame
     var data_sections: HandleMapSOA(Section, u16) = undefined;
     var data_settings: HandleMapSOA(Setting, u16) = undefined;
@@ -299,11 +299,9 @@ const ASettings = struct {
         data_sections = HandleMapSOA(Section, u16).init(alloc);
         data_settings = HandleMapSOA(Setting, u16).init(alloc);
         section_update_queue = ArrayList(ASettingSent).init(alloc);
-        // TODO: load from file
     }
 
     pub fn deinit() void {
-        // TODO: save to file if needed
         data_sections.deinit();
         data_settings.deinit();
         section_update_queue.deinit();
@@ -534,6 +532,7 @@ const ASettings = struct {
         return try data_settings.insert(DEFAULT_ID, setting);
     }
 
+    // TODO: assert value_ptr and fnOnChange aren't both null (same for other functions with this arrangement)
     // FIXME: review how the handle map is being manipulated with respect to index
     // to make sure it's not messing with the mapping
     // FIXME: error handling (catch unreachable)
@@ -810,7 +809,7 @@ const ASettings = struct {
         _ = writer.write("\n") catch {};
     }
 
-    fn save(filename: []const u8) !void {
+    fn save() !void {
         dbg.ConsoleOut("save\n", .{}) catch {};
 
         const changed_settings: u32 = savePrepare();
@@ -818,7 +817,7 @@ const ASettings = struct {
 
         dbg.ConsoleOut(">> writing ({d} settings changed)\n", .{changed_settings}) catch {};
 
-        const file = try std.fs.cwd().createFile(filename, .{}); // .exclusive=true for no file rewrite
+        const file = try std.fs.cwd().createFile(FILENAME_ACTIVE, .{}); // .exclusive=true for no file rewrite
         defer file.close();
         var file_w = file.writer();
 
@@ -829,9 +828,9 @@ const ASettings = struct {
         saveCleanup();
     }
 
-    fn saveAuto(filename: []const u8) !void {
+    fn saveAuto() !void {
         if (s_save_auto)
-            try save(filename);
+            try save();
     }
 
     /// post-processing of sections and settings, to make settings ready for next write
@@ -883,7 +882,8 @@ const ASettings = struct {
             if (!s_save_defaults and fl.contains(.DefaultValueIsSet) and
                 vald.eql(val, t)) continue;
 
-            if (fl.contains(.SavedValueIsSet) and !vals.eql(val, t))
+            if ((fl.contains(.SavedValueIsSet) and !vals.eql(val, t)) or
+                (!fl.contains(.SavedValueIsSet) and s_save_defaults))
                 changed += 1;
 
             vals.* = val.*;
@@ -895,6 +895,26 @@ const ASettings = struct {
         return changed;
     }
 };
+
+pub fn init() !void {
+    ASettings.init(coreAllocator());
+    _ = ASettings.load();
+
+    ASettings.h_s_settings_version =
+        try ASettings.settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);
+    ASettings.h_s_save_auto =
+        try ASettings.settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_AUTO", .B, .{ .b = true }, &ASettings.s_save_auto, null);
+    ASettings.h_s_save_defaults =
+        try ASettings.settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &ASettings.s_save_defaults, null);
+
+    // ensure version is written to file by defaulting to 0 and setting here
+    ASettings.settingUpdate(ASettings.h_s_settings_version.?, .{ .u = SETTINGS_VERSION });
+}
+
+pub fn deinit() !void {
+    try ASettings.saveAuto();
+    ASettings.deinit();
+}
 
 // FIXME: copied from hook.zig; move both to util?
 fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
@@ -996,13 +1016,13 @@ pub fn ASettingCleanAll() callconv(.C) void {
 /// for internal use; will do nothing if caller is plugin
 pub fn ASave() callconv(.C) void {
     if (!workingOwnerIsSystem()) return;
-    ASettings.save(FILENAME_ACTIVE) catch {};
+    ASettings.save() catch {};
 }
 
 /// create checkpoint for writing of settings file
 /// file will only be written if user has enabled autosave
 pub fn ASaveAuto() callconv(.C) void {
-    ASettings.saveAuto(FILENAME_ACTIVE) catch {};
+    ASettings.saveAuto() catch {};
 }
 
 // HOOKS
@@ -1012,21 +1032,7 @@ fn updateSet1(value: ASettingSent.Value) callconv(.C) void {
     dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
 }
 
-pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    ASettings.init(coreAllocator());
-
-    _ = ASettings.load();
-
-    ASettings.h_s_settings_version =
-        gf.ASettingOccupy(NullHandle, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);
-    ASettings.h_s_save_auto =
-        gf.ASettingOccupy(NullHandle, "SETTINGS_SAVE_AUTO", .B, .{ .b = true }, &ASettings.s_save_auto, null);
-    ASettings.h_s_save_defaults =
-        gf.ASettingOccupy(NullHandle, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &ASettings.s_save_defaults, null);
-
-    // ensure version is written to file by defaulting to 0 and setting here
-    gf.ASettingUpdate(ASettings.h_s_settings_version.?, .{ .u = SETTINGS_VERSION });
-
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: move below to commented test block
     // TODO: add setting occupy -> string type test
 
@@ -1062,10 +1068,7 @@ pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    ASettings.saveAuto(FILENAME_ACTIVE) catch {};
-    ASettings.deinit();
-}
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnPluginInitA(owner: u16) callconv(.C) void {
     ASettings.sectionRunUpdateOwner(owner);
@@ -1077,7 +1080,7 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 
 pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (gs.in_race.new())
-        ASettings.saveAuto(FILENAME_ACTIVE) catch {};
+        ASettings.saveAuto() catch {};
 
     if (gs.timestamp > ASettings.last_check + ASettings.check_freq)
         _ = ASettings.load();
@@ -1087,7 +1090,7 @@ pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: remove, for testing
 pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gf.InputGetKbRaw(.J) == .JustOn)
-        ASettings.saveAuto(FILENAME_ACTIVE) catch {};
+        ASettings.saveAuto() catch {};
 
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 

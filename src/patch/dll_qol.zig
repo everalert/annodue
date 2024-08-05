@@ -155,9 +155,9 @@ const QolState = struct {
         h_s_quickrace =
             gf.ASettingOccupy(section, "quick_race_menu_enable", .B, .{ .b = false }, &s_quickrace, null);
         h_s_default_racers =
-            gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, &s_default_racers, null);
+            gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null, settingsUpdateRacers);
         h_s_default_laps =
-            gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, &s_default_laps, null);
+            gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null, settingsUpdateLaps);
         h_s_ms_timer =
             gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, &s_ms_timer, null);
         h_s_fps_limiter =
@@ -178,20 +178,32 @@ const QolState = struct {
             gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, &QuickRaceMenu.s_fps_default, null);
     }
 
+    fn settingsUpdateRacers(new_value: Setting.Value) callconv(.C) void {
+        s_default_racers = std.math.clamp(new_value.u, 1, 12);
+        if (h_s_default_racers) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_racers });
+
+        QuickRaceMenu.values.racers = @intCast(s_default_racers);
+        if (QuickRaceMenu.gs.init_late_passed) {
+            _ = mem.write(0x50C558, i8, @as(i8, @intCast(s_default_racers)));
+            re.Manager.entity(.Hang, 0).Racers = @intCast(s_default_racers);
+        }
+    }
+
+    fn settingsUpdateLaps(new_value: Setting.Value) callconv(.C) void {
+        s_default_laps = std.math.clamp(new_value.u, 1, 5);
+        if (h_s_default_laps) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_laps });
+
+        QuickRaceMenu.values.laps = @intCast(s_default_laps);
+        if (QuickRaceMenu.gs.init_late_passed) {
+            re.Manager.entity(.Hang, 0).Laps = @intCast(s_default_laps);
+        }
+    }
+
     fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
         var update_fast_countdown: bool = false;
 
         for (changed, 0..len) |setting, _| {
             const nlen: usize = std.mem.len(setting.name);
-
-            if (nlen == 12 and std.mem.eql(u8, "default_laps", setting.name[0..nlen])) {
-                s_default_laps = std.math.clamp(s_default_laps, 1, 5);
-                continue;
-            }
-            if (nlen == 14 and std.mem.eql(u8, "default_racers", setting.name[0..nlen])) {
-                s_default_racers = std.math.clamp(s_default_racers, 1, 12);
-                continue;
-            }
 
             if (nlen == 22 and std.mem.eql(u8, "quick_race_menu_enable", setting.name[0..nlen])) {
                 if (!s_quickrace) QuickRaceMenu.close();
@@ -662,6 +674,7 @@ const QuickRaceMenu = extern struct {
         if (QolState.h_s_default_racers) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.racers) });
         gf.ASettingSaveAuto();
 
+        // NOTE: laps, racers handled by settings update fn
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
         var hang = re.Manager.entity(.Hang, 0);
@@ -669,10 +682,7 @@ const QuickRaceMenu = extern struct {
         hang.Track = @intCast(values.track);
         hang.Circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
         hang.Mirror = @intCast(values.mirror);
-        hang.Laps = @intCast(values.laps);
         hang.AISpeed = @intCast(values.ai_speed + 1);
-        hang.Racers = @intCast(values.racers);
-        _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
         for (0..7) |i| {
             rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
             rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
@@ -883,12 +893,12 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = w32wm.ShowCursor(0); // cursor fix
-    QolState.settingsInit(gf);
-
+    // NOTE: keep at top
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
-    //QuickRaceMenu.FpsTimer.Start();
+
+    _ = w32wm.ShowCursor(0); // cursor fix
+    QolState.settingsInit(gf);
 
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
@@ -896,7 +906,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    // TODO: look into using in-game default setter, see fn_45BD90
+    // TODO: look into using in-game default setter as hook, see fn_45BD90
     // TODO: change annodue setting to i32 for both, also look into anywhere
     // else like this that might have been affected by new Hang stuff
 

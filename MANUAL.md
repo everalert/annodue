@@ -152,13 +152,21 @@ Configurable under `[inputdisplay]`
 
 - Show individual lap times during race
 - Show time to overheat and underheat
+- Show death count
+- Show fall timer
+- Show FPS readout
 
 ##### Settings
 Configured under `[overlay]`
 
 |Option|Type|
 |:---|:---|
-|`enable`|`bool`|
+|`enable`          |`bool`|
+|`show_fps`        |`bool`|
+|`show_lap_times`  |`bool`|
+|`show_heat_timer` |`bool`|
+|`show_death_count`|`bool`|
+|`show_fall_timer` |`bool`|
 
 ### Quality of Life
 

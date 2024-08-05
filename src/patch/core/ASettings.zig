@@ -1017,12 +1017,15 @@ pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
     _ = ASettings.load();
 
-    ASettings.h_s_settings_version = // default 0 so that it's always saved to file
+    ASettings.h_s_settings_version =
         gf.ASettingOccupy(NullHandle, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);
     ASettings.h_s_save_auto =
         gf.ASettingOccupy(NullHandle, "SETTINGS_SAVE_AUTO", .B, .{ .b = true }, &ASettings.s_save_auto, null);
     ASettings.h_s_save_defaults =
         gf.ASettingOccupy(NullHandle, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &ASettings.s_save_defaults, null);
+
+    // ensure version is written to file by defaulting to 0 and setting here
+    gf.ASettingUpdate(ASettings.h_s_settings_version.?, .{ .u = SETTINGS_VERSION });
 
     // TODO: move below to commented test block
     // TODO: add setting occupy -> string type test

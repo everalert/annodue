@@ -221,7 +221,7 @@ pub const Setting = struct {
                 .I => try std.fmt.format(writer, "{d}", .{self.i}),
                 .U => try std.fmt.format(writer, "{d}", .{self.u}),
                 .F => try std.fmt.format(writer, "{d:4.2}", .{self.f}),
-                else => try std.fmt.format(writer, "{s}", .{self.str}),
+                else => try std.fmt.format(writer, "{s}", .{@as([*:0]const u8, @ptrCast(&self.str))}),
             }
         }
     };

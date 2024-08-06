@@ -298,8 +298,6 @@ Configurable under `[multiplayer]`
 
 Configurable under `[gameplay]`
 
-*All settings in this section require game restart to apply*
-
 |Option|Type|
 |:---|:---|
 |`death_speed_mod_enable`|`bool`|
@@ -319,5 +317,5 @@ Configurable under `[developer]`
 
 |Option|Type|
 |:---|:---|
-|`dump_fonts`|`bool`|*Requires game restart to apply*
+|`dump_fonts`|`bool`|*Requires game restart to re-dump*
 |`visualize_matrices`|`bool`|&nbsp;

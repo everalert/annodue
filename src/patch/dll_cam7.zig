@@ -304,7 +304,8 @@ const Cam7 = extern struct {
         for (changed, 0..len) |setting, _| {
             const nlen: usize = std.mem.len(setting.name);
 
-            if (nlen == 9 and std.mem.eql(u8, "fog_patch", setting.name[0..nlen]) and
+            if ((nlen == 9 and std.mem.eql(u8, "fog_patch", setting.name[0..nlen]) or
+                nlen == 10 and std.mem.eql(u8, "fog_remove", setting.name[0..nlen])) and
                 cam_state == .FreeCam)
             {
                 patchFog(s_fog_patch);
@@ -382,7 +383,7 @@ const Cam7 = extern struct {
 
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
 
-inline fn patchFlags(on: bool) void {
+fn patchFlags(on: bool) void {
     if (on) {
         _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
     } else {
@@ -390,7 +391,7 @@ inline fn patchFlags(on: bool) void {
     }
 }
 
-inline fn patchFog(on: bool) void {
+fn patchFog(on: bool) void {
     if (on) {
         const dist = if (Cam7.s_fog_remove) comptime m.pow(f32, 10, 10) else Cam7.fog_dist;
         var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(dist))); // fog dist, normal case
@@ -402,7 +403,7 @@ inline fn patchFog(on: bool) void {
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
 }
 
-inline fn patchFOV(on: bool) void {
+fn patchFOV(on: bool) void {
     const fov: f32 = if (on) 100 else 120; // first-person internal cam fov
     _ = mem.write(0x4528EF, f32, fov); // instruction at 0x4528E9
 }

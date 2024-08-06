@@ -162,6 +162,13 @@ const CosmeticState = struct {
 
 // SWE1R-PATCHER STUFF
 
+// NOTE: code_begin_offset = part of the arguments to a function call (sprite setup-related fn fn_445EE0)
+// args expected in this range: maxwidth?, maxheight?, width, height (args 3-6)
+// NOTE: code_end_offset = the instruction after 4 arguments later
+// NOTE: texture table seems to be 'len' in first field (u32), followed by len ptrs to texture segments
+// FIXME: can probably convert font->sprite conversion to comptime embed then hook up ptrs only in code,
+// then all the allocation bs can be skipped
+// NOTE: probably cannot reverse this, because it patches something that seems to only run once during setup
 fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usize, code_end_offset: usize, width: u32, height: u32, filename: []const u8) usize {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
@@ -188,7 +195,8 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
 
     // Have a buffer for pixeldata
     const texture_size: u32 = width * height * 4 / 8;
-    var buffer = alloc.alloc(u8, texture_size) catch @panic("failed to allocate memory for texture table patch");
+    var buffer = alloc.alloc(u8, texture_size) catch
+        @panic("failed to allocate memory for texture table patch");
     defer alloc.free(buffer);
     const buffer_slice = @as([*]u8, @ptrCast(buffer))[0..texture_size];
 
@@ -196,16 +204,19 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
     var i: usize = 0;
     while (i < count) : (i += 1) {
         // Load input texture to buffer
-        var path = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch @panic("failed to format path for texture table patch"); // FIXME: error handling
+        var path = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch
+            @panic("failed to format path for texture table patch"); // FIXME: error handling
 
-        const file = std.fs.cwd().openFile(path, .{}) catch @panic("failed to open texture table patch file"); // FIXME: error handling
+        const file = std.fs.cwd().openFile(path, .{}) catch
+            @panic("failed to open texture table patch file"); // FIXME: error handling
         defer file.close();
         var file_pos: usize = 0;
         @memset(buffer_slice, 0x00);
         var j: u32 = 0;
         while (j < texture_size * 2) : (j += 1) {
             var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
-            file_pos += file.pread(&pixel, file_pos) catch @panic("failed to read segment of texture table patch file"); // FIXME: error handling
+            file_pos += file.pread(&pixel, file_pos) catch
+                @panic("failed to read segment of texture table patch file"); // FIXME: error handling
             buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
         }
 
@@ -364,6 +375,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // then we can properly deinit it when the plugin unloads or the user setting changes.
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
+    // NOTE: original function at fn_42D720
     var off = gs.patch_offset;
     if (CosmeticState.s_patch_fonts) {
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");

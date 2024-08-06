@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: rotation speed - `360` -> `80..810`
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
 - Core: reworked toast animation/aesthetics
+- Setting: changed from init-only to dynamic - `cam7->fog_remove` `gameplay->death_speed_mod_enable` `gameplay->death_speed_drop` `gameplay->death_speed_min` `developer->dump_fonts (single-use arbitrary enable)`
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Core): Global Function version `15` to `28`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)

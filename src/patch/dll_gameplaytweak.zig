@@ -45,7 +45,7 @@ const GameplayTweak = struct {
     var s_ds_drop: f32 = 140;
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", null);
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", settingsUpdate);
         h_s_section = section;
 
         //h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
@@ -56,6 +56,30 @@ const GameplayTweak = struct {
             gf.ASettingOccupy(section, "death_speed_min", .F, .{ .f = 325 }, &s_ds_min, null);
         h_s_ds_drop =
             gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .f = 140 }, &s_ds_drop, null);
+    }
+
+    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+        var update_death_speed_mod: bool = false;
+
+        for (changed, 0..len) |setting, _| {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if (nlen == 22 and std.mem.eql(u8, "death_speed_mod_enable", setting.name[0..nlen]) or
+                nlen == 15 and std.mem.eql(u8, "death_speed_min", setting.name[0..nlen]) or
+                nlen == 16 and std.mem.eql(u8, "death_speed_drop", setting.name[0..nlen]))
+            {
+                update_death_speed_mod = true;
+                continue;
+            }
+        }
+
+        // TODO: add conditional thing for practice mode toggling
+        if (update_death_speed_mod) {
+            if (s_ds_mod_enable)
+                PatchDeathSpeed(s_ds_min, s_ds_drop)
+            else
+                PatchDeathSpeed(325, 140);
+        }
     }
 };
 
@@ -82,10 +106,6 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     GameplayTweak.settingsInit(gf);
-
-    // TODO: add conditional thing for practice mode toggling
-    if (GameplayTweak.s_ds_mod_enable)
-        PatchDeathSpeed(GameplayTweak.s_ds_min, GameplayTweak.s_ds_drop);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

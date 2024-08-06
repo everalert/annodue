@@ -8,7 +8,10 @@ const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
 const coreAllocator = @import("Allocator.zig").allocator;
-const SettingGetB = @import("Settings.zig").get_bool;
+
+const SettingHandle = @import("ASettings.zig").Handle;
+const SettingValue = @import("ASettings.zig").ASettingSent.Value;
+const Setting = @import("ASettings.zig").ASettingSent;
 
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
@@ -26,6 +29,7 @@ const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 // TODO: cleanup commenting around functions; consolidate relevant info for plugin devs
 // TODO: cleanup hand-rolled assembly, once more work on generalizing x86 util done
 
+// TODO: finish writing out FEATURES section according to below todo, and mirror in MANUAL.md
 // TODO: explain lifecycle of a trigger common model-entity interactions at each stage, etc.
 // notes for plugin devs:
 // - you have to do any modelblock-related init and cleanup yourself
@@ -38,6 +42,12 @@ const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 //   - accessible via 'settings' args in callbacks
 //   - shifted down to bits 0..9, with bits 10..15 zeroed out
 //   - use it however you like, as bitfield, packed struct, int/float, etc.
+
+// FEATURES
+// - ..
+// - Show race trigger interactions via game notification system
+// - SETTINGS:
+//   notify_trigger     bool
 
 pub const THandle = Handle(u16);
 pub const THandleMap = HandleMap(CustomTriggerDef, u16);
@@ -60,6 +70,10 @@ const CustomTriggerDef = extern struct {
 
 const CustomTrigger = struct {
     var data: THandleMap = undefined;
+
+    var h_s_section: ?SettingHandle = null;
+    var h_s_notify_trigger: ?SettingHandle = null;
+    var s_notify_trigger: bool = false;
 
     // based on loc_47D138 in HandleTriggers
     inline fn basicCleanup(tr: *Trig) void {
@@ -122,7 +136,7 @@ const CustomTrigger = struct {
     // - else flags |= 1 will be set
     fn hookTrigger(tr: *Trig, te: *Test, is_local: BOOL) callconv(.C) void {
         // TODO: move to internal Toast system; spam queueing an issue
-        if (SettingGetB("cosmetic", "patch_trigger_display").?) {
+        if (s_notify_trigger) {
             var b: [127:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&b, "Trigger {d} activated", .{tr.Type}) catch {};
             t.swrText_NewNotification(&b, 3.0);
@@ -267,6 +281,14 @@ const CustomTrigger = struct {
         var update_addr: usize = 0x47C51B;
         update_addr = mem.write_bytes(update_addr, &buf.u_ins, 5);
     }
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "core/RTrigger", null);
+        h_s_section = section;
+
+        h_s_notify_trigger =
+            gf.ASettingOccupy(section, "notify_trigger", .B, .{ .b = false }, &s_notify_trigger, null);
+    }
 };
 
 // GLOBAL EXPORTS
@@ -301,8 +323,9 @@ pub fn RReleaseAll() callconv(.C) void {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     CustomTrigger.init(coreAllocator());
+    CustomTrigger.settingsInit(gf);
 }
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

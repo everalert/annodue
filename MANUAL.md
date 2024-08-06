@@ -319,3 +319,16 @@ Configurable under `[developer]`
 |:---|:---|
 |`dump_fonts`|`bool`|*Requires game restart to re-dump*
 |`visualize_matrices`|`bool`|&nbsp;
+
+### RTrigger System
+
+- System for plugin developers to implement custom track behaviours
+- Show race triggers via game notification system
+
+##### Settings
+
+Configurable under `[core/RTrigger]`
+
+|Option|Type|Note|
+|:---|:---|:---|
+|`notify_trigger`|`bool`|&nbsp;

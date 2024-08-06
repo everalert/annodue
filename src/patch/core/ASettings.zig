@@ -40,7 +40,7 @@ const dbg = @import("../util/debug.zig");
 
 // DEFS
 
-const SETTINGS_VERSION: u32 = 1;
+const SETTINGS_VERSION: u32 = 2;
 const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";

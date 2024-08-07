@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): `GDrawText`, `GDrawRect`, `GDrawRectBdr` to global functions
 - Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
 - Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
+- Backent(Core): Support for string-type settings
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
 - Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`
@@ -88,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: changed `cosmetic->patch_trigger_display` -> `core/RTrigger->notify_trigger`
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Core): Settings version `1` to `2`
+- Backend(Core): Settings back-end rewritten to support plugin-directed settings definitions
 - Backend(Core): Global Function version `15` to `28`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
 - Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`

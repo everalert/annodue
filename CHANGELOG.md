@@ -90,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Core): Settings version `1` to `2`
 - Backend(Core): Settings back-end rewritten to support plugin-directed settings definitions
-- Backend(Core): Global Function version `15` to `28`
+- Backend(Core): Global Function version `15` to `29`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
 - Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`
 - Backend(Core): Global Functions `GHideRaceUIEnable->GHideRaceUIOn` `GHideRaceUIDisable->GHideRaceUIOff` `GHideRaceUIIsHidden->GHideRaceUIIsOn`
@@ -102,8 +102,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Backend(Core): `Settings.zig` core module
+- Backend(Core): global functions `SettingGetB` `SettingGetU` `SettingGetI` `SettingGetF`
 - Backend(Build): `-Dver` option in `release` builds
 - Backend(Build): `-Dminver` option in `release` builds
+- Backend(Util): `settings.zig` util lib
 
 ### Fixed
 

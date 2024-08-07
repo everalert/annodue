@@ -77,7 +77,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 28;
+pub const GLOBAL_FUNCTION_VERSION = 29;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -108,10 +108,6 @@ pub const GlobalFunction = extern struct {
     ASettingSectionResetDefault: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
     ASettingSectionResetFile: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
     ASettingSectionClean: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
-    SettingGetB: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?bool,
-    SettingGetI: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?i32,
-    SettingGetU: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?u32,
-    SettingGetF: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?f32,
     // Input
     InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ActiveState) bool,
     InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) ActiveState,

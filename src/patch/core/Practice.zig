@@ -2,7 +2,6 @@ pub const Self = @This();
 
 const std = @import("std");
 
-const s = @import("Settings.zig").state;
 const app = @import("../appinfo.zig");
 const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;

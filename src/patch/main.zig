@@ -6,7 +6,6 @@ const global = @import("core/Global.zig");
 const hook = @import("core/Hook.zig");
 const allocator = @import("core/Allocator.zig");
 const debug = @import("core/Debug.zig");
-const settings = @import("core/Settings.zig");
 const asettings = @import("core/ASettings.zig");
 
 const msg = @import("util/message.zig");
@@ -29,7 +28,6 @@ export fn Init() void {
     global.GLOBAL_STATE.patch_offset = @intFromPtr(memory.ptr);
 
     // TODO: reimpl alloc in init fn args
-    settings.init();
     asettings.init() catch {};
     hook.init();
 

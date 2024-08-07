@@ -12,8 +12,6 @@ const hide_race_ui = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const asettings = @import("ASettings.zig");
-const settings = @import("Settings.zig");
-const s = settings.SettingsState;
 const rterrain = @import("RTerrain.zig");
 const rtrigger = @import("RTrigger.zig");
 
@@ -101,10 +99,6 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .ASettingSectionResetDefault = &asettings.ASectionResetDefault,
     .ASettingSectionResetFile = &asettings.ASectionResetFile,
     .ASettingSectionClean = &asettings.ASectionClean,
-    .SettingGetB = &settings.get_bool,
-    .SettingGetI = &settings.get_i32,
-    .SettingGetU = &settings.get_u32,
-    .SettingGetF = &settings.get_f32,
     // Input
     .InputGetKb = &input.get_kb,
     .InputGetKbRaw = &input.get_kb_raw,

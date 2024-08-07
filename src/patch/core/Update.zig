@@ -16,7 +16,6 @@ const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 
 const allocator = @import("Allocator.zig");
-const SettingsSt = @import("Settings.zig").SettingsState;
 const app = @import("../appinfo.zig");
 const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;

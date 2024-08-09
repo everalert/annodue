@@ -101,6 +101,8 @@ pub fn HandleMapSOA(comptime T: type, comptime I: type) type {
             return false;
         }
 
+        /// get internal array index of data associated with handle
+        /// index is also valid for the handle itself
         pub fn getIndex(self: *Self, h: Handle(I)) ?I {
             if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
                 const entry = self.sparse_indices.items[h.index];
@@ -159,7 +161,7 @@ pub fn HandleMapSOA(comptime T: type, comptime I: type) type {
         pub fn remove(self: *Self, h: Handle(I)) ?T {
             if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
                 var entry = &self.sparse_indices.items[h.index];
-                if (entry.generation != h.generation)
+                if (entry.generation != h.generation) // FIXME: add owner check? also for other handle_maps
                     return null;
 
                 const index = entry.index_or_next;

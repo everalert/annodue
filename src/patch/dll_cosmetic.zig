@@ -23,7 +23,6 @@ pub const panic = debug.annodue_panic;
 // FEATURES
 // - High-resolution fonts
 // - Rotating rainbow colors for race UI elements: top values, top labels, speedo
-// - Show race trigger interactions via game notification system
 // - (disabled) High-fidelity audio
 // - (disabled) Load sprites from TGA
 // - SETTINGS:
@@ -32,7 +31,6 @@ pub const panic = debug.annodue_panic;
 //   rainbow_label_enable   bool
 //   rainbow_speed_enable   bool
 //   patch_fonts            bool    * requires game restart to apply
-//   patch_trigger_display  bool    * requires game restart to apply
 //   patch_audio            bool    ignored
 //   patch_tga_loader       bool    ignored
 
@@ -55,7 +53,6 @@ const CosmeticState = struct {
     var h_s_rb_label_enable: ?SettingHandle = null;
     var h_s_rb_speed_enable: ?SettingHandle = null;
     var h_s_patch_tga_loader: ?SettingHandle = null;
-    var h_s_patch_trig_disp: ?SettingHandle = null;
     var h_s_patch_audio: ?SettingHandle = null;
     var h_s_patch_fonts: ?SettingHandle = null;
     var s_rb_enable: bool = false;
@@ -66,7 +63,6 @@ const CosmeticState = struct {
     var rb_label = crot.RotatingRGB.new(95, 255, 1);
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
     var s_patch_tga_loader: bool = false;
-    var s_patch_trig_disp: bool = false;
     var s_patch_audio: bool = false;
     var s_patch_fonts: bool = false;
 
@@ -85,8 +81,6 @@ const CosmeticState = struct {
 
         h_s_patch_tga_loader = // FIXME: need tga files to verify with
             gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, &s_patch_tga_loader, null);
-        h_s_patch_trig_disp =
-            gf.ASettingOccupy(section, "patch_trigger_display", .B, .{ .b = false }, &s_patch_trig_disp, null);
         h_s_patch_audio = // FIXME: crashes
             gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, &s_patch_audio, null);
         h_s_patch_fonts =

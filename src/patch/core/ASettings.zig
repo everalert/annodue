@@ -23,6 +23,8 @@ const SparseIndex = @import("../util/handle_map_soa.zig").SparseIndex(u16);
 pub const Handle = @import("../util/handle_map_soa.zig").Handle(u16);
 pub const NullHandle = Handle.getNull();
 
+const dbg = @import("../util/debug.zig");
+
 const r = @import("racer");
 const rt = r.Text;
 
@@ -225,9 +227,6 @@ pub const Setting = struct {
 
 // reserved settings: AutoSave, UseGlobalAutoSave
 // TODO: add global st/fn ptrs to fnOnChange def?
-// FIXME: section->index may become invalid when handle expires due to swapRemove
-// in handle_map; same problem with Setting->section too
-// need to confirm if this is an issue, and maybe rework how connecting parents works
 pub const Section = struct {
     section: ?ParentHandle = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
@@ -333,11 +332,12 @@ pub const ASettings = struct {
         name: [*:0]const u8,
         fnOnChange: ?*const fn ([*]ASettingSent, usize) callconv(.C) void,
     ) !Handle {
-        // FIXME: ensure validity, currently panics
-        //if (section) |s| {
-        //    if (s.owner != owner) @panic("owner and handle owner must match");
-        //    if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
-        //}
+        // TODO: return error instead of panic? and move panic to global function?
+        if (section) |s| blk: {
+            if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
+            if (s.owner != owner) dbg.PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
+        }
 
         const existing_i = nodeFind(data_sections, section, name);
 
@@ -517,8 +517,10 @@ pub const ASettings = struct {
     ) !Handle {
         std.debug.assert(value_type != .None);
 
-        if (section) |s| {
-            if (s.owner != owner) @panic("owner and handle owner must match");
+        // TODO: return error instead of panic? and move panic to global function?
+        if (section) |s| blk: {
+            if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
+            if (s.owner != owner) dbg.PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
             if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
@@ -998,8 +1000,8 @@ pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     _ = ASettings.sectionNew(sec_base, "Sec1") catch {};
     _ = ASettings.sectionNew(sec_base, "Sec2") catch {};
     _ = ASettings.sectionNew(sec_base, "Sec2") catch {}; // expect: NameTaken error -> skipped
-    const sec1 = ASettings.sectionOccupy(0x0000, sec_base, "Sec1", null) catch NullHandle;
-    const sec2 = ASettings.sectionOccupy(0x0001, sec_base, "Sec2", null) catch NullHandle;
+    const sec1 = ASettings.sectionOccupy(0xF000, sec_base, "Sec1", null) catch NullHandle;
+    const sec2 = ASettings.sectionOccupy(0xF001, sec_base, "Sec2", null) catch NullHandle;
 
     _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
     _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
@@ -1009,20 +1011,20 @@ pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     _ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
     _ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
 
-    const occ1 = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null, testUpdateSet1) catch NullHandle;
-    _ = ASettings.settingOccupy(0x0000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
-    const occ2 = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
-    _ = ASettings.settingOccupy(0x0000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
+    const occ1 = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, testUpdateSet1) catch NullHandle;
+    _ = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
+    const occ2 = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    _ = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
 
     ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
     ASettings.settingVacate(occ2); // expect: undefined default, etc.
 
-    const sec3 = ASettings.sectionOccupy(0x0000, sec2, "Sec3", null) catch NullHandle;
+    const sec3 = ASettings.sectionOccupy(0xF001, sec2, "Sec3", null) catch NullHandle;
     _ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
-    _ = ASettings.settingOccupy(0x0000, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    _ = ASettings.settingOccupy(0xF001, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
     ASettings.sectionVacate(sec3);
 
-    ASettings.vacateOwner(0x0000); // expect: everything undefined default, etc.
+    ASettings.vacateOwner(0xF000); // expect: everything undefined default, etc.
 }
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
@@ -1058,15 +1060,15 @@ pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         var y_off: i16 = 0;
     };
 
-    _ = gf.GDrawRect(.Debug, 0, 0, 400, 480, 0x000020E0);
-    var x: i16 = 0;
-    var y: i16 = 0 + s.y_off;
+    _ = gf.GDrawRect(.Debug, 0, 0, 416, 480, 0x000020E0);
+    var x: i16 = 8;
+    var y: i16 = 8 + s.y_off;
     drawSettings(gf, null, &x, &y);
 
     var h: i16 = y - s.y_off;
     var dif: i16 = @intFromFloat(gs.dt_f * s.rate);
     if (gf.InputGetKbRaw(.PRIOR).on()) s.y_off = @min(s.y_off + dif, 0); // scroll up
-    if (gf.InputGetKbRaw(.NEXT).on()) s.y_off = std.math.clamp(s.y_off - dif, -h + 480, 0); // scroll dn
+    if (gf.InputGetKbRaw(.NEXT).on()) s.y_off = std.math.clamp(s.y_off - dif, -h + 480 - 8, 0); // scroll dn
 }
 
 // TODO: maybe adapt for test script
@@ -1093,7 +1095,7 @@ fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void 
             .U => rt.MakeText(312, y_ref.*, "{d}", .{value.value_default.u}, null, null) catch null,
             .I => rt.MakeText(312, y_ref.*, "{d}", .{value.value_default.i}, null, null) catch null,
             .Str => rt.MakeText(312, y_ref.*, "{s}", .{value.value_default.str}, null, null) catch null,
-            .None => rt.MakeText(312, y_ref.*, "{s}", .{"undefined"}, null, null) catch null,
+            .None => null,
         });
         _ = gf.GDrawText(.Debug, rt.MakeText(368, y_ref.*, "{s}", .{@tagName(value.value_type)}, null, null) catch null);
         y_ref.* += 10;

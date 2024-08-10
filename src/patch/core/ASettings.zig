@@ -3,9 +3,7 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 
 const ini = @import("zigini");
-const w32 = @import("zigwin32");
-const w32f = w32.foundation;
-const w32fs = w32.storage.file_system;
+const w32f = @import("zigwin32").foundation;
 
 const EnumSet = std.EnumSet;
 const Allocator = std.mem.Allocator;
@@ -23,12 +21,16 @@ const SparseIndex = @import("../util/handle_map.zig").SparseIndex(u16);
 pub const Handle = @import("../util/handle_map.zig").Handle(u16);
 pub const NullHandle = Handle.getNull();
 
+const filetime_checkNewerWriteTime = @import("../util/file_system.zig").filetime_checkNewerWriteTime;
+
 const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
 const rt = r.Text;
 
 // TODO: add global st/fn ptrs to fnOnChange defs?
+// TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
+// TODO: minor cleanup with handle_map 'update owner' fn?
 
 // SYSTEM OVERVIEW
 // - support for bool, u32, i32, f32, and strings (64 bytes null-terminated)
@@ -60,7 +62,7 @@ const rt = r.Text;
 // DEFS
 
 const SETTINGS_VERSION: u32 = 2;
-const DEFAULT_ID = 0xFFFF; // TODO: use ASettings plugin id?
+const DEFAULT_ID = 0xFFFF;
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";
 const FILENAME_ACTIVE = FILENAME_TEST;
@@ -97,6 +99,8 @@ pub const ASettingSent = extern struct {
 
         pub fn fromRaw(value: [*:0]const u8, t: Setting.Type) Value {
             const len = std.mem.len(@as([*:0]const u8, @ptrCast(value)));
+            std.debug.assert(len > 0 and len <= 63);
+
             return switch (t) {
                 .B => .{ .b = std.mem.eql(u8, "on", value[0..2]) or
                     std.mem.eql(u8, "true", value[0..4]) or
@@ -140,7 +144,6 @@ pub const Setting = struct {
         i: i32,
         b: bool,
 
-        // TODO: decide if any need to error on None type
         pub fn fromSent(self: *Value, v: ASettingSent.Value, t: Type) !void {
             switch (t) {
                 .F => self.f = v.f,
@@ -278,7 +281,6 @@ pub const ASettings = struct {
     var h_s_settings_version: ?Handle = null;
     var h_s_save_auto: ?Handle = null;
     var h_s_save_defaults: ?Handle = null;
-    // TODO: change to false once annodue stops releasing Safe builds (also in settingOccupy call)
     var s_settings_version: u32 = 1;
     var s_save_auto: bool = true;
     var s_save_defaults: bool = true;
@@ -307,6 +309,8 @@ pub const ASettings = struct {
         parent: ?Handle,
         name: [*:0]const u8,
     ) ?u16 {
+        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+
         if (parent != null and (parent.?.isNull() or !data_sections.hasHandle(parent.?))) return null;
 
         const name_len = std.mem.len(name) + 1; // include sentinel
@@ -326,6 +330,8 @@ pub const ASettings = struct {
         section: ?Handle,
         name: [*:0]const u8,
     ) !Handle {
+        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+
         if (section != null and
             (section.?.isNull() or
             !data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
@@ -342,9 +348,6 @@ pub const ASettings = struct {
     }
 
     // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for settingOccupy)
-    // FIXME: use data ref instead of making new data item? also applies to settingOccupy, maybe others
-    // FIXME: impl 'update owner' function in handle_map for cases like here?
-    // search for 'sparse_indices.items[' for all uses
     /// assign owner to a section.
     /// will prevent all other owners from creating children to the section.
     pub fn sectionOccupy(
@@ -353,6 +356,8 @@ pub const ASettings = struct {
         name: [*:0]const u8,
         fnOnChange: ?*const fn ([*]ASettingSent, usize) callconv(.C) void,
     ) !Handle {
+        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
@@ -495,6 +500,9 @@ pub const ASettings = struct {
         value: [*:0]const u8, // -> value_saved
         from_file: bool,
     ) !Handle {
+        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+        std.debug.assert(std.mem.len(value) > 0 and std.mem.len(value) <= 63);
+
         if (section != null and
             (section.?.isNull() or
             !data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
@@ -520,9 +528,7 @@ pub const ASettings = struct {
     }
 
     // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for sectionOccupy)
-    // FIXME: assert input name length (also do so for other functions)
     // FIXME: test - output handle contains input owner (same for sectionOccupy)
-    // FIXME: error handling (catch unreachable)
     /// assign an owner to a setting and apply a definition, creating the setting
     /// data if needed. will update value in external pointer callback to run update
     /// callback using the initial value (the existing value if available, or the default)
@@ -536,6 +542,7 @@ pub const ASettings = struct {
         fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
     ) !Handle {
         std.debug.assert(value_type != .None);
+        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
@@ -565,18 +572,18 @@ pub const ASettings = struct {
         if (data.flags.contains(.ValueIsSet)) {
             data.value.raw2type(value_type) catch {
                 // invalid data = use default, will be cleaned next file write
-                data.value.fromSent(value_default, value_type) catch unreachable;
+                data.value.fromSent(value_default, value_type) catch unreachable; // value_type assertion = OK
             };
             if (!data.value.eqlSent(value_default, value_type))
                 data.flags.insert(.InSectionUpdateQueue);
             if (data.flags.contains(.SavedValueIsSet))
                 data.value_saved.raw2type(value_type) catch data.flags.insert(.SavedValueNotConverted);
         } else {
-            data.value.fromSent(value_default, value_type) catch unreachable;
+            data.value.fromSent(value_default, value_type) catch unreachable; // value_type assertion = OK
             data.flags.insert(.ValueIsSet);
         }
         data.value_type = value_type;
-        data.value_default.fromSent(value_default, value_type) catch unreachable;
+        data.value_default.fromSent(value_default, value_type) catch unreachable; // value_type assertion = OK
         data.flags.insert(.DefaultValueIsSet);
 
         data.value_ptr = value_ptr;
@@ -721,16 +728,8 @@ pub const ASettings = struct {
 
     /// read settings from file
     fn load() bool {
-        var fd: w32fs.WIN32_FIND_DATAA = undefined;
-
-        const find_handle = w32fs.FindFirstFileA(FILENAME_ACTIVE, &fd);
-        defer _ = w32fs.FindClose(find_handle);
-        if (-1 == find_handle) return false;
-
-        if (filetime_eql(&fd.ftLastWriteTime, &ASettings.last_filetime))
+        if (!filetime_checkNewerWriteTime(FILENAME_ACTIVE, &ASettings.last_filetime))
             return false;
-
-        ASettings.last_filetime = fd.ftLastWriteTime;
 
         if (skip_next_load) {
             skip_next_load = false;
@@ -751,7 +750,6 @@ pub const ASettings = struct {
     }
 
     // TODO: sorting both settings and sections?
-    // TODO: track and output whether file had changes?
     /// write settings section to buffer in ini format
     fn iniWriteSection(writer: anytype, handle: ?Handle) !void {
         if (handle) |h| blk: {
@@ -876,12 +874,6 @@ pub fn deinit() !void {
     ASettings.deinit();
 }
 
-// FIXME: copied from hook.zig; move both to util?
-fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
-    return (t1.dwLowDateTime == t2.dwLowDateTime and
-        t1.dwHighDateTime == t2.dwHighDateTime);
-}
-
 // CORE MODULE EXPORTS
 
 // TODO: generally - make the plugin-facing stuff operate under 'plugin' section,
@@ -909,7 +901,7 @@ pub fn ASectionOccupy(
 ) callconv(.C) Handle {
     return ASettings.sectionOccupy(
         workingOwner(),
-        if (section.isNull()) null else section, // TODO: internal 'plugin' section
+        if (section.isNull()) null else section,
         name,
         fnOnChange,
     ) catch NullHandle;
@@ -1038,41 +1030,7 @@ pub fn ASaveAuto() callconv(.C) void {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    // TODO: move below to commented test block
-    // TODO: add setting occupy -> string type test
-    // TODO: use actual owner IDs that don't clash (or just make sure it's all actually test scoped)
-
-    const sec_base = ASettings.sectionNew(null, "TestBaseSection") catch NullHandle;
-    _ = ASettings.sectionNew(sec_base, "Sec1") catch {};
-    _ = ASettings.sectionNew(sec_base, "Sec2") catch {};
-    _ = ASettings.sectionNew(sec_base, "Sec2") catch {}; // expect: NameTaken error -> skipped
-    const sec1 = ASettings.sectionOccupy(0xF000, sec_base, "Sec1", null) catch NullHandle;
-    const sec2 = ASettings.sectionOccupy(0xF001, sec_base, "Sec2", null) catch NullHandle;
-
-    _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
-    _ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
-    _ = ASettings.settingNew(null, "Set2", "Val2", false) catch {};
-    _ = ASettings.settingNew(sec2, "Set3", "Val3", false) catch {};
-    _ = ASettings.settingNew(null, "Set4", "Val4", false) catch {};
-    _ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
-    _ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
-
-    const occ1 = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, testUpdateSet1) catch NullHandle;
-    _ = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
-    const occ2 = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
-    _ = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
-
-    ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
-    ASettings.settingVacate(occ2); // expect: undefined default, etc.
-
-    const sec3 = ASettings.sectionOccupy(0xF001, sec2, "Sec3", null) catch NullHandle;
-    _ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
-    _ = ASettings.settingOccupy(0xF001, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
-    ASettings.sectionVacate(sec3);
-
-    ASettings.vacateOwner(0xF000); // expect: everything undefined default, etc.
-}
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
@@ -1095,30 +1053,9 @@ pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     ASettings.last_check = gs.timestamp;
 }
 
-// FIXME: remove, for testing
-pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (gf.InputGetKbRaw(.J) == .JustOn)
-        ASettings.saveAuto() catch {};
+// DEBUGGING & TESTING
 
-    if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
-
-    const s = struct {
-        const rate: f32 = 300;
-        var y_off: i16 = 0;
-    };
-
-    _ = gf.GDrawRect(.Debug, 0, 0, 416, 480, 0x000020E0);
-    var x: i16 = 8;
-    var y: i16 = 8 + s.y_off;
-    drawSettings(gf, null, &x, &y);
-
-    var h: i16 = y - s.y_off;
-    var dif: i16 = @intFromFloat(gs.dt_f * s.rate);
-    if (gf.InputGetKbRaw(.PRIOR).on()) s.y_off = @min(s.y_off + dif, 0); // scroll up
-    if (gf.InputGetKbRaw(.NEXT).on()) s.y_off = std.math.clamp(s.y_off - dif, -h + 480 - 8, 0); // scroll dn
-}
-
-// TODO: maybe adapt for test script
+// TODO: maybe adapt for test script/debugging
 // TODO: also maybe adapt for json settings (nesting, etc.)
 fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void {
     for (ASettings.data_settings.values.items) |value| {
@@ -1165,6 +1102,26 @@ fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void 
     }
 }
 
+// TODO: adapt for debug features
+fn drawSettingsDebugPanel(gs: *GlobalSt, gf: *GlobalFn) void {
+    if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
+
+    const s = struct {
+        const rate: f32 = 300;
+        var y_off: i16 = 0;
+    };
+
+    _ = gf.GDrawRect(.Debug, 0, 0, 416, 480, 0x000020E0);
+    var x: i16 = 8;
+    var y: i16 = 8 + s.y_off;
+    drawSettings(gf, null, &x, &y);
+
+    var h: i16 = y - s.y_off;
+    var dif: i16 = @intFromFloat(gs.dt_f * s.rate);
+    if (gf.InputGetKbRaw(.PRIOR).on()) s.y_off = @min(s.y_off + dif, 0); // scroll up
+    if (gf.InputGetKbRaw(.NEXT).on()) s.y_off = std.math.clamp(s.y_off - dif, -h + 480 - 8, 0); // scroll dn
+}
+
 // NOTE: use in testing
 fn testUpdateSet1(_: ASettingSent.Value) callconv(.C) void {
     //dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
@@ -1172,4 +1129,38 @@ fn testUpdateSet1(_: ASettingSent.Value) callconv(.C) void {
 
 // TODO: impl testing in build script; cannot test statically because imports out of scope
 // TODO: move testing stuff to here but commented in meantime
-test {}
+test {
+    // TODO: move below to commented test block
+    // TODO: add setting occupy -> string type test
+    // TODO: use actual owner IDs that don't clash (or just make sure it's all actually test scoped)
+
+    //const sec_base = ASettings.sectionNew(null, "TestBaseSection") catch NullHandle;
+    //_ = ASettings.sectionNew(sec_base, "Sec1") catch {};
+    //_ = ASettings.sectionNew(sec_base, "Sec2") catch {};
+    //_ = ASettings.sectionNew(sec_base, "Sec2") catch {}; // expect: NameTaken error -> skipped
+    //const sec1 = ASettings.sectionOccupy(0xF000, sec_base, "Sec1", null) catch NullHandle;
+    //const sec2 = ASettings.sectionOccupy(0xF001, sec_base, "Sec2", null) catch NullHandle;
+
+    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.settingNew(null, "Set2", "Val2", false) catch {};
+    //_ = ASettings.settingNew(sec2, "Set3", "Val3", false) catch {};
+    //_ = ASettings.settingNew(null, "Set4", "Val4", false) catch {};
+    //_ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
+    //_ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
+
+    //const occ1 = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, testUpdateSet1) catch NullHandle;
+    //_ = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
+    //const occ2 = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    //_ = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
+
+    //ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
+    //ASettings.settingVacate(occ2); // expect: undefined default, etc.
+
+    //const sec3 = ASettings.sectionOccupy(0xF001, sec2, "Sec3", null) catch NullHandle;
+    //_ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
+    //_ = ASettings.settingOccupy(0xF001, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    //ASettings.sectionVacate(sec3);
+
+    //ASettings.vacateOwner(0xF000); // expect: everything undefined default, etc.
+}

@@ -71,8 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(RacerLib): Added new defs to `entity`, `entity/Test`, `entity/Toss`, `entity/Trig`
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`, `Quad`
-- Backend(Util): Added `handle_map` and `handle_map_static` for handle-based resource management
+- Backend(Util): Added `handle_map` `handle_map_static` `handle_map_soa` for handle-based resource management
 - Backend(Util): Added `deadzone` util, `spatial` util defs
+- Backend(Util): Added `file_system` util
 - Backend(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
 - Backend(Util): x86 - helper functions and defs
 

@@ -24,6 +24,7 @@ const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
 const dbg = @import("../util/debug.zig");
+const filetime_eql = @import("../util/file_system.zig").filetime_eql;
 
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
@@ -252,12 +253,6 @@ pub fn PluginFnOnPluginInit(comptime ex: PluginExportFn, owner: u16) void {
 fn PluginFnCallback1_stub(_: u32) void {}
 
 // MISC
-
-// w32fs.CompareFileTime is slow as balls for some reason???
-fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
-    return (t1.dwLowDateTime == t2.dwLowDateTime and
-        t1.dwHighDateTime == t2.dwHighDateTime);
-}
 
 // TODO: move to lib, share with generate_safe_plugin_hash_file.zig
 fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {

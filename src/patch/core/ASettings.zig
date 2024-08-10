@@ -28,11 +28,34 @@ const PPanic = @import("../util/debug.zig").PPanic;
 const r = @import("racer");
 const rt = r.Text;
 
-// FIXME: not really sure handle maps needed to be SOA tbh, test using non-SOA handle_map
-// in separate branch if majority of functions are using majority of slices anyways
-// FIXME: too much power given to developers with ASettingResetAllDefault, ASettingResetAllFile,
-// ASettingCleanAll? delete from api or restrict these to core module use only?
 // TODO: add global st/fn ptrs to fnOnChange defs?
+
+// SYSTEM OVERVIEW
+// - support for bool, u32, i32, f32, and strings (64 bytes null-terminated)
+// - settings stored as tree, with branch nodes representing sections/categories
+// - tree is expanded on demand; not pre-seeded by design, to maximize flexibility
+// - handle-based ownership of setting and section nodes
+// - setting and section defs merged from different sources as needed, as long as no ownership conflict
+// - callback behaviours available for both individual settings updates and collective section updates
+// - settings hot-loaded from file; game-side changes written to file periodically
+
+// PLUGIN DEVELOPER NOTES
+// - use ASettingSectionOccupy to define a setting category
+// - then, use ASettingOccupy to assign settings to the category
+// - prefer doing this setup during OnInit, and prefer using plugin name for
+//   section to avoid naming collisions
+// - define setting value_ptr to save you the trouble of updating your local value manually
+// - define setting fnOnChange to do any post-processing on setting update automatically
+// - setting callback and pointer update will happen after setting is occupied, whenever
+//   the value changes on file, and when you call ASettingUpdate
+// - define section fnOnChange to do any settings coordination needed, e.g. for
+//   multi-setting derived values
+// - section callback will run after OnInit, and whenever values change on file; call
+//   ASettingSectionRunUpdate to manually run the section callback, e.g. after closing
+//   a related plugin menu
+// - various cleanup functions are available in the api; batch vacating will be
+//   done for you after OnDeinit
+// - see official plugin source code for usage examples; cam7 is a good place to start
 
 // DEFS
 
@@ -926,6 +949,7 @@ pub fn ASectionClean(handle: Handle) callconv(.C) void {
 
 // FIXME: logging - error before returning NullHandle (do same with ASectionOccupy)
 /// take ownership of a setting and apply a definition
+/// setting will be rejected if caller is plugin and no valid section handle is provided
 /// @section        section handle of desired parent as received from ASettingSectionOccupy; use
 ///                 NullHandle for no parent
 /// @name           identifying string for setting; max 63 chars, used to represent the setting on file
@@ -942,6 +966,7 @@ pub fn ASettingOccupy(
     value_ptr: ?*anyopaque,
     fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
 ) callconv(.C) Handle {
+    if (!workingOwnerIsSystem() and section.isNull()) return NullHandle;
     return ASettings.settingOccupy(
         workingOwner(),
         if (section.isNull()) null else section,
@@ -970,23 +995,31 @@ pub fn ASettingUpdate(handle: Handle, value: ASettingSent.Value) callconv(.C) vo
 
 /// release ownership and definitions of all sections and settings associated
 /// with the caller.
+/// for internal use; will do nothing if caller is plugin
 pub fn AVacateAll() callconv(.C) void {
+    if (!workingOwnerIsSystem()) return;
     ASettings.vacateOwner(workingOwner());
 }
 
 /// revert all entries back to owner-defined defaults
+/// for internal use; will do nothing if caller is plugin
 pub fn ASettingResetAllDefault() callconv(.C) void {
+    if (!workingOwnerIsSystem()) return;
     ASettings.settingResetAllToDefaults();
 }
 
 /// revert all entries back to values on file
+/// for internal use; will do nothing if caller is plugin
 pub fn ASettingResetAllFile() callconv(.C) void {
+    if (!workingOwnerIsSystem()) return;
     ASettings.settingResetAllToSaved();
 }
 
 /// remove all superfluous entries loaded from file
 /// will be reflected in the settings file on the following save write
+/// for internal use; will do nothing if caller is plugin
 pub fn ASettingCleanAll() callconv(.C) void {
+    if (!workingOwnerIsSystem()) return;
     ASettings.settingRemoveAllVacant();
 }
 

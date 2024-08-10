@@ -30,6 +30,9 @@ const rt = r.Text;
 
 // FIXME: not really sure handle maps needed to be SOA tbh, test using non-SOA handle_map
 // in separate branch if majority of functions are using majority of slices anyways
+// FIXME: too much power given to developers with ASettingResetAllDefault, ASettingResetAllFile,
+// ASettingCleanAll? delete from api or restrict these to core module use only?
+// TODO: add global st/fn ptrs to fnOnChange defs?
 
 // DEFS
 
@@ -43,6 +46,7 @@ pub const ParentHandle = extern struct {
     generation: u16,
     index: u16,
 
+    /// helper to test equality of nullable parent and regular handles
     fn eql(p: ?ParentHandle, h: ?Handle) bool {
         if ((p == null) != (h == null)) return false;
         if (p != null and (p.?.index != h.?.index or p.?.generation != h.?.generation)) return false;
@@ -93,7 +97,6 @@ pub const ASettingSent = extern struct {
     };
 };
 
-// TODO: add global st/fn ptrs to fnOnChange def?
 pub const Setting = struct {
     section: ?ParentHandle = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
@@ -115,8 +118,7 @@ pub const Setting = struct {
         b: bool,
 
         // TODO: decide if any need to error on None type
-        // FIXME: rename to 'fromSent'
-        pub fn setSent(self: *Value, v: ASettingSent.Value, t: Type) !void {
+        pub fn fromSent(self: *Value, v: ASettingSent.Value, t: Type) !void {
             switch (t) {
                 .F => self.f = v.f,
                 .U => self.u = v.u,
@@ -124,28 +126,6 @@ pub const Setting = struct {
                 .B => self.b = v.b,
                 else => _ = try bufPrintZ(&self.str, "{s}", .{v.str}),
             }
-        }
-
-        pub fn get(self: *Value, t: Type) Value {
-            return switch (t) {
-                .Str => self.str,
-                .F => self.f,
-                .U => self.u,
-                .I => self.i,
-                .B => self.b,
-                else => @panic("setting value type must not be None"),
-            };
-        }
-
-        pub fn getToPtr(self: *Value, p: *anyopaque, t: Type) void {
-            return switch (t) {
-                .Str => @as(*[63:0]u8, @alignCast(@ptrCast(p))).* = @as(*[63:0]u8, @ptrCast(&self.str)).*,
-                .F => @as(*f32, @alignCast(@ptrCast(p))).* = @as(*f32, @ptrCast(&self.f)).*,
-                .U => @as(*u32, @alignCast(@ptrCast(p))).* = @as(*u32, @ptrCast(&self.u)).*,
-                .I => @as(*i32, @alignCast(@ptrCast(p))).* = @as(*i32, @ptrCast(&self.i)).*,
-                .B => @as(*bool, @alignCast(@ptrCast(p))).* = @as(*bool, @ptrCast(&self.b)).*,
-                else => @panic("setting value type must not be None"),
-            };
         }
 
         /// raw (string) to value
@@ -215,6 +195,17 @@ pub const Setting = struct {
                 else => try std.fmt.format(writer, "{s}", .{@as([*:0]const u8, @ptrCast(&self.str))}),
             }
         }
+
+        pub fn writeToPtr(self: *Value, p: *anyopaque, t: Type) void {
+            return switch (t) {
+                .Str => @as(*[63:0]u8, @alignCast(@ptrCast(p))).* = @as(*[63:0]u8, @ptrCast(&self.str)).*,
+                .F => @as(*f32, @alignCast(@ptrCast(p))).* = @as(*f32, @ptrCast(&self.f)).*,
+                .U => @as(*u32, @alignCast(@ptrCast(p))).* = @as(*u32, @ptrCast(&self.u)).*,
+                .I => @as(*i32, @alignCast(@ptrCast(p))).* = @as(*i32, @ptrCast(&self.i)).*,
+                .B => @as(*bool, @alignCast(@ptrCast(p))).* = @as(*bool, @ptrCast(&self.b)).*,
+                else => @panic("setting value type must not be None"),
+            };
+        }
     };
 
     const Flags = enum(u32) {
@@ -234,7 +225,6 @@ pub const Setting = struct {
 };
 
 // reserved settings: AutoSave, UseGlobalAutoSave
-// TODO: add global st/fn ptrs to fnOnChange def?
 pub const Section = struct {
     section: ?ParentHandle = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
@@ -307,6 +297,8 @@ pub const ASettings = struct {
         return null;
     }
 
+    /// create a new raw section in the data set using a minimal definition. prefer
+    /// sectionOccupy for regular api-facing use.
     pub fn sectionNew(
         section: ?Handle,
         name: [*:0]const u8,
@@ -326,9 +318,12 @@ pub const ASettings = struct {
         return try data_sections.insert(DEFAULT_ID, section_new);
     }
 
+    // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for settingOccupy)
     // FIXME: use data ref instead of making new data item? also applies to settingOccupy, maybe others
     // FIXME: impl 'update owner' function in handle_map for cases like here?
     // search for 'sparse_indices.items[' for all uses
+    /// assign owner to a section.
+    /// will prevent all other owners from creating children to the section.
     pub fn sectionOccupy(
         owner: u16,
         section: ?Handle,
@@ -364,7 +359,8 @@ pub const ASettings = struct {
         return handle_new;
     }
 
-    /// release ownership of a section node, and all of the children below it
+    /// release ownership of a section node, and all of the children in the settings
+    /// tree below it. calls settingVacate on applicable settings.
     pub fn sectionVacate(
         handle: Handle,
     ) void {
@@ -391,6 +387,7 @@ pub const ASettings = struct {
         data_sections.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
+    /// run section update callback on the recently updated settings of that group.
     pub fn sectionRunUpdate(handle: Handle) void {
         const sec: *Section = data_sections.get(handle) orelse return;
         const sec_fn = sec.fnOnChange orelse return;
@@ -413,16 +410,21 @@ pub const ASettings = struct {
         sec_fn(section_update_queue.items.ptr, section_update_queue.items.len);
     }
 
+    /// run sectionRunUpdate on all sections that are occupied by the given owner.
     pub fn sectionRunUpdateOwner(owner: u16) void {
         for (data_sections.handles.items) |handle|
             if (handle.owner == owner) sectionRunUpdate(handle);
     }
 
+    /// run sectionRunUpdate on all sections.
     pub fn sectionRunUpdateAll() void {
         for (data_sections.handles.items) |handle|
             sectionRunUpdate(handle);
     }
 
+    /// restore all settings that are direct children of the section associated
+    /// with the give handle to the value loaded frome file.
+    /// settings that are not on file are not affected.
     pub fn sectionResetToSaved(handle: ?Handle) void {
         for (data_settings.values.items) |*s| {
             if (!ParentHandle.eql(s.section, handle)) continue;
@@ -433,6 +435,9 @@ pub const ASettings = struct {
         }
     }
 
+    /// restore all settings that are direct children of the section associated
+    /// with the give handle to the default value defined by their owner.
+    /// settings that do not have an owner are not affected.
     pub fn sectionResetToDefaults(handle: ?Handle) void {
         for (data_settings.values.items) |*s| {
             if (!ParentHandle.eql(s.section, handle)) continue;
@@ -443,6 +448,8 @@ pub const ASettings = struct {
         }
     }
 
+    /// scrub all unoccupied settings that are direct children of the section associated
+    /// with the given handle, removing their data entirely
     pub fn sectionRemoveVacant(handle: ?Handle) void {
         const slices = data_settings.values.slice();
         const sl_sec = slices.items(.section);
@@ -457,6 +464,8 @@ pub const ASettings = struct {
         }
     }
 
+    /// create a new raw setting in the data set using a minimal definition. prefer
+    /// settingOccupy for regular api-facing use.
     pub fn settingNew(
         section: ?Handle,
         name: [*:0]const u8,
@@ -487,11 +496,13 @@ pub const ASettings = struct {
         return try data_settings.insert(DEFAULT_ID, setting);
     }
 
+    // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for sectionOccupy)
     // FIXME: assert input name length (also do so for other functions)
     // FIXME: test - output handle contains input owner (same for sectionOccupy)
     // FIXME: error handling (catch unreachable)
-    /// take ownership of a setting
-    /// will cause callback to run on the initial value
+    /// assign an owner to a setting and apply a definition, creating the setting
+    /// data if needed. will update value in external pointer callback to run update
+    /// callback using the initial value (the existing value if available, or the default)
     pub fn settingOccupy(
         owner: u16,
         section: ?Handle,
@@ -531,22 +542,22 @@ pub const ASettings = struct {
         if (data.flags.contains(.ValueIsSet)) {
             data.value.raw2type(value_type) catch {
                 // invalid data = use default, will be cleaned next file write
-                data.value.setSent(value_default, value_type) catch unreachable;
+                data.value.fromSent(value_default, value_type) catch unreachable;
             };
             if (!data.value.eqlSent(value_default, value_type))
                 data.flags.insert(.InSectionUpdateQueue);
             if (data.flags.contains(.SavedValueIsSet))
                 data.value_saved.raw2type(value_type) catch data.flags.insert(.SavedValueNotConverted);
         } else {
-            data.value.setSent(value_default, value_type) catch unreachable;
+            data.value.fromSent(value_default, value_type) catch unreachable;
             data.flags.insert(.ValueIsSet);
         }
         data.value_type = value_type;
-        data.value_default.setSent(value_default, value_type) catch unreachable;
+        data.value_default.fromSent(value_default, value_type) catch unreachable;
         data.flags.insert(.DefaultValueIsSet);
 
         data.value_ptr = value_ptr;
-        if (value_ptr) |p| data.value.getToPtr(p, data.value_type);
+        if (value_ptr) |p| data.value.writeToPtr(p, data.value_type);
 
         data.fnOnChange = fnOnChange;
         if (fnOnChange) |f| f(ASettingSent.Value.fromSetting(&data.value, data.value_type));
@@ -554,6 +565,7 @@ pub const ASettings = struct {
         return handle_new;
     }
 
+    /// remove owner from a setting and clear its definition.
     pub fn settingVacate(
         handle: Handle,
     ) void {
@@ -577,8 +589,8 @@ pub const ASettings = struct {
         data_settings.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
-    /// trigger setting update with new value
-    /// will cause callback to run
+    /// trigger setting update with new value.
+    /// will update value in external pointer callback to run update callback.
     pub fn settingUpdate(
         handle: Handle,
         value: ASettingSent.Value,
@@ -587,13 +599,15 @@ pub const ASettings = struct {
 
         if (s.value.eqlSent(value, s.value_type)) return;
 
-        s.value.setSent(value, s.value_type) catch return;
+        s.value.fromSent(value, s.value_type) catch return;
 
         s.flags.insert(.InSectionUpdateQueue);
-        if (s.value_ptr) |p| s.value.getToPtr(p, s.value_type);
+        if (s.value_ptr) |p| s.value.writeToPtr(p, s.value_type);
         if (s.fnOnChange) |f| f(value);
     }
 
+    /// restore all settings to the value loaded from file.
+    /// settings that are not on file are not affected.
     pub fn settingResetAllToSaved() void {
         for (data_settings.values.items) |*s| {
             if (!s.flags.contains(.SavedValueIsSet)) continue;
@@ -602,6 +616,8 @@ pub const ASettings = struct {
         }
     }
 
+    /// restore all settings to the default value defined by their owner.
+    /// settings that do not have an owner are not affected.
     pub fn settingResetAllToDefaults() void {
         for (data_settings.values.items) |*s| {
             if (!s.flags.contains(.DefaultValueIsSet)) continue;
@@ -610,6 +626,7 @@ pub const ASettings = struct {
         }
     }
 
+    /// scrub all unoccupied settings, removing their data entirely
     pub fn settingRemoveAllVacant() void {
         const len = data_settings.handles.items.len;
         for (0..len) |j| {
@@ -619,6 +636,8 @@ pub const ASettings = struct {
         }
     }
 
+    /// free all sections and settings of the given owner, allowing them to be
+    /// assigned a new owner
     pub fn vacateOwner(owner: u16) void {
         // settings first for better cache use of data_settings processes
         for (ASettings.data_settings.handles.items) |h|
@@ -628,6 +647,8 @@ pub const ASettings = struct {
             if (h.owner == owner) ASettings.sectionVacate(h);
     }
 
+    // TODO: convert to reader to match iniWrite?
+    /// read ini-formatted settings from file
     pub fn iniRead(alloc: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
@@ -658,7 +679,7 @@ pub const ASettings = struct {
                         const send_val = ASettingSent.Value.fromRaw(kv.value, s.value_type);
 
                         if (!s.value_saved.eqlSent(send_val, s.value_type))
-                            try s.value_saved.setSent(send_val, s.value_type);
+                            try s.value_saved.fromSent(send_val, s.value_type);
 
                         if (!s.value.eqlSent(send_val, s.value_type))
                             settingUpdate(h, send_val);
@@ -675,6 +696,7 @@ pub const ASettings = struct {
         sectionRunUpdateAll();
     }
 
+    /// read settings from file
     fn load() bool {
         var fd: w32fs.WIN32_FIND_DATAA = undefined;
 
@@ -698,14 +720,16 @@ pub const ASettings = struct {
         return true;
     }
 
-    // TODO: sorting both settings and sections?
+    /// write all settings to buffer in ini format
     pub fn iniWrite(writer: anytype) !void {
         try iniWriteSection(writer, null);
         for (data_sections.handles.items) |h|
             try iniWriteSection(writer, h);
     }
 
-    // TODO: track and output whether file had changes
+    // TODO: sorting both settings and sections?
+    // TODO: track and output whether file had changes?
+    /// write settings section to buffer in ini format
     fn iniWriteSection(writer: anytype, handle: ?Handle) !void {
         if (handle) |h| blk: {
             const section: *Section = data_sections.get(h) orelse break :blk;
@@ -730,6 +754,7 @@ pub const ASettings = struct {
         _ = writer.write("\n") catch {};
     }
 
+    /// write settings to file
     fn save() !void {
         const changed_settings: u32 = savePrepare();
         if (changed_settings == 0 and (s_save_defaults and file_exists)) return;
@@ -745,6 +770,7 @@ pub const ASettings = struct {
         saveCleanup();
     }
 
+    /// write settings to file, but only if autosave setting is enabled
     fn saveAuto() !void {
         if (s_save_auto)
             try save();
@@ -776,6 +802,7 @@ pub const ASettings = struct {
         return changed;
     }
 
+    /// see savePrepare for explanation
     /// @return     number of settings that would actually change in the file as a result of writing
     fn savePrepareSection(handle: ?Handle) u32 {
         var changed: u32 = 0;
@@ -804,6 +831,8 @@ pub const ASettings = struct {
     }
 };
 
+// GLOBAL
+
 pub fn init() !void {
     ASettings.init(coreAllocator());
     _ = ASettings.load();
@@ -830,11 +859,26 @@ fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
         t1.dwHighDateTime == t2.dwHighDateTime);
 }
 
-// GLOBAL EXPORTS
+// CORE MODULE EXPORTS
 
 // TODO: generally - make the plugin-facing stuff operate under 'plugin' section,
-// which is initialized internally; same for core, identify via id range check
+// which is initialized internally; same for core, identify via id range check.
+// i.e. settings tree looks like this after moving to json-based settings
+// [root]
+// - <global stuff goes here>
+// - core
+// -- <insert here when core module using ASetting* with null parent>
+// - plugin
+// -- <insert here when plugin using ASetting* with null parent>
 
+/// take ownership of a section and apply a definition
+/// @section        section handle of desired parent as received from ASettingSectionOccupy; use
+///                 NullHandle for no parent
+/// @name           identifying string for section; max 63 chars, used to represent the section on file
+/// @fnOnChange     callback function that will be run on all recently updated settings in this section
+///                 collectively when ASettingSectionRunUpdate is called; use this to post-process
+///                 settings that are needed to work in tandem to derive a value
+/// @return         handle to section
 pub fn ASectionOccupy(
     section: Handle,
     name: [*:0]const u8,
@@ -848,32 +892,48 @@ pub fn ASectionOccupy(
     ) catch NullHandle;
 }
 
+/// release ownership of a section and all its children, automatically running
+/// ASettingVacate as needed.
+/// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionVacate(handle: Handle) callconv(.C) void {
     ASettings.sectionVacate(handle);
 }
 
 /// manually call fnOnChange section callback on any 'changed' settings
+/// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionRunUpdate(handle: Handle) callconv(.C) void {
     ASettings.sectionRunUpdate(handle);
 }
 
 /// revert entries under the given section back to owner-defined defaults
+/// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionResetDefault(handle: Handle) callconv(.C) void {
     ASettings.sectionResetToDefaults(handle);
 }
 
 /// revert entries under the given section back to values on file
+/// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionResetFile(handle: Handle) callconv(.C) void {
     ASettings.sectionResetToSaved(handle);
 }
 
 /// remove superfluous entries loaded from file under the given section
 /// will be reflected in the settings file on the following save write
+/// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionClean(handle: Handle) callconv(.C) void {
     ASettings.sectionResetToDefaults(handle);
 }
 
-// FIXME: logging - error before returning NullHandle (same with ASectionOccupy)
+// FIXME: logging - error before returning NullHandle (do same with ASectionOccupy)
+/// take ownership of a setting and apply a definition
+/// @section        section handle of desired parent as received from ASettingSectionOccupy; use
+///                 NullHandle for no parent
+/// @name           identifying string for setting; max 63 chars, used to represent the setting on file
+/// @value_type     enum value corresponding to string, u32, i32, f32 or bool types. max 63 chars for strings
+/// @value_default  union interpreted as the type specified by @value_type
+/// @value_ptr      memory location to be automatically updated with value via ASettingUpdate
+/// @fnOnChange     callback function that will be run when the value is updated with ASettingUpdate
+/// @return         handle to setting
 pub fn ASettingOccupy(
     section: Handle,
     name: [*:0]const u8,
@@ -893,14 +953,23 @@ pub fn ASettingOccupy(
     ) catch NullHandle;
 }
 
+/// release ownership of a setting, clearing its definition and internally
+/// returning the value to raw (string-formatted) data.
+/// @handle     setting handle as received from ASettingOccupy
 pub fn ASettingVacate(handle: Handle) callconv(.C) void {
     ASettings.settingVacate(handle);
 }
 
+/// update setting with a new value, passing on the value to the defined
+/// external sources.
+/// @handle     setting handle as received from ASettingOccupy
+/// @value      union interpreted as the type defined with ASettingOccupy
 pub fn ASettingUpdate(handle: Handle, value: ASettingSent.Value) callconv(.C) void {
     ASettings.settingUpdate(handle, value);
 }
 
+/// release ownership and definitions of all sections and settings associated
+/// with the caller.
 pub fn AVacateAll() callconv(.C) void {
     ASettings.vacateOwner(workingOwner());
 }

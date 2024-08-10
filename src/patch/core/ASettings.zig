@@ -65,7 +65,7 @@ const SETTINGS_VERSION: u32 = 2;
 const DEFAULT_ID = 0xFFFF;
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";
-const FILENAME_ACTIVE = FILENAME_TEST;
+const FILENAME_ACTIVE = FILENAME;
 
 pub const ParentHandle = extern struct {
     generation: u16,

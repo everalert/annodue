@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): `GDrawText`, `GDrawRect`, `GDrawRectBdr` to global functions
 - Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
 - Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
-- Backent(Core): Support for string-type settings
+- Backend(Core): Support for string-type settings
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
 - Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`

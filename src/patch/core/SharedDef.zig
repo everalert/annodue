@@ -85,29 +85,29 @@ pub const GlobalFunction = extern struct {
     ASettingSave: *const fn () callconv(.C) void,
     ASettingSaveAuto: *const fn () callconv(.C) void,
     ASettingOccupy: *const fn (
-        section: HandleSOA(u16), // originally nullable
+        section: Handle(u16), // originally nullable
         name: [*:0]const u8,
         value_type: ASetting.Type,
         value_default: ASettingSent.Value,
         value_ptr: ?*anyopaque,
         fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
-    ) callconv(.C) HandleSOA(u16),
-    ASettingVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ) callconv(.C) Handle(u16),
+    ASettingVacate: *const fn (handle: Handle(u16)) callconv(.C) void,
     ASettingVacateAll: *const fn () callconv(.C) void,
-    ASettingUpdate: *const fn (handle: HandleSOA(u16), value: ASettingSent.Value) callconv(.C) void,
+    ASettingUpdate: *const fn (handle: Handle(u16), value: ASettingSent.Value) callconv(.C) void,
     ASettingResetAllDefault: *const fn () callconv(.C) void,
     ASettingResetAllFile: *const fn () callconv(.C) void,
     ASettingCleanAll: *const fn () callconv(.C) void,
     ASettingSectionOccupy: *const fn (
-        section: HandleSOA(u16), // originally nullable
+        section: Handle(u16), // originally nullable
         name: [*:0]const u8,
         fnOnChange: ?*const fn (arr: [*]ASettingSent, len: usize) callconv(.C) void,
-    ) callconv(.C) HandleSOA(u16),
-    ASettingSectionVacate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
-    ASettingSectionRunUpdate: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
-    ASettingSectionResetDefault: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
-    ASettingSectionResetFile: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
-    ASettingSectionClean: *const fn (handle: HandleSOA(u16)) callconv(.C) void,
+    ) callconv(.C) Handle(u16),
+    ASettingSectionVacate: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionRunUpdate: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionResetDefault: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionResetFile: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionClean: *const fn (handle: Handle(u16)) callconv(.C) void,
     // Input
     InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ActiveState) bool,
     InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) ActiveState,

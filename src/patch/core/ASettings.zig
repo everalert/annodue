@@ -18,12 +18,12 @@ const workingOwner = @import("Hook.zig").PluginState.workingOwner;
 const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
 const coreAllocator = @import("Allocator.zig").allocator;
 
-const HandleMapSOA = @import("../util/handle_map_soa.zig").HandleMapSOA;
-const SparseIndex = @import("../util/handle_map_soa.zig").SparseIndex(u16);
-pub const Handle = @import("../util/handle_map_soa.zig").Handle(u16);
+const HandleMap = @import("../util/handle_map.zig").HandleMap;
+const SparseIndex = @import("../util/handle_map.zig").SparseIndex(u16);
+pub const Handle = @import("../util/handle_map.zig").Handle(u16);
 pub const NullHandle = Handle.getNull();
 
-const dbg = @import("../util/debug.zig");
+const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -47,6 +47,13 @@ pub const ParentHandle = extern struct {
         if ((p == null) != (h == null)) return false;
         if (p != null and (p.?.index != h.?.index or p.?.generation != h.?.generation)) return false;
         return true;
+    }
+
+    fn fromHandle(h: Handle) ParentHandle {
+        return .{
+            .generation = h.generation,
+            .index = h.index,
+        };
     }
 };
 
@@ -108,6 +115,7 @@ pub const Setting = struct {
         b: bool,
 
         // TODO: decide if any need to error on None type
+        // FIXME: rename to 'fromSent'
         pub fn setSent(self: *Value, v: ASettingSent.Value, t: Type) !void {
             switch (t) {
                 .F => self.f = v.f,
@@ -243,8 +251,8 @@ pub const Section = struct {
 // reserved global settings: AutoSave
 pub const ASettings = struct {
     const check_freq: u32 = 1000 / 24; // in lieu of every frame
-    var data_sections: HandleMapSOA(Section, u16) = undefined;
-    var data_settings: HandleMapSOA(Setting, u16) = undefined;
+    var data_sections: HandleMap(Section, u16) = undefined;
+    var data_settings: HandleMap(Setting, u16) = undefined;
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
     var last_check: u32 = 0;
     var last_filetime: w32f.FILETIME = undefined;
@@ -267,8 +275,8 @@ pub const ASettings = struct {
     };
 
     pub fn init(alloc: Allocator) void {
-        data_sections = HandleMapSOA(Section, u16).init(alloc);
-        data_settings = HandleMapSOA(Setting, u16).init(alloc);
+        data_sections = HandleMap(Section, u16).init(alloc);
+        data_settings = HandleMap(Setting, u16).init(alloc);
         section_update_queue = ArrayList(ASettingSent).init(alloc);
     }
 
@@ -286,18 +294,13 @@ pub const ASettings = struct {
         parent: ?Handle,
         name: [*:0]const u8,
     ) ?u16 {
-        if (parent != null and
-            (parent.?.isNull() or
-            !data_sections.hasHandle(parent.?))) return null;
+        if (parent != null and (parent.?.isNull() or !data_sections.hasHandle(parent.?))) return null;
 
         const name_len = std.mem.len(name) + 1; // include sentinel
-        const slices = map.values.slice();
-        const sl_name = slices.items(.name);
-        const sl_sec = slices.items(.section);
-        for (sl_name, sl_sec, 0..) |*n, *s, i| {
-            if (!ParentHandle.eql(s.*, parent)) continue;
-            if (!std.mem.eql(u8, n[0..name_len], name[0..name_len]))
-                continue;
+
+        for (map.values.items, 0..) |*v, i| {
+            if (!ParentHandle.eql(v.section, parent)) continue;
+            if (!std.mem.eql(u8, v.name[0..name_len], name[0..name_len])) continue;
             return @intCast(i);
         }
 
@@ -310,7 +313,7 @@ pub const ASettings = struct {
     ) !Handle {
         if (section != null and
             (section.?.isNull() or
-            !data_sections.hasHandle(section.?))) return error.SectionDoesNotExist;
+            !data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
@@ -335,82 +338,75 @@ pub const ASettings = struct {
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) dbg.PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (s.owner != owner) PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
             if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
         const existing_i = nodeFind(data_sections, section, name);
 
-        var data: Section = Section{};
+        var data: *Section = undefined;
+        var handle_new: Handle = undefined;
         if (existing_i) |i| {
             if (data_sections.handles.items[i].owner != DEFAULT_ID) return error.SectionAlreadyOwned;
-            data = data_sections.values.get(i);
+            data_sections.handles.items[i].owner = owner;
+            data_sections.sparse_indices.items[data_sections.handles.items[i].index].owner = owner;
+            handle_new = data_sections.handles.items[i];
+            data = &data_sections.values.items[i];
         } else {
+            handle_new = try data_sections.insert(owner, .{});
+            data = data_sections.get(handle_new).?;
             data.section = if (section) |s| .{ .generation = s.generation, .index = s.index } else null;
             _ = try bufPrintZ(&data.name, "{s}", .{name});
         }
 
         data.fnOnChange = fnOnChange;
 
-        if (existing_i) |i| {
-            data_sections.values.set(i, data);
-            data_sections.handles.items[i].owner = owner;
-            data_sections.sparse_indices.items[data_sections.handles.items[i].index].owner = owner;
-            return data_sections.handles.items[i];
-        } else {
-            return data_sections.insert(owner, data);
-        }
+        return handle_new;
     }
 
     /// release ownership of a section node, and all of the children below it
     pub fn sectionVacate(
         handle: Handle,
     ) void {
-        var data_i = data_sections.getIndex(handle) orelse return;
+        var data: *Section = data_sections.get(handle) orelse return;
 
-        const sec_slices = data_sections.values.slice();
-        const sec_sl_fn = sec_slices.items(.fnOnChange);
-        const sec_sl_sec = sec_slices.items(.section);
-        for (sec_sl_sec, 0..) |*s, i| {
-            if (s.* != null and ParentHandle.eql(s.*, handle)) {
+        for (data_sections.values.items, 0..) |*s, i| {
+            if (s.section != null and ParentHandle.eql(s.section, handle)) {
                 const h: Handle = data_sections.handles.items[i];
                 if (h.owner != DEFAULT_ID and h.owner == handle.owner) sectionVacate(h);
             }
         }
 
-        const set_sl_sec = data_settings.values.items(.section);
-        for (set_sl_sec, 0..) |*s, i| {
-            if (s.* != null and ParentHandle.eql(s.*, handle)) {
+        for (data_settings.values.items, 0..) |*s, i| {
+            if (s.section != null and ParentHandle.eql(s.section, handle)) {
                 const h: Handle = data_settings.handles.items[i];
                 if (h.owner != DEFAULT_ID and h.owner == handle.owner) settingVacate(h);
             }
         }
 
-        sec_sl_fn[data_i] = null;
-        data_sections.sparse_indices.items[handle.index].owner = DEFAULT_ID;
-        data_sections.handles.items[data_i].owner = DEFAULT_ID;
+        data.fnOnChange = null;
+
+        var s_index: *SparseIndex = &data_sections.sparse_indices.items[handle.index];
+        s_index.owner = DEFAULT_ID;
+        data_sections.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
     pub fn sectionRunUpdate(handle: Handle) void {
-        const sec_i = data_sections.getIndex(handle) orelse return;
-        const sec_fn = data_sections.values.items(.fnOnChange)[sec_i] orelse return;
+        const sec: *Section = data_sections.get(handle) orelse return;
+        const sec_fn = sec.fnOnChange orelse return;
 
         section_update_queue.clearRetainingCapacity();
 
-        const slices = data_settings.values.slice();
-        const sl_sec = slices.items(.section);
-        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
-        const sl_name = slices.items(.name);
-        const sl_val = slices.items(.value);
-        const sl_t = slices.items(.value_type);
+        for (data_settings.values.items) |*s| {
+            if (s.section == null or !ParentHandle.eql(s.section, handle)) continue;
+            if (!s.flags.contains(.InSectionUpdateQueue)) continue;
+            if (s.value_type == .None) continue;
 
-        for (sl_sec, sl_fl, sl_name, sl_val, sl_t) |*s, *f, *n, *v, t| {
-            if (s.* == null or !ParentHandle.eql(s.*, handle)) continue;
-            if (!f.contains(.InSectionUpdateQueue)) continue;
-            if (t == .None) continue;
-
-            f.remove(.InSectionUpdateQueue);
-            const send_data = ASettingSent{ .name = n, .value = ASettingSent.Value.fromSetting(v, t) };
+            s.flags.remove(.InSectionUpdateQueue);
+            const send_data = ASettingSent{
+                .name = &s.name,
+                .value = ASettingSent.Value.fromSetting(&s.value, s.value_type),
+            };
             section_update_queue.append(send_data) catch continue;
         }
 
@@ -428,34 +424,22 @@ pub const ASettings = struct {
     }
 
     pub fn sectionResetToSaved(handle: ?Handle) void {
-        const slices = data_settings.values.slice();
-        const sl_sec = slices.items(.section);
-        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
-        const sl_val = slices.items(.value);
-        const sl_vals = slices.items(.value_saved);
+        for (data_settings.values.items) |*s| {
+            if (!ParentHandle.eql(s.section, handle)) continue;
+            if (!s.flags.contains(.SavedValueIsSet)) continue;
 
-        for (sl_sec, sl_fl, sl_val, sl_vals) |*s, *f, *v, *vs| {
-            if (!ParentHandle.eql(s.*, handle)) continue;
-            if (!f.contains(.SavedValueIsSet)) continue;
-
-            v.* = vs.*;
-            f.insert(.ValueIsSet);
+            s.value = s.value_saved;
+            s.flags.insert(.ValueIsSet);
         }
     }
 
     pub fn sectionResetToDefaults(handle: ?Handle) void {
-        const slices = data_settings.values.slice();
-        const sl_sec = slices.items(.section);
-        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
-        const sl_val = slices.items(.value);
-        const sl_vald = slices.items(.value_default);
+        for (data_settings.values.items) |*s| {
+            if (!ParentHandle.eql(s.section, handle)) continue;
+            if (!s.flags.contains(.DefaultValueIsSet)) continue;
 
-        for (sl_sec, sl_fl, sl_val, sl_vald) |*s, *f, *v, *vd| {
-            if (!ParentHandle.eql(s.*, handle)) continue;
-            if (!f.contains(.DefaultValueIsSet)) continue;
-
-            v.* = vd.*;
-            f.insert(.ValueIsSet);
+            s.value = s.value_default;
+            s.flags.insert(.ValueIsSet);
         }
     }
 
@@ -481,7 +465,7 @@ pub const ASettings = struct {
     ) !Handle {
         if (section != null and
             (section.?.isNull() or
-            !data_sections.hasHandle(section.?))) return error.SectionDoesNotExist;
+            !data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
@@ -503,6 +487,8 @@ pub const ASettings = struct {
         return try data_settings.insert(DEFAULT_ID, setting);
     }
 
+    // FIXME: assert input name length (also do so for other functions)
+    // FIXME: test - output handle contains input owner (same for sectionOccupy)
     // FIXME: error handling (catch unreachable)
     /// take ownership of a setting
     /// will cause callback to run on the initial value
@@ -520,18 +506,24 @@ pub const ASettings = struct {
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) dbg.PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (s.owner != owner) PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
             if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
         const existing_i = nodeFind(data_settings, section, name);
 
-        var data: Setting = Setting{};
+        var data: *Setting = undefined;
+        var handle_new: Handle = undefined;
         if (existing_i) |i| {
             if (data_settings.handles.items[i].owner != DEFAULT_ID) return error.SettingAlreadyOwned;
-            data = data_settings.values.get(i);
+            data_settings.handles.items[i].owner = owner;
+            data_settings.sparse_indices.items[data_settings.handles.items[i].index].owner = owner;
+            handle_new = data_settings.handles.items[i];
+            data = &data_settings.values.items[i];
         } else {
-            data.section = if (section) |s| .{ .generation = s.generation, .index = s.index } else null;
+            handle_new = try data_settings.insert(owner, .{});
+            data = data_settings.get(handle_new).?;
+            data.section = if (section) |s| ParentHandle.fromHandle(s) else null;
             _ = try bufPrintZ(&data.name, "{s}", .{name});
         }
 
@@ -552,51 +544,37 @@ pub const ASettings = struct {
         data.value_type = value_type;
         data.value_default.setSent(value_default, value_type) catch unreachable;
         data.flags.insert(.DefaultValueIsSet);
-        data.value_ptr = value_ptr;
-        if (value_ptr) |p|
-            data.value.getToPtr(p, data.value_type);
-        data.fnOnChange = fnOnChange;
-        if (fnOnChange) |f|
-            f(ASettingSent.Value.fromSetting(&data.value, data.value_type));
 
-        if (existing_i) |i| {
-            data_settings.values.set(i, data);
-            data_settings.handles.items[i].owner = owner;
-            data_settings.sparse_indices.items[data_settings.handles.items[i].index].owner = owner;
-            return data_settings.handles.items[i];
-        } else {
-            return data_settings.insert(owner, data);
-        }
+        data.value_ptr = value_ptr;
+        if (value_ptr) |p| data.value.getToPtr(p, data.value_type);
+
+        data.fnOnChange = fnOnChange;
+        if (fnOnChange) |f| f(ASettingSent.Value.fromSetting(&data.value, data.value_type));
+
+        return handle_new;
     }
 
     pub fn settingVacate(
         handle: Handle,
     ) void {
-        const data_i = data_settings.getIndex(handle) orelse return;
-        const slices = data_settings.values.slice();
-        const fl: *EnumSet(Setting.Flags) = &slices.items(.flags)[data_i];
-        std.debug.assert(fl.contains(.ValueIsSet));
+        var data: *Setting = data_settings.get(handle) orelse return;
+        std.debug.assert(data.flags.contains(.ValueIsSet));
 
-        const val: *Setting.Value = &slices.items(.value)[data_i];
-        const vals: *Setting.Value = &slices.items(.value_saved)[data_i];
-        const vald: *Setting.Value = &slices.items(.value_default)[data_i];
-        const t: *Setting.Type = &slices.items(.value_type)[data_i];
-        const f = &slices.items(.fnOnChange)[data_i];
+        data.fnOnChange = null;
 
-        f.* = null;
+        data.value_default = .{ .str = std.mem.zeroes([63:0]u8) };
+        data.flags.remove(.DefaultValueIsSet);
 
-        vald.* = .{ .str = std.mem.zeroes([63:0]u8) };
-        fl.remove(.DefaultValueIsSet);
+        data.value.type2raw(data.value_type) catch @panic("settingVacate: 'value' invalid");
+        if (!data.flags.contains(.SavedValueNotConverted))
+            data.value_saved.type2raw(data.value_type) catch @panic("settingVacate: 'value_saved' invalid");
+        data.flags.remove(.SavedValueNotConverted);
 
-        val.type2raw(t.*) catch @panic("settingVacate: 'value' invalid");
-        if (!fl.contains(.SavedValueNotConverted))
-            vals.type2raw(t.*) catch @panic("settingVacate: 'value_saved' invalid");
-        fl.remove(.SavedValueNotConverted);
+        data.value_type = .None;
 
-        t.* = .None;
-
-        data_settings.sparse_indices.items[handle.index].owner = DEFAULT_ID;
-        data_settings.handles.items[data_i].owner = DEFAULT_ID;
+        var s_index: *SparseIndex = &data_settings.sparse_indices.items[handle.index];
+        s_index.owner = DEFAULT_ID;
+        data_settings.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
     /// trigger setting update with new value
@@ -605,54 +583,38 @@ pub const ASettings = struct {
         handle: Handle,
         value: ASettingSent.Value,
     ) void {
-        const i = data_settings.getIndex(handle) orelse return;
-        const slices = data_settings.values.slice();
-        const t: Setting.Type = slices.items(.value_type)[i];
-        const value_out: *Setting.Value = &slices.items(.value)[i];
+        var s: *Setting = data_settings.get(handle) orelse return;
 
-        if (value_out.eqlSent(value, t)) return;
+        if (s.value.eqlSent(value, s.value_type)) return;
 
-        value_out.setSent(value, t) catch return;
+        s.value.setSent(value, s.value_type) catch return;
 
-        slices.items(.flags)[i].insert(.InSectionUpdateQueue);
-        if (slices.items(.value_ptr)[i]) |p| value_out.getToPtr(p, t);
-        if (slices.items(.fnOnChange)[i]) |f| f(value);
+        s.flags.insert(.InSectionUpdateQueue);
+        if (s.value_ptr) |p| s.value.getToPtr(p, s.value_type);
+        if (s.fnOnChange) |f| f(value);
     }
 
     pub fn settingResetAllToSaved() void {
-        const slices = data_settings.values.slice();
-        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
-        const sl_val = slices.items(.value);
-        const sl_vals = slices.items(.value_saved);
-
-        for (sl_fl, sl_val, sl_vals) |*f, *v, *vs| {
-            if (!f.contains(.SavedValueIsSet)) continue;
-            v.* = vs.*;
-            f.insert(.ValueIsSet);
+        for (data_settings.values.items) |*s| {
+            if (!s.flags.contains(.SavedValueIsSet)) continue;
+            s.value = s.value_saved;
+            s.flags.insert(.ValueIsSet);
         }
     }
 
     pub fn settingResetAllToDefaults() void {
-        const slices = data_settings.values.slice();
-        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
-        const sl_val = slices.items(.value);
-        const sl_vald = slices.items(.value_default);
-
-        for (sl_fl, sl_val, sl_vald) |*f, *v, *vd| {
-            if (!f.contains(.DefaultValueIsSet)) continue;
-            v.* = vd.*;
-            f.insert(.ValueIsSet);
+        for (data_settings.values.items) |*s| {
+            if (!s.flags.contains(.DefaultValueIsSet)) continue;
+            s.value = s.value_default;
+            s.flags.insert(.ValueIsSet);
         }
     }
 
     pub fn settingRemoveAllVacant() void {
-        const slices = data_settings.values.slice();
-        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
-
         const len = data_settings.handles.items.len;
         for (0..len) |j| {
             const i = len - j - 1;
-            if (sl_fl[i].contains(.DefaultValueIsSet)) continue;
+            if (data_settings.values.items[i].flags.contains(.DefaultValueIsSet)) continue;
             _ = data_settings.remove(data_settings.handles.items[i]);
         }
     }
@@ -686,24 +648,20 @@ pub const ASettings = struct {
                 .property => |kv| {
                     const setting_i = nodeFind(data_settings, sec_handle, kv.key);
                     if (setting_i) |i| {
-                        const handle = data_settings.handles.items[i]; // WARN: could be invalid
-                        const slices = data_settings.values.slice();
-                        const sl_t = slices.items(.value_type);
-                        const sl_val: []Setting.Value = slices.items(.value);
-                        const sl_vals: []Setting.Value = slices.items(.value_saved);
-                        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+                        const s = &data_settings.values.items[i];
+                        const h = data_settings.handles.items[i];
 
                         // don't override value that has already been changed by something else
-                        if (sl_fl[i].contains(.SavedValueIsSet) and
-                            !sl_val[i].eql(&sl_vals[i], sl_t[i])) continue;
+                        if (s.flags.contains(.SavedValueIsSet) and
+                            !s.value.eql(&s.value_saved, s.value_type)) continue;
 
-                        const send_val = ASettingSent.Value.fromRaw(kv.value, sl_t[i]);
+                        const send_val = ASettingSent.Value.fromRaw(kv.value, s.value_type);
 
-                        if (!sl_vals[i].eqlSent(send_val, sl_t[i]))
-                            try sl_vals[i].setSent(send_val, sl_t[i]);
+                        if (!s.value_saved.eqlSent(send_val, s.value_type))
+                            try s.value_saved.setSent(send_val, s.value_type);
 
-                        if (!sl_val[i].eqlSent(send_val, sl_t[i]))
-                            settingUpdate(handle, send_val);
+                        if (!s.value.eqlSent(send_val, s.value_type))
+                            settingUpdate(h, send_val);
                     } else {
                         _ = try settingNew(sec_handle, kv.key, kv.value, true);
                     }
@@ -749,31 +707,26 @@ pub const ASettings = struct {
 
     // TODO: track and output whether file had changes
     fn iniWriteSection(writer: anytype, handle: ?Handle) !void {
-        if (handle) |h| {
-            const section: Section = data_sections.get(h).?;
+        if (handle) |h| blk: {
+            const section: *Section = data_sections.get(h) orelse break :blk;
             const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&section.name)));
             _ = try writer.write("[");
             _ = try writer.write(section.name[0..nlen]);
             _ = try writer.write("]\n");
         }
 
-        const slices = data_settings.values.slice();
-        const sl_sec: []?ParentHandle = slices.items(.section);
-        const sl_name: [][63:0]u8 = slices.items(.name);
-        const sl_val: []Setting.Value = slices.items(.value);
-        const sl_f: []EnumSet(Setting.Flags) = slices.items(.flags);
-        const sl_t: []Setting.Type = slices.items(.value_type);
-        for (sl_sec, sl_name, sl_val, sl_f, sl_t) |*sec, *name, *val, *fl, t| {
-            if (!fl.contains(.InFileWriteQueue) or !ParentHandle.eql(sec.*, handle)) continue;
+        for (data_settings.values.items) |*s| {
+            if (!s.flags.contains(.InFileWriteQueue) or !ParentHandle.eql(s.section, handle)) continue;
 
-            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(name.ptr)));
-            _ = try writer.write(name[0..nlen]);
+            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&s.name)));
+            _ = try writer.write(s.name[0..nlen]);
             _ = try writer.write(" = ");
-            try val.write(writer, t);
+            try s.value.write(writer, s.value_type);
             _ = try writer.write("\n");
 
-            fl.remove(.InFileWriteQueue);
+            s.flags.remove(.InFileWriteQueue);
         }
+
         _ = writer.write("\n") catch {};
     }
 
@@ -799,14 +752,12 @@ pub const ASettings = struct {
 
     /// post-processing of sections and settings, to make settings ready for next write
     fn saveCleanup() void {
-        const slices = data_settings.values.slice();
-        const sl_f: []EnumSet(Setting.Flags) = slices.items(.flags);
-        for (sl_f) |*fl| {
+        for (data_settings.values.items) |*s| {
             // make sure system knows which settings are no longer on file
-            if (!fl.contains(.FileUpdatedLastWrite))
-                fl.remove(.SavedValueIsSet);
+            if (!s.flags.contains(.FileUpdatedLastWrite))
+                s.flags.remove(.SavedValueIsSet);
 
-            fl.remove(.FileUpdatedLastWrite);
+            s.flags.remove(.FileUpdatedLastWrite);
         }
     }
 
@@ -828,33 +779,26 @@ pub const ASettings = struct {
     /// @return     number of settings that would actually change in the file as a result of writing
     fn savePrepareSection(handle: ?Handle) u32 {
         var changed: u32 = 0;
-        const slices = data_settings.values.slice();
-        const sl_sec = slices.items(.section);
-        const sl_val: []Setting.Value = slices.items(.value);
-        const sl_vald: []Setting.Value = slices.items(.value_default);
-        const sl_vals: []Setting.Value = slices.items(.value_saved);
-        const sl_f: []EnumSet(Setting.Flags) = slices.items(.flags);
-        const sl_t: []Setting.Type = slices.items(.value_type);
-        for (sl_sec, sl_val, sl_vald, sl_vals, sl_f, sl_t) |sec, *val, *vald, *vals, *fl, t| {
-            if (!ParentHandle.eql(sec, handle)) continue;
+        for (data_settings.values.items) |*s| {
+            if (!ParentHandle.eql(s.section, handle)) continue;
 
             // only keep uninitialized settings if they were already on file
-            if (!fl.contains(.DefaultValueIsSet) and
-                !fl.contains(.SavedValueIsSet)) continue;
+            if (!s.flags.contains(.DefaultValueIsSet) and
+                !s.flags.contains(.SavedValueIsSet)) continue;
 
             // only store initialized settings if they are not default
-            if (!s_save_defaults and fl.contains(.DefaultValueIsSet) and
-                vald.eql(val, t)) continue;
+            if (!s_save_defaults and s.flags.contains(.DefaultValueIsSet) and
+                s.value_default.eql(&s.value, s.value_type)) continue;
 
-            if ((fl.contains(.SavedValueIsSet) and !vals.eql(val, t)) or
-                (!fl.contains(.SavedValueIsSet) and s_save_defaults))
+            if ((s.flags.contains(.SavedValueIsSet) and !s.value_saved.eql(&s.value, s.value_type)) or
+                (!s.flags.contains(.SavedValueIsSet) and s_save_defaults))
                 changed += 1;
 
-            vals.* = val.*;
-            fl.insert(.SavedValueIsSet);
-            fl.insert(.FileUpdatedLastWrite);
+            s.value_saved = s.value;
+            s.flags.insert(.SavedValueIsSet);
+            s.flags.insert(.FileUpdatedLastWrite);
 
-            fl.insert(.InFileWriteQueue);
+            s.flags.insert(.InFileWriteQueue);
         }
         return changed;
     }
@@ -929,6 +873,7 @@ pub fn ASectionClean(handle: Handle) callconv(.C) void {
     ASettings.sectionResetToDefaults(handle);
 }
 
+// FIXME: logging - error before returning NullHandle (same with ASectionOccupy)
 pub fn ASettingOccupy(
     section: Handle,
     name: [*:0]const u8,
@@ -1074,8 +1019,7 @@ pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 // TODO: maybe adapt for test script
 // TODO: also maybe adapt for json settings (nesting, etc.)
 fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void {
-    for (0..ASettings.data_settings.values.len) |i| {
-        const value: Setting = ASettings.data_settings.values.get(i);
+    for (ASettings.data_settings.values.items) |value| {
         if ((section == null) != (value.section == null)) continue;
         if (section != null and
             (value.section.?.generation != section.?.generation or
@@ -1101,8 +1045,8 @@ fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void 
         y_ref.* += 10;
     }
 
-    for (0..ASettings.data_sections.values.len) |i| {
-        const value: Section = ASettings.data_sections.values.get(i);
+    for (0..ASettings.data_sections.values.items.len) |i| {
+        const value: *Section = &ASettings.data_sections.values.items[i];
         if ((section == null) != (value.section == null)) continue;
         if (section != null and
             (value.section.?.generation != section.?.generation or

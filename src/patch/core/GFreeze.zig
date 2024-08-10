@@ -83,7 +83,7 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         _ = Freeze.unfreeze(o);
 }
 
-pub fn OnPluginDeinit(owner: u16) callconv(.C) void {
+pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     if (Freeze.owner == owner)
         _ = Freeze.unfreeze(owner);
 }

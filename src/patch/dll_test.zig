@@ -12,6 +12,10 @@ const msg = @import("util/message.zig");
 const r = @import("racer");
 const rt = r.Text;
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 

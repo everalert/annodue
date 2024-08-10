@@ -17,13 +17,13 @@ const rq = r.Quad;
 const TextDef = rt.TextDef;
 const ResetMaterial = r.Quad.ResetMaterial;
 
-pub const GDRAW_VERSION: usize = 3;
+pub const GDRAW_VERSION: usize = 4;
 
 // NOTE: anything above around 256 characters seems pointless even with excessive formatting
 // characters, but may be worth reconsidering down the line if e.g. higher res viewport
 
 // NOTE: system always last (on top)
-pub const GDrawLayer = enum(u32) { Default, DefaultP, Overlay, OverlayP, System, SystemP };
+pub const GDrawLayer = enum(u32) { Default, DefaultP, Overlay, OverlayP, System, SystemP, Debug };
 
 // TODO: assert/test sizeof = 256 bytes
 const GDrawTextDef = extern struct {
@@ -175,7 +175,7 @@ pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) bool {
 /// @return     true if text successfully added to queue
 pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_y: i16, rect_color: u32) bool {
     if (text == null) return false;
-    if ((layer == .System or layer == .SystemP) and !workingOwnerIsSystem()) return false;
+    if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
 
     GDraw.insertText(layer, text.?) catch return false;
 
@@ -198,8 +198,32 @@ pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_
 /// - set color 0 for default
 /// @return     true if rect successfully added to queue
 pub fn GDrawRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) bool {
-    if ((layer == .System or layer == .SystemP) and !workingOwnerIsSystem()) return false;
+    if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
     GDraw.insertRect(layer, x, y, w, h, color) catch return false;
+    return true;
+}
+
+/// queue rect with border into Annodue render queue
+/// will be drawn under text of the same layer
+/// - set color 0 for default
+/// @return     true if rect successfully added to queue
+pub fn GDrawRectBdr(
+    layer: GDrawLayer,
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
+    color: u32,
+    bdr_w: i16,
+    bdr_col: u32,
+) bool {
+    if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
+    const bw = bdr_w;
+    GDraw.insertRect(layer, x + bw, y + bw, w - bw * 2, h - bw * 2, color) catch return false;
+    GDraw.insertRect(layer, x, y, w, bw, bdr_col) catch return false; // T
+    GDraw.insertRect(layer, x, y + h - bw, w, bw, bdr_col) catch return false; // B
+    GDraw.insertRect(layer, x, y + bw, bw, h - bw * 2, bdr_col) catch return false; // L
+    GDraw.insertRect(layer, x + w - bw, y + bw, bw, h - bw * 2, bdr_col) catch return false; // R
     return true;
 }
 
@@ -231,6 +255,8 @@ pub fn Draw2DA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
     GDraw.drawLayer(.System, rt.DEFAULT_COLOR);
     if (gs.practice_mode) GDraw.drawLayer(.SystemP, rt.DEFAULT_COLOR);
+
+    GDraw.drawLayer(.Debug, rt.DEFAULT_COLOR);
 
     GDraw.clear();
 }

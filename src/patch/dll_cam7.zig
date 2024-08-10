@@ -14,6 +14,9 @@ const debug = @import("core/Debug.zig");
 
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -30,6 +33,9 @@ const dz = @import("util/deadzone.zig");
 const nt = @import("util/normalized_transform.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -91,6 +97,26 @@ const CamState = enum(u32) {
 
 const Cam7 = extern struct {
     // ini settings
+    var h_s_section: ?SettingHandle = null;
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_flip_look_x: ?SettingHandle = null;
+    var h_s_flip_look_y: ?SettingHandle = null;
+    var h_s_flip_look_x_inverted: ?SettingHandle = null;
+    var h_s_dz_i: ?SettingHandle = null;
+    var h_s_dz_o: ?SettingHandle = null;
+    var h_s_i_mouse_dpi: ?SettingHandle = null;
+    var h_s_i_mouse_cm360: ?SettingHandle = null;
+    var h_s_rot_damp_i_dflt: ?SettingHandle = null;
+    var h_s_rot_spd_i_dflt: ?SettingHandle = null;
+    var h_s_move_damp_i_dflt: ?SettingHandle = null;
+    var h_s_move_spd_i_dflt: ?SettingHandle = null;
+    var h_s_move_planar: ?SettingHandle = null;
+    var h_s_hide_ui: ?SettingHandle = null;
+    var h_s_disable_input: ?SettingHandle = null;
+    var h_s_sfx_volume: ?SettingHandle = null;
+    var h_s_fog_patch: ?SettingHandle = null;
+    var h_s_fog_remove: ?SettingHandle = null;
+    var h_s_visuals_patch: ?SettingHandle = null;
     var s_enable: bool = false;
     var s_flip_look_x: bool = false;
     var s_flip_look_y: bool = false;
@@ -99,7 +125,7 @@ const Cam7 = extern struct {
     var s_dz_o: f32 = 0.95; // 0.5..1.0
     var dz_range: f32 = 0.9; // derived
     var dz_fact: f32 = 1.0 / 0.9; // derived
-    var s_i_mouse_dpi: f32 = 1600; // only needed for sens calc, does not set mouse dpi
+    var s_i_mouse_dpi: u32 = 1600; // only needed for sens calc, does not set mouse dpi
     var s_i_mouse_cm360: f32 = 24; // real-world space per full rotation
     var i_mouse_sens: f32 = 15118.1; // derived; mouse units per full rotation
     var s_rot_damp_i_dflt: usize = 0;
@@ -118,6 +144,7 @@ const Cam7 = extern struct {
     var s_fog_patch: bool = true;
     var s_fog_remove: bool = false;
     var s_visuals_patch: bool = true;
+    var queue_update_hide_ui: bool = false;
 
     const rot_damp_val = [_]?f32{ null, 36, 24, 12, 6 };
     var rot_damp: ?f32 = null;
@@ -218,11 +245,145 @@ const Cam7 = extern struct {
             i_mouse_d_y = @as(f32, @floatFromInt(mouse_d.y)) / i_mouse_sens;
         }
     }
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", settingsUpdate);
+        h_s_section = section;
+
+        h_s_enable =
+            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+
+        h_s_fog_patch =
+            gf.ASettingOccupy(section, "fog_patch", .B, .{ .b = true }, &s_fog_patch, null);
+        h_s_fog_remove =
+            gf.ASettingOccupy(section, "fog_remove", .B, .{ .b = false }, &s_fog_remove, null);
+        h_s_visuals_patch =
+            gf.ASettingOccupy(section, "visuals_patch", .B, .{ .b = true }, &s_visuals_patch, null);
+
+        h_s_flip_look_x =
+            gf.ASettingOccupy(section, "flip_look_x", .B, .{ .b = false }, &s_flip_look_x, null);
+        h_s_flip_look_y =
+            gf.ASettingOccupy(section, "flip_look_y", .B, .{ .b = false }, &s_flip_look_y, null);
+        h_s_flip_look_x_inverted =
+            gf.ASettingOccupy(section, "flip_look_x_inverted", .B, .{ .b = false }, &s_flip_look_x_inverted, null);
+
+        h_s_dz_i =
+            gf.ASettingOccupy(section, "stick_deadzone_inner", .F, .{ .f = 0.05 }, &s_dz_i, null);
+        h_s_dz_o =
+            gf.ASettingOccupy(section, "stick_deadzone_outer", .F, .{ .f = 0.95 }, &s_dz_o, null);
+
+        h_s_i_mouse_dpi =
+            gf.ASettingOccupy(section, "mouse_dpi", .U, .{ .u = 1600 }, &s_i_mouse_dpi, null);
+        h_s_i_mouse_cm360 =
+            gf.ASettingOccupy(section, "mouse_cm360", .F, .{ .f = 24 }, &s_i_mouse_cm360, null);
+
+        h_s_rot_damp_i_dflt =
+            gf.ASettingOccupy(section, "default_rotation_smoothing", .U, .{ .u = 0 }, &s_rot_damp_i_dflt, null);
+        h_s_rot_spd_i_dflt =
+            gf.ASettingOccupy(section, "default_rotation_speed", .U, .{ .u = 3 }, &s_rot_spd_i_dflt, null);
+        h_s_move_damp_i_dflt =
+            gf.ASettingOccupy(section, "default_move_smoothing", .U, .{ .u = 2 }, &s_move_damp_i_dflt, null);
+        h_s_move_spd_i_dflt =
+            gf.ASettingOccupy(section, "default_move_speed", .U, .{ .u = 3 }, &s_move_spd_i_dflt, null);
+        h_s_move_planar =
+            gf.ASettingOccupy(section, "default_planar_movement", .B, .{ .b = false }, &s_move_planar, null);
+
+        h_s_hide_ui =
+            gf.ASettingOccupy(section, "default_hide_ui", .B, .{ .b = false }, &s_hide_ui, null);
+        h_s_disable_input =
+            gf.ASettingOccupy(section, "default_disable_input", .B, .{ .b = false }, &s_disable_input, null);
+        h_s_sfx_volume =
+            gf.ASettingOccupy(section, "sfx_volume", .F, .{ .f = 0.7 }, &s_sfx_volume, null);
+    }
+
+    // TODO: rethink default -> live setting flow during settings reload, for the relevant settings
+    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+        var update_mouse_sens: bool = false;
+        var update_deadzone: bool = false;
+
+        for (changed, 0..len) |setting, _| {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if ((nlen == 9 and std.mem.eql(u8, "fog_patch", setting.name[0..nlen]) or
+                nlen == 10 and std.mem.eql(u8, "fog_remove", setting.name[0..nlen])) and
+                cam_state == .FreeCam)
+            {
+                patchFog(s_fog_patch);
+                continue;
+            }
+            if (nlen == 13 and std.mem.eql(u8, "visuals_patch", setting.name[0..nlen]) and
+                cam_state == .FreeCam)
+            {
+                patchFlags(s_visuals_patch);
+                continue;
+            }
+
+            if (nlen == 9 and std.mem.eql(u8, "mouse_dpi", setting.name[0..nlen]) or
+                nlen == 11 and std.mem.eql(u8, "mouse_cm360", setting.name[0..nlen]))
+            {
+                update_mouse_sens = true;
+                continue;
+            }
+
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_inner", setting.name[0..nlen])) {
+                s_dz_i = m.clamp(s_dz_i, 0.000, 0.495);
+                update_deadzone = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_outer", setting.name[0..nlen])) {
+                s_dz_o = m.clamp(s_dz_o, 0.505, 1.000);
+                update_deadzone = true;
+                continue;
+            }
+
+            // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
+            if (nlen == 26 and std.mem.eql(u8, "default_rotation_smoothing", setting.name[0..nlen])) {
+                s_rot_damp_i_dflt = m.clamp(s_rot_damp_i_dflt, 0, 4);
+                rot_damp_i = s_rot_damp_i_dflt;
+                rot_damp = rot_damp_val[rot_damp_i];
+                continue;
+            }
+            if (nlen == 22 and std.mem.eql(u8, "default_rotation_speed", setting.name[0..nlen])) {
+                s_rot_spd_i_dflt = m.clamp(s_rot_spd_i_dflt, 0, 5);
+                rot_spd_i = s_rot_spd_i_dflt;
+                rot_spd_tgt = rot_spd_val[rot_spd_i];
+                continue;
+            }
+            if (nlen == 22 and std.mem.eql(u8, "default_move_smoothing", setting.name[0..nlen])) {
+                s_move_damp_i_dflt = m.clamp(s_move_damp_i_dflt, 0, 3);
+                move_damp_i = s_move_damp_i_dflt;
+                move_damp = move_damp_val[move_damp_i];
+                continue;
+            }
+            if (nlen == 18 and std.mem.eql(u8, "default_move_speed", setting.name[0..nlen])) {
+                s_move_spd_i_dflt = m.clamp(s_move_spd_i_dflt, 0, 6);
+                move_spd_i = s_move_spd_i_dflt;
+                move_spd_xy_tgt = move_spd_xy_val[move_spd_i];
+                move_spd_z_tgt = move_spd_z_val[move_spd_i];
+                continue;
+            }
+
+            if (nlen == 15 and std.mem.eql(u8, "default_hide_ui", setting.name[0..nlen]) and
+                cam_state == .FreeCam)
+            {
+                queue_update_hide_ui = true;
+                continue;
+            }
+        }
+
+        if (update_mouse_sens)
+            i_mouse_sens = s_i_mouse_cm360 / 2.54 * @as(f32, @floatFromInt(s_i_mouse_dpi));
+
+        if (update_deadzone) {
+            dz_range = s_dz_o - s_dz_i;
+            dz_fact = 1 / dz_range;
+        }
+    }
 };
 
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
 
-inline fn patchFlags(on: bool) void {
+fn patchFlags(on: bool) void {
     if (on) {
         _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
     } else {
@@ -230,7 +391,7 @@ inline fn patchFlags(on: bool) void {
     }
 }
 
-inline fn patchFog(on: bool) void {
+fn patchFog(on: bool) void {
     if (on) {
         const dist = if (Cam7.s_fog_remove) comptime m.pow(f32, 10, 10) else Cam7.fog_dist;
         var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(dist))); // fog dist, normal case
@@ -242,7 +403,7 @@ inline fn patchFog(on: bool) void {
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
 }
 
-inline fn patchFOV(on: bool) void {
+fn patchFOV(on: bool) void {
     const fov: f32 = if (on) 100 else 120; // first-person internal cam fov
     _ = mem.write(0x4528EF, f32, fov); // instruction at 0x4528E9
 }
@@ -291,54 +452,6 @@ fn CheckAndResetSavedCam(gf: *GlobalFn) void {
     _ = gf.GHideRaceUIOff();
 }
 
-// TODO: rethink default -> live setting flow during settings reload, for the relevant settings
-fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
-    Cam7.s_enable = gf.SettingGetB("cam7", "enable") orelse false;
-
-    Cam7.s_fog_patch = gf.SettingGetB("cam7", "fog_patch") orelse true;
-    Cam7.s_fog_remove = gf.SettingGetB("cam7", "fog_remove") orelse false;
-    Cam7.s_visuals_patch = gf.SettingGetB("cam7", "visuals_patch") orelse true;
-    if (Cam7.cam_state == .FreeCam) {
-        patchFog(Cam7.s_fog_patch);
-        patchFlags(Cam7.s_visuals_patch);
-    }
-
-    Cam7.s_flip_look_x = gf.SettingGetB("cam7", "flip_look_x") orelse false;
-    Cam7.s_flip_look_y = gf.SettingGetB("cam7", "flip_look_y") orelse false;
-    Cam7.s_flip_look_x_inverted = gf.SettingGetB("cam7", "flip_look_x_inverted") orelse false;
-
-    Cam7.s_i_mouse_dpi = @floatFromInt(gf.SettingGetU("cam7", "mouse_dpi") orelse 1600);
-    Cam7.s_i_mouse_cm360 = gf.SettingGetF("cam7", "mouse_cm360") orelse 24;
-    Cam7.i_mouse_sens = Cam7.s_i_mouse_cm360 / 2.54 * Cam7.s_i_mouse_dpi;
-
-    Cam7.s_dz_i = m.clamp(gf.SettingGetF("cam7", "stick_deadzone_inner") orelse 0.05, 0.000, 0.495);
-    Cam7.s_dz_o = m.clamp(gf.SettingGetF("cam7", "stick_deadzone_outer") orelse 0.95, 0.505, 1.000);
-    Cam7.dz_range = Cam7.s_dz_o - Cam7.s_dz_i;
-    Cam7.dz_fact = 1 / Cam7.dz_range;
-
-    // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
-    Cam7.s_move_planar = gf.SettingGetB("cam7", "default_planar_movement") orelse false;
-    Cam7.s_rot_damp_i_dflt = m.clamp(gf.SettingGetU("cam7", "default_rotation_smoothing") orelse 0, 0, 4);
-    Cam7.s_rot_spd_i_dflt = m.clamp(gf.SettingGetU("cam7", "default_rotation_speed") orelse 3, 0, 5);
-    Cam7.s_move_damp_i_dflt = m.clamp(gf.SettingGetU("cam7", "default_move_smoothing") orelse 2, 0, 3);
-    Cam7.s_move_spd_i_dflt = m.clamp(gf.SettingGetU("cam7", "default_move_speed") orelse 3, 0, 6);
-    Cam7.rot_damp_i = Cam7.s_rot_damp_i_dflt;
-    Cam7.rot_spd_i = Cam7.s_rot_spd_i_dflt;
-    Cam7.move_damp_i = Cam7.s_move_damp_i_dflt;
-    Cam7.move_spd_i = Cam7.s_move_spd_i_dflt;
-    Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
-    Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
-    Cam7.move_damp = Cam7.move_damp_val[Cam7.move_damp_i];
-    Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
-    Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
-
-    Cam7.s_disable_input = gf.SettingGetB("cam7", "default_disable_input") orelse false;
-    Cam7.s_hide_ui = gf.SettingGetB("cam7", "default_hide_ui") orelse false;
-    UpdateHideUI(gf);
-
-    Cam7.s_sfx_volume = m.clamp(gf.SettingGetF("cam7", "sfx_volume") orelse 0.7, 0, 1);
-}
-
 fn UpdateHideUI(gf: *GlobalFn) void {
     if (Cam7.s_hide_ui and Cam7.cam_state == .FreeCam) {
         _ = gf.GHideRaceUIOn();
@@ -385,6 +498,11 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         return .None;
     }
 
+    if (Cam7.queue_update_hide_ui) {
+        Cam7.queue_update_hide_ui = false;
+        UpdateHideUI(gf);
+    }
+
     // input
 
     if (Cam7.i_planar.gets() == .JustOn)
@@ -392,11 +510,14 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
 
     if (Cam7.i_hide_ui.gets() == .JustOn) {
         Cam7.s_hide_ui = !Cam7.s_hide_ui;
+        if (Cam7.h_s_hide_ui) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_hide_ui });
         UpdateHideUI(gf);
     }
 
-    if (Cam7.i_disable_input.gets() == .JustOn)
+    if (Cam7.i_disable_input.gets() == .JustOn) {
         Cam7.s_disable_input = !Cam7.s_disable_input;
+        if (Cam7.h_s_disable_input) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_disable_input });
+    }
 
     const move_sweep: bool = Cam7.i_sweep.gets().on();
     if (Cam7.i_sweep.gets() == .JustOn) {
@@ -580,7 +701,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
+    Cam7.settingsInit(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -607,9 +728,9 @@ export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
-}
+//export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//    HandleSettings(gf);
+//}
 
 export fn EngineUpdateStage1CA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     UpdateState(gs, gf);

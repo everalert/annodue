@@ -1,7 +1,9 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const BoundedArray = std.BoundedArray;
+const MultiArrayList = std.MultiArrayList;
+
+// https://gist.github.com/gingerBill/7282ff54744838c52cc80c559f697051
 
 pub fn Handle(comptime T: type) type {
     std.debug.assert(@typeInfo(T) == .Int);
@@ -57,50 +59,65 @@ pub fn SparseIndex(comptime T: type) type {
     };
 }
 
-pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) type {
-    std.debug.assert(@typeInfo(I) == .Int);
-    std.debug.assert(L < std.math.maxInt(I)); // reserve topmost index for C-compatible 'null'
-
+pub fn HandleMapSOA(comptime T: type, comptime I: type) type {
     return struct {
         const Self = @This();
-        handles: BoundedArray(Handle(I), L),
-        values: BoundedArray(T, L),
-        sparse_indices: BoundedArray(SparseIndex(I), L),
+        const MAX_VALUE = std.math.maxInt(I) - 1;
+        handles: ArrayList(Handle(I)),
+        values: MultiArrayList(T),
+        sparse_indices: ArrayList(SparseIndex(I)),
         next: I,
+        alloc: Allocator,
 
-        pub fn init() !Self {
+        pub fn init(allocator: Allocator) Self {
             return .{
-                .handles = try BoundedArray(Handle(I), L).init(0),
-                .values = try BoundedArray(T, L).init(0),
-                .sparse_indices = try BoundedArray(SparseIndex(I), L).init(0),
+                .handles = ArrayList(Handle(I)).init(allocator),
+                .values = .{},
+                .sparse_indices = ArrayList(SparseIndex(I)).init(allocator),
                 .next = 0,
+                .alloc = allocator,
             };
         }
 
-        pub fn clear(self: *Self) !void {
-            try self.handles.resize(0);
-            try self.values.resize(0);
-            try self.sparse_indices.resize(0);
+        pub fn deinit(self: *Self) void {
+            self.clear();
+            self.handles.deinit();
+            self.values.deinit(self.alloc);
+            self.sparse_indices.deinit();
+        }
+
+        pub fn clear(self: *Self) void {
+            self.handles.clearRetainingCapacity();
+            self.values.shrinkRetainingCapacity(0);
+            self.sparse_indices.clearRetainingCapacity();
             self.next = 0;
         }
 
         pub fn hasHandle(self: *Self, h: Handle(I)) bool {
-            if (h.index < @as(I, @intCast(self.sparse_indices.len))) {
-                return self.sparse_indices.buffer[h.index].generation == h.generation and
-                    self.sparse_indices.buffer[h.index].owner == h.owner;
+            if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
+                return self.sparse_indices.items[h.index].generation == h.generation and
+                    self.sparse_indices.items[h.index].owner == h.owner;
             }
             return false;
         }
 
-        pub fn isFull(self: *Self) bool {
-            return self.next >= L;
+        /// get internal array index of data associated with handle
+        /// index is also valid for the handle itself
+        pub fn getIndex(self: *Self, h: Handle(I)) ?I {
+            if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
+                const entry = self.sparse_indices.items[h.index];
+                if (entry.generation == h.generation and entry.owner == h.owner) {
+                    return entry.index_or_next;
+                }
+            }
+            return null;
         }
 
-        pub fn get(self: *Self, h: Handle(I)) ?*T {
-            if (h.index < @as(I, @intCast(self.sparse_indices.len))) {
-                const entry = self.sparse_indices.buffer[h.index];
+        pub fn get(self: *Self, h: Handle(I)) ?T {
+            if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
+                const entry = self.sparse_indices.items[h.index];
                 if (entry.generation == h.generation and entry.owner == h.owner) {
-                    return &self.values.buffer[entry.index_or_next];
+                    return self.values.get(entry.index_or_next);
                 }
             }
             return null;
@@ -108,9 +125,9 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
 
         pub fn insert(self: *Self, owner: I, value: T) !Handle(I) {
             var handle: Handle(I) = undefined;
-            if (self.next < @as(I, @intCast(self.sparse_indices.len))) {
-                var entry = &self.sparse_indices.buffer[self.next];
-                std.debug.assert(entry.generation < std.math.maxInt(I) - 1); // "Generation sparse indices overflow"
+            if (self.next < @as(I, @intCast(self.sparse_indices.items.len))) {
+                var entry = &self.sparse_indices.items[self.next];
+                std.debug.assert(entry.generation < MAX_VALUE); // "Generation sparse indices overflow"
 
                 entry.owner = owner;
                 entry.generation += 1;
@@ -120,31 +137,31 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
                     .index = self.next,
                 };
                 self.next = entry.index_or_next;
-                entry.index_or_next = @as(I, @intCast(self.handles.len));
+                entry.index_or_next = @as(I, @intCast(self.handles.items.len));
                 try self.handles.append(handle);
-                try self.values.append(value);
+                try self.values.append(self.alloc, value);
             } else {
-                std.debug.assert(self.next < L); // "Index sparse indices overflow"
+                std.debug.assert(self.next < MAX_VALUE); // "Index sparse indices overflow"
 
                 handle = Handle(I){
                     .owner = owner,
-                    .index = @as(I, @intCast(self.sparse_indices.len)),
+                    .index = @as(I, @intCast(self.sparse_indices.items.len)),
                 };
                 try self.sparse_indices.append(.{
                     .owner = owner,
-                    .index_or_next = @as(I, @intCast(self.handles.len)),
+                    .index_or_next = @as(I, @intCast(self.handles.items.len)),
                 });
                 try self.handles.append(handle);
-                try self.values.append(value);
+                try self.values.append(self.alloc, value);
                 self.next += 1;
             }
             return handle;
         }
 
         pub fn remove(self: *Self, h: Handle(I)) ?T {
-            if (h.index < @as(I, @intCast(self.sparse_indices.len))) {
-                var entry = &self.sparse_indices.buffer[h.index];
-                if (entry.generation != h.generation)
+            if (h.index < @as(I, @intCast(self.sparse_indices.items.len))) {
+                var entry = &self.sparse_indices.items[h.index];
+                if (entry.generation != h.generation) // FIXME: add owner check? also for other handle_maps
                     return null;
 
                 const index = entry.index_or_next;
@@ -153,9 +170,10 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
                 self.next = h.index;
 
                 _ = self.handles.swapRemove(index);
-                const value = self.values.swapRemove(index);
-                if (index < @as(I, @intCast(self.handles.len)))
-                    self.sparse_indices.buffer[self.handles.buffer[index].index].index_or_next = index;
+                const value = self.values.get(index);
+                self.values.swapRemove(index);
+                if (index < @as(I, @intCast(self.handles.items.len)))
+                    self.sparse_indices.items[self.handles.items[index].index].index_or_next = index;
 
                 return value;
             }
@@ -163,9 +181,9 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
         }
 
         pub fn removeOwner(self: *Self, o: I) void {
-            const n = self.handles.len;
+            const n = self.handles.items.len;
             for (0..n) |i| {
-                const h = self.handles.buffer[n - i - 1];
+                const h = self.handles.items[n - i - 1];
                 if (h.owner == o)
                     _ = self.remove(h);
             }
@@ -174,34 +192,30 @@ pub fn HandleMapStatic(comptime T: type, comptime I: type, comptime L: usize) ty
 }
 
 test {
-    const HM = HandleMapStatic(f32, u16, 2);
+    const T = struct { a: f32, b: u32 };
+    const HM = HandleMapSOA(T, u16);
     const H = Handle(u16);
 
-    var m = try HM.init();
-    defer m.clear() catch {};
+    var m = HM.init(std.testing.allocator);
+    defer m.deinit();
 
-    var value: f32 = 123.456;
-
-    try std.testing.expect(!m.isFull());
+    var value: T = .{ .a = 123.456, .b = 123456 };
 
     var h1: H = try m.insert(123, value);
     var h2: H = try m.insert(456, value);
     var h_: H = h1;
     h_.owner = 789;
 
-    //try std.testing.expectError(error.Overflow, m.insert(value)); // covered by assertion
-    try std.testing.expect(m.isFull());
     try std.testing.expect(m.hasHandle(h1));
     try std.testing.expect(m.hasHandle(h2));
     try std.testing.expect(!m.hasHandle(h_));
 
     m.removeOwner(456);
     try std.testing.expect(!m.hasHandle(h2));
-    try std.testing.expect(!m.isFull());
 
-    var ptr = m.get(h1);
-    try std.testing.expect(ptr != null);
-    try std.testing.expect(ptr.?.* == value);
+    var value_out = m.get(h1);
+    try std.testing.expect(value_out != null);
+    try std.testing.expectEqual(value, value_out.?);
 
     _ = m.remove(h1);
     try std.testing.expect(!m.hasHandle(h1));

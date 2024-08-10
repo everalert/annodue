@@ -45,29 +45,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting: 'cam7' -> 'visuals_patch'
 - Setting: 'collisionviewer' -> 'depth_bias'
 - Setting: 'developer' -> 'visualize_matrices'
+- Setting: `overlay` -> `show_fps` `show_lap_times` `show_heat_timer` `show_death_count` `show_fall_timer`
+- Setting: `SETTING_SAVE_DEFAULTS` `SETTINGS_SAVE_AUTO` `PLUGIN_HOT_RELOAD`
+- Setting: some settings now saved between sessions by syncing settings file with game actions - `cam7->default_disable_input` `cam7->default_hide_ui` `collisionviewer->depth_bias` `qol->default_laps` `qol->default_racers` `qol->fps_limiter_default`
 - Backend(Core): `appinfo` module for externally-facing defs
-- Backend(Core): `GDRAW_VERSION` (now `3`) added to Compatibility Version sum
+- Backend(Core): `GDRAW_VERSION` (now `4`) added to Compatibility Version sum
 - Backend(Core): custom triggers via `RTrigger` module/api
 - Backend(Core): custom terrain via `RTerrain` module/api
 - Backend(Core): added `RTerrainRequest` `RTerrainRelease` `RTerrainReleaseAll` to global functions
 - Backend(Core): added `RTriggerRequest` `RTriggerRelease` `RTriggerReleaseAll` to global functions
+- Backend(Core): added `ASettingSectionOccupy` `ASettingSectionVacate` `ASettingSectionRunUpdate` `ASettingOccupy` `ASettingVacate` `ASettingVacateAll` `ASettingUpdate` `ASettingSectionResetDefault` `ASettingSectionResetFile` `ASettingSectionClean` `ASettingResetAllDefault` `ASettingResetAllFile` `ASettingCleanAll` `ASettingSave` `ASettingSaveAuto` to global functions
 - Backend(Core): enforcing semantic versioning for plugins
 - Backend(Core): enforcing minimum implemented functions for core-side plugins
-- Backend(Core): `OnPluginDeinit` hook function, usable by core-side plugins
+- Backend(Core): `OnPluginInit` `OnPluginLateInit` `OnPluginDeinitA` hook functions, usable by core-side plugins
 - Backend(Core): plugin identity tracking, for use with handle-based resources
 - Backend(Core): `GDraw` global api, for unrestricted drawing
 - Backend(Core): `GDraw` layers `Default`, `DefaultP`, `Overlay`, `OverlayP`, `System`, `SystemP`
-- Backend(Core): `GDrawText`, `GDrawRect` to global functions
+- Backend(Core): `GDrawText`, `GDrawRect`, `GDrawRectBdr` to global functions
 - Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
 - Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
+- Backend(Core): Support for string-type settings
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
 - Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`
 - Backend(RacerLib): Added new defs to `entity`, `entity/Test`, `entity/Toss`, `entity/Trig`
 - Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
 - Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`, `Quad`
-- Backend(Util): Added `handle_map` and `handle_map_static` for handle-based resource management
+- Backend(Util): Added `handle_map` `handle_map_static` `handle_map_soa` for handle-based resource management
 - Backend(Util): Added `deadzone` util, `spatial` util defs
+- Backend(Util): Added `file_system` util
 - Backend(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
 - Backend(Util): x86 - helper functions and defs
 
@@ -80,8 +86,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: rotation speed - `360` -> `80..810`
 - Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
 - Core: reworked toast animation/aesthetics
+- Setting: changed from init-only to dynamic - `cam7->fog_remove` `gameplay->death_speed_mod_enable` `gameplay->death_speed_drop` `gameplay->death_speed_min` `developer->dump_fonts (single-use arbitrary enable)`
+- Setting: changed `cosmetic->patch_trigger_display` -> `core/RTrigger->notify_trigger`
 - Backend(Build): release versioning now based on `appinfo` module
-- Backend(Core): Global Function version `15` to `22`
+- Backend(Core): Settings version `1` to `2`
+- Backend(Core): Settings back-end rewritten to support plugin-directed settings definitions
+- Backend(Core): Global Function version `15` to `29`
 - Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
 - Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`
 - Backend(Core): Global Functions `GHideRaceUIEnable->GHideRaceUIOn` `GHideRaceUIDisable->GHideRaceUIOff` `GHideRaceUIIsHidden->GHideRaceUIIsOn`
@@ -93,8 +103,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Backend(Core): `Settings.zig` core module
+- Backend(Core): global functions `SettingGetB` `SettingGetU` `SettingGetI` `SettingGetF`
 - Backend(Build): `-Dver` option in `release` builds
 - Backend(Build): `-Dminver` option in `release` builds
+- Backend(Util): `settings.zig` util lib
 
 ### Fixed
 

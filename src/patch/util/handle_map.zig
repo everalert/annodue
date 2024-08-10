@@ -4,6 +4,10 @@ const ArrayList = std.ArrayList;
 
 // https://gist.github.com/gingerBill/7282ff54744838c52cc80c559f697051
 
+// TODO: impl 'update owner' helper function for cases that look like:
+// data_sections.handles.items[i].owner = owner;
+// data_sections.sparse_indices.items[data_sections.handles.items[i].index].owner = owner;
+
 pub fn Handle(comptime T: type) type {
     std.debug.assert(@typeInfo(T) == .Int);
     std.debug.assert(@typeInfo(T).Int.signedness == .unsigned);
@@ -21,6 +25,12 @@ pub fn Handle(comptime T: type) type {
                 .generation = std.math.maxInt(T),
                 .index = std.math.maxInt(T),
             };
+        }
+
+        pub fn isNull(self: *const Self) bool {
+            return self.owner == std.math.maxInt(T) and
+                self.generation == std.math.maxInt(T) and
+                self.index == std.math.maxInt(T);
         }
     };
 }
@@ -42,6 +52,12 @@ pub fn SparseIndex(comptime T: type) type {
                 .generation = std.math.maxInt(T),
                 .index_or_next = std.math.maxInt(T),
             };
+        }
+
+        pub fn isNull(self: *const Self) bool {
+            return self.owner == std.math.maxInt(T) and
+                self.generation == std.math.maxInt(T) and
+                self.index_or_next == std.math.maxInt(T);
         }
     };
 }

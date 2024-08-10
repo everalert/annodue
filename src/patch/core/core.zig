@@ -3,7 +3,7 @@
 // this stuff was outside core and hooked in this order before making this file
 pub const Hook = @import("Hook.zig");
 pub const Input = @import("Input.zig");
-pub const Settings = @import("Settings.zig");
+pub const ASettings = @import("ASettings.zig");
 pub const Global = @import("Global.zig");
 pub const Practice = @import("Practice.zig");
 

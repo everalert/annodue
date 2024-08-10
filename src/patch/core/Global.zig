@@ -11,8 +11,7 @@ const freeze = @import("GFreeze.zig");
 const hide_race_ui = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
 const input = @import("Input.zig");
-const settings = @import("Settings.zig");
-const s = settings.SettingsState;
+const asettings = @import("ASettings.zig");
 const rterrain = @import("RTerrain.zig");
 const rtrigger = @import("RTrigger.zig");
 
@@ -85,10 +84,21 @@ pub var GLOBAL_STATE: GlobalState = .{};
 
 pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Settings
-    .SettingGetB = &settings.get_bool,
-    .SettingGetI = &settings.get_i32,
-    .SettingGetU = &settings.get_u32,
-    .SettingGetF = &settings.get_f32,
+    .ASettingSave = &asettings.ASave,
+    .ASettingSaveAuto = &asettings.ASaveAuto,
+    .ASettingOccupy = &asettings.ASettingOccupy,
+    .ASettingVacate = &asettings.ASettingVacate,
+    .ASettingVacateAll = &asettings.AVacateAll,
+    .ASettingUpdate = &asettings.ASettingUpdate,
+    .ASettingResetAllDefault = &asettings.ASettingResetAllDefault,
+    .ASettingResetAllFile = &asettings.ASettingResetAllFile,
+    .ASettingCleanAll = &asettings.ASettingCleanAll,
+    .ASettingSectionOccupy = &asettings.ASectionOccupy,
+    .ASettingSectionVacate = &asettings.ASectionVacate,
+    .ASettingSectionRunUpdate = &asettings.ASectionRunUpdate,
+    .ASettingSectionResetDefault = &asettings.ASectionResetDefault,
+    .ASettingSectionResetFile = &asettings.ASectionResetFile,
+    .ASettingSectionClean = &asettings.ASectionClean,
     // Input
     .InputGetKb = &input.get_kb,
     .InputGetKbRaw = &input.get_kb_raw,
@@ -102,6 +112,7 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .GDrawText = &draw.GDrawText,
     //.GDrawTextBox = &draw.GDrawTextBox,
     .GDrawRect = &draw.GDrawRect,
+    .GDrawRectBdr = &draw.GDrawRectBdr,
     .GFreezeOn = &freeze.GFreezeOn,
     .GFreezeOff = &freeze.GFreezeOff,
     .GFreezeIsOn = &freeze.GFreezeIsOn,

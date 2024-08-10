@@ -12,9 +12,19 @@ Press `P` to toggle Practice Mode. This mode is required to use certain features
 
 Control configuration is planned, but currently not possible. Similarly, DirectInput support is planned, but not yet implemented.
 
+If you normally need to run a specific `dinput.dll` to prevent the game from crashing, you can place it in the `annodue` folder and the game use it.
+
 Settings can be changed by editing `annodue/settings.ini`. Changes will be reflected in the game in realtime when you save this file, unless indicated otherwise below. In-game editing of settings is planned, but not yet implemented.
 
-If you normally need to run a specific `dinput.dll` to prevent the game from crashing, you can place it in the `annodue` folder and the game use it.
+##### Setting Types
+
+|Type|Possible Values|Note
+|:---|:---|:---|:---|
+|`bool`|`1`, `on` or `true` to enable|&nbsp;
+|`u32` |`0` to `4294967295`|whole number
+|`i32` |`-2147483648` to `2147483647`|whole number
+|`f32` |any decimal number|rounded to 2 decimal places
+|`str` |any text up to 63 characters|individual setting may only accept specific strings
 
 ## Features
 
@@ -79,27 +89,27 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 
 Configured under `[cam7]`
 
-|Option|Type|Note|
-|:---|:---|:---|
-|`enable`                    |`bool`|&nbsp;
-|`fog_patch`                 |`bool`|override normal fog
-|`fog_disable`               |`bool`|infinite draw distance (needs 'fog_patch' on)
-|`visuals_patch`             |`bool`|show entire track
-|`sfx_volume`                |`f32` |0.0 to 1.0
-|`flip_look_x`               |`bool`|Invert x-axis rotation
-|`flip_look_y`               |`bool`|Invert y-axis rotation
-|`flip_look_x_inverted`      |`bool`|Invert x-axis rotation while upside-down
-|`stick_deadzone_inner`      |`f32` |0.0 to 0.5
-|`stick_deadzone_outer`      |`f32` |0.5 to 1.0
-|`default_move_speed`        |`u32` |0 to 6
-|`default_move_smoothing`    |`u32` |0 to 3
-|`default_rotation_speed`    |`u32` |0 to 4
-|`default_rotation_smoothing`|`u32` |0 to 3
-|`default_planar_movement`   |`bool`|movement is always level; turn off to move based on the view angle
-|`default_hide_ui`           |`bool`|&nbsp;
-|`default_disable_input`     |`bool`|&nbsp;
-|`mouse_dpi`                 |`u32` |reference for mouse sensitivity calculations; does not change mouse
-|`mouse_cm360`               |`f32` |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`enable`                    |`bool`|`off` |&nbsp;
+|`fog_patch`                 |`bool`|`on`  |override normal fog
+|`fog_disable`               |`bool`|`off` |infinite draw distance (needs `fog_patch` on)
+|`visuals_patch`             |`bool`|`on`  |show entire track
+|`sfx_volume`                |`f32` |`0.7` |0.0 to 1.0
+|`flip_look_x`               |`bool`|`off` |Invert x-axis rotation
+|`flip_look_y`               |`bool`|`off` |Invert y-axis rotation
+|`flip_look_x_inverted`      |`bool`|`off` |Invert x-axis rotation while upside-down
+|`stick_deadzone_inner`      |`f32` |`0.05`|0.0 to 0.5
+|`stick_deadzone_outer`      |`f32` |`0.95`|0.5 to 1.0
+|`default_move_speed`        |`u32` |`3`   |0 to 6
+|`default_move_smoothing`    |`u32` |`2`   |0 to 3
+|`default_rotation_speed`    |`u32` |`3`   |0 to 4
+|`default_rotation_smoothing`|`u32` |`0`   |0 to 3
+|`default_planar_movement`   |`bool`|`off` |movement is always level; turn off to move based on the view angle
+|`default_hide_ui`           |`bool`|`off` |&nbsp;
+|`default_disable_input`     |`bool`|`off` |&nbsp;
+|`mouse_dpi`                 |`u32` |`1600`|reference for mouse sensitivity calculations; does not change mouse
+|`mouse_cm360`               |`f32` |`24`  |physical range of motion for one 360° camera rotation in cm<br>if you don't know what that means, just treat this number as sensitivity
 
 ### Savestates & Rewind
 
@@ -123,10 +133,10 @@ Configured under `[cam7]`
 
 Configurable under `[savestate]`
 
-|Option|Type|Note|
-|:---|:---|:---|
-|`savestate_enable`|`bool`|&nbsp;
-|`load_delay`      |`u32` |Amount of time to delay restoring a savestate in milliseconds
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`savestate_enable`|`bool`|`off`|&nbsp;
+|`load_delay`      |`u32` |`500`|Amount of time to delay restoring a savestate in milliseconds
 
 *Setting `load_delay` too low can interfere with ability to enter scrub mode*
 
@@ -138,11 +148,11 @@ Simple input visualization during races. Shows inputs as they are after the game
 
 Configurable under `[inputdisplay]`
 
-|Option|Type|Note|
-|:---|:---|:---|
-|`enable`|`bool`|&nbsp;
-|`pos_x` |`i32` |Screen X-position
-|`pos_y` |`i32` |Screen Y-position
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`enable`|`bool`|`off`|&nbsp;
+|`pos_x` |`i32` |`420`|Screen X-position
+|`pos_y` |`i32` |`432`|Screen Y-position
 
 *Game considers screen to be 640x480 regardless of window size*
 
@@ -152,13 +162,21 @@ Configurable under `[inputdisplay]`
 
 - Show individual lap times during race
 - Show time to overheat and underheat
+- Show death count
+- Show fall timer
+- Show FPS readout
 
 ##### Settings
 Configured under `[overlay]`
 
-|Option|Type|
-|:---|:---|
-|`enable`|`bool`|
+|Option|Type|Default|
+|:---|:---|:---|:---|
+|`enable`          |`bool`|`off`|
+|`show_fps`        |`bool`|`on` |
+|`show_lap_times`  |`bool`|`on` |
+|`show_heat_timer` |`bool`|`on` |
+|`show_death_count`|`bool`|`on` |
+|`show_fall_timer` |`bool`|`on` |
 
 ### Quality of Life
 
@@ -200,20 +218,20 @@ Configured under `[overlay]`
 
 Configured under `[qol]`
 
-|Option|Type|Note|
-|:---|:---|:---|
-|`quick_restart_enable`   |`bool`|&nbsp;
-|`quick_race_menu_enable` |`bool`|&nbsp;
-|`ms_timer_enable`        |`bool`|&nbsp;
-|`fps_limiter_enable`     |`bool`|&nbsp;
-|`fps_limiter_default`    |`u32` |&nbsp;
-|`skip_planet_cutscenes`  |`bool`|&nbsp;
-|`skip_podium_cutscene`   |`bool`|&nbsp;
-|`default_racers`         |`u32` |1 to 12
-|`default_laps`           |`u32` |1 to 5
-|`fast_countdown_enable`  |`bool`|&nbsp;
-|`fast_countdown_duration`|`f32` |0.05 to 3.00
-|`fix_viewport_edges`     |`bool`|&nbsp;
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`quick_restart_enable`   |`bool`|`off` |&nbsp;
+|`quick_race_menu_enable` |`bool`|`off` |&nbsp;
+|`ms_timer_enable`        |`bool`|`off` |&nbsp;
+|`fps_limiter_enable`     |`bool`|`off` |&nbsp;
+|`fps_limiter_default`    |`u32` |`24`  |&nbsp;
+|`skip_planet_cutscenes`  |`bool`|`off` |&nbsp;
+|`skip_podium_cutscene`   |`bool`|`off` |&nbsp;
+|`default_racers`         |`u32` |`12`  |1 to 12
+|`default_laps`           |`u32` |`3`   |1 to 5
+|`fast_countdown_enable`  |`bool`|`off` |&nbsp;
+|`fast_countdown_duration`|`f32` |`1.00`|0.05 to 3.00
+|`fix_viewport_edges`     |`bool`|`off` |May cause sprites at edge to be slightly cut off
 
 ### Collision Viewer
 
@@ -234,9 +252,9 @@ Credit to ([tly000](https://github.com/tly000)) for plugin.
 
 Configured under `[collisionviewer]`
 
-|Option|Type|Note|
-|:---|:---|:---|
-|`depth_bias`           |`i32` |correct misalignment between game and collision visuals
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`depth_bias`           |`i32`|`10`|correct misalignment between game and collision visuals
 
 ### Cosmetic
 
@@ -250,16 +268,15 @@ Configured under `[collisionviewer]`
 
 Configurable under `[cosmetic]`
 
-|Option|Type|Note|
-|:---|:---|:---|
-|`rainbow_enable`       |`bool`|&nbsp;
-|`rainbow_value_enable` |`bool`|Values shown above `LAP`, `TIME` and `POS`
-|`rainbow_label_enable` |`bool`|The `LAP`, `TIME` and `POS` text itself
-|`rainbow_speed_enable` |`bool`|&nbsp;
-|`patch_fonts`          |`bool`|*Requires game restart to apply*
-|`patch_trigger_display`|`bool`|*Requires game restart to apply*
-|`patch_audio`          |`bool`|*Disabled*
-|`patch_tga_loader`     |`bool`|*Disabled*
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`rainbow_enable`       |`bool`|`off`|&nbsp;
+|`rainbow_value_enable` |`bool`|`off`|Values shown above `LAP`, `TIME` and `POS`
+|`rainbow_label_enable` |`bool`|`off`|The `LAP`, `TIME` and `POS` text itself
+|`rainbow_speed_enable` |`bool`|`off`|&nbsp;
+|`patch_fonts`          |`bool`|`off`|*Requires game restart to apply*
+|`patch_audio`          |`bool`|`off`|*Disabled*
+|`patch_tga_loader`     |`bool`|`off`|*Disabled*
 
 ### Multiplayer
 
@@ -273,11 +290,11 @@ Configurable under `[multiplayer]`
 
 *All settings in this section require game restart to apply*
 
-|Option|Type|Note|
-|:---|:---|:---|
-|`enable`    |`bool`|&nbsp;
-|`patch_guid`|`bool`|&nbsp;
-|`patch_r100`|`bool`|Use R-100 traction in the patched upgrade stack
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`enable`    |`bool`|`off`|&nbsp;
+|`patch_guid`|`bool`|`off`|&nbsp;
+|`patch_r100`|`bool`|`off`|Use R-100 traction in the patched upgrade stack
 
 ### Gameplay Tweak
 
@@ -290,13 +307,11 @@ Configurable under `[multiplayer]`
 
 Configurable under `[gameplay]`
 
-*All settings in this section require game restart to apply*
-
-|Option|Type|
-|:---|:---|
-|`death_speed_mod_enable`|`bool`|
-|`death_speed_min`       |`f32` |
-|`death_speed_drop`      |`f32` |
+|Option|Type|Default|
+|:---|:---|:---|:---|
+|`death_speed_mod_enable`|`bool`|`off`|
+|`death_speed_min`       |`f32` |`325`|
+|`death_speed_drop`      |`f32` |`140`|
 
 ### Developer Tools
 
@@ -309,7 +324,20 @@ Configurable under `[gameplay]`
 
 Configurable under `[developer]`
 
-|Option|Type|
-|:---|:---|
-|`dump_fonts`|`bool`|*Requires game restart to apply*
-|`visualize_matrices`|`bool`|&nbsp;
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`dump_fonts`        |`bool`|`off`|*Requires game restart to re-dump*
+|`visualize_matrices`|`bool`|`off`|&nbsp;
+
+### RTrigger System
+
+- System for plugin developers to implement custom track behaviours
+- Show race triggers via game notification system
+
+##### Settings
+
+Configurable under `[core/RTrigger]`
+
+|Option|Type|Default|
+|:---|:---|:---|
+|`notify_trigger`|`bool`|`off`

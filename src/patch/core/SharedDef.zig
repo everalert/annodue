@@ -11,9 +11,13 @@ const POINT = w32.foundation.POINT;
 const ActiveState = @import("../util/active_state.zig").ActiveState;
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
+const HandleSOA = @import("../util/handle_map_soa.zig").Handle;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
+const ASettingSent = @import("ASettings.zig").ASettingSent;
+const ASetting = @import("ASettings.zig").Setting;
+const ASettingSection = @import("ASettings.zig").Section;
 const GDrawLayer = @import("GDraw.zig").GDrawLayer;
 
 const r = @import("racer");
@@ -73,14 +77,37 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 22;
+pub const GLOBAL_FUNCTION_VERSION = 29;
 
+// TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
     // Settings
-    SettingGetB: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?bool,
-    SettingGetI: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?i32,
-    SettingGetU: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?u32,
-    SettingGetF: *const fn (group: ?[*:0]const u8, setting: [*:0]const u8) ?f32,
+    ASettingSave: *const fn () callconv(.C) void,
+    ASettingSaveAuto: *const fn () callconv(.C) void,
+    ASettingOccupy: *const fn (
+        section: Handle(u16), // originally nullable
+        name: [*:0]const u8,
+        value_type: ASetting.Type,
+        value_default: ASettingSent.Value,
+        value_ptr: ?*anyopaque,
+        fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
+    ) callconv(.C) Handle(u16),
+    ASettingVacate: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingVacateAll: *const fn () callconv(.C) void,
+    ASettingUpdate: *const fn (handle: Handle(u16), value: ASettingSent.Value) callconv(.C) void,
+    ASettingResetAllDefault: *const fn () callconv(.C) void,
+    ASettingResetAllFile: *const fn () callconv(.C) void,
+    ASettingCleanAll: *const fn () callconv(.C) void,
+    ASettingSectionOccupy: *const fn (
+        section: Handle(u16), // originally nullable
+        name: [*:0]const u8,
+        fnOnChange: ?*const fn (arr: [*]ASettingSent, len: usize) callconv(.C) void,
+    ) callconv(.C) Handle(u16),
+    ASettingSectionVacate: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionRunUpdate: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionResetDefault: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionResetFile: *const fn (handle: Handle(u16)) callconv(.C) void,
+    ASettingSectionClean: *const fn (handle: Handle(u16)) callconv(.C) void,
     // Input
     InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ActiveState) bool,
     InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) ActiveState,
@@ -94,6 +121,7 @@ pub const GlobalFunction = extern struct {
     GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) bool,
     //GDrawTextBox: *const fn (layer: GDrawLayer, text: ?*TextDef, pad_x: i16, pad_y: i16, rect_color: u32) bool,
     GDrawRect: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) bool,
+    GDrawRectBdr: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32, bdr_w: i16, bdr_col: u32) bool,
     GFreezeOn: *const fn () bool,
     GFreezeOff: *const fn () bool,
     GFreezeIsOn: *const fn () bool,

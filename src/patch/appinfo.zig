@@ -6,20 +6,21 @@ pub const GLOBAL_STATE = shared.GlobalState;
 pub const GLOBAL_FUNCTION = shared.GlobalFunction;
 pub const COMPATIBILITY_VERSION =
     shared.GLOBAL_STATE_VERSION +
-    shared.GLOBAL_FUNCTION_VERSION;
+    shared.GLOBAL_FUNCTION_VERSION +
+    @import("core/GDraw.zig").GDRAW_VERSION;
 
 pub const VERSION = SemVer{
     .major = 0,
     .minor = 1,
-    .patch = 5,
+    .patch = 6,
     //.pre = "alpha",
-    .build = "373",
+    .build = "573",
 };
 
 pub const VERSION_MIN = SemVer{
     .major = 0,
     .minor = 1,
-    .patch = 2,
+    .patch = 6,
     //.pre = "alpha",
 };
 

@@ -1,5 +1,7 @@
 # Annodue
 
+![Ben Quadinaros](assets/images/ben.png)
+
 **A universal extension platform for *STAR WARS Episode I Racer* oriented toward speedrunning.**
 
 Annodue adds new features, quality of life adjustments and cosmetic changes, as well as a plugin system for user-made extensions.
@@ -27,7 +29,7 @@ See [CHANGELOG](CHANGELOG.md) for a complete version history.
 ```zig
 zig build release -Doptimize=ReleaseSafe -Drop="<release_output_path>"
 ```
-3. Find `annodue-0.1.5.zip` in `<release_output_path>/0.1.5/` and extract it to the game directory.
+3. Find `annodue-0.1.6.zip` in `<release_output_path>/0.1.6/` and extract it to the game directory.
 
 ## Building from source
 
@@ -104,6 +106,7 @@ git push origin ft/supremo-featrino
 ### Contributor Credit
 
 - [tly000](https://github.com/tly000)
+- [jcm93](https://github.com/jcm93)
 - [DeonPoncini](https://github.com/DeonPoncini)
 
 ## License

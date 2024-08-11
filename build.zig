@@ -15,13 +15,27 @@ const appinfo = @import("src/patch/appinfo.zig");
 // hotcopy etc., only running the pieces that need to be for the command and ordered well, etc. ..
 
 // example release build command
-// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Drop="F:\Projects\swe1r\annodue\.release"
+// zig build release -Doptimize=ReleaseSafe -Drop="F:\Projects\swe1r\annodue\.release"
 
 fn allocFmtSemVer(alloc: Allocator, ver: *const SemVer) ![]u8 {
     if (ver.pre) |pre|
         return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}-{s}", .{ ver.major, ver.minor, ver.patch, pre });
 
     return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}", .{ ver.major, ver.minor, ver.patch });
+}
+
+fn getDirSize(allocator: std.mem.Allocator, d: std.fs.IterableDir) f32 {
+    var dir_walker: ?std.fs.IterableDir.Walker = d.walk(allocator) catch null;
+    var total: usize = 0;
+    if (dir_walker) |*w| {
+        defer w.deinit();
+        while (w.next() catch null) |we| {
+            if (we.kind != .file) continue;
+            const stat = d.dir.statFile(we.path) catch continue;
+            total += stat.size;
+        }
+    }
+    return @as(f32, @floatFromInt(total)) / 1_048_576;
 }
 
 pub fn build(b: *std.Build) void {
@@ -70,6 +84,13 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     const options_label = "BuildOptions";
     options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
+
+    // STEP - CLEANUP
+
+    // FIXME: cache part causes failure (on windows?)
+    //const clean_step = b.step("clean", "Clean up zig output directories");
+    //clean_step.dependOn(&b.addRemoveDirTree(b.install_path).step);
+    //if (b.cache_root.path ) |p| clean_step.dependOn(&b.addRemoveDirTree(p).step);
 
     // STEP - HOTCOPY
 
@@ -315,7 +336,8 @@ pub fn build(b: *std.Build) void {
     core.addModule("zigini", zigini_m);
     core.addModule("zigwin32", zigwin32_m);
     core.addModule("zzip", zzip_m);
-    core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
+    if (!DEV_MODE)
+        core.addAnonymousModule("hashfile", .{ .source_file = .{ .path = pho_module_path } });
     // TODO: don't make the core depend on plugin_step,
     // connect plugins to default_step so it can be parallel unless doing release build
     core.step.dependOn(
@@ -337,6 +359,28 @@ pub fn build(b: *std.Build) void {
         .implib_dir = .disabled,
     });
     if (zip_step != null) zip_step.?.dependOn(&core_release.step);
+
+    // CLEANUP
+
+    // FIXME: cache part causes failure (on windows?)
+    // TODO: automate deletion, not just warn
+    var output_size: f32 = 0; // MiB
+    blk: {
+        var cache_dir = b.cache_root.handle.openIterableDir("", .{}) catch break :blk;
+        defer cache_dir.close();
+        output_size += getDirSize(gpa.allocator(), cache_dir);
+        //std.debug.print("cache dir size: {d:4.2} MiB\n", .{size});
+    }
+    blk: {
+        var install_dir = std.fs.openIterableDirAbsolute(b.install_path, .{}) catch break :blk;
+        defer install_dir.close();
+        output_size += getDirSize(gpa.allocator(), install_dir);
+        //std.debug.print("install dir size: {d:4.2} MiB\n", .{size});
+    }
+    const output_limit: f32 = 500;
+    if (output_size > output_limit) {
+        std.debug.print("\x1b[31m[WARNING]\x1b[33m Zig output exceeds {d:1.0} MiB - run zig-clean.bat\x1b[0m\n", .{output_limit});
+    }
 
     // DEFAULT STEP
 

@@ -21,15 +21,19 @@ const TemporalCompressor = @import("util/temporal_compression.zig").TemporalComp
 const TDataPoint = @import("util/temporal_compression.zig").DataPoint;
 
 const rg = @import("racer").Global;
-const ri = @import("racer").Input;
+const rin = @import("racer").Input;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
+const rr = @import("racer").Random;
+const rti = @import("racer").Time;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -49,7 +53,7 @@ pub const panic = debug.annodue_panic;
 //   Scrub Back             3           D-Left      Hold to rewind
 //   Scrub Forward          4           D-Right     Hold to fast-forward
 // - SETTINGS:
-//   savestate_enable       bool
+//   enable                 bool
 //   load_delay             u32         amount of time to delay restoring a savestate, in ms
 //                                      * setting to a low value can interfere with ability to enter scrub mode
 
@@ -86,20 +90,30 @@ const LoadState = enum(u32) {
 const RewindDataType = TemporalCompressor(4, 4, 4);
 
 const state = struct {
-    var savestate_enable: bool = false;
     var initialized: bool = false;
+
+    // settings
+    var s_h_section: ?SettingHandle = null;
+    var s_h_enable: ?SettingHandle = null;
+    var s_h_load_delay: ?SettingHandle = null;
+    var s_enable: bool = false;
+    var s_load_delay: usize = 500; // ms
 
     var rec_state: LoadState = .Recording;
     var rec_data: RewindDataType = .{};
     var rec_sources = [_]TDataPoint{
-        .{ .data = @as([*]u8, @ptrFromInt(ri.COMBINED_ADDR))[0..ri.COMBINED_SIZE] }, // Input
         .{}, // RaceData
         .{}, // Test
         .{}, // Hang
         .{}, // cMan
+        .{}, // Smok
+        .{}, // Toss
+        .{ .data = @as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
+        .{ .data = @as([*]u8, @ptrCast(rr.NUMBER))[0..4] }, // RNG
     };
 
-    var load_delay: usize = 500; // ms
     var load_time: usize = 0;
     var load_frame: usize = 0;
     var load_count: usize = 0;
@@ -132,11 +146,13 @@ const state = struct {
 
     fn reset() void {
         rec_data.reset();
-        //rec_sources[0].data = @ptrFromInt(ri.COMBINED_ADDR); // don't need to reset this
-        rec_sources[1].data = rrd.PLAYER_SLICE.*;
-        rec_sources[2].data = re.Test.PLAYER_SLICE.*;
-        rec_sources[3].data = re.Manager.entitySlice(.Hang, 0);
-        rec_sources[4].data = re.Manager.entitySlice(.cMan, 0);
+        rec_sources[0].data = rrd.PLAYER_SLICE.*;
+        rec_sources[1].data = re.Test.PLAYER_SLICE.*;
+        rec_sources[2].data = re.Manager.entitySlice(.Hang, 0);
+        rec_sources[3].data = re.Manager.entitySlice(.cMan, 0);
+        rec_sources[4].data = re.Manager.entitySliceAll(.Smok);
+        rec_sources[5].data = re.Manager.entitySliceAll(.Toss);
+        // don't need to update any other sources
         load_frame = 0;
         load_count = 0;
         scrub_frame = 0;
@@ -172,9 +188,11 @@ const state = struct {
         return race_ok and !tabbed_out and !paused and loading_ok;
     }
 
-    fn handle_settings(gf: *GlobalFn) callconv(.C) void {
-        savestate_enable = gf.SettingGetB("savestate", "enable") orelse false;
-        load_delay = gf.SettingGetU("savestate", "load_delay") orelse 500;
+    fn settingsInit(gf: *GlobalFn) void {
+        s_h_section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "savestate", null);
+
+        s_h_enable = gf.ASettingOccupy(s_h_section.?, "enable", .B, .{ .b = false }, &s_enable, null);
+        s_h_load_delay = gf.ASettingOccupy(s_h_section.?, "load_delay", .U, .{ .u = 500 }, &s_load_delay, null);
     }
 };
 
@@ -188,7 +206,7 @@ fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
         state.load_frame = state.rec_data.frame - 1;
     }
     if (state.save_input_ld.gets() == .JustOn and state.rec_data.frames > 0) {
-        state.load_time = state.load_delay + gs.timestamp;
+        state.load_time = state.s_load_delay + gs.timestamp;
         return .Loading;
     }
 
@@ -196,17 +214,22 @@ fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
 }
 
 fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
+    if (state.saveable(gs))
+        state.rec_data.save(gs.framecount);
+
     if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.rec_data.frame).? - 1;
         state.rec_data.frame_total = state.rec_data.frame;
         return .Scrubbing;
     }
+
     if (gs.timestamp >= state.load_time) {
         if (!state.loadable(gs)) return .Recording;
         state.rec_data.restore(state.load_frame);
         state.load_count += 1;
         return .Recording;
     }
+
     return .Loading;
 }
 
@@ -216,7 +239,8 @@ fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
     }
     if (state.save_input_ld.gets() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
-        state.load_time = state.load_delay + gs.timestamp;
+        state.load_time = state.s_load_delay + gs.timestamp;
+        state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
         return .ScrubExiting;
     }
 
@@ -283,7 +307,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    state.handle_settings(gf);
+    state.settingsInit(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
@@ -294,13 +318,9 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-//pub fn MenuStartRaceB(gs: *GlobalState,gv:*GlobalFn, initialized: bool) callconv(.C) void {
-//    state.reset();
+//export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//    state.handle_settings(gf);
 //}
-
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    state.handle_settings(gf);
-}
 
 export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.scrub_input_dec.update(gf);
@@ -309,24 +329,33 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     state.save_input_ld.update(gf);
 }
 
-// TODO: maybe reset state/recording if savestates or practice mode disabled?
-export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (!state.savestate_enable) return;
+export fn EngineEntityUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (!state.s_enable) return;
+
     UpdateState(gs, gf);
 }
 
-// TODO: merge with EngineUpdateStage20A?
-export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (!state.savestate_enable) return;
+export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (!state.s_enable) return;
 
+    // TODO: build checks for GHideRaceUIIsHidden into drawtext api when that's done
     // TODO: show during whole race scene? esp. if recording from count
     // TODO: experiment with positioning
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
-    if (gs.practice_mode and gs.race_state == .Racing) {
-        rt.DrawText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch {};
-        rt.DrawText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch {};
+    if (gs.race_state == .Racing and !gf.GHideRaceUIIsOn()) {
+        _ = gf.GDrawText(
+            .OverlayP,
+            rt.MakeText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch null,
+        );
+        _ = gf.GDrawText(
+            .OverlayP,
+            rt.MakeText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch null,
+        );
         if (state.load_count > 0)
-            rt.DrawText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch {};
+            _ = gf.GDrawText(
+                .OverlayP,
+                rt.MakeText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch null,
+            );
     }
 }

@@ -2,7 +2,6 @@ pub const Self = @This();
 
 const std = @import("std");
 
-const s = @import("Settings.zig").state;
 const app = @import("../appinfo.zig");
 const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
@@ -34,7 +33,7 @@ const mode_vis = struct {
     const y_size: i16 = @round(32 * y_scale);
     const x_rt: i16 = 640 - x_size;
     const y_bt: i16 = 480 - y_size;
-    var spr: u32 = undefined;
+    var spr: *rq.Sprite = undefined;
     var tl: u16 = undefined;
     var tr: u16 = undefined;
     var bl: u16 = undefined;
@@ -75,6 +74,12 @@ const mode_vis = struct {
 };
 
 // HOOK FUNCTIONS
+
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     mode_vis.init();

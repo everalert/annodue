@@ -29,11 +29,11 @@ pub const ToastSystem = extern struct {
     const n_visible_max: u32 = 8;
     var n_visible: u32 = 0;
     const dur: f32 = 3;
-    const dur_in: f32 = 0.1;
-    const dur_flash: f32 = 1.5;
-    const dur_out: f32 = 0.3;
+    const dur_in: f32 = 0.3;
+    const dur_flash: f32 = 0.9;
+    const dur_out: f32 = 0.1;
     const t_out: f32 = dur - dur_out;
-    const row_h: i16 = 12;
+    const row_h: i16 = 9;
     const max_len: u32 = 32;
     var buffer: RingBuffer(ToastItem, max_len) = .{};
     var item: ToastItem = .{};
@@ -42,46 +42,42 @@ pub const ToastSystem = extern struct {
         _ = std.fmt.bufPrintZ(&item.text, "{s}", .{text}) catch return false;
         item.timer = 0;
         item.color = color & 0xFFFFFF00;
-        return buffer.enqueue(&item);
+        n_visible += 1;
+        return buffer.push(&item);
     }
 };
 
 // HOOK FUNCTIONS
 
-pub fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    const r_start: u32 = @intCast(ToastSystem.buffer.b);
-    const r_end: u32 = r_start + ToastSystem.buffer.len;
-    const len: u32 = ToastSystem.buffer.len;
-    const n_vis: *u32 = &ToastSystem.n_visible;
-    const i_len: *const u32 = &ToastSystem.buffer.items.len;
+pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-    const y_off: i16 = blk: {
-        if (r_end == r_start) break :blk 0;
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-        if (n_vis.* == 0) n_vis.* += 1;
-        var item: *ToastItem = &ToastSystem.buffer.items[(r_end - n_vis.*) % i_len.*];
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-        if (item.timer > ToastSystem.dur_in) {
-            if (n_vis.* < len and n_vis.* < ToastSystem.n_visible_max) {
-                n_vis.* += 1;
-                item = &ToastSystem.buffer.items[(r_end - n_vis.*) % i_len.*];
-            } else break :blk 0;
-        }
+pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    const num_vis: *u32 = &ToastSystem.n_visible;
+    const num_items: *const u32 = &ToastSystem.buffer.items.len;
 
-        break :blk @as(i16, @intFromFloat(-nxf.fadeOut2(item.timer / ToastSystem.dur_in) * ToastSystem.row_h));
-    };
-
-    const vis: u32 = n_vis.*;
-    for (0..vis) |r_cur| {
-        const i: i16 = @intCast(vis - r_cur - 1);
-        const item: *ToastItem = &ToastSystem.buffer.items[(r_end - r_cur - 1) % i_len.*];
+    var y_off: i16 = 0;
+    var r_start: u32 = @intCast(ToastSystem.buffer.b); // range
+    for (0..num_vis.*) |i| {
+        const item: *ToastItem = &ToastSystem.buffer.items[(r_start + i) % num_items.*];
 
         item.timer += gs.dt_f;
         if (item.timer >= ToastSystem.dur) {
-            _ = ToastSystem.buffer.pop(null);
+            _ = ToastSystem.buffer.dequeue(null);
             ToastSystem.n_visible -= 1;
             continue;
         }
+
+        if (item.timer >= ToastSystem.t_out)
+            y_off -= @intFromFloat(nxf.pow3((item.timer - ToastSystem.t_out) / ToastSystem.dur_out) * ToastSystem.row_h);
+    }
+
+    r_start = @intCast(ToastSystem.buffer.b); // range
+    for (0..num_vis.*) |i| {
+        const item: *ToastItem = &ToastSystem.buffer.items[(r_start + i) % num_items.*];
 
         var a: u32 = 255;
         if (item.timer <= ToastSystem.dur_in) {
@@ -91,6 +87,6 @@ pub fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         }
         const color: u32 = fl.flash_color(item.color, item.timer, ToastSystem.dur_flash) | a;
 
-        rt.DrawText(16, 8 + y_off + ToastSystem.row_h * i, "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text");
+        _ = gf.GDrawText(.System, rt.MakeText(4, 2 + y_off + ToastSystem.row_h * @as(i16, @intCast(i)), "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text"));
     }
 }

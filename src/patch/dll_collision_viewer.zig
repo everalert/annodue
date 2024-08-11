@@ -1,32 +1,21 @@
-const Self = @This();
-
 const std = @import("std");
+
+const win = std.os.windows;
+const w32 = @import("zigwin32");
+const w32wm = w32.ui.windows_and_messaging;
+const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
+const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
 const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const rs = @import("racer").Sound;
-
-// FEATURES
-// - visualize collision faces
-// - visualize collision mesh
-// - visualize spline
-// - CONTROLS:              keyboard        xinput
-//   Open menu              9              ..
-//   Toggle visualization   8              ..
-// - SETTINGS:
-//   ..             type    note
-
-const PLUGIN_NAME: [*:0]const u8 = "PluginCollisionViewer";
-const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
-
-const win = std.os.windows;
-const w32 = @import("zigwin32");
-const w32wm = w32.ui.windows_and_messaging;
-const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
+const c = @cImport({
+    @cInclude("collision_viewer.h");
+});
+const CollisionViewerSettings = c.CollisionViewerSettings;
+const CollisionViewerState = c.CollisionViewerState;
 
 const debug = @import("core/Debug.zig");
 
@@ -42,17 +31,51 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
+const rs = @import("racer").Sound;
+
+extern fn init_collision_viewer(gs: *CollisionViewerState) callconv(.C) void;
+extern fn deinit_collision_viewer() callconv(.C) void;
+
+const PLUGIN_NAME: [*:0]const u8 = "PluginCollisionViewer";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
+// FEATURES
+// - visualize collision faces
+// - visualize collision mesh
+// - visualize spline
+// - CONTROLS:              keyboard        xinput
+//   Open menu              9               ..
+//   Toggle visualization   8               ..
+// - SETTINGS:              type            note
+//   depth_bias             i32             for aligining collision models with ingame models correctly
+
+// FIXME: merge with existing state, just like this cuz i cbf earlier
+const AnnodueSettings = struct {
+    var h_s_section: ?SettingHandle = null;
+    var h_s_depth_bias: ?SettingHandle = null;
+    var s_depth_bias: i32 = 10;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "collisionviewer", null);
+        h_s_section = section;
+
+        h_s_depth_bias =
+            gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, &s_depth_bias, updateDepthBias);
+    }
+
+    fn updateDepthBias(changed: SettingValue) callconv(.C) void {
+        state.depth_bias = @as(f32, @floatFromInt(changed.i)) / 100.0;
+    }
+};
+
 var input_enable_data = ButtonInputMap{ .kb = .@"8", .xi = null };
 var input_enable = input_enable_data.inputMap();
 
 var input_pause_data = ButtonInputMap{ .kb = .@"9", .xi = null };
 var input_pause = input_pause_data.inputMap();
-
-const c = @cImport({
-    @cInclude("collision_viewer.h");
-});
-const CollisionViewerSettings = c.CollisionViewerSettings;
-const CollisionViewerState = c.CollisionViewerState;
 
 var presets: [5]CollisionViewerSettings = .{
     .{
@@ -156,7 +179,6 @@ const ConvertedMenuItem = struct {
 };
 
 const QuickRaceMenu = extern struct {
-    const menu_key: [*:0]const u8 = "CollisionViewerMenu";
     var menu_active: bool = false;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
@@ -198,7 +220,7 @@ const QuickRaceMenu = extern struct {
             },
             .len = 3,
         },
-        .callback = CollisionViewerCallback,
+        .callback = null,
         .y_scroll = .{
             .scroll_time = 0.75,
             .scroll_units = 18,
@@ -230,7 +252,7 @@ const QuickRaceMenu = extern struct {
         mi.MenuItemSpacer(),
         mi.MenuItemToggle(&QuickRaceMenu.item_depth_test.input_converted, "Depth test"),
         mi.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces"),
-        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", 0, 100, false, null),
+        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", -100, 100, false, MenuDepthBiasCallback),
     };
 
     var item_enabled = ConvertedMenuItem{ .input_bool = &state.enabled };
@@ -268,14 +290,14 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
-        if (!gf.GameFreezeEnable(menu_key)) return;
+        if (!gf.GFreezeOn()) return;
         rs.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active = true;
     }
 
     fn close() void {
-        if (!gf.GameFreezeDisable(menu_key)) return;
+        if (!gf.GFreezeOff()) return;
         rs.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         menu_active = false;
     }
@@ -324,10 +346,10 @@ const QuickRaceMenu = extern struct {
     }
 };
 
-fn CollisionViewerCallback(m: *Menu) callconv(.C) bool {
-    var result = false;
-    _ = m;
-    return result;
+fn MenuDepthBiasCallback(_: *Menu) callconv(.C) bool {
+    if (AnnodueSettings.h_s_depth_bias) |h|
+        QuickRaceMenu.gf.ASettingUpdate(h, .{ .i = @as(i32, @intFromFloat(state.depth_bias * 100.0)) });
+    return false;
 }
 
 // HOUSEKEEPING
@@ -344,26 +366,20 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-extern fn init_collision_viewer(gs: *CollisionViewerState) callconv(.C) void;
-extern fn deinit_collision_viewer() callconv(.C) void;
-
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    AnnodueSettings.settingsInit(gf);
+
     init_collision_viewer(&state);
 
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
 }
 
-export fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = gf;
-    _ = gs;
-}
+export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.close();
     deinit_collision_viewer();
-    _ = gf;
-    _ = gs;
 }
 
 // HOOKS
@@ -374,7 +390,6 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.update_input();
 }
 
-export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    _ = gs;
+export fn EarlyEngineUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.update();
 }

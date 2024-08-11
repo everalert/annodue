@@ -1,9 +1,7 @@
-const Self = @This();
-
 const std = @import("std");
 
 const m = std.math;
-const deg2rad = m.degreesToRadians;
+const rad2deg = m.radiansToDegrees;
 
 const w32 = @import("zigwin32");
 const POINT = w32.foundation.POINT;
@@ -14,17 +12,30 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const debug = @import("core/Debug.zig");
 
-const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 
+const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
+const rs = @import("racer").Sound;
 const re = @import("racer").Entity;
 const rg = @import("racer").Global;
+const rm = @import("racer").Matrix;
+const rv = @import("racer").Vector;
+const Vec3 = rv.Vec3;
+const Mat4x4 = rm.Mat4x4;
 
-const st = @import("util/active_state.zig");
+const sp = @import("util/spatial.zig");
+const dz = @import("util/deadzone.zig");
+const nt = @import("util/normalized_transform.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -34,31 +45,47 @@ pub const panic = debug.annodue_panic;
 // FEATURES
 // - free cam
 // - usable both in race and in cantina
-// - CONTROLS:      keyboard        xinput
-//   toggle         0               Back
-//   XY-move        WASD            L Stick
-//   XY-rotate      Mouse or ↑↓→←   R Stick
-//   Z-move up      Space           L Trigger
-//   Z-move down    Shift           R Trigger
+// - CONTROLS:                  keyboard        xinput
+//   toggle                     0               Back
+//   XY-move                    WASD            L Stick
+//   XY-rotate                  Mouse or ↑↓→←   R Stick
+//   Z-move up                  Space           L Trigger
+//   Z-move down                Shift           R Trigger
+//   movement down              Q               LB
+//   movement up                E               RB          up+down = return to default
+//   rotation down              Z               LSB
+//   rotation up                C               RSB         up+down = return to default
+//   damping                    X               Y           hold to edit movement/rotation
+//                                                          damping instead of speed
+//   toggle planar movement     Tab             B
+//   toggle hide ui             6
+//   toggle disable input       7                           pod will not drive when on
+//   pan and orbit mode         RCtrl           X           hold
+//   move pod to camera         Bksp            X           hold while exiting free-cam
+//   orient camera to pod       \                           will set rotation point to pod in pan/orbit mode
 // - SETTINGS:
-//   enable         bool
-//   flip_look_x    bool
-//   flip_look_y    bool
-//   mouse_dpi      u32     reference for mouse sensitivity calculations; does not change mouse
-//   mouse_cm360    f32     physical centimeters of motion for one 360° rotation
-//                          if you don't know what that means, just treat this value as a sensitivity scale
-
-// FIXME: cam seems to not always correct itself upright when switching?
-// TODO: controls = ???
-//   - option: drone-style controls, including Z-rotate
-//   - option: z-control moving along view axis rather than world axis
-//   - dinput controls
-//   - speed toggles; infinite accel toggle
-//   - control mapping
-// TODO: fog
-// - option: disable fog entirely
-// - option: fog dist
-// TODO: settings for all of the above
+//   enable                     bool
+//   fog_patch                  bool
+//   fog_remove                 bool
+//   visuals_patch              bool
+//   sfx_vol                    f32     0.0..1.0
+//   flip_look_x                bool
+//   flip_look_y                bool
+//   flip_look_x_inverted       bool
+//   stick_deadzone_inner       f32     0.0..0.5
+//   stick_deadzone_outer       f32     0.5..1.0
+//   default_move_speed         u32     0..6
+//   default_move_smoothing     u32     0..3
+//   default_rotation_speed     u32     0..4
+//   default_rotation_smoothing u32     0..3
+//   default_planar_movement    bool    level motion vs view angle-based motion
+//   default_hide_ui            bool
+//   default_disable_input      bool
+//   mouse_dpi                  u32     reference for mouse sensitivity calculations;
+//                                      does not change mouse
+//   mouse_cm360                f32     physical centimeters of motion for one 360° rotation
+//                                      if you don't know what that means, just treat
+//                                      this value as a sensitivity scale
 
 const PLUGIN_NAME: [*:0]const u8 = "Cam7";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -69,129 +96,325 @@ const CamState = enum(u32) {
 };
 
 const Cam7 = extern struct {
-    var enable: bool = false;
-    var flip_look_x: bool = false;
-    var flip_look_y: bool = false;
+    // ini settings
+    var h_s_section: ?SettingHandle = null;
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_flip_look_x: ?SettingHandle = null;
+    var h_s_flip_look_y: ?SettingHandle = null;
+    var h_s_flip_look_x_inverted: ?SettingHandle = null;
+    var h_s_dz_i: ?SettingHandle = null;
+    var h_s_dz_o: ?SettingHandle = null;
+    var h_s_i_mouse_dpi: ?SettingHandle = null;
+    var h_s_i_mouse_cm360: ?SettingHandle = null;
+    var h_s_rot_damp_i_dflt: ?SettingHandle = null;
+    var h_s_rot_spd_i_dflt: ?SettingHandle = null;
+    var h_s_move_damp_i_dflt: ?SettingHandle = null;
+    var h_s_move_spd_i_dflt: ?SettingHandle = null;
+    var h_s_move_planar: ?SettingHandle = null;
+    var h_s_hide_ui: ?SettingHandle = null;
+    var h_s_disable_input: ?SettingHandle = null;
+    var h_s_sfx_volume: ?SettingHandle = null;
+    var h_s_fog_patch: ?SettingHandle = null;
+    var h_s_fog_remove: ?SettingHandle = null;
+    var h_s_visuals_patch: ?SettingHandle = null;
+    var s_enable: bool = false;
+    var s_flip_look_x: bool = false;
+    var s_flip_look_y: bool = false;
+    var s_flip_look_x_inverted: bool = true;
+    var s_dz_i: f32 = 0.05; // 0.0..0.5
+    var s_dz_o: f32 = 0.95; // 0.5..1.0
+    var dz_range: f32 = 0.9; // derived
+    var dz_fact: f32 = 1.0 / 0.9; // derived
+    var s_i_mouse_dpi: u32 = 1600; // only needed for sens calc, does not set mouse dpi
+    var s_i_mouse_cm360: f32 = 24; // real-world space per full rotation
+    var i_mouse_sens: f32 = 15118.1; // derived; mouse units per full rotation
+    var s_rot_damp_i_dflt: usize = 0;
+    var s_rot_spd_i_dflt: usize = 3;
+    var s_move_damp_i_dflt: usize = 2;
+    var s_move_spd_i_dflt: usize = 3;
+    var rot_damp_i: usize = 0; // derived
+    var rot_spd_i: usize = 3; // derived
+    var move_damp_i: usize = 2; // derived
+    var move_spd_i: usize = 3; // derived
+    var s_move_planar: bool = false;
+    var s_hide_ui: bool = false;
+    var s_disable_input: bool = false;
+    var s_sfx_volume: f32 = 0.7;
+    var sfx_volume_scale: f32 = 0; // derived
+    var s_fog_patch: bool = true;
+    var s_fog_remove: bool = false;
+    var s_visuals_patch: bool = true;
+    var queue_update_hide_ui: bool = false;
 
-    const dz: f32 = 0.05;
-    const rotation_damp: f32 = 48;
-    const rotation_speed: f32 = 360;
-    const motion_damp: f32 = 8;
-    const motion_speed_xy: f32 = 650;
-    const motion_speed_z: f32 = 350;
+    const rot_damp_val = [_]?f32{ null, 36, 24, 12, 6 };
+    var rot_damp: ?f32 = null;
+    const rot_spd_val = [_]f32{ 80, 160, 240, 360, 540, 810 };
+    const rot_change_damp: f32 = 8;
+    var rot_spd: f32 = 360;
+    var rot_spd_tgt: f32 = 360;
+    var orbit_dist: f32 = 0;
+    var orbit_dist_d: f32 = 0;
+    var orbit_pos: Vec3 = .{};
+
+    const move_damp_val = [_]?f32{ null, 16, 8, 4 };
+    var move_damp: ?f32 = 8;
+    const move_change_damp: f32 = 8;
+    const move_spd_xy_val = [_]f32{ 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
+    var move_spd_xy: f32 = 1000;
+    var move_spd_xy_tgt: f32 = 1000;
+    const move_spd_z_val = [_]f32{ 62.5, 125, 250, 500, 1000, 2000, 4000, 8000 };
+    var move_spd_z: f32 = 500;
+    var move_spd_z_tgt: f32 = 500;
+
     const fog_dist: f32 = 7500;
+
     var cam_state: CamState = .None;
     var saved_camstate_index: ?u32 = null;
-    var cam_mat4x4: [4][4]f32 = .{ // TODO: use actual Mat4x4
-        .{ 1, 0, 0, 0 },
-        .{ 0, 1, 0, 0 },
-        .{ 0, 0, 1, 0 },
-        .{ 0, 0, 0, 1 },
-    };
-    var xcam_rot: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_rot_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_rotation: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_rotation_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_motion: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
-    var xcam_motion_target: Vec3 = .{ .x = 0, .y = 0, .z = 0 };
+    var xf: Mat4x4 = .{};
+    var xf_plane: Mat4x4 = .{};
+    var rot: Vec3 = .{};
+    var rot_d: Vec3 = .{};
+    var rot_d_tgt: Vec3 = .{};
+    var move_d: Vec3 = .{};
+    var move_d_tgt: Vec3 = .{};
 
-    var input_toggle_data = ButtonInputMap{ .kb = .@"0", .xi = .BACK };
-    var input_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX, .kb_scale = 0.65 };
-    var input_look_y_data = AxisInputMap{ .kb_dec = .DOWN, .kb_inc = .UP, .xi_inc = .StickRY, .kb_scale = 0.65 };
-    var input_move_x_data = AxisInputMap{ .kb_dec = .A, .kb_inc = .D, .xi_inc = .StickLX };
-    var input_move_y_data = AxisInputMap{ .kb_dec = .S, .kb_inc = .W, .xi_inc = .StickLY };
-    var input_move_z_data = AxisInputMap{ .kb_dec = .SHIFT, .kb_inc = .SPACE, .xi_dec = .TriggerR, .xi_inc = .TriggerL };
-    var input_toggle = input_toggle_data.inputMap();
-    var input_look_x = input_look_x_data.inputMap();
-    var input_look_y = input_look_y_data.inputMap();
-    var input_move_x = input_move_x_data.inputMap();
-    var input_move_y = input_move_y_data.inputMap();
-    var input_move_z = input_move_z_data.inputMap();
-    var input_mouse_d_x: f32 = 0;
-    var input_mouse_d_y: f32 = 0;
-    var input_mouse_dpi: f32 = 1600; // only needed for sens calc, does not set mouse dpi
-    var input_mouse_cm360: f32 = 24; // real-world space per full rotation
-    var input_mouse_sens: f32 = 15118.1; // mouse units per full rotation
+    var i_toggle_data = ButtonInputMap{ .kb = .@"0", .xi = .BACK };
+    var i_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX };
+    var i_look_y_data = AxisInputMap{ .kb_dec = .DOWN, .kb_inc = .UP, .xi_inc = .StickRY };
+    var i_move_x_data = AxisInputMap{ .kb_dec = .A, .kb_inc = .D, .xi_inc = .StickLX };
+    var i_move_y_data = AxisInputMap{ .kb_dec = .S, .kb_inc = .W, .xi_inc = .StickLY };
+    var i_move_z_data = AxisInputMap{ .kb_dec = .SHIFT, .kb_inc = .SPACE, .xi_dec = .TriggerR, .xi_inc = .TriggerL };
+    var i_movement_dec_data = ButtonInputMap{ .kb = .Q, .xi = .LEFT_SHOULDER };
+    var i_movement_inc_data = ButtonInputMap{ .kb = .E, .xi = .RIGHT_SHOULDER };
+    var i_rotation_dec_data = ButtonInputMap{ .kb = .Z, .xi = .LEFT_THUMB };
+    var i_rotation_inc_data = ButtonInputMap{ .kb = .C, .xi = .RIGHT_THUMB };
+    var i_damp_data = ButtonInputMap{ .kb = .X, .xi = .Y };
+    var i_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .B };
+    var i_sweep_data = ButtonInputMap{ .kb = .RCONTROL, .xi = .X };
+    //var i_mpan_data = ButtonInputMap{ .kb = .LBUTTON };
+    //var i_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
+    var i_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
+    var i_disable_input_data = ButtonInputMap{ .kb = .@"7" };
+    var i_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .X };
+    var i_look_at_vehicle_data = ButtonInputMap{ .kb = .OEM_5 }; // backslash
+    var i_toggle = i_toggle_data.inputMap();
+    var i_look_x = i_look_x_data.inputMap();
+    var i_look_y = i_look_y_data.inputMap();
+    var i_move_x = i_move_x_data.inputMap();
+    var i_move_y = i_move_y_data.inputMap();
+    var i_move_z = i_move_z_data.inputMap();
+    var i_movement_dec = i_movement_dec_data.inputMap();
+    var i_movement_inc = i_movement_inc_data.inputMap();
+    var i_rotation_dec = i_rotation_dec_data.inputMap();
+    var i_rotation_inc = i_rotation_inc_data.inputMap();
+    var i_damp = i_damp_data.inputMap();
+    var i_planar = i_planar_data.inputMap();
+    var i_sweep = i_sweep_data.inputMap();
+    var i_hide_ui = i_hide_ui_data.inputMap();
+    var i_disable_input = i_disable_input_data.inputMap();
+    var i_move_vehicle = i_move_vehicle_data.inputMap();
+    var i_look_at_vehicle = i_look_at_vehicle_data.inputMap();
+    var i_mouse_d_x: f32 = 0;
+    var i_mouse_d_y: f32 = 0;
 
-    // TODO: maybe normalizing XY stuff
+    // TODO: maybe normalizing XY stuff (or do it at input system level)
     fn update_input(gf: *GlobalFn) void {
-        input_toggle.update(gf);
-        input_look_x.update(gf);
-        input_look_y.update(gf);
-        input_move_x.update(gf);
-        input_move_y.update(gf);
-        input_move_z.update(gf);
+        i_toggle.update(gf);
+        i_look_x.update(gf);
+        i_look_y.update(gf);
+        i_move_x.update(gf);
+        i_move_y.update(gf);
+        i_move_z.update(gf);
+        i_movement_dec.update(gf);
+        i_movement_inc.update(gf);
+        i_rotation_dec.update(gf);
+        i_rotation_inc.update(gf);
+        i_damp.update(gf);
+        i_planar.update(gf);
+        i_sweep.update(gf);
+        i_hide_ui.update(gf);
+        i_disable_input.update(gf);
+        i_move_vehicle.update(gf);
+        i_look_at_vehicle.update(gf);
+
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
             gf.InputLockMouse();
-            // TODO: move to InputMap
+            // TODO: move to InputMap (after input customization)
             const mouse_d: POINT = gf.InputGetMouseDelta();
-            input_mouse_d_x = @as(f32, @floatFromInt(mouse_d.x)) / input_mouse_sens;
-            input_mouse_d_y = @as(f32, @floatFromInt(mouse_d.y)) / input_mouse_sens;
+            i_mouse_d_x = @as(f32, @floatFromInt(mouse_d.x)) / i_mouse_sens;
+            i_mouse_d_y = @as(f32, @floatFromInt(mouse_d.y)) / i_mouse_sens;
+        }
+    }
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", settingsUpdate);
+        h_s_section = section;
+
+        h_s_enable =
+            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+
+        h_s_fog_patch =
+            gf.ASettingOccupy(section, "fog_patch", .B, .{ .b = true }, &s_fog_patch, null);
+        h_s_fog_remove =
+            gf.ASettingOccupy(section, "fog_remove", .B, .{ .b = false }, &s_fog_remove, null);
+        h_s_visuals_patch =
+            gf.ASettingOccupy(section, "visuals_patch", .B, .{ .b = true }, &s_visuals_patch, null);
+
+        h_s_flip_look_x =
+            gf.ASettingOccupy(section, "flip_look_x", .B, .{ .b = false }, &s_flip_look_x, null);
+        h_s_flip_look_y =
+            gf.ASettingOccupy(section, "flip_look_y", .B, .{ .b = false }, &s_flip_look_y, null);
+        h_s_flip_look_x_inverted =
+            gf.ASettingOccupy(section, "flip_look_x_inverted", .B, .{ .b = false }, &s_flip_look_x_inverted, null);
+
+        h_s_dz_i =
+            gf.ASettingOccupy(section, "stick_deadzone_inner", .F, .{ .f = 0.05 }, &s_dz_i, null);
+        h_s_dz_o =
+            gf.ASettingOccupy(section, "stick_deadzone_outer", .F, .{ .f = 0.95 }, &s_dz_o, null);
+
+        h_s_i_mouse_dpi =
+            gf.ASettingOccupy(section, "mouse_dpi", .U, .{ .u = 1600 }, &s_i_mouse_dpi, null);
+        h_s_i_mouse_cm360 =
+            gf.ASettingOccupy(section, "mouse_cm360", .F, .{ .f = 24 }, &s_i_mouse_cm360, null);
+
+        h_s_rot_damp_i_dflt =
+            gf.ASettingOccupy(section, "default_rotation_smoothing", .U, .{ .u = 0 }, &s_rot_damp_i_dflt, null);
+        h_s_rot_spd_i_dflt =
+            gf.ASettingOccupy(section, "default_rotation_speed", .U, .{ .u = 3 }, &s_rot_spd_i_dflt, null);
+        h_s_move_damp_i_dflt =
+            gf.ASettingOccupy(section, "default_move_smoothing", .U, .{ .u = 2 }, &s_move_damp_i_dflt, null);
+        h_s_move_spd_i_dflt =
+            gf.ASettingOccupy(section, "default_move_speed", .U, .{ .u = 3 }, &s_move_spd_i_dflt, null);
+        h_s_move_planar =
+            gf.ASettingOccupy(section, "default_planar_movement", .B, .{ .b = false }, &s_move_planar, null);
+
+        h_s_hide_ui =
+            gf.ASettingOccupy(section, "default_hide_ui", .B, .{ .b = false }, &s_hide_ui, null);
+        h_s_disable_input =
+            gf.ASettingOccupy(section, "default_disable_input", .B, .{ .b = false }, &s_disable_input, null);
+        h_s_sfx_volume =
+            gf.ASettingOccupy(section, "sfx_volume", .F, .{ .f = 0.7 }, &s_sfx_volume, null);
+    }
+
+    // TODO: rethink default -> live setting flow during settings reload, for the relevant settings
+    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+        var update_mouse_sens: bool = false;
+        var update_deadzone: bool = false;
+
+        for (changed, 0..len) |setting, _| {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if ((nlen == 9 and std.mem.eql(u8, "fog_patch", setting.name[0..nlen]) or
+                nlen == 10 and std.mem.eql(u8, "fog_remove", setting.name[0..nlen])) and
+                cam_state == .FreeCam)
+            {
+                patchFog(s_fog_patch);
+                continue;
+            }
+            if (nlen == 13 and std.mem.eql(u8, "visuals_patch", setting.name[0..nlen]) and
+                cam_state == .FreeCam)
+            {
+                patchFlags(s_visuals_patch);
+                continue;
+            }
+
+            if (nlen == 9 and std.mem.eql(u8, "mouse_dpi", setting.name[0..nlen]) or
+                nlen == 11 and std.mem.eql(u8, "mouse_cm360", setting.name[0..nlen]))
+            {
+                update_mouse_sens = true;
+                continue;
+            }
+
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_inner", setting.name[0..nlen])) {
+                s_dz_i = m.clamp(s_dz_i, 0.000, 0.495);
+                update_deadzone = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_outer", setting.name[0..nlen])) {
+                s_dz_o = m.clamp(s_dz_o, 0.505, 1.000);
+                update_deadzone = true;
+                continue;
+            }
+
+            // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
+            if (nlen == 26 and std.mem.eql(u8, "default_rotation_smoothing", setting.name[0..nlen])) {
+                s_rot_damp_i_dflt = m.clamp(s_rot_damp_i_dflt, 0, 4);
+                rot_damp_i = s_rot_damp_i_dflt;
+                rot_damp = rot_damp_val[rot_damp_i];
+                continue;
+            }
+            if (nlen == 22 and std.mem.eql(u8, "default_rotation_speed", setting.name[0..nlen])) {
+                s_rot_spd_i_dflt = m.clamp(s_rot_spd_i_dflt, 0, 5);
+                rot_spd_i = s_rot_spd_i_dflt;
+                rot_spd_tgt = rot_spd_val[rot_spd_i];
+                continue;
+            }
+            if (nlen == 22 and std.mem.eql(u8, "default_move_smoothing", setting.name[0..nlen])) {
+                s_move_damp_i_dflt = m.clamp(s_move_damp_i_dflt, 0, 3);
+                move_damp_i = s_move_damp_i_dflt;
+                move_damp = move_damp_val[move_damp_i];
+                continue;
+            }
+            if (nlen == 18 and std.mem.eql(u8, "default_move_speed", setting.name[0..nlen])) {
+                s_move_spd_i_dflt = m.clamp(s_move_spd_i_dflt, 0, 6);
+                move_spd_i = s_move_spd_i_dflt;
+                move_spd_xy_tgt = move_spd_xy_val[move_spd_i];
+                move_spd_z_tgt = move_spd_z_val[move_spd_i];
+                continue;
+            }
+
+            if (nlen == 15 and std.mem.eql(u8, "default_hide_ui", setting.name[0..nlen]) and
+                cam_state == .FreeCam)
+            {
+                queue_update_hide_ui = true;
+                continue;
+            }
+        }
+
+        if (update_mouse_sens)
+            i_mouse_sens = s_i_mouse_cm360 / 2.54 * @as(f32, @floatFromInt(s_i_mouse_dpi));
+
+        if (update_deadzone) {
+            dz_range = s_dz_o - s_dz_i;
+            dz_fact = 1 / dz_range;
         }
     }
 };
 
-// NOTE: stolen from Mat4x4_Rotate_430E00
-fn mat4x4_set_rotation(mat: *[4][4]f32, euler: *const Vec3) void {
-    const Xsin: f32 = m.sin(euler.x);
-    const Xcos: f32 = m.cos(euler.x);
-    const Ysin: f32 = m.sin(euler.y);
-    const Ycos: f32 = m.cos(euler.y);
-    const Zsin: f32 = m.sin(euler.z);
-    const Zcos: f32 = m.cos(euler.z);
-    mat[0][0] = Zcos * Xcos - Zsin * Xsin * Ysin;
-    mat[0][1] = Zsin * Xcos * Ysin + Zcos * Xsin;
-    mat[0][2] = -(Zsin * Ycos);
-    mat[1][0] = -(Ycos * Xsin);
-    mat[1][1] = Ycos * Xcos;
-    mat[1][2] = Ysin;
-    mat[2][0] = Zcos * Xsin * Ysin + Zsin * Xcos;
-    mat[2][1] = Zsin * Xsin - Zcos * Xcos * Ysin;
-    mat[2][2] = Zcos * Ycos;
-}
-
-fn mat4x4_get_rotation(mat: *const [4][4]f32, euler: *Vec3) void {
-    const t1: f32 = m.atan2(f32, mat[1][2], mat[2][2]); // Z
-    const c2: f32 = m.sqrt(mat[0][0] * mat[0][0] + mat[0][1] * mat[0][1]);
-    const t2: f32 = m.atan2(f32, -mat[0][2], c2); // Y
-    const c1: f32 = m.cos(t1);
-    const s1: f32 = m.sin(t1);
-    const t3: f32 = m.atan2(f32, s1 * mat[2][0] - c1 * mat[1][0], c1 * mat[1][1] - s1 * mat[2][1]); // X
-    euler.x = t3;
-    euler.y = t2;
-    euler.z = t1;
-}
-
 const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
 
-fn CheckAndResetSavedCam() void {
-    if (Cam7.saved_camstate_index == null) return;
-    if (mem.read(camstate_ref_addr, u32) == 31) return;
-
-    re.Manager.entity(.cMan, 0).CamStateIndex = 7;
-    _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
-    _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
-    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
-
-    Cam7.xcam_motion_target = comptime .{ .x = 0, .y = 0, .z = 0 };
-    Cam7.xcam_motion = comptime .{ .x = 0, .y = 0, .z = 0 };
-    Cam7.saved_camstate_index = null;
-    Cam7.cam_state = .None;
+fn patchFlags(on: bool) void {
+    if (on) {
+        _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
+    } else {
+        _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
+    }
 }
 
-fn RestoreSavedCam() void {
-    if (Cam7.saved_camstate_index) |i| {
-        _ = mem.write(camstate_ref_addr, u32, i);
-        re.Manager.entity(.cMan, 0).CamStateIndex = i;
-
-        _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
-        _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
-        _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
-
-        Cam7.xcam_motion_target = comptime .{ .x = 0, .y = 0, .z = 0 };
-        Cam7.xcam_motion = comptime .{ .x = 0, .y = 0, .z = 0 };
-        Cam7.saved_camstate_index = null;
+fn patchFog(on: bool) void {
+    if (on) {
+        const dist = if (Cam7.s_fog_remove) comptime m.pow(f32, 10, 10) else Cam7.fog_dist;
+        var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(dist))); // fog dist, normal case
+        _ = x86.nop_until(o, 0x4539A6);
+        _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @bitCast(dist)); // fog dist, flags @0=1 case
+        return;
     }
+    _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
+    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
+}
+
+fn patchFOV(on: bool) void {
+    const fov: f32 = if (on) 100 else 120; // first-person internal cam fov
+    _ = mem.write(0x4528EF, f32, fov); // instruction at 0x4528E9
+}
+
+inline fn CamTransitionOut() void {
+    patchFlags(false);
+    patchFog(false);
+    patchFOV(false);
+    Cam7.move_d_tgt = .{};
+    Cam7.move_d = .{};
+    Cam7.saved_camstate_index = null;
 }
 
 fn SaveSavedCam() void {
@@ -200,180 +423,270 @@ fn SaveSavedCam() void {
 
     const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
         Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
-    @memcpy(@as(*[16]f32, @ptrCast(&Cam7.cam_mat4x4[0])), @as([*]f32, @ptrFromInt(mat4_addr)));
-    mat4x4_get_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
-    @memcpy(@as(*[3]f32, @ptrCast(&Cam7.xcam_rot_target)), @as(*[3]f32, @ptrCast(&Cam7.xcam_rot)));
+    @memcpy(@as(*[16]f32, @ptrCast(&Cam7.xf)), @as([*]f32, @ptrFromInt(mat4_addr)));
+    sp.mat4x4_getEuler(&Cam7.xf, &Cam7.rot);
 
-    _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
-    var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, normal case
-    _ = x86.nop_until(o, 0x4539A6);
-    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @as(u32, @bitCast(Cam7.fog_dist))); // fog dist, flags @0=1 case
+    patchFlags(Cam7.s_visuals_patch);
+    patchFog(Cam7.s_fog_patch);
+    patchFOV(true);
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 31;
     _ = mem.write(camstate_ref_addr, u32, 31);
 }
 
-fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
-    Cam7.enable = gf.SettingGetB("cam7", "enable") orelse false;
-    Cam7.flip_look_x = gf.SettingGetB("cam7", "flip_look_x") orelse false;
-    Cam7.flip_look_y = gf.SettingGetB("cam7", "flip_look_y") orelse false;
-    Cam7.input_mouse_dpi = @floatFromInt(gf.SettingGetU("cam7", "mouse_dpi") orelse 1600);
-    Cam7.input_mouse_cm360 = gf.SettingGetF("cam7", "mouse_cm360") orelse 24;
-    Cam7.input_mouse_sens = Cam7.input_mouse_cm360 / 2.54 * Cam7.input_mouse_dpi;
+fn RestoreSavedCam() void {
+    if (Cam7.saved_camstate_index) |i| {
+        _ = mem.write(camstate_ref_addr, u32, i);
+        re.Manager.entity(.cMan, 0).CamStateIndex = i;
+        CamTransitionOut();
+    }
+}
+
+fn CheckAndResetSavedCam(gf: *GlobalFn) void {
+    if (Cam7.saved_camstate_index == null) return;
+    if (mem.read(camstate_ref_addr, u32) == 31) return;
+
+    re.Manager.entity(.cMan, 0).CamStateIndex = 7;
+    CamTransitionOut();
+    Cam7.cam_state = .None;
+    _ = gf.GHideRaceUIOff();
+}
+
+fn UpdateHideUI(gf: *GlobalFn) void {
+    if (Cam7.s_hide_ui and Cam7.cam_state == .FreeCam) {
+        _ = gf.GHideRaceUIOn();
+        return;
+    }
+
+    _ = gf.GHideRaceUIOff();
 }
 
 // STATE MACHINE
 
-fn DoStateNone(_: *GlobalSt, _: *GlobalFn) CamState {
-    if (Cam7.input_toggle.gets() == .JustOn and Cam7.enable) {
+fn DoStateNone(_: *GlobalSt, gf: *GlobalFn) CamState {
+    if (Cam7.i_toggle.gets() == .JustOn and Cam7.s_enable) {
         SaveSavedCam();
+        if (Cam7.s_hide_ui) _ = gf.GHideRaceUIOn();
         return .FreeCam;
     }
     return .None;
 }
 
-fn DoStateFreeCam(gs: *GlobalSt, _: *GlobalFn) CamState {
-    if (Cam7.input_toggle.gets() == .JustOn or !Cam7.enable) {
+fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
+    if (Cam7.i_toggle.gets() == .JustOn or !Cam7.s_enable) {
+        if (gs.race_state != .None and Cam7.i_move_vehicle.gets().on()) {
+            re.Test.DoRespawn(re.Test.PLAYER.*, 0);
+            re.Test.PLAYER.*._collision_toggles = 0xFFFFFFFF;
+            re.Test.PLAYER.*.transform = Cam7.xf;
+            var fwd: Vec3 = .{ .y = 11 };
+            rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+            rv.Vec3_Add(@ptrCast(&re.Test.PLAYER.*.transform.T), @ptrCast(&re.Test.PLAYER.*.transform.T), &fwd);
+
+            for (re.Manager.entitySliceAllObj(.cMan)) |*cman| {
+                if (cman.pTest != null) {
+                    const anim_mode = cman.mode;
+                    cman.animTimer = 8;
+                    re.cMan.DoPreRaceSweep(cman);
+                    cman.mode = anim_mode;
+                    cman.visualFlags = 0xFFFFFF00;
+                }
+            }
+        }
+
         RestoreSavedCam();
+        _ = gf.GHideRaceUIOff();
         return .None;
     }
 
+    if (Cam7.queue_update_hide_ui) {
+        Cam7.queue_update_hide_ui = false;
+        UpdateHideUI(gf);
+    }
+
+    // input
+
+    if (Cam7.i_planar.gets() == .JustOn)
+        Cam7.s_move_planar = !Cam7.s_move_planar;
+
+    if (Cam7.i_hide_ui.gets() == .JustOn) {
+        Cam7.s_hide_ui = !Cam7.s_hide_ui;
+        if (Cam7.h_s_hide_ui) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_hide_ui });
+        UpdateHideUI(gf);
+    }
+
+    if (Cam7.i_disable_input.gets() == .JustOn) {
+        Cam7.s_disable_input = !Cam7.s_disable_input;
+        if (Cam7.h_s_disable_input) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_disable_input });
+    }
+
+    const move_sweep: bool = Cam7.i_sweep.gets().on();
+    if (Cam7.i_sweep.gets() == .JustOn) {
+        Cam7.orbit_dist = 200;
+        Cam7.orbit_dist_d = 0;
+        var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Add(&Cam7.orbit_pos, @ptrCast(&Cam7.xf.T), &fwd);
+    }
+
+    const move_dec: bool = Cam7.i_movement_dec.gets() == .JustOn;
+    const move_inc: bool = Cam7.i_movement_inc.gets() == .JustOn;
+    const move_both: bool = (move_dec and Cam7.i_movement_inc.gets().on()) or
+        (move_inc and Cam7.i_movement_dec.gets().on());
+    if (Cam7.i_damp.gets().on()) {
+        if (move_dec and Cam7.move_damp_i > 0) Cam7.move_damp_i -= 1;
+        if (move_inc and Cam7.move_damp_i < 3) Cam7.move_damp_i += 1;
+        if (move_both) Cam7.move_damp_i = Cam7.s_move_damp_i_dflt;
+        Cam7.move_damp = Cam7.move_damp_val[Cam7.move_damp_i];
+    } else {
+        if (move_dec and Cam7.move_spd_i > 0) Cam7.move_spd_i -= 1;
+        if (move_inc and Cam7.move_spd_i < 7) Cam7.move_spd_i += 1;
+        if (move_both) Cam7.move_spd_i = Cam7.s_move_spd_i_dflt;
+        Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
+        Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
+    }
+    Cam7.move_spd_xy = sp.f32_damp(Cam7.move_spd_xy, Cam7.move_spd_xy_tgt, Cam7.move_change_damp, gs.dt_f);
+    Cam7.move_spd_z = sp.f32_damp(Cam7.move_spd_z, Cam7.move_spd_z_tgt, Cam7.move_change_damp, gs.dt_f);
+
+    const rot_dec: bool = Cam7.i_rotation_dec.gets() == .JustOn;
+    const rot_inc: bool = Cam7.i_rotation_inc.gets() == .JustOn;
+    const rot_both: bool = (rot_dec and Cam7.i_rotation_inc.gets().on()) or
+        (rot_inc and Cam7.i_rotation_dec.gets().on());
+    if (Cam7.i_damp.gets().on()) {
+        if (rot_dec and Cam7.rot_damp_i > 0) Cam7.rot_damp_i -= 1;
+        if (rot_inc and Cam7.rot_damp_i < 4) Cam7.rot_damp_i += 1;
+        if (rot_both) Cam7.rot_damp_i = Cam7.s_rot_damp_i_dflt;
+        Cam7.rot_damp = Cam7.rot_damp_val[Cam7.rot_damp_i];
+    } else {
+        if (rot_dec and Cam7.rot_spd_i > 0) Cam7.rot_spd_i -= 1;
+        if (rot_inc and Cam7.rot_spd_i < 5) Cam7.rot_spd_i += 1;
+        if (rot_both) Cam7.rot_spd_i = Cam7.s_rot_spd_i_dflt;
+        Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
+    }
+    Cam7.rot_spd = sp.f32_damp(Cam7.rot_spd, Cam7.rot_spd_tgt, Cam7.rot_change_damp, gs.dt_f);
+
+    const upside_down: bool = @mod(Cam7.rot.y / (m.pi * 2) - 0.25, 1) < 0.5;
+
     // rotation
 
-    if (Cam7.input_mouse_d_x != 0 or Cam7.input_mouse_d_y != 0) {
-        const _a_rx: f32 = if (Cam7.flip_look_x) Cam7.input_mouse_d_x else -Cam7.input_mouse_d_x;
-        const _a_ry: f32 = if (Cam7.flip_look_y) Cam7.input_mouse_d_y else -Cam7.input_mouse_d_y;
+    const using_mouse: bool = Cam7.i_mouse_d_x != 0 or Cam7.i_mouse_d_y != 0;
+    const flip_x: bool = Cam7.s_flip_look_x != (Cam7.s_flip_look_x_inverted and upside_down);
 
-        Cam7.xcam_rot.x += _a_rx * rot;
-        Cam7.xcam_rot.y += _a_ry * rot;
-        Cam7.xcam_rot.z += 0;
-    } else {
-        const _a_rx: f32 = if (Cam7.flip_look_x) -Cam7.input_look_x.getf() else Cam7.input_look_x.getf();
-        const _a_ry: f32 = if (Cam7.flip_look_y) -Cam7.input_look_y.getf() else Cam7.input_look_y.getf();
-
-        const a_r_mag: f32 = smooth2(@min(m.sqrt(_a_rx * _a_rx + _a_ry * _a_ry), 1));
-        const a_r_ang: f32 = m.atan2(f32, _a_ry, _a_rx);
-        const a_rx: f32 = if (m.fabs(_a_rx) > Cam7.dz) a_r_mag * m.cos(a_r_ang) else 0;
-        const a_ry: f32 = if (m.fabs(_a_ry) > Cam7.dz) a_r_mag * m.sin(a_r_ang) else 0;
-
-        Cam7.xcam_rotation.x = -a_rx;
-        Cam7.xcam_rotation.y = a_ry;
-        Cam7.xcam_rotation.z = 0;
-        //if (Cam7.xcam_rotation.magnitude() > 1)
-        //    Cam7.xcam_rotation = Cam7.xcam_rotation.normalize();
-        //Cam7.xcam_rotation.damp(&Cam7.xcam_rotation_target, Cam7.rotation_damp, gs.dt_f);
-
-        Cam7.xcam_rot.x += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.x;
-        Cam7.xcam_rot.y += gs.dt_f * Cam7.rotation_speed / 360 * rot * Cam7.xcam_rotation.y;
-        Cam7.xcam_rot.z += 0;
+    var rot_scale: f32 = m.pi * 2;
+    Cam7.rot_d.x = if (using_mouse) -Cam7.i_mouse_d_x else -Cam7.i_look_x.getf();
+    Cam7.rot_d.y = if (using_mouse) -Cam7.i_mouse_d_y else Cam7.i_look_y.getf();
+    if (flip_x) Cam7.rot_d.x = -Cam7.rot_d.x;
+    if (Cam7.s_flip_look_y) Cam7.rot_d.y = -Cam7.rot_d.y;
+    if (!using_mouse) {
+        dz.vec2_applyDeadzoneSq(@ptrCast(&Cam7.rot_d), Cam7.s_dz_i, Cam7.dz_range, Cam7.dz_fact);
+        const r_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.rot_d)));
+        rv.Vec2_Scale(@ptrCast(&Cam7.rot_d), r_scale, @ptrCast(&Cam7.rot_d));
+        rot_scale = gs.dt_f * Cam7.rot_spd / 360 * m.pi * 2;
     }
-    //Cam7.xcam_rot.damp(&Cam7.xcam_rot_target, Cam7.rotation_damp, gs.dt_f);
-    mat4x4_set_rotation(&Cam7.cam_mat4x4, &Cam7.xcam_rot);
+
+    if (!using_mouse and Cam7.rot_damp != null) {
+        sp.vec3_damp(&Cam7.rot_d_tgt, &Cam7.rot_d, Cam7.rot_damp.?, gs.dt_f);
+        rv.Vec3_AddScale1(&Cam7.rot, &Cam7.rot, rot_scale, &Cam7.rot_d_tgt);
+    } else {
+        rv.Vec3_Copy(&Cam7.rot_d_tgt, &Cam7.rot_d);
+        rv.Vec3_AddScale1(&Cam7.rot, &Cam7.rot, rot_scale, &Cam7.rot_d);
+    }
+    Cam7.rot.z = sp.f32_damp(Cam7.rot.z, 0, 8, gs.dt_f); // NOTE: straighten out, not for drone
+
+    if (move_sweep) {
+        var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Add(&Cam7.orbit_pos, @ptrCast(&Cam7.xf.T), &fwd);
+    }
+
+    sp.mat4x4_setRotation(&Cam7.xf, &Cam7.rot);
+
+    if (move_sweep) {
+        var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Sub(@ptrCast(&Cam7.xf.T), &Cam7.orbit_pos, &fwd);
+    }
 
     // motion
 
-    // TODO: normalize XY only
-    const _a_lx: f32 = Cam7.input_move_x.getf();
-    const _a_ly: f32 = Cam7.input_move_y.getf();
-    const _a_t: f32 = Cam7.input_move_z.getf();
+    var xf_fwd_ref: *Mat4x4 = &Cam7.xf;
 
-    // TODO: individual X, Y deadzone; rather than magnitude-based
-    const a_l_mag: f32 = @min(m.sqrt(_a_lx * _a_lx + _a_ly * _a_ly), 1);
-    const a_l_ang: f32 = m.atan2(f32, _a_ly, _a_lx);
-    const a_lx: f32 = smooth2(a_l_mag) * m.cos(a_l_ang + Cam7.xcam_rot.x);
-    const a_ly: f32 = smooth2(a_l_mag) * m.sin(a_l_ang + Cam7.xcam_rot.x);
-    const a_t: f32 = if (m.fabs(_a_t) > Cam7.dz) smooth2(_a_t) else 0;
+    Cam7.move_d_tgt.z = Cam7.i_move_z.getf();
+    dz.f32_applyDeadzoneSq(&Cam7.move_d_tgt.z, Cam7.s_dz_i, Cam7.dz_range, Cam7.dz_fact);
+    Cam7.move_d_tgt.z = nt.smooth4(Cam7.move_d_tgt.z);
 
-    Cam7.xcam_motion_target.x = if (a_l_mag > Cam7.dz) a_lx else 0;
-    Cam7.xcam_motion_target.y = if (a_l_mag > Cam7.dz) a_ly else 0;
-    Cam7.xcam_motion_target.z = a_t;
-    //if (Cam7.xcam_motion_target.magnitude() > 1)
-    //    Cam7.xcam_motion_target = Cam7.xcam_motion_target.normalize();
+    Cam7.move_d_tgt.x = Cam7.i_move_x.getf();
+    Cam7.move_d_tgt.y = Cam7.i_move_y.getf();
+    dz.vec2_applyDeadzoneSq(@ptrCast(&Cam7.move_d_tgt), Cam7.s_dz_i, Cam7.dz_range, Cam7.dz_fact);
 
-    Cam7.xcam_motion.damp(&Cam7.xcam_motion_target, Cam7.motion_damp, gs.dt_f);
+    // TODO: state machine enum, probably
+    if (move_sweep) {
+        var orbit_dist_d_tgt: f32 = Cam7.move_d_tgt.z;
+        Cam7.move_d_tgt.z = Cam7.move_d_tgt.y;
+        sp.vec3_mul3(&Cam7.move_d_tgt, Cam7.move_spd_xy, 0, Cam7.move_spd_xy);
 
-    Cam7.cam_mat4x4[3][0] += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.x;
-    Cam7.cam_mat4x4[3][1] += gs.dt_f * Cam7.motion_speed_xy * Cam7.xcam_motion.y;
-    Cam7.cam_mat4x4[3][2] += gs.dt_f * Cam7.motion_speed_z * Cam7.xcam_motion.z;
+        Cam7.orbit_dist_d = if (Cam7.move_damp) |d| sp.f32_damp(Cam7.orbit_dist_d, orbit_dist_d_tgt, d, gs.dt_f) else orbit_dist_d_tgt;
+        var dist_d: f32 = Cam7.orbit_dist_d * Cam7.move_spd_z * gs.dt_f;
+        if (Cam7.orbit_dist + dist_d < 0) dist_d = -Cam7.orbit_dist;
+        var fwd: Vec3 = .{ .y = dist_d };
+        Cam7.orbit_dist += dist_d;
+        rv.Vec3_MulMat4x4(&fwd, &fwd, &Cam7.xf);
+        rv.Vec3_Sub(@ptrCast(&Cam7.xf.T), @ptrCast(&Cam7.xf.T), &fwd);
+    } else if (Cam7.s_move_planar) {
+        if (upside_down) {
+            Cam7.move_d_tgt.y = -Cam7.move_d_tgt.y;
+            Cam7.move_d_tgt.z = -Cam7.move_d_tgt.z;
+        }
+        sp.vec3_mul3(&Cam7.move_d_tgt, Cam7.move_spd_xy, Cam7.move_spd_xy, Cam7.move_spd_z);
+
+        rm.Mat4x4_SetRotation(&Cam7.xf_plane, rad2deg(f32, Cam7.rot.x), 0, rad2deg(f32, Cam7.rot.z));
+        xf_fwd_ref = &Cam7.xf_plane;
+    } else {
+        sp.vec3_mul3(&Cam7.move_d_tgt, Cam7.move_spd_xy, Cam7.move_spd_xy, Cam7.move_spd_z);
+    }
+
+    rv.Vec3_MulMat4x4(&Cam7.move_d_tgt, &Cam7.move_d_tgt, xf_fwd_ref);
+
+    if (Cam7.move_damp) |d| {
+        sp.vec3_damp(&Cam7.move_d, &Cam7.move_d_tgt, d, gs.dt_f);
+    } else {
+        rv.Vec3_Copy(&Cam7.move_d, &Cam7.move_d_tgt);
+    }
+
+    rv.Vec3_AddScale1(@ptrCast(&Cam7.xf.T), @ptrCast(&Cam7.xf.T), gs.dt_f, &Cam7.move_d);
+
+    // LOOK TO HOME
+
+    if (Cam7.i_look_at_vehicle.gets().on()) blk: {
+        var dir: Vec3 = undefined;
+        rv.Vec3_Sub(&dir, @ptrCast(&re.Test.PLAYER.*.transform.T), @ptrCast(&Cam7.xf.T));
+        if (!sp.vec3_norm(&dir)) break :blk;
+
+        var dirEulerXY: Vec3 = undefined;
+        sp.vec3_dirToEulerXY(&dirEulerXY, &dir);
+        sp.mat4x4_setRotation(&Cam7.xf, &dirEulerXY);
+        Cam7.rot = dirEulerXY;
+
+        if (move_sweep) Cam7.orbit_dist =
+            rv.Vec3_Dist(@ptrCast(&re.Test.PLAYER.*.transform.T), @ptrCast(&Cam7.xf.T));
+    }
+
+    // SOUND EFFECTS
+
+    const vol_speed_max: f32 = @max(Cam7.move_spd_xy, 1000);
+    const vol_scale: f32 = nt.pow2(@min(rv.Vec3_Mag(&Cam7.move_d) / vol_speed_max, 1));
+    Cam7.sfx_volume_scale = sp.f32_damp(Cam7.sfx_volume_scale, vol_scale, 6, gs.dt_f);
+    const volume = Cam7.s_sfx_volume * Cam7.sfx_volume_scale;
+    rs.swrSound_PlaySound(28, 6, 0.35, volume, 1); // sfx_amb_wind_tat_a_loop.wav
 
     return .FreeCam;
 }
 
-fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
-    CheckAndResetSavedCam();
+fn UpdateState(gs: *GlobalSt, gf: *GlobalFn) void {
+    CheckAndResetSavedCam(gf); // handle transition in and out of race scene
     Cam7.cam_state = switch (Cam7.cam_state) {
-        .None => DoStateNone(gs, gv),
-        .FreeCam => DoStateFreeCam(gs, gv),
+        .None => DoStateNone(gs, gf),
+        .FreeCam => DoStateFreeCam(gs, gf),
     };
-}
-
-// math
-
-const rot: f32 = m.pi * 2;
-
-// TODO: move
-fn smooth2(scalar: f32) f32 {
-    return m.fabs(scalar) * scalar;
-}
-
-// TODO: move to lib, or replace with real lib
-const Vec3 = extern struct {
-    x: f32,
-    y: f32,
-    z: f32,
-
-    inline fn magnitude(self: *const Vec3) f32 {
-        return std.math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z);
-    }
-
-    inline fn cross(self: *const Vec3, other: *const Vec3) Vec3 {
-        return .{
-            .x = self.y * other.z - self.z - other.y,
-            .y = self.z * other.x - self.x - other.z,
-            .z = self.x * other.y - self.y - other.x,
-        };
-    }
-
-    inline fn normalize(self: *const Vec3) Vec3 {
-        const mul: f32 = 1 / self.magnitude();
-        return .{
-            .x = self.x * mul,
-            .y = self.y * mul,
-            .z = self.z * mul,
-        };
-    }
-
-    inline fn apply_deadzone(self: *Vec3, dz: f32) void {
-        if (self.magnitude() < dz) {
-            self.x = 0;
-            self.y = 0;
-            self.z = 0;
-        }
-    }
-
-    inline fn damp(self: *Vec3, target: *const Vec3, t: f32, dt: f32) void {
-        self.x = std.math.lerp(self.x, target.x, 1 - std.math.exp(-t * dt));
-        self.y = std.math.lerp(self.y, target.y, 1 - std.math.exp(-t * dt));
-        self.z = std.math.lerp(self.z, target.z, 1 - std.math.exp(-t * dt));
-    }
-};
-
-const Mat4x4 = extern struct {
-    x: f32[4] = f32{ 1, 0, 0, 0 },
-    y: f32[4] = f32{ 0, 1, 0, 0 },
-    z: f32[4] = f32{ 0, 0, 1, 0 },
-    w: f32[4] = f32{ 0, 0, 0, 1 },
-};
-
-// TODO: move to vec lib, or find glm equivalent
-fn mmul(comptime n: u32, in1: *[n][n]f32, in2: *[n][n]f32, out: *[n][n]f32) void {
-    inline for (0..n) |i| {
-        inline for (0..n) |j| {
-            var v: f32 = 0;
-            inline for (0..n) |k| v += in1[i][k] * in2[k][j];
-            out[i][j] = v;
-        }
-    }
 }
 
 // HOUSEKEEPING
@@ -391,11 +704,11 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
+    Cam7.settingsInit(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.cam_mat4x4), 0);
+    rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.xf), 0);
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -409,10 +722,19 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     Cam7.update_input(gf);
 }
 
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
+export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    if (Cam7.cam_state == .FreeCam and Cam7.s_disable_input and rg.PAUSE_STATE.* == 0) { // kill race input
+        // NOTE: unk block starting at 0xEC8820 still written to, but no observable ill-effects
+        @memset(@as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..0x70], 0);
+        @memset(@as([*]u8, @ptrFromInt(rin.RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR))[0..0x40], 0);
+        @memset(@as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE], 0);
+    }
 }
 
-export fn EngineUpdateStage20A(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//    HandleSettings(gf);
+//}
+
+export fn EngineUpdateStage1CA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     UpdateState(gs, gf);
 }

@@ -45,3 +45,15 @@ pub fn ConsoleOut(comptime fmt: []const u8, args: anytype) !void {
     }
     try WriteConsole(DebugConsole.handle_out, fmt, args);
 }
+
+pub inline fn PPanic(comptime fmt: []const u8, args: anytype) noreturn {
+    var buf: [2048]u8 = undefined;
+    const out = std.fmt.bufPrint(&buf, fmt, args) catch @panic(fmt);
+    @panic(out);
+}
+
+pub inline fn PCompileError(comptime fmt: []const u8, args: anytype) noreturn {
+    var buf: [2048]u8 = undefined;
+    const out = std.fmt.bufPrint(&buf, fmt, args) catch @compileError(fmt);
+    @compileError(out);
+}

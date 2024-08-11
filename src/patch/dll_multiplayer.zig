@@ -12,6 +12,9 @@ const debug = @import("core/Debug.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -34,16 +37,26 @@ const PLUGIN_NAME: [*:0]const u8 = "Multiplayer";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const MpState = struct {
-    var mp_enable: bool = false;
-    var patch_r100: bool = false;
-    var patch_guid: bool = false;
-};
+    var h_s_section: ?SettingHandle = null;
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_patch_guid: ?SettingHandle = null;
+    var h_s_patch_r100: ?SettingHandle = null;
+    var s_enable: bool = false;
+    var s_patch_r100: bool = false;
+    var s_patch_guid: bool = false;
 
-fn HandleSettings(gf: *GlobalFn) callconv(.C) void {
-    MpState.mp_enable = gf.SettingGetB("multiplayer", "enable").?;
-    MpState.patch_r100 = gf.SettingGetB("multiplayer", "patch_r100").?;
-    MpState.patch_guid = gf.SettingGetB("multiplayer", "patch_guid").?;
-}
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "multiplayer", null);
+        h_s_section = section;
+
+        h_s_enable = // working? TODO: check collisions
+            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+        h_s_patch_guid = // working?
+            gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, &s_patch_guid, null);
+        h_s_patch_r100 = // working
+            gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, &s_patch_r100, null);
+    }
+};
 
 // PATCHES
 
@@ -112,16 +125,16 @@ fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_he
 
     // Construct our code
     const off_upgrade_code: usize = offset;
-    offset = x86.push_edx(offset);
-    offset = x86.push_eax(offset);
-    offset = x86.push_u32(offset, off_up_hp);
-    offset = x86.push_u32(offset, off_up_lv);
-    offset = x86.push_esi(offset);
-    offset = x86.push_edi(offset);
+    offset = x86.push(offset, .{ .r32 = .edx });
+    offset = x86.push(offset, .{ .r32 = .eax });
+    offset = x86.push(offset, .{ .imm32 = off_up_hp });
+    offset = x86.push(offset, .{ .imm32 = off_up_lv });
+    offset = x86.push(offset, .{ .r32 = .esi });
+    offset = x86.push(offset, .{ .r32 = .edi });
     offset = x86.call(offset, 0x449D00); // ???
     offset = x86.add_esp8(offset, 0x10);
-    offset = x86.pop_eax(offset);
-    offset = x86.pop_edx(offset);
+    offset = x86.pop(offset, .{ .r32 = .eax });
+    offset = x86.pop(offset, .{ .r32 = .edx });
     offset = x86.retn(offset);
 
     // Install it by jumping from 0x45B765 and returning to 0x45B76C
@@ -144,10 +157,10 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     const memory_offset_collision_code: usize = memory_offset;
 
     // Inject new code
-    offset = x86.push_edx(offset);
+    offset = x86.push(offset, .{ .r32 = .edx });
     offset = x86.mov_edx(offset, 0x4D5E00); // _dword_4D5E00_is_multiplayer
     offset = x86.test_edx_edx(offset);
-    offset = x86.pop_edx(offset);
+    offset = x86.pop(offset, .{ .r32 = .edx });
     offset = x86.jz(offset, 0x47B0C0);
     offset = x86.retn(offset);
 
@@ -172,18 +185,18 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
+    MpState.settingsInit(gf);
 
     // TODO: move this to settings handler, once global allocation figured out
     var off = gs.patch_offset;
-    if (MpState.mp_enable) {
-        const traction: u8 = if (MpState.patch_r100) 3 else 5;
+    if (MpState.s_enable) {
+        const traction: u8 = if (MpState.s_patch_r100) 3 else 5;
         var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
         var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
         const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
         const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
-        off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.patch_guid);
-        off = PatchNetworkCollisions(off, MpState.patch_guid);
+        off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.s_patch_guid);
+        off = PatchNetworkCollisions(off, MpState.s_patch_guid);
     }
     gs.patch_offset = off;
 }
@@ -193,7 +206,3 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
-
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleSettings(gf);
-}

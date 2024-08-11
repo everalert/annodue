@@ -764,17 +764,6 @@ extern "C" void init_collision_viewer(CollisionViewerState* global_state)
 {
     ::global_state = global_state;
     detour_attach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
-
-    /*{
-        FILE* log = fopen("collision_viewer.log", "wb");
-        for (const auto& v : box_triangle_strip)
-        {
-            fprintf(log, "%f %f %f", v.x, v.y, v.z);
-            fflush(log);
-        }
-        fclose(log);
-        abort();
-    }*/
 }
 
 extern "C" void deinit_collision_viewer()

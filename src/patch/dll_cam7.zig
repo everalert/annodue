@@ -62,7 +62,7 @@ pub const panic = debug.annodue_panic;
 //   toggle disable input       7                           pod will not drive when on
 //   pan and orbit mode         RCtrl           X           hold
 //   move pod to camera         Bksp            X           hold while exiting free-cam
-//   orient camera to pod       \
+//   orient camera to pod       \                           will set rotation point to pod in pan/orbit mode
 // - SETTINGS:
 //   enable                     bool
 //   fog_patch                  bool
@@ -665,6 +665,9 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         sp.vec3_dirToEulerXY(&dirEulerXY, &dir);
         sp.mat4x4_setRotation(&Cam7.xf, &dirEulerXY);
         Cam7.rot = dirEulerXY;
+
+        if (move_sweep) Cam7.orbit_dist =
+            rv.Vec3_Dist(@ptrCast(&re.Test.PLAYER.*.transform.T), @ptrCast(&Cam7.xf.T));
     }
 
     // SOUND EFFECTS

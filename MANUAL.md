@@ -26,6 +26,15 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 |`f32` |any decimal number|rounded to 2 decimal places
 |`str` |any text up to 63 characters|individual setting may only accept specific strings
 
+##### Global Settings
+
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`SETTINGS_SAVE_AUTO`    |`bool`|`on`|&nbsp;
+|`SETTINGS_SAVE_DEFAULTS`|`bool`|`on`|Save settings to file even when not customized
+|`AUTO_UPDATE`           |`bool`|`on`|&nbsp;
+|`PLUGIN_HOT_RELOAD`     |`bool`|`on`|&nbsp;
+
 ## Features
 
 ##### Feature Summary

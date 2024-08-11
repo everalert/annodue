@@ -2,9 +2,10 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("core/Global.zig").GlobalState;
-const GlobalFn = @import("core/Global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
+const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
+const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const debug = @import("core/Debug.zig");
 
@@ -12,13 +13,16 @@ const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
 // FEATURES
 // - High-resolution fonts
 // - Rotating rainbow colors for race UI elements: top values, top labels, speedo
-// - Show race trigger interactions via game notification system
 // - (disabled) High-fidelity audio
 // - (disabled) Load sprites from TGA
 // - SETTINGS:
@@ -27,7 +31,6 @@ pub const panic = debug.annodue_panic;
 //   rainbow_label_enable   bool
 //   rainbow_speed_enable   bool
 //   patch_fonts            bool    * requires game restart to apply
-//   patch_trigger_display  bool    * requires game restart to apply
 //   patch_audio            bool    ignored
 //   patch_tga_loader       bool    ignored
 
@@ -44,61 +47,122 @@ const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const CosmeticState = struct {
-    var rb_enable: bool = false;
-    var rb_value_enable: bool = false;
-    var rb_label_enable: bool = false;
-    var rb_speed_enable: bool = false;
+    var h_s_section: ?SettingHandle = null;
+    var h_s_rb_enable: ?SettingHandle = null;
+    var h_s_rb_value_enable: ?SettingHandle = null;
+    var h_s_rb_label_enable: ?SettingHandle = null;
+    var h_s_rb_speed_enable: ?SettingHandle = null;
+    var h_s_patch_tga_loader: ?SettingHandle = null;
+    var h_s_patch_audio: ?SettingHandle = null;
+    var h_s_patch_fonts: ?SettingHandle = null;
+    var s_rb_enable: bool = false;
+    var s_rb_value_enable: bool = false;
+    var s_rb_label_enable: bool = false;
+    var s_rb_speed_enable: bool = false;
     var rb_value = crot.RotatingRGB.new(95, 255, 0);
     var rb_label = crot.RotatingRGB.new(95, 255, 1);
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
+    var s_patch_tga_loader: bool = false;
+    var s_patch_audio: bool = false;
+    var s_patch_fonts: bool = false;
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", settingsUpdate);
+        h_s_section = section;
+
+        h_s_rb_enable =
+            gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .b = false }, &s_rb_enable, null);
+        h_s_rb_value_enable =
+            gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .b = false }, &s_rb_value_enable, null);
+        h_s_rb_label_enable =
+            gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .b = false }, &s_rb_label_enable, null);
+        h_s_rb_speed_enable =
+            gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .b = false }, &s_rb_speed_enable, null);
+
+        h_s_patch_tga_loader = // FIXME: need tga files to verify with
+            gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, &s_patch_tga_loader, null);
+        h_s_patch_audio = // FIXME: crashes
+            gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, &s_patch_audio, null);
+        h_s_patch_fonts =
+            gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, &s_patch_fonts, null);
+    }
+
+    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+        var update_rb_value: bool = false;
+        var update_rb_label: bool = false;
+        var update_rb_speed: bool = false;
+
+        for (changed, 0..len) |setting, _| {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if (nlen == 14 and std.mem.eql(u8, "rainbow_enable", setting.name[0..nlen])) {
+                update_rb_value = true;
+                update_rb_label = true;
+                update_rb_speed = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_value_enable", setting.name[0..nlen])) {
+                update_rb_value = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_label_enable", setting.name[0..nlen])) {
+                update_rb_label = true;
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_speed_enable", setting.name[0..nlen])) {
+                update_rb_speed = true;
+                continue;
+            }
+        }
+
+        if (update_rb_value and (!s_rb_enable or !s_rb_value_enable)) {
+            crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
+            crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
+            crot.PatchRgbArgs(0x461045, 0xFFFFFF);
+        }
+
+        if (update_rb_label and (!s_rb_enable or !s_rb_label_enable)) {
+            crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
+            crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
+            crot.PatchRgbArgs(0x461069, 0xFFFFFF);
+        }
+
+        if (update_rb_speed and (!s_rb_enable or !s_rb_speed_enable)) {
+            crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
+        }
+    }
+
+    // COLOR CHANGES
+
+    fn PatchHudColRotate(value: bool, label: bool, speed: bool) void {
+        rb_value.update();
+        rb_label.update();
+        rb_speed.update();
+        if (value) {
+            crot.PatchRgbArgs(0x460E5D, rb_value.get());
+            crot.PatchRgbArgs(0x460FB1, rb_value.get());
+            crot.PatchRgbArgs(0x461045, rb_value.get());
+        }
+        if (label) {
+            crot.PatchRgbArgs(0x460E8D, rb_label.get());
+            crot.PatchRgbArgs(0x460FE3, rb_label.get());
+            crot.PatchRgbArgs(0x461069, rb_label.get());
+        }
+        if (speed) {
+            crot.PatchRgbArgs(0x460A6E, rb_speed.get());
+        }
+    }
 };
-
-// COLOR CHANGES
-
-fn PatchHudColRotate(v: bool, l: bool, s: bool) void {
-    CosmeticState.rb_value.update();
-    CosmeticState.rb_label.update();
-    CosmeticState.rb_speed.update();
-    if (v) {
-        crot.PatchRgbArgs(0x460E5D, CosmeticState.rb_value.get());
-        crot.PatchRgbArgs(0x460FB1, CosmeticState.rb_value.get());
-        crot.PatchRgbArgs(0x461045, CosmeticState.rb_value.get());
-    }
-    if (l) {
-        crot.PatchRgbArgs(0x460E8D, CosmeticState.rb_label.get());
-        crot.PatchRgbArgs(0x460FE3, CosmeticState.rb_label.get());
-        crot.PatchRgbArgs(0x461069, CosmeticState.rb_label.get());
-    }
-    if (s) {
-        crot.PatchRgbArgs(0x460A6E, CosmeticState.rb_speed.get());
-    }
-}
-
-fn HandleColorSettings(gf: *GlobalFn) callconv(.C) void {
-    CosmeticState.rb_enable = gf.SettingGetB("cosmetic", "rainbow_enable").?;
-
-    CosmeticState.rb_value_enable = gf.SettingGetB("cosmetic", "rainbow_value_enable").?;
-    if (!CosmeticState.rb_enable or !CosmeticState.rb_value_enable) {
-        crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
-        crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
-        crot.PatchRgbArgs(0x461045, 0xFFFFFF);
-    }
-
-    CosmeticState.rb_label_enable = gf.SettingGetB("cosmetic", "rainbow_label_enable").?;
-    if (!CosmeticState.rb_enable or !CosmeticState.rb_label_enable) {
-        crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
-        crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
-        crot.PatchRgbArgs(0x461069, 0xFFFFFF);
-    }
-
-    CosmeticState.rb_speed_enable = gf.SettingGetB("cosmetic", "rainbow_speed_enable").?;
-    if (!CosmeticState.rb_enable or !CosmeticState.rb_speed_enable) {
-        crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
-    }
-}
 
 // SWE1R-PATCHER STUFF
 
+// NOTE: code_begin_offset = part of the arguments to a function call (sprite setup-related fn fn_445EE0)
+// args expected in this range: maxwidth?, maxheight?, width, height (args 3-6)
+// NOTE: code_end_offset = the instruction after 4 arguments later
+// NOTE: texture table seems to be 'len' in first field (u32), followed by len ptrs to texture segments
+// FIXME: can probably convert font->sprite conversion to comptime embed then hook up ptrs only in code,
+// then all the allocation bs can be skipped
+// NOTE: probably cannot reverse this, because it patches something that seems to only run once during setup
 fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usize, code_end_offset: usize, width: u32, height: u32, filename: []const u8) usize {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
@@ -110,10 +174,10 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
     const cave_memory_offset: usize = off;
 
     // Patches the arguments for the texture loader
-    off = x86.push_u32(off, height);
-    off = x86.push_u32(off, width);
-    off = x86.push_u32(off, height);
-    off = x86.push_u32(off, width);
+    off = x86.push(off, .{ .imm32 = height });
+    off = x86.push(off, .{ .imm32 = width });
+    off = x86.push(off, .{ .imm32 = height });
+    off = x86.push(off, .{ .imm32 = width });
     off = x86.jmp(off, code_end_offset);
 
     // Detour original code to ours
@@ -125,7 +189,8 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
 
     // Have a buffer for pixeldata
     const texture_size: u32 = width * height * 4 / 8;
-    var buffer = alloc.alloc(u8, texture_size) catch @panic("failed to allocate memory for texture table patch");
+    var buffer = alloc.alloc(u8, texture_size) catch
+        @panic("failed to allocate memory for texture table patch");
     defer alloc.free(buffer);
     const buffer_slice = @as([*]u8, @ptrCast(buffer))[0..texture_size];
 
@@ -133,16 +198,19 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
     var i: usize = 0;
     while (i < count) : (i += 1) {
         // Load input texture to buffer
-        var path = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch @panic("failed to format path for texture table patch"); // FIXME: error handling
+        var path = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch
+            @panic("failed to format path for texture table patch"); // FIXME: error handling
 
-        const file = std.fs.cwd().openFile(path, .{}) catch @panic("failed to open texture table patch file"); // FIXME: error handling
+        const file = std.fs.cwd().openFile(path, .{}) catch
+            @panic("failed to open texture table patch file"); // FIXME: error handling
         defer file.close();
         var file_pos: usize = 0;
         @memset(buffer_slice, 0x00);
         var j: u32 = 0;
         while (j < texture_size * 2) : (j += 1) {
             var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
-            file_pos += file.pread(&pixel, file_pos) catch @panic("failed to read segment of texture table patch file"); // FIXME: error handling
+            file_pos += file.pread(&pixel, file_pos) catch
+                @panic("failed to read segment of texture table patch file"); // FIXME: error handling
             buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
         }
 
@@ -253,15 +321,15 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = x86.mov_edx_esp(off);
 
     // Generate the path, keep sprite_index on stack as we'll keep using it
-    off = x86.push_eax(off); // (sprite_index)
-    off = x86.push_u32(off, offset_tga_path); // (fmt)
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .r32 = .eax }); // (sprite_index)
+    off = x86.push(off, .{ .imm32 = offset_tga_path }); // (fmt)
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
-    off = x86.pop_edx(off); // (buffer)
+    off = x86.pop(off, .{ .r32 = .edx }); // (buffer)
     off = x86.add_esp32(off, 0x4);
 
     // Attempt to load the TGA, then remove path from stack
-    off = x86.push_edx(off); // (buffer)
+    off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x4114D0); // load_sprite_from_tga_and_add_loaded_sprite
     off = x86.add_esp32(off, 0x4);
 
@@ -276,66 +344,6 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
 
     // Install it by jumping from 0x446FB0 (and we'll return directly)
     _ = x86.jmp(0x446FB0, offset_tga_loader_code);
-
-    return off;
-}
-
-// TODO: might be able to just ditch the function hooking and use our own toast system
-fn PatchTriggerDisplay(memory: usize) usize {
-    var off = memory;
-
-    // Display triggers
-    const trigger_string = "Trigger %d activated";
-    const trigger_string_display_duration: f32 = 3.0;
-
-    var offset_trigger_string = off;
-    off = mem.write(off, @TypeOf(trigger_string.*), trigger_string.*);
-
-    var offset_trigger_code: u32 = off;
-
-    // Read the trigger from stack
-    off = mem.write(off, u8, 0x8B); // mov    eax, [esp+4]
-    off = mem.write(off, u8, 0x44);
-    off = mem.write(off, u8, 0x24);
-    off = mem.write(off, u8, 0x04);
-
-    // Get pointer to section 8
-    off = mem.write(off, u8, 0x8B); // 8b 40 4c  ->  mov    eax,DWORD PTR [eax+0x4c]
-    off = mem.write(off, u8, 0x40);
-    off = mem.write(off, u8, 0x4C);
-
-    // Read the section8.trigger_action field
-    off = mem.write(off, u8, 0x0F); // 0f b7 40 24  ->  movzx    eax, WORD PTR [eax+0x24]
-    off = mem.write(off, u8, 0xB7);
-    off = mem.write(off, u8, 0x40);
-    off = mem.write(off, u8, 0x24);
-
-    // Make room for sprintf buffer and keep the pointer in edx
-    off = x86.add_esp32(off, @bitCast(@as(i32, -0x400))); // add    esp, -400h
-    off = x86.mov_edx_esp(off);
-
-    // Generate the string we'll display
-    off = x86.push_eax(off); // (trigger index)
-    off = x86.push_u32(off, offset_trigger_string); // (fmt)
-    off = x86.push_edx(off); // (buffer)
-    off = x86.call(off, 0x49EB80); // sprintf
-    off = x86.pop_edx(off); // (buffer)
-    off = x86.add_esp32(off, 0x8);
-
-    // Display a message
-    off = x86.push_u32(off, @bitCast(trigger_string_display_duration));
-    off = x86.push_edx(off); // (buffer)
-    off = x86.call(off, 0x44FCE0);
-    off = x86.add_esp32(off, 0x8);
-
-    // Pop the string buffer off of the stack
-    off = x86.add_esp32(off, 0x400);
-
-    // Jump to the real function to run the trigger
-    off = x86.jmp(off, 0x47CE60);
-
-    // Install it by replacing the call destination (we'll jump to the real one)
-    _ = x86.call(0x476E80, offset_trigger_code);
 
     return off;
 }
@@ -355,32 +363,30 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleColorSettings(gf);
+    CosmeticState.settingsInit(gf);
 
     // TODO: convert to use global allocator once it is part of the GlobalFn interface;
     // then we can properly deinit it when the plugin unloads or the user setting changes.
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
+    // NOTE: original function at fn_42D720
     var off = gs.patch_offset;
-    if (gf.SettingGetB("cosmetic", "patch_fonts").?) {
+    if (CosmeticState.s_patch_fonts) {
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
         off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
         off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
         off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
         off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
     }
-    //if (gf.SettingGetB("cosmetic", "patch_audio").?) {
+    //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
     //    const bits_per_sample: u8 = 16;
     //    const stereo: bool = true;
     //    PatchAudioStreamQuality(sample_rate, bits_per_sample, stereo);
     //}
-    //if (gf.SettingGetB("cosmetic", "patch_tga_loader").?) {
+    //if (CosmeticState.s_patch_tga_loader) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
-    if (gf.SettingGetB("cosmetic", "patch_trigger_display").?) {
-        off = PatchTriggerDisplay(off);
-    }
     gs.patch_offset = off;
 }
 
@@ -398,16 +404,12 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    HandleColorSettings(gf);
-}
-
 export fn TextRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (CosmeticState.rb_enable) {
-        PatchHudColRotate(
-            CosmeticState.rb_value_enable,
-            CosmeticState.rb_label_enable,
-            CosmeticState.rb_speed_enable,
+    if (CosmeticState.s_rb_enable) {
+        CosmeticState.PatchHudColRotate(
+            CosmeticState.s_rb_value_enable,
+            CosmeticState.s_rb_label_enable,
+            CosmeticState.s_rb_speed_enable,
         );
     }
 }

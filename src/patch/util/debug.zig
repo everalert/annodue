@@ -6,7 +6,7 @@ const w32f = w32.foundation;
 const w32c = w32.system.console;
 const w32wm = w32.ui.windows_and_messaging;
 
-const global = @import("../core/Global.zig");
+const VERSION_STR = @import("../appinfo.zig").VERSION_STR;
 const mem = @import("memory.zig");
 const rg = @import("racer").Global;
 
@@ -28,7 +28,7 @@ fn Init() void {
     DebugConsole.initialized = true;
 
     _ = w32wm.SetWindowPos(DebugConsole.hwnd, null, 0, 0, 640, 960, .{});
-    _ = w32wm.SetForegroundWindow(rg.HWND.*);
+    _ = w32wm.SetForegroundWindow(@ptrCast(rg.HWND.*));
 }
 
 fn WriteConsole(handle: win.HANDLE, comptime fmt: []const u8, args: anytype) !void {
@@ -41,7 +41,19 @@ fn WriteConsole(handle: win.HANDLE, comptime fmt: []const u8, args: anytype) !vo
 pub fn ConsoleOut(comptime fmt: []const u8, args: anytype) !void {
     if (!DebugConsole.initialized) {
         Init();
-        try WriteConsole(DebugConsole.handle_out, "{s}\n\n", .{global.VersionStr});
+        try WriteConsole(DebugConsole.handle_out, "{s}\n\n", .{VERSION_STR});
     }
     try WriteConsole(DebugConsole.handle_out, fmt, args);
+}
+
+pub inline fn PPanic(comptime fmt: []const u8, args: anytype) noreturn {
+    var buf: [2048]u8 = undefined;
+    const out = std.fmt.bufPrint(&buf, fmt, args) catch @panic(fmt);
+    @panic(out);
+}
+
+pub inline fn PCompileError(comptime fmt: []const u8, args: anytype) noreturn {
+    var buf: [2048]u8 = undefined;
+    const out = std.fmt.bufPrint(&buf, fmt, args) catch @compileError(fmt);
+    @compileError(out);
 }

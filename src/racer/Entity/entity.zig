@@ -8,11 +8,19 @@ pub const Elmo = @import("Elmo.zig");
 pub const Smok = @import("Smok.zig");
 pub const cMan = @import("cMan.zig");
 
-// MANAGER
+// GAME FUNCTIONS
+
+pub const CallFreeEvent: *fn (*anyopaque) callconv(.C) void = @ptrFromInt(0x450E30);
+
+// GAME CONSTANTS
 
 pub const MANAGER_JUMPTABLE_PTR_ADDR: usize = 0x4BFEC0;
 pub const MANAGER_JUMPTABLE: *[*]*Manager = @ptrFromInt(MANAGER_JUMPTABLE_PTR_ADDR);
 pub const MANAGER_SIZE: usize = 0x28;
+
+// GAME TYPEDEFS
+
+// MANAGER
 
 // TODO: comptime generic that takes an actual entity id or something
 // TODO: testing to assert the shape of the manager
@@ -33,9 +41,23 @@ pub const Manager = extern struct {
         return &@as([*]ENTITY.t(E), @ptrCast(manager.array))[i];
     }
 
+    // TODO: rename to entitySlice, and rename old entitySlice* to entityByteSlice*
+    pub fn entitySliceAllObj(comptime E: ENTITY) []ENTITY.t(E) {
+        const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
+        return @as([*]ENTITY.t(E), @ptrCast(manager.array))[0..manager.count];
+    }
+
     pub fn entitySlice(comptime E: ENTITY, i: usize) []u8 {
         const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
-        return &@as([*][@sizeOf(ENTITY.t(E))]u8, @ptrCast(manager.array))[i];
+        const st = i * manager.stride;
+        const en = st + manager.stride;
+        return @as([*]u8, @ptrCast(manager.array))[st..en];
+    }
+
+    pub fn entitySliceAll(comptime E: ENTITY) []u8 {
+        const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;
+        const len = manager.count * manager.stride;
+        return @as([*]u8, @ptrCast(manager.array))[0..len];
     }
 };
 
@@ -131,3 +153,7 @@ pub const MAGIC_EVENT = enum(u32) {
 pub const M_ABRT: u32 = @intFromEnum(MAGIC_EVENT.Abrt);
 pub const M_RSTR: u32 = @intFromEnum(MAGIC_EVENT.RStr);
 pub const M_FINI: u32 = @intFromEnum(MAGIC_EVENT.Fini);
+
+// HELPERS
+
+// ...

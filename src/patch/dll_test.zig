@@ -1,15 +1,20 @@
-const Self = @This();
-
 const std = @import("std");
 
-const GlobalSt = @import("core/Global.zig").GlobalState;
-const GlobalFn = @import("core/Global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
-const VERSION_STR = @import("core/Global.zig").VersionStr;
+const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
+const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
+const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const debug = @import("core/Debug.zig");
 
 const msg = @import("util/message.zig");
+
+const r = @import("racer");
+const rt = r.Text;
+
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -47,8 +52,5 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 // HOOKS
 
 export fn EarlyEngineUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    //rt.DrawText(16, 16, "{s} {s}", .{
-    //    PLUGIN_NAME,
-    //    PLUGIN_VERSION,
-    //}, null, null) catch {};
+    //_ = gf.GDrawText(.Default, rt.MakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
 }

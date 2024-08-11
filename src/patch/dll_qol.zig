@@ -7,9 +7,9 @@ const w32wm = w32.ui.windows_and_messaging;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
-const GlobalSt = @import("core/Global.zig").GlobalState;
-const GlobalFn = @import("core/Global.zig").GlobalFunction;
-const COMPATIBILITY_VERSION = @import("core/Global.zig").PLUGIN_VERSION;
+const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
+const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const debug = @import("core/Debug.zig");
 
@@ -37,6 +37,12 @@ const rto = rt.TextStyleOpts;
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+const SettingHandle = @import("core/ASettings.zig").Handle;
+const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const Setting = @import("core/ASettings.zig").ASettingSent;
+
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -48,6 +54,8 @@ pub const panic = debug.annodue_panic;
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - fix: bugfix Cy Yunga cheat having no audio
 // - fix: bugfix map rendering not accounting for hi-res flag
+// - fix: remove 1px gap on right and bottom of viewport when rendering sprites
+//     - this may cut off sprites placed right at the edge, depending on your resolution settings
 // - feat: quick restart
 //     - CONTROLS:          Tab+Esc          Back+Start
 // - feat: quick race menu
@@ -78,6 +86,7 @@ pub const panic = debug.annodue_panic;
 // - feat: show milliseconds on all timers
 // - feat: limit fps during races (configurable via quick race menu)
 // - feat: skip planet cutscene
+// - feat: skip podium cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
 // - feat: fast countdown timer
@@ -98,18 +107,31 @@ pub const panic = debug.annodue_panic;
 // FIXME: quick race menu stops working after hot reload??
 // TODO: split this because it's getting unruly
 //   maybe -- quality of life + game bugfixes + non-gameplay extra features
+// TODO: settings for patching jinn/cy cheats
 
 const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const QolState = struct {
-    var quickstart: bool = false;
-    var quickrace: bool = false;
-    var default_racers: u32 = 12;
-    var default_laps: u32 = 3;
-    var ms_timer: bool = false;
-    var fps_limiter: bool = false;
-    var skip_planet_cutscenes: bool = false;
+    var h_s_section: ?SettingHandle = null;
+    var h_s_quickstart: ?SettingHandle = null;
+    var h_s_quickrace: ?SettingHandle = null;
+    var h_s_default_racers: ?SettingHandle = null;
+    var h_s_default_laps: ?SettingHandle = null;
+    var h_s_ms_timer: ?SettingHandle = null;
+    var h_s_fps_limiter: ?SettingHandle = null;
+    var h_s_skip_planet_cutscenes: ?SettingHandle = null;
+    var h_s_skip_podium_cutscene: ?SettingHandle = null;
+    var h_s_fix_viewport_edges: ?SettingHandle = null;
+    var s_quickstart: bool = false;
+    var s_quickrace: bool = false;
+    var s_default_racers: u32 = 12;
+    var s_default_laps: u32 = 3;
+    var s_ms_timer: bool = false;
+    var s_fps_limiter: bool = false;
+    var s_skip_planet_cutscenes: bool = false;
+    var s_skip_podium_cutscene: bool = false;
+    var s_fix_viewport_edges: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -117,28 +139,115 @@ const QolState = struct {
     var input_pause = input_pause_data.inputMap();
     var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
+
+    fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
+        input_pause.update(gf);
+        input_unpause.update(gf);
+        input_quickstart.update(gf);
+    }
+
+    fn settingsInit(gf: *GlobalFn) void {
+        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "qol", settingsUpdate);
+        h_s_section = section;
+
+        h_s_quickstart =
+            gf.ASettingOccupy(section, "quick_restart_enable", .B, .{ .b = false }, &s_quickstart, null);
+        h_s_quickrace =
+            gf.ASettingOccupy(section, "quick_race_menu_enable", .B, .{ .b = false }, &s_quickrace, null);
+        h_s_default_racers =
+            gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null, settingsUpdateRacers);
+        h_s_default_laps =
+            gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null, settingsUpdateLaps);
+        h_s_ms_timer =
+            gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, &s_ms_timer, null);
+        h_s_fps_limiter =
+            gf.ASettingOccupy(section, "fps_limiter_enable", .B, .{ .b = false }, &s_fps_limiter, null);
+        h_s_skip_planet_cutscenes =
+            gf.ASettingOccupy(section, "skip_planet_cutscenes", .B, .{ .b = false }, &s_skip_planet_cutscenes, null);
+        h_s_skip_podium_cutscene =
+            gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .b = false }, &s_skip_podium_cutscene, null);
+        h_s_fix_viewport_edges =
+            gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, &s_fix_viewport_edges, null);
+
+        FastCountdown.h_s_enable =
+            gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
+        FastCountdown.h_s_duration =
+            gf.ASettingOccupy(section, "fast_countdown_duration", .F, .{ .f = 1.0 }, &FastCountdown.s_duration, null);
+
+        QuickRaceMenu.h_s_fps_default =
+            gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, &QuickRaceMenu.s_fps_default, null);
+    }
+
+    fn settingsUpdateRacers(new_value: Setting.Value) callconv(.C) void {
+        s_default_racers = std.math.clamp(new_value.u, 1, 12);
+        if (h_s_default_racers) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_racers });
+
+        QuickRaceMenu.values.racers = @intCast(s_default_racers);
+        if (QuickRaceMenu.gs.init_late_passed) {
+            _ = mem.write(0x50C558, i8, @as(i8, @intCast(s_default_racers)));
+            re.Manager.entity(.Hang, 0).Racers = @intCast(s_default_racers);
+        }
+    }
+
+    fn settingsUpdateLaps(new_value: Setting.Value) callconv(.C) void {
+        s_default_laps = std.math.clamp(new_value.u, 1, 5);
+        if (h_s_default_laps) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_laps });
+
+        QuickRaceMenu.values.laps = @intCast(s_default_laps);
+        if (QuickRaceMenu.gs.init_late_passed) {
+            re.Manager.entity(.Hang, 0).Laps = @intCast(s_default_laps);
+        }
+    }
+
+    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+        var update_fast_countdown: bool = false;
+
+        for (changed, 0..len) |setting, _| {
+            const nlen: usize = std.mem.len(setting.name);
+
+            if (nlen == 22 and std.mem.eql(u8, "quick_race_menu_enable", setting.name[0..nlen])) {
+                if (!s_quickrace) QuickRaceMenu.close();
+                continue;
+            }
+
+            // FIXME: add these to deinit?
+            if (nlen == 15 and std.mem.eql(u8, "ms_timer_enable", setting.name[0..nlen])) {
+                PatchHudTimerMs(s_ms_timer);
+                continue;
+            }
+            if (nlen == 21 and std.mem.eql(u8, "skip_planet_cutscenes", setting.name[0..nlen])) {
+                PatchPlanetCutscenes(s_skip_planet_cutscenes);
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "skip_podium_cutscene", setting.name[0..nlen])) {
+                PatchPodiumCutscene(s_skip_podium_cutscene);
+                continue;
+            }
+            if (nlen == 18 and std.mem.eql(u8, "fix_viewport_edges", setting.name[0..nlen])) {
+                PatchViewportEdges(s_fix_viewport_edges);
+                continue;
+            }
+
+            if (nlen == 19 and std.mem.eql(u8, "fps_limiter_default", setting.name[0..nlen])) {
+                QuickRaceMenu.FpsTimer.SetPeriod(QuickRaceMenu.s_fps_default);
+                QuickRaceMenu.values.fps = @intCast(QuickRaceMenu.s_fps_default);
+                continue;
+            }
+
+            if (nlen == 21 and std.mem.eql(u8, "fast_countdown_enable", setting.name[0..nlen]) or
+                nlen == 23 and std.mem.eql(u8, "fast_countdown_duration", setting.name[0..nlen]))
+            {
+                update_fast_countdown = true;
+                continue;
+            }
+        }
+
+        if (update_fast_countdown) {
+            if (FastCountdown.s_enable) FastCountdown.init(FastCountdown.s_duration);
+            FastCountdown.patch(FastCountdown.s_enable);
+        }
+    }
 };
-
-fn QolUpdateInput(gf: *GlobalFn) callconv(.C) void {
-    QolState.input_pause.update(gf);
-    QolState.input_unpause.update(gf);
-    QolState.input_quickstart.update(gf);
-}
-
-fn QolHandleSettings(gf: *GlobalFn) callconv(.C) void {
-    QolState.quickstart = gf.SettingGetB("qol", "quick_restart_enable") orelse false;
-    QolState.quickrace = gf.SettingGetB("qol", "quick_race_menu_enable") orelse false;
-    QolState.default_racers = gf.SettingGetU("qol", "default_racers") orelse 12;
-    QolState.default_laps = gf.SettingGetU("qol", "default_laps") orelse 3;
-    QolState.ms_timer = gf.SettingGetB("qol", "ms_timer_enable") orelse false;
-    QolState.fps_limiter = gf.SettingGetB("qol", "fps_limiter_enable") orelse false;
-    QolState.skip_planet_cutscenes = gf.SettingGetB("qol", "skip_planet_cutscenes") orelse false;
-
-    if (!QolState.quickrace) QuickRaceMenu.close();
-    // FIXME: add these to deinit?
-    PatchHudTimerMs(QolState.ms_timer);
-    PatchPlanetCutscenes(QolState.skip_planet_cutscenes);
-}
 
 // HUD TIMER MS
 
@@ -168,6 +277,34 @@ fn PatchPlanetCutscenes(enable: bool) void {
     } else {
         _ = x86.call(0x45753D, @intFromPtr(rvi.swrVideo_PlayVideoFile));
     }
+}
+
+// PODIUM CUTSCENE
+
+// force game to use in-built debug feature to fast scroll through podium cutscene
+fn PatchPodiumCutscene(enable: bool) void {
+    // see end of fn_43CEB0
+    var buf: [2]u8 = undefined;
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x75, 0x09 };
+    _ = mem.write_bytes(0x43D48C, &buf, 2); // jnz+09
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x29 };
+    _ = mem.write_bytes(0x43D495, &buf, 2); // jz+29
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x7E, 0x20 };
+    _ = mem.write_bytes(0x43D49E, &buf, 2); // jle+20
+    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x0A };
+    _ = mem.write_bytes(0x43D4B4, &buf, 2); // jz+0A
+}
+
+// VIEWPORT
+
+// eliminate the extra undrawn pixel on bottom and right of screen
+// tradeoff - slight cutoff for stuff placed right along edge,
+//   could possibly be mitigated by adjusting quad scale on per-sprite basis
+fn PatchViewportEdges(enable: bool) void {
+    const h: u8 = if (enable) 0x90 else 0x48; // dec eax = height
+    const w: u8 = if (enable) 0x90 else 0x49; // dec ecx = width
+    _ = mem.write(0x44F610, u8, h);
+    _ = mem.write(0x44F611, u8, w);
 }
 
 // GAME CHEATS
@@ -268,6 +405,11 @@ fn PatchCyYungaCheatAudio(enable: bool) void {
 // TODO: settings for count length, enable
 
 const FastCountdown = struct {
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_duration: ?SettingHandle = null;
+    var s_enable: bool = false;
+    var s_duration: f32 = 1.0;
+
     var CountDuration: f32 = 1.0;
     var CountRatio: f32 = 3 / 1.0;
     var CountDif: f32 = 3 - 1.0;
@@ -293,13 +435,6 @@ const FastCountdown = struct {
         _ = mem.write(0x4AD254, u32, boost_window_min);
         _ = mem.write(0x4AD258, u32, boost_window_max);
     }
-
-    fn settingsLoad(gf: *GlobalFn) void {
-        const enable = gf.SettingGetB("qol", "fast_countdown_enable") orelse false;
-        const duration = gf.SettingGetF("qol", "fast_countdown_duration") orelse 1.0;
-        if (enable) init(duration);
-        patch(enable);
-    }
 };
 
 // PRACTICE/STATISTICAL DATA
@@ -309,7 +444,7 @@ const race = struct {
     const stat_y: i16 = 48;
     const stat_h: i16 = 12;
     const stat_col: ?u32 = 0xFFFFFFFF;
-    var this_position: spatial.Pos3D = .{};
+    var this_position: spatial.Pos3D = .{}; // TODO: convert to racer types & update with racer fns
     var prev_position: spatial.Pos3D = .{};
     var top_speed: f32 = 0;
     var total_distance: f32 = 0;
@@ -402,41 +537,41 @@ const race = struct {
 
     fn update_position() void {
         prev_position = this_position;
-        this_position = @bitCast(re.Test.PLAYER.*.transform[12..15].*); // FIXME: ???
+        this_position = @as(*spatial.Pos3D, @ptrCast(&re.Test.PLAYER.*.transform.T)).*; // FIXME
     }
 };
 
 const s_head = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultHeader(i: i16, comptime fmt: []const u8, args: anytype) void {
-    rt.DrawText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch {};
+fn RenderRaceResultHeader(gf: *GlobalFn, i: i16, comptime fmt: []const u8, args: anytype) void {
+    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch null);
 }
 
 const s_stat = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultStat(i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
-    rt.DrawText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch {};
-    rt.DrawText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch {};
+fn RenderRaceResultStat(gf: *GlobalFn, i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
+    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch null);
+    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch null);
 }
 
-fn RenderRaceResultStatU(i: i16, label: [*:0]const u8, value: u32) void {
-    RenderRaceResultStat(i, label, "{d: <7}", .{value});
+fn RenderRaceResultStatU(gf: *GlobalFn, i: i16, label: [*:0]const u8, value: u32) void {
+    RenderRaceResultStat(gf, i, label, "{d: <7}", .{value});
 }
 
-fn RenderRaceResultStatF(i: i16, label: [*:0]const u8, value: f32) void {
-    RenderRaceResultStat(i, label, "{d:4.3}", .{value});
+fn RenderRaceResultStatF(gf: *GlobalFn, i: i16, label: [*:0]const u8, value: f32) void {
+    RenderRaceResultStat(gf, i, label, "{d:4.3}", .{value});
 }
 
-fn RenderRaceResultStatTime(i: i16, label: [*:0]const u8, time: f32) void {
+fn RenderRaceResultStatTime(gf: *GlobalFn, i: i16, label: [*:0]const u8, time: f32) void {
     const t = timing.RaceTimeFromFloat(time);
-    RenderRaceResultStat(i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
+    RenderRaceResultStat(gf, i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
 
 const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
 const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
 
-fn RenderRaceResultStatUpgrade(i: i16, cat: u8, lv: u8, hp: u8) void {
-    RenderRaceResultStat(i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
+fn RenderRaceResultStatUpgrade(gf: *GlobalFn, i: i16, cat: u8, lv: u8, hp: u8) void {
+    RenderRaceResultStat(gf, i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
         if (hp < 255) s_upg_dmg else s_upg_full, hp, rv.PartNameS(cat)[lv],
     });
 }
@@ -458,7 +593,9 @@ const QuickRaceMenuInput = extern struct {
 };
 
 const QuickRaceMenu = extern struct {
-    const menu_key: [*:0]const u8 = "QuickRaceMenu";
+    var h_s_fps_default: ?SettingHandle = null;
+    var s_fps_default: u32 = 24;
+
     const open_threshold: f32 = 0.75;
     var menu_active: st.ActiveState = .Off;
     var initialized: bool = false;
@@ -532,17 +669,20 @@ const QuickRaceMenu = extern struct {
     };
 
     fn load_race() void {
+        if (h_s_fps_default) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
+        if (QolState.h_s_default_laps) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.laps) });
+        if (QolState.h_s_default_racers) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.racers) });
+        gf.ASettingSaveAuto();
+
+        // NOTE: laps, racers handled by settings update fn
         FpsTimer.SetPeriod(@intCast(values.fps));
         _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
         var hang = re.Manager.entity(.Hang, 0);
-        hang.vehicle = @intCast(values.vehicle);
-        hang.track = @intCast(values.track);
-        hang.circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
-        hang.mirror = @intCast(values.mirror);
-        hang.laps = @intCast(values.laps);
-        hang.aiSpeed = @intCast(values.ai_speed + 1);
-        hang.racers = @intCast(values.racers);
-        _ = mem.write(0x50C558, u8, @as(u8, @intCast(values.racers))); // for cantina
+        hang.VehiclePlayer = @intCast(values.vehicle);
+        hang.Track = @intCast(values.track);
+        hang.Circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
+        hang.Mirror = @intCast(values.mirror);
+        hang.AISpeed = @intCast(values.ai_speed + 1);
         for (0..7) |i| {
             rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
             rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
@@ -557,13 +697,13 @@ const QuickRaceMenu = extern struct {
     // that introduces issues with state loop
     fn init() void {
         const hang = re.Manager.entity(.Hang, 0);
-        values.vehicle = hang.vehicle;
-        values.track = hang.track;
-        values.mirror = hang.mirror;
-        values.laps = hang.laps;
-        values.racers = hang.racers;
-        values.ai_speed = hang.aiSpeed - 1;
-        //values.ai_speed = hang.winnings;
+        values.vehicle = hang.VehiclePlayer;
+        values.track = hang.Track;
+        values.mirror = hang.Mirror;
+        values.laps = hang.Laps;
+        values.racers = hang.Racers;
+        values.ai_speed = hang.AISpeed - 1;
+        //values.ai_speed = hang.Winnings;
         for (0..7) |i| {
             values.up_lv[i] = rrd.PLAYER.*.pFile.upgrade_lv[i];
             values.up_hp[i] = rrd.PLAYER.*.pFile.upgrade_hp[i];
@@ -574,14 +714,14 @@ const QuickRaceMenu = extern struct {
 
     fn open() void {
         rg.PAUSE_SCROLLINOUT.* = open_threshold;
-        if (!gf.GameFreezeEnable(menu_key)) return;
+        if (!gf.GFreezeOn()) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
         menu_active.update(true);
     }
 
     fn close() void {
-        if (!gf.GameFreezeDisable(menu_key)) return;
+        if (!gf.GFreezeOff()) return;
         rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rg.PAUSE_STATE.* = 3;
         menu_active.update(false);
@@ -607,12 +747,6 @@ const QuickRaceMenu = extern struct {
             return open();
         if (rg.PAUSE_STATE.* == 2 and rg.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
             return open();
-    }
-
-    fn settingsLoad(v: *GlobalFn) void {
-        const fps_default = v.SettingGetU("qol", "fps_limiter_default").?;
-        QuickRaceMenu.FpsTimer.SetPeriod(fps_default);
-        QuickRaceMenu.values.fps = @intCast(fps_default);
     }
 };
 
@@ -697,6 +831,9 @@ fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
         // save without restarting
         if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
             QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
+            if (QuickRaceMenu.h_s_fps_default) |h|
+                QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = @intCast(QuickRaceMenu.values.fps) });
+
             rso.swrSound_PlaySoundMacro(0x2D);
         }
     }
@@ -756,29 +893,25 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    _ = w32wm.ShowCursor(0); // cursor fix
-    QolHandleSettings(gf);
-
+    // NOTE: keep at top
     QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
-    QuickRaceMenu.settingsLoad(gf);
-    //QuickRaceMenu.FpsTimer.Start();
+
+    _ = w32wm.ShowCursor(0); // cursor fix
+    QolState.settingsInit(gf);
 
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
-
-    FastCountdown.settingsLoad(gf);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    // TODO: look into using in-game default setter, see fn_45BD90
+    // TODO: look into using in-game default setter as hook, see fn_45BD90
+    // TODO: change annodue setting to i32 for both, also look into anywhere
+    // else like this that might have been affected by new Hang stuff
 
-    if (QolState.default_laps >= 1 and QolState.default_laps <= 5)
-        re.Manager.entity(.Hang, 0).laps = @truncate(QolState.default_laps);
-
-    if (QolState.default_racers >= 1 and QolState.default_racers <= 12)
-        _ = mem.write(0x50C558, u8, @as(u8, @truncate(QolState.default_racers))); // racers
+    re.Manager.entity(.Hang, 0).Laps = @intCast(QolState.s_default_laps);
+    _ = mem.write(0x50C558, i8, @as(i8, @intCast(QolState.s_default_racers))); // racers
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -794,13 +927,8 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    QolHandleSettings(gf);
-    FastCountdown.settingsLoad(gf);
-}
-
 export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    QolUpdateInput(gf);
+    QolState.UpdateInput(gf);
     QuickRaceMenu.update_input();
 }
 
@@ -815,12 +943,22 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // TODO: confirm tabbed_in is actually needed here, possibly move to global state
     const tabbed_in: bool = rg.GUI_STOPPED.* == 0;
-    if (gs.in_race.on() and tabbed_in and QolState.fps_limiter)
+    if (gs.in_race.on() and tabbed_in and QolState.s_fps_limiter)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
 export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     FastCountdown.update();
+}
+
+export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    const laps: u32 = @intCast(re.Manager.entity(.Hang, 0).Laps);
+    if (QolState.h_s_default_laps != null and laps != QolState.s_default_laps)
+        gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .u = laps });
+
+    const racers: u32 = @intCast(mem.read(0x50C558, i8));
+    if (QolState.h_s_default_racers != null and racers != QolState.s_default_racers)
+        gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .u = racers });
 }
 
 // FIXME: settings toggles for both of these
@@ -829,7 +967,7 @@ export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // Quick Restart
     if (gs.in_race.on() and
-        QolState.quickstart and
+        QolState.s_quickstart and
         !QuickRaceMenu.menu_active.on() and
         ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
         (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
@@ -841,13 +979,13 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 
     // Quick Race Menu
-    if (QolState.quickrace)
+    if (QolState.s_quickrace)
         QuickRaceMenu.update();
 }
 
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
 // however, the text flushing DOES run on those frames, apparently from a different callsite
-export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
 
@@ -877,39 +1015,41 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
         }
 
-        if (gs.race_state == .PostRace) {
+        if (gs.race_state == .PostRace and !gf.GHideRaceUIIsOn()) {
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
-            RenderRaceResultHeader(0, "{d:>2.0}/{s}{s}", .{
+            RenderRaceResultHeader(gf, 0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
                 rv.PartNamesShort[gs.player.upgrades_lv[0]],
                 upg_postfix,
             });
 
             for (0..7) |i| RenderRaceResultStatUpgrade(
+                gf,
                 2 + @as(u8, @truncate(i)),
                 @as(u8, @truncate(i)),
                 gs.player.upgrades_lv[i],
                 gs.player.upgrades_hp[i],
             );
 
-            RenderRaceResultStatF(10, "Top Speed", race.top_speed);
-            RenderRaceResultStatF(11, "Avg. Speed", race.avg_speed);
-            RenderRaceResultStatF(12, "Distance", race.total_distance);
-            RenderRaceResultStatU(13, "Deaths", gs.player.deaths);
-            RenderRaceResultStatTime(20, "First Boost", race.first_boost_time);
-            RenderRaceResultStatTime(21, "Underheat Time", race.total_underheat);
-            RenderRaceResultStatTime(22, "Fire Finish", race.fire_finish_duration);
-            RenderRaceResultStatTime(23, "Overheat Time", race.total_overheat);
-            RenderRaceResultStatU(14, "Boosts", race.total_boosts);
-            RenderRaceResultStatTime(15, "Boost Time", race.total_boost_duration);
-            RenderRaceResultStatTime(16, "Avg. Boost Time", race.avg_boost_duration);
-            RenderRaceResultStatF(17, "Boost Distance", race.total_boost_distance);
-            RenderRaceResultStatF(18, "Avg. Boost Distance", race.avg_boost_distance);
-            RenderRaceResultStatF(19, "Boost Ratio", race.total_boost_ratio);
+            RenderRaceResultStatF(gf, 10, "Top Speed", race.top_speed);
+            RenderRaceResultStatF(gf, 11, "Avg. Speed", race.avg_speed);
+            RenderRaceResultStatF(gf, 12, "Distance", race.total_distance);
+            RenderRaceResultStatU(gf, 13, "Deaths", gs.player.deaths);
+            RenderRaceResultStatTime(gf, 20, "First Boost", race.first_boost_time);
+            RenderRaceResultStatTime(gf, 21, "Underheat Time", race.total_underheat);
+            RenderRaceResultStatTime(gf, 22, "Fire Finish", race.fire_finish_duration);
+            RenderRaceResultStatTime(gf, 23, "Overheat Time", race.total_overheat);
+            RenderRaceResultStatU(gf, 14, "Boosts", race.total_boosts);
+            RenderRaceResultStatTime(gf, 15, "Boost Time", race.total_boost_duration);
+            RenderRaceResultStatTime(gf, 16, "Avg. Boost Time", race.avg_boost_duration);
+            RenderRaceResultStatF(gf, 17, "Boost Distance", race.total_boost_distance);
+            RenderRaceResultStatF(gf, 18, "Avg. Boost Distance", race.avg_boost_distance);
+            RenderRaceResultStatF(gf, 19, "Boost Ratio", race.total_boost_ratio);
         }
     }
 }
 
 export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // TODO: move to core? since it only matters with running annodue
     rt.TEXT_HIRES_FLAG.* = 0;
 }

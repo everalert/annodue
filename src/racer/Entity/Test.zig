@@ -1,6 +1,30 @@
 const std = @import("std");
+
 const e = @import("entity.zig");
+const mat = @import("../Matrix.zig");
+const Mat4x4 = mat.Mat4x4;
+const vec = @import("../Vector.zig");
+const Vec3 = vec.Vec3;
+const model = @import("../Model.zig");
+const ModelMesh = model.ModelMesh;
+
 const TestStats = @import("../Stats.zig").TestStats;
+
+// GAME FUNCTIONS
+
+pub const HandleTerrain: *fn (*Test) callconv(.C) void = @ptrFromInt(0x476EA0);
+
+pub const fnStage14: *fn (*Test) callconv(.C) void = @ptrFromInt(0x46D170);
+pub const fnStage18: *fn (*Test) callconv(.C) void = @ptrFromInt(0x47AB40);
+pub const fnStage1C: *fn (*Test) callconv(.C) void = @ptrFromInt(0x47B520);
+pub const fnStage20: *fn (*Test) callconv(.C) void = @ptrFromInt(0x470610);
+pub const fnEvent: *fn (*Test, magic: *e.MAGIC_EVENT, payload: u32) callconv(.C) void = @ptrFromInt(0x474D80);
+
+// GAME CONSTANTS
+
+pub const DoRespawn: *fn (*Test, spline_offset: f32) callconv(.C) void = @ptrFromInt(0x473F40);
+
+// GAME TYPEDEFS
 
 pub const SIZE: usize = e.EntitySize(.Test);
 
@@ -10,13 +34,15 @@ pub const PLAYER_PTR: *usize = @ptrFromInt(PLAYER_PTR_ADDR);
 pub const PLAYER: **Test = @ptrFromInt(PLAYER_PTR_ADDR);
 pub const PLAYER_SLICE: **[SIZE]u8 = @ptrFromInt(PLAYER_PTR_ADDR); // TODO: convert to many-item pointer
 
+// GAME TYPEDEFS
+
 // TODO: testing to assert entity size
 // TODO: finish filling in this
 pub const Test = extern struct {
     entity_magic: u32,
     entity_flags: u32,
-    spawn: extern struct { position: [3]f32, orientation: [3]f32 }, // TODO: typedef
-    transform: [16]f32, // TODO: typedef
+    spawn: extern struct { position: [3]f32, orientation: [3]f32 }, // TODO: typedef, Location
+    transform: Mat4x4,
     flags1: u32, // TODO: enum
     flags2: u32, // TODO: enum
     _unk_0068_006B: [4]u8,
@@ -31,28 +57,28 @@ pub const Test = extern struct {
     moveTick: i32, // resets to 0 when going backward on track, and tick up to max 200 when moving fwd
     _unk_0118_013B: [0x13C - 0x118]u8,
     _unkptr_013C: *anyopaque, // collision-related?
-    _unkptr_0140: *anyopaque, // terrain-related struct
-    _unkvec3_0144: [3]f32, // TODO: typedef
+    _unk_0140_terrainModel: *ModelMesh, // terrain-related struct
+    _unkvec3_0144: Vec3,
     speedLoss: f32,
-    _unkvec3_0154: [3]f32, // TODO: typedef
-    _unkvec3_0160: [3]f32, // TODO: typedef, down direction vector?
-    positionPrev: [3]f32, // TODO: typedef
-    positionDeath: [3]f32, // TODO: typedef
+    _unkvec3_0154: Vec3,
+    _unkvec3_0160: Vec3, // down direction vector?
+    positionPrev: Vec3,
+    positionDeath: Vec3,
     _vert_motion: f32,
     _ground_z: f32,
     _thrust: f32,
     _grav_mult: f32,
-    _unkvec3_0194: [3]f32, // TODO: typedef, up or down direction vector?
+    _unkvec3_0194: Vec3, // up or down direction vector?
     speed: f32,
     accelThrust: f32,
     accelBoost: f32,
     _speed_mult: f32,
     _fall_float_rate: f32,
     _fall_float_value: f32,
-    velocity: [3]f32, // TODO: typedef
-    velocitySlope: [3]f32, // TODO: typedef
-    velocityCollision: [3]f32, // TODO: typedef
-    velocityCollisionOpponent: [3]f32, // TODO: typedef
+    velocity: Vec3,
+    velocitySlope: Vec3,
+    velocityCollision: Vec3,
+    velocityCollisionOpponent: Vec3,
     slide: f32,
     turnRate: f32,
     turnRateTarget: f32,
@@ -85,21 +111,48 @@ pub const Test = extern struct {
     damageWarningTimer: f32,
     damageTotal: f32,
     fallTimer: f32,
-    nextPosition: [3]f32, // TODO: typedef
-    nextRotation: [3]f32, // TODO: typedef
-    nextRotationDelta: [3]f32, // TODO: typedef
-    _unk_02F0_02FB: [12]u8,
+    nextPosition: Vec3, // TODO: typedef, Location
+    nextRotation: Vec3, // TODO: typedef, Location
+    nextRotationDelta: Vec3,
+    _unk_02F0_02FB: [12]u8, // correct
     pitch: f32, // -0.8..0.8
     _unk_0300_030B: [12]u8,
     respawnInvincibilityTimer: f32,
-    _unk_0310_032F: [28]u8,
+    _unk_0310_032F: [32]u8, // correct
     engineExhaustSizeL: f32,
     engineExhaustSizeR: f32,
-    _unk_0338_0343: [12]u8,
+    _unk_0338_0343: [12]u8, // wrong
     _unkptr_0344: *anyopaque,
     _unkptr_0348: *anyopaque,
     _unkptr_034C: *anyopaque,
-    _unk_0350_1F27: [SIZE - 0x350]u8,
+    _unk_0350: Mat4x4,
+    EngineXfR: Mat4x4,
+    EngineXfL: Mat4x4,
+    EngineXfR2: Mat4x4,
+    EngineXfL2: Mat4x4,
+    CockpitXf: Mat4x4,
+    EnergyBinderXf: Mat4x4,
+    _unk_0510: Mat4x4,
+    _unk_0550: Mat4x4,
+    _unk_0590: Mat4x4,
+    _unk_05D0: Mat4x4,
+    _unk_0610: Mat4x4,
+    _unk_0650: Mat4x4,
+    _unk_0690: Mat4x4,
+    _unk_06D0_0A4F: [0x0A50 - 0x6D0]u8,
+    _unk_0A50: Mat4x4,
+    _unk_0A90: Mat4x4,
+    _unk_0AD0_12CF: [0x12D0 - 0xAD0]u8,
+    _unk_12D0: Mat4x4,
+    _unk_1310: Mat4x4,
+    _unk_1350: Mat4x4,
+    ScrapeSparkXf: Mat4x4,
+    _unk_13D0: Mat4x4,
+    EngineExhaustXfR: Mat4x4,
+    EngineExhaustXfL: Mat4x4,
+    _unk_1490: Mat4x4,
+    _unk_14D0: Mat4x4,
+    _unk_1510_1F27: [SIZE - 0x1510]u8,
 };
 
 // TODO: enum
@@ -197,3 +250,7 @@ pub const Test = extern struct {
 //	1<<29  ??? ref in 47AB40, 47B520, 479E10, 47B000_DeathSpeedHandler
 //	1<<30
 //	1<<31  ??? called from 4783E0_ApplyAcceleration()
+
+// HELPERS
+
+// ...

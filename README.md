@@ -1,5 +1,7 @@
 # Annodue
 
+![Ben Quadinaros](assets/images/ben.png)
+
 **A universal extension platform for *STAR WARS Episode I Racer* oriented toward speedrunning.**
 
 Annodue adds new features, quality of life adjustments and cosmetic changes, as well as a plugin system for user-made extensions.
@@ -25,9 +27,9 @@ See [CHANGELOG](CHANGELOG.md) for a complete version history.
 
 2. Generate the release files with the following command in a terminal in the project directory. You must have `zig 0.11.0` installed.
 ```zig
-zig build release -Dver="0.1.5" -Dminver="0.1.2" -Drop="<release_output_path>"
+zig build release -Doptimize=ReleaseSafe -Drop="<release_output_path>"
 ```
-3. Find `annodue-0.1.5.zip` in `<release_output_path>/0.1.5/` and extract it to the game directory.
+3. Find `annodue-0.1.6.zip` in `<release_output_path>/0.1.6/` and extract it to the game directory.
 
 ## Building from source
 
@@ -49,9 +51,7 @@ The build process can be customized with the following options.
 |`dinput`|Build only dinput.dll.
 |`plugins`|Build only the plugin DLLs.
 |`hashfile`|Build the plugin DLLs and generate their hashes, without building the main DLL.
-|`release`     |Build entire project and package for release. Currently requires `-Dver` and `-Dminver`, and using `-Ddbp` and `-Doptimize` is also recommended. Output can be found under `./release`.
-|`-Dver=<version>`|Release version. See [Semantic Version](https://semver.org/) for format.
-|`-Dminver=<version>`|Minimum version for auto-update compatibility. See [Semantic Version](https://semver.org/) for format.
+|`release`     |Build entire project and package for release. Currently requires `-Drop`, and using `-Doptimize` is also recommended.
 |`-Drop=<path>`|Output base path of release build; files will be placed in `<path>/<ver>`. Required for `release`.
 |`-Ddev`|Build with developer options. Skips applying the core plugin hash check to the main DLL, etc.
 |`-Dcopypath=<path>`|Path to the game directory, for hot-reloading DLLs during development. Only available when using `-Ddev`.
@@ -106,6 +106,7 @@ git push origin ft/supremo-featrino
 ### Contributor Credit
 
 - [tly000](https://github.com/tly000)
+- [jcm93](https://github.com/jcm93)
 - [DeonPoncini](https://github.com/DeonPoncini)
 
 ## License

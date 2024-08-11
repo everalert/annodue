@@ -1,6 +1,18 @@
 const std = @import("std");
 const e = @import("entity.zig");
 
+// GAME FUNCTIONS
+
+pub const DoFirstPersonCamera: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x4528B0);
+pub const DoPreRaceSweep: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x451EF0);
+pub const DoPreRaceSweepEnd: *fn (*cMan) callconv(.C) void = @ptrFromInt(0x4525D0);
+
+// GAME CONSTANTS
+
+// ...
+
+// GAME TYPEDEFS
+
 pub const SIZE: usize = e.EntitySize(.cMan);
 
 // TODO: testing assertion of size correctness
@@ -36,7 +48,7 @@ pub const cMan = extern struct {
     _unk_0AC: u32,
     _unk_0B0: u32,
     _unkmat44_0B4: [16]f32, // TODO: typedef
-    pTest: *e.Test,
+    pTest: ?*e.Test,
     _unk_0F8: u32,
     _unk_0FC: u32,
     _unk_100: u32,
@@ -73,7 +85,7 @@ pub const cMan = extern struct {
     _unkmat44_1E4: [16]f32, // TODO: typedef
     _staging_transform: [16]f32, // TODO: typedef
     _staging_transform_focus: [16]f32, // TODO: typedef
-    //0x02A4 ??? ref in 4542E0 (cManFunc0x20), looks like pointer to terrain flags
+    _unk_2A4: u32, // pointer to terrain flags?
     fogFlags: u32,
     visualFlags: u32, // defaults to 0xFFFFFF00
     zoom: f32,

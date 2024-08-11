@@ -2,6 +2,8 @@ const Self = @This();
 
 const std = @import("std");
 
+// TODO: merge with Quad
+
 // NOTE: original idea notes
 // swrText_CreateEntry helper ideas
 //
@@ -35,6 +37,19 @@ pub const swrText_DrawTime2: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8
 pub const swrText_DrawTime3: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
 pub const swrText_NewNotification: *fn (str: [*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
 
+pub const RenderSetColor: *fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x42D950);
+pub const RenderSetPosition: *fn (x: i16, y: i16) callconv(.C) void = @ptrFromInt(0x42D910);
+pub const RenderString: *fn (str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x42EC50);
+
+pub const GetStringWidthByFontIndex: *fn (str: [*:0]const u8, font: u32) callconv(.C) i32 =
+    @ptrFromInt(0x42DE10);
+pub const GetStringWidth: *fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+    @ptrFromInt(0x42DE30);
+pub const GetStringHeight: *fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+    @ptrFromInt(0x42DF70);
+pub const SetCurrentFont: *fn (index: u32) callconv(.C) void =
+    @ptrFromInt(0x42D8D0);
+
 // GAME CONSTANTS
 
 pub const TEXT_COLOR_PRESET = [10]u32{
@@ -52,6 +67,14 @@ pub const TEXT_COLOR_PRESET = [10]u32{
 
 pub const TEXT_HIRES_FLAG_ADDR: usize = 0x50C0AC;
 pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(TEXT_HIRES_FLAG_ADDR);
+
+// TODO: font typedef (probably sprite?)
+pub const TEXT_FONT_CURRENT_ADDR: usize = 0x50C0C4;
+pub const TEXT_FONT_CURRENT: **anyopaque = @ptrFromInt(TEXT_FONT_CURRENT_ADDR);
+pub const TEXT_FONT_NUM_ADDR: usize = 0x50C0C0;
+pub const TEXT_FONT_NUM: *u32 = @ptrFromInt(TEXT_FONT_NUM_ADDR);
+pub const TEXT_FONT_TABLE_ADDR: usize = 0xE99720;
+pub const TEXT_FONT_TABLE: *[*]*anyopaque = @ptrFromInt(TEXT_FONT_TABLE_ADDR);
 
 // HELPERS
 
@@ -103,7 +126,7 @@ pub const Font = enum(u8) {
     Unk7,
 };
 
-pub const Alignment = enum(u8) { Center, Right };
+pub const Alignment = enum(u8) { Left, Center, Right };
 
 pub const TextStyleOpts = enum(u8) {
     ClearDecoration, // ~p
@@ -142,6 +165,7 @@ pub inline fn MakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype)
     const ao = if (alignment) |a| try std.fmt.bufPrint(buf[i..], switch (a) {
         .Center => "~c",
         .Right => "~r",
+        else => "",
     }, .{}) else "";
     i += ao.len;
 
@@ -172,22 +196,72 @@ pub inline fn MakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype)
     return buf[0..i];
 }
 
-pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !void {
+// TODO: assert/test sizeof = 1024 bytes
+pub const TextDef = extern struct {
+    x: i16,
+    y: i16,
+    color: u32, // alpha 0 = default color (i.e. 0 = no color)
+    string: [1015:0]u8, // fit to 64-byte cache line boundary
+};
+
+/// format text in racer format, without forwarding to the engine for rendering
+/// result must be used before the next MakeText call, as the pointer will become stale quickly
+pub fn MakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !*TextDef {
     const state = struct {
-        var buf1: [127:0]u8 = undefined;
-        var buf2: [127:0]u8 = undefined;
+        var buf: [1015:0]u8 = undefined;
+        var data: TextDef = std.mem.zeroes(TextDef);
     };
-    const color: u32 = rgba orelse DEFAULT_COLOR;
+    state.data.x = x;
+    state.data.y = y;
+    state.data.color = rgba orelse DEFAULT_COLOR;
     const head: []const u8 = style orelse DEFAULT_STYLE;
-    const body = try std.fmt.bufPrintZ(state.buf1[head.len..], fmt, args);
-    _ = try std.fmt.bufPrintZ(&state.buf2, "{s}{s}", .{ head, body });
+    const body = try std.fmt.bufPrintZ(state.buf[head.len..], fmt, args);
+    _ = try std.fmt.bufPrintZ(&state.data.string, "{s}{s}", .{ head, body });
+
+    return &state.data;
+}
+
+/// format text in racer format, and send to engine text render queue
+/// resulting string must be within 127 characters to fit into engine buffer
+pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !void {
+    const text = try MakeText(x, y, fmt, args, rgba, style);
+    std.debug.assert(std.mem.len(@as([*:0]u8, @ptrCast(&text.string))) <= 127);
     swrText_CreateEntry1(
-        x,
-        y,
-        @as(u8, @truncate(color >> 24)),
-        @as(u8, @truncate(color >> 16)),
-        @as(u8, @truncate(color >> 8)),
-        @as(u8, @truncate(color >> 0)),
-        &state.buf2,
+        text.x,
+        text.y,
+        @as(u8, @truncate(text.color >> 24)),
+        @as(u8, @truncate(text.color >> 16)),
+        @as(u8, @truncate(text.color >> 8)),
+        @as(u8, @truncate(text.color >> 0)),
+        &text.string,
     );
+}
+
+pub fn TextGetFontIndex(str: [*:0]const u8) u32 {
+    var i: u32 = 0;
+    while (str[i] != 0) : (i += 1) {
+        if (str[i] == '~' and (str[i + 1] == 'f' or str[i + 1] == 'F'))
+            return std.math.clamp(str[i + 2] - '0', 0, TEXT_FONT_NUM.* - 1);
+    }
+    return 0;
+}
+
+pub fn TextGetAlignment(str: [*:0]const u8) Alignment {
+    var i: u32 = 0;
+    while (str[i] != 0) : (i += 1) {
+        if (str[i] == '~' and str[i + 1] == 'c')
+            return .Center;
+        if (str[i] == '~' and str[i + 1] == 'r')
+            return .Right;
+    }
+    return .Left;
+}
+
+pub fn TextGetDimensions(str: [*:0]const u8) struct { w: i16, h: i16 } {
+    const font_idx = TextGetFontIndex(str);
+    const font = TEXT_FONT_TABLE.*[font_idx];
+    return .{
+        .w = @truncate(GetStringWidth(str, font)), // FIXME: crash
+        .h = @truncate(GetStringHeight(str, font)), // FIXME: crash
+    };
 }

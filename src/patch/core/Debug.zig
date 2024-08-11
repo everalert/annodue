@@ -5,7 +5,7 @@ const StackTrace = std.builtin.StackTrace;
 // FIXME: make comptime-generated annodue_panic that takes a string, so that those
 // piggybacking off this def aren't stuck with the annodue version str they happen
 // to compile with
-const ANNODUE_VER = @import("Global.zig").VersionStr;
+const ANNODUE_VER = @import("../appinfo.zig").VERSION_STR;
 
 // FIXME: should there be unreachable in here?
 // TODO: if we normally write to file while logging, do we need to do anything extra here

@@ -3,6 +3,8 @@ const Self = @This();
 const BuildOptions = @import("BuildOptions");
 
 const std = @import("std");
+const SemVer = std.SemanticVersion;
+
 const w = std.os.windows;
 const w32 = @import("zigwin32");
 const w32ll = w32.system.library_loader;
@@ -11,15 +13,22 @@ const w32fs = w32.storage.file_system;
 
 const core = @import("core.zig");
 const allocator = core.Allocator;
-const global = core.Global;
-const GlobalSt = global.GlobalState;
-const GLOBAL_STATE = &global.GLOBAL_STATE;
-const GlobalFn = global.GlobalFunction;
-const GLOBAL_FUNCTION = &global.GLOBAL_FUNCTION;
-const PLUGIN_VERSION = global.PLUGIN_VERSION;
+const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
+const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
+
+const app = @import("../appinfo.zig");
+const GlobalSt = app.GLOBAL_STATE;
+const GlobalFn = app.GLOBAL_FUNCTION;
+const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
+const dbg = @import("../util/debug.zig");
+const filetime_eql = @import("../util/file_system.zig").filetime_eql;
+
+const SettingHandle = @import("ASettings.zig").Handle;
+const SettingValue = @import("ASettings.zig").ASettingSent.Value;
+const Setting = @import("ASettings.zig").ASettingSent;
 
 const r = @import("racer");
 const reh = r.Entity.Hang;
@@ -45,6 +54,7 @@ const Plugin = plugin: {
         .{ "WriteTime", ?w32f.FILETIME },
         .{ "Initialized", bool },
         .{ "Filename", [127:0]u8 },
+        .{ "OwnerId", u16 },
     };
     const ev = std.enums.values(PluginExportFn);
     var fields: [stdf.len + ev.len]std.builtin.Type.StructField = undefined;
@@ -81,6 +91,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginName, .PluginVersion => ?*const fn () callconv(.C) [*:0]const u8,
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
+        .OnPluginInitA, .OnPluginInitLateA, .OnPluginDeinitA => ?*const fn (u16) callconv(.C) void,
         else => ?*const fn (*GlobalSt, *GlobalFn) callconv(.C) void,
     };
 }
@@ -97,7 +108,12 @@ const PluginExportFn = enum(u32) {
     OnDeinit,
     //OnEnable,
     //OnDisable,
-    OnSettingsLoad,
+    //OnPluginInitB,
+    OnPluginInitA,
+    //OnPluginInitLateB,
+    OnPluginInitLateA,
+    //OnPluginDeinitB,
+    OnPluginDeinitA,
 
     // Hook Functions
     GameLoopB,
@@ -106,6 +122,8 @@ const PluginExportFn = enum(u32) {
     EarlyEngineUpdateA,
     LateEngineUpdateB,
     LateEngineUpdateA,
+    EngineEntityUpdateB,
+    //EngineEntityUpdateA,
     //EngineUpdateStage14B,
     EngineUpdateStage14A,
     //EngineUpdateStage18B,
@@ -142,40 +160,99 @@ const PluginExportFn = enum(u32) {
     MenuTrackSelectB,
     MenuTrackB,
     MenuCantinaEntryB,
-    TextRenderB,
-    TextRenderA,
+    Draw2DB,
+    Draw2DA,
+    TextRenderB, // TODO: deprecate
+    TextRenderA, // TODO: deprecate
     MapRenderB,
     MapRenderA,
 };
 
-const PluginState = struct {
+// TODO: owner range limiting
+pub const PluginState = struct {
     const check_freq: u32 = 1000 / 24; // in lieu of every frame
     var last_check: u32 = 0;
     var core: std.ArrayList(Plugin) = undefined;
     var plugin: std.ArrayList(Plugin) = undefined;
+    var hot_reload_i: usize = 0;
+    var owners_core: u16 = 0x0000;
+    var owners_user: u16 = 0x0800;
+    var working_owner: u16 = 0;
+
+    var h_s_hot_reload: ?SettingHandle = null;
+    var s_hot_reload: bool = true;
+
+    pub fn workingOwner() u16 {
+        return working_owner;
+    }
+
+    pub fn workingOwnerIsSystem() bool {
+        return working_owner < 0x0800;
+    }
 };
 
 pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
         fn callback() void {
-            for (PluginState.core.items) |p|
-                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
-            for (PluginState.plugin.items) |p|
-                if (@field(p, @tagName(ex))) |f| f(GLOBAL_STATE, GLOBAL_FUNCTION);
+            for (PluginState.core.items) |p| {
+                PluginState.working_owner = p.OwnerId;
+                if (@field(p, @tagName(ex))) |f| {
+                    f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                    switch (ex) {
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        else => {},
+                    }
+                }
+            }
+            for (PluginState.plugin.items) |p| {
+                PluginState.working_owner = p.OwnerId;
+                if (@field(p, @tagName(ex))) |f| {
+                    f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                    switch (ex) {
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        else => {},
+                    }
+                }
+            }
         }
     };
     return &c.callback;
 }
 
+//// TODO: generalize for OnPluginInit etc.
+//fn PluginFnOnPluginDeinit(owner: u16) void {
+//    for (PluginState.core.items) |p| {
+//        if (p.OwnerId == owner) continue;
+//        PluginState.working_owner = p.OwnerId;
+//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+//    }
+//    for (PluginState.plugin.items) |p| {
+//        if (p.OwnerId == owner) continue;
+//        PluginState.working_owner = p.OwnerId;
+//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+//    }
+//}
+pub fn PluginFnOnPluginInit(comptime ex: PluginExportFn, owner: u16) void {
+    comptime if (ex != .OnPluginInitA and
+        ex != .OnPluginInitLateA and
+        ex != .OnPluginDeinitA) @compileError("invalid plugin export fn");
+
+    for (PluginState.core.items) |p| {
+        if (p.OwnerId == owner) continue;
+        PluginState.working_owner = p.OwnerId;
+        if (@field(p, @tagName(ex))) |f| f(owner);
+    }
+    // TODO: system to allow any plugin to act on any other plugin's init-ing safely
+    //for (PluginState.plugin.items) |p| {
+    //    if (p.OwnerId == owner) continue;
+    //    PluginState.working_owner = p.OwnerId;
+    //    if (@field(p, @tagName(ex))) |f| f(owner);
+    //}
+}
+
 fn PluginFnCallback1_stub(_: u32) void {}
 
 // MISC
-
-// w32fs.CompareFileTime is slow as balls for some reason???
-fn filetime_eql(t1: *w32f.FILETIME, t2: *w32f.FILETIME) bool {
-    return (t1.dwLowDateTime == t2.dwLowDateTime and
-        t1.dwHighDateTime == t2.dwHighDateTime);
-}
 
 // TODO: move to lib, share with generate_safe_plugin_hash_file.zig
 fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
@@ -217,10 +294,12 @@ fn ensureDirectoryExists(alloc: std.mem.Allocator, path: []const u8) bool {
 // TODO: OnLoad, OnUnload, OnEnable, OnDisable
 // TODO: also stuff for loading and unloading based on watching the directory, outside of
 // updating already loaded plugins
+// TODO: allow OnPluginDeinit for user-plugins; needs protections and to communicate which plugin
 // NOTE: assumes index is allocated and initialized, to allow different
 // ways of handling the backing data
-/// @return plugin loaded correctly; guarantee of no dangling handles on failure
-fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
+/// @return     null = no change, true = (re)loaded, false = rejected
+///             guarantee of no dangling handles on failure
+fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
     const i_ext = filename.len - 4;
 
     std.debug.assert(std.mem.eql(u8, ".DLL", filename[i_ext..]) or
@@ -233,9 +312,10 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     // do we even need to do anything
     var fd1: w32fs.WIN32_FIND_DATAA = undefined;
-    _ = w32fs.FindFirstFileA(&buf1, &fd1);
+    const find_handle = w32fs.FindFirstFileA(&buf1, &fd1);
+    defer _ = w32fs.FindClose(find_handle); // TODO: hold onto the handle and reuse instead?
     if (p.Initialized and filetime_eql(&fd1.ftLastWriteTime, &p.WriteTime.?))
-        return true;
+        return null;
 
     if (BuildOptions.BUILD_MODE != .Developer) blk: {
         const this_hash = getFileSha512(filepath) catch return false;
@@ -256,6 +336,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
     // do we need to unload anything
     if (p.Handle) |h| {
         p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+        PluginFnOnPluginInit(.OnPluginDeinitA, p.OwnerId);
         _ = w32ll.FreeLibrary(h);
     }
 
@@ -274,18 +355,26 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) bool {
 
     if (p.PluginName == null or
         p.PluginVersion == null or
+        SemVer.parse(p.PluginVersion.?()[0..std.mem.len(p.PluginVersion.?())]) == error.InvalidVersion or
         p.PluginCompatibilityVersion == null or
-        p.PluginCompatibilityVersion.?() != PLUGIN_VERSION or
+        p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
         p.OnInit == null or
         p.OnInitLate == null or
-        p.OnDeinit == null)
+        p.OnDeinit == null or
+        p.OnPluginInitA != null or
+        p.OnPluginInitLateA != null or
+        p.OnPluginDeinitA != null)
     {
         _ = w32ll.FreeLibrary(p.Handle);
         p.Initialized = false;
         return false;
     }
 
+    p.OwnerId = PluginState.owners_user;
+    PluginState.owners_user += 1;
+    PluginState.working_owner = p.OwnerId;
     p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+    PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
     if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION);
     p.Initialized = true;
     return true;
@@ -306,24 +395,34 @@ pub fn init() void {
     // TODO: hot-reloading core (i.e. all of annodue)
 
     // TODO: move to LoadPlugin equivalent?
-    // TODO: require OnInit, OnLateInit, OnDeinit?
-    // TODO: run OnInit immediately like plugins
     // TODO: (after hot-reloading core) run OnLateInit immediately on hot-reload like plugins
     // TODO: filtering/error-checking the fields to make sure they're actually objects, not functions etc.
     const fn_fields = comptime std.enums.values(PluginExportFn);
-    const core_decls = @typeInfo(core).Struct.decls;
+    const core_decls = comptime @typeInfo(core).Struct.decls;
     inline for (core_decls) |cd| {
-        const this_decl = @field(core, cd.name);
+        const decl = @field(core, cd.name);
         var this_p: ?*Plugin = null;
         inline for (fn_fields) |ff| {
-            if (@hasDecl(this_decl, @tagName(ff))) {
+            if (@hasDecl(decl, @tagName(ff))) {
                 if (this_p == null) {
                     p = PluginState.core.addOne() catch @panic("failed to add core plugin to arraylist");
                     p.* = std.mem.zeroInit(Plugin, .{});
                     this_p = p;
                 }
-                @field(this_p.?, @tagName(ff)) = &@field(this_decl, @tagName(ff));
+                @field(this_p.?, @tagName(ff)) = &@field(decl, @tagName(ff));
+
+                comptime if (!@hasDecl(decl, "OnInit") or
+                    !@hasDecl(decl, "OnInitLate") or
+                    !@hasDecl(decl, "OnDeinit"))
+                    dbg.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
             }
+        }
+        if (this_p) |plug| {
+            plug.OwnerId = PluginState.owners_core;
+            PluginState.owners_core += 1;
+            PluginState.working_owner = plug.OwnerId;
+            plug.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+            PluginFnOnPluginInit(.OnPluginInitA, PluginState.working_owner);
         }
     }
 
@@ -342,13 +441,14 @@ pub fn init() void {
 
         p = PluginState.plugin.addOne() catch @panic("failed to add user plugin to arraylist");
         p.* = std.mem.zeroInit(Plugin, .{});
-        if (!LoadPlugin(p, file.name))
+        const load = LoadPlugin(p, file.name);
+        if (load != null and !load.?)
             _ = PluginState.plugin.pop();
     }
 
     // hooking game
 
-    var off = global.GLOBAL_STATE.patch_offset;
+    var off = GLOBAL_STATE.patch_offset;
     off = HookGameSetup(off);
     off = HookGameLoop(off);
     off = HookEngineUpdate(off);
@@ -360,19 +460,40 @@ pub fn init() void {
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
     //off = HookLoadSprite(off);
-    global.GLOBAL_STATE.patch_offset = off;
+    GLOBAL_STATE.patch_offset = off;
 }
 
-pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (gs.timestamp > PluginState.last_check + PluginState.check_freq) {
-        for (PluginState.plugin.items, 0..) |*p, i| {
-            const len = for (p.Filename, 0..) |c, j| {
-                if (c == 0) break j;
-            } else p.Filename.len;
-            if (!LoadPlugin(p, p.Filename[0..len]))
-                _ = PluginState.plugin.swapRemove(i);
-        }
+// HOOKS
+
+pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    PluginState.h_s_hot_reload =
+        gf.ASettingOccupy(SettingHandle.getNull(), "PLUGIN_HOT_RELOAD", .B, .{ .b = true }, &PluginState.s_hot_reload, null);
+}
+
+pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+
+pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (PluginState.s_hot_reload and gs.timestamp > PluginState.last_check + PluginState.check_freq) {
         PluginState.last_check = gs.timestamp;
+        PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
+        const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];
+
+        const len = for (p.Filename, 0..) |c, j| {
+            if (c == 0) break j;
+        } else p.Filename.len;
+        const load = LoadPlugin(p, p.Filename[0..len]);
+
+        if (load == null) return;
+
+        if (load.?) {
+            var buf: [127:0]u8 = undefined;
+            _ = std.fmt.bufPrintZ(&buf, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch return;
+            _ = gf.ToastNew(&buf, r.Text.ColorRGB.Green.rgba(0));
+        } else {
+            _ = PluginState.plugin.swapRemove(PluginState.hot_reload_i);
+        }
     }
 }
 
@@ -411,6 +532,10 @@ fn HookEngineUpdate(memory: usize) usize {
     // text processing, etc. before the actual render
     off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
     off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
+
+    // the function before CallAll0x14, at the start of the entity updates block
+    // EngineUpdateStage20A is the equivalent for end of block
+    off = hook.intercept_call(off, 0x4459D1, PluginFnCallback(.EngineEntityUpdateB), null);
 
     // entity system stages in EarlyEngineUpdate (CallAll0x14, etc.)
     // will only run when game is not paused
@@ -548,6 +673,7 @@ fn HookTextRender(memory: usize) usize {
     // NOTE: 0x483F8B calls ProcessQueue1, only usable with after-fn when using intercept_call()
     var off = memory;
     // FlushQueue1
+    // TODO: deprecate, update to be more reflective of current knowledge and add granularity
     off = hook.intercept_call(
         off,
         0x450297,
@@ -560,6 +686,13 @@ fn HookTextRender(memory: usize) usize {
         0x45029C,
         PluginFnCallback(.MapRenderB),
         PluginFnCallback(.MapRenderA),
+    );
+    // MetaCam_Draw2D
+    off = hook.intercept_call(
+        off,
+        0x445A1A,
+        PluginFnCallback(.Draw2DB),
+        PluginFnCallback(.Draw2DA),
     );
     return off;
 }

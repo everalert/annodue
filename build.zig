@@ -15,7 +15,7 @@ const appinfo = @import("src/patch/appinfo.zig");
 // hotcopy etc., only running the pieces that need to be for the command and ordered well, etc. ..
 
 // example release build command
-// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Drop="F:\Projects\swe1r\annodue\.release"
+// zig build release -Doptimize=ReleaseSafe -Drop="F:\Projects\swe1r\annodue\.release"
 
 fn allocFmtSemVer(alloc: Allocator, ver: *const SemVer) ![]u8 {
     if (ver.pre) |pre|

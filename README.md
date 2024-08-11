@@ -29,7 +29,7 @@ See [CHANGELOG](CHANGELOG.md) for a complete version history.
 ```zig
 zig build release -Doptimize=ReleaseSafe -Drop="<release_output_path>"
 ```
-3. Find `annodue-0.1.5.zip` in `<release_output_path>/0.1.5/` and extract it to the game directory.
+3. Find `annodue-0.1.6.zip` in `<release_output_path>/0.1.6/` and extract it to the game directory.
 
 ## Building from source
 

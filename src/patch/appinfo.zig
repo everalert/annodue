@@ -12,11 +12,12 @@ pub const COMPATIBILITY_VERSION =
 pub const VERSION = SemVer{
     .major = 0,
     .minor = 1,
-    .patch = 5,
+    .patch = 6,
     //.pre = "alpha",
-    .build = "373",
+    .build = "573",
 };
 
+// TODO: re-evaluate; '-autoupdate' suffix added in 0.1.6, but '-update' still checked for
 pub const VERSION_MIN = SemVer{
     .major = 0,
     .minor = 1,

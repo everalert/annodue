@@ -5,113 +5,167 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.6] - 2024-08-11
 
 ### Added
 
-- Cam7: analog deadzone customization via settings
-- Cam7: ability to toggle planar movement with `TAB(kb) or B(xinput)`
-- Cam7: pan and orbit with `RCtrl(kb) or X(xinput)`
-- Cam7: cycle movement speed with `Q or LB` and `E or RB`
-- Cam7: cycle rotation speed with `Z or LSB` and `C or RSB`
-- Cam7: cycle smoothing instead of speed by holding `X or Y(xinput)` while pressing movement/rotation buttons
-- Cam7: return movement or rotation to default by pressing both up+down together
-- Cam7: toggle hiding ui with `6`
-- Cam7: toggle disabling pod input with `7`
-- Cam7: orient camera to pod with `\`
-- Cam7: move pod to camera by holding `BKSP(kb) or A(xinput)` when exiting free-cam
-- Cam7: sfx during camera motion
-- Core: notify on plugin reload
-- CollisionViewer: depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
+- Cam7: Analog deadzone customization
+- Cam7: Toggle planar movement with `Tab (keyboard)` or `B (xinput)`
+- Cam7: Pan and Orbit with `RCtrl (keyboard)` or `X (xinput)`
+- Cam7: Cycle movement speed with `Q/E (keyboard)` or `LB/RB (xinput)`
+- Cam7: Cycle rotation speed with `Z/C (keyboard)` or `LSB/RSB (xinput)`
+- Cam7: Cycle smoothing instead of speed by holding `X (keyboard)` or `Y (xinput)`
+- Cam7: Return movement or rotation to default by pressing both cycle direction buttons together
+- Cam7: Toggle hiding ui with `6`
+- Cam7: Toggle disabling pod input with `7`
+- Cam7: Orient camera to pod with `\` -- sets rotation point to pod when pressed in pan & orbit mode
+- Cam7: Teleport pod to camera by holding `Backspace (keyboard)` or `X (xinput)` when exiting free-cam
+- Cam7: SFX during camera motion
+- Cam7: Fog and track section visibility customization
+- Cam7: Default speed and smoothness customization
+- Core: Toast notification on plugin reload
+- CollisionViewer: Depth bias customization for correcting model-collision visual mismatch ([#5](https://github.com/everalert/annodue/pull/5))
 - Developer: Visualization of matrices via hijacking the debug spline markers
-- Savestate: Flame effects (Smok entities) added to saved state
-- Savestate: Dust clouds (Toss entities) added to saved state
-- InputDisplay: Now shows inputs from savestate rewind
+- Overlay: Toggles for individual elements
 - QOL: Option to skip podium cutscene
 - QOL: Option to remove 1px gap at screen edge
-- Setting: 'cam7' -> 'stick_deadzone_inner'
-- Setting: 'cam7' -> 'stick_deadzone_outer'
-- Setting: 'cam7' -> 'default_move_speed'
-- Setting: 'cam7' -> 'default_move_smoothing'
-- Setting: 'cam7' -> 'default_rotation_speed'
-- Setting: 'cam7' -> 'default_rotation_smoothing'
-- Setting: 'cam7' -> 'default_planar_movement'
-- Setting: 'cam7' -> 'default_hide_ui'
-- Setting: 'cam7' -> 'default_disable_input'
-- Setting: 'cam7' -> 'flip_look_x_inverted'
-- Setting: 'cam7' -> 'sfx_volume'
-- Setting: 'cam7' -> 'fog_patch'
-- Setting: 'cam7' -> 'fog_disable'
-- Setting: 'cam7' -> 'visuals_patch'
-- Setting: 'collisionviewer' -> 'depth_bias'
-- Setting: 'developer' -> 'visualize_matrices'
-- Setting: `overlay` -> `show_fps` `show_lap_times` `show_heat_timer` `show_death_count` `show_fall_timer`
-- Setting: `SETTING_SAVE_DEFAULTS` `SETTINGS_SAVE_AUTO` `PLUGIN_HOT_RELOAD`
-- Setting: some settings now saved between sessions by syncing settings file with game actions - `cam7->default_disable_input` `cam7->default_hide_ui` `collisionviewer->depth_bias` `qol->default_laps` `qol->default_racers` `qol->fps_limiter_default`
+- Savestate: Flame effects added to saved state
+- Savestate: Dust clouds added to saved state
+- Setting: New global settings
+	- `SETTINGS_SAVE_DEFAULTS`
+	- `SETTINGS_SAVE_AUTO`
+	- `PLUGIN_HOT_RELOAD`
+- Setting: Following settings now persist between play sessions when changed in-game
+    - `[cam7] default_planar_movement`
+	- `[cam7] default_disable_input`
+	- `[cam7] default_hide_ui`
+	- `[collisionviewer] depth_bias`
+	- `[qol] default_laps`
+	- `[qol] default_racers`
+	- `[qol] fps_limiter_default`
+- Backend(Build): Warning for when accumulated build files too large
+- Backend(Build): Helper script for cleaning build output
 - Backend(Core): `appinfo` module for externally-facing defs
 - Backend(Core): `GDRAW_VERSION` (now `4`) added to Compatibility Version sum
-- Backend(Core): custom triggers via `RTrigger` module/api
-- Backend(Core): custom terrain via `RTerrain` module/api
-- Backend(Core): added `RTerrainRequest` `RTerrainRelease` `RTerrainReleaseAll` to global functions
-- Backend(Core): added `RTriggerRequest` `RTriggerRelease` `RTriggerReleaseAll` to global functions
-- Backend(Core): added `ASettingSectionOccupy` `ASettingSectionVacate` `ASettingSectionRunUpdate` `ASettingOccupy` `ASettingVacate` `ASettingVacateAll` `ASettingUpdate` `ASettingSectionResetDefault` `ASettingSectionResetFile` `ASettingSectionClean` `ASettingResetAllDefault` `ASettingResetAllFile` `ASettingCleanAll` `ASettingSave` `ASettingSaveAuto` to global functions
-- Backend(Core): enforcing semantic versioning for plugins
-- Backend(Core): enforcing minimum implemented functions for core-side plugins
-- Backend(Core): `OnPluginInit` `OnPluginLateInit` `OnPluginDeinitA` hook functions, usable by core-side plugins
-- Backend(Core): plugin identity tracking, for use with handle-based resources
-- Backend(Core): `GDraw` global api, for unrestricted drawing
-- Backend(Core): `GDraw` layers `Default`, `DefaultP`, `Overlay`, `OverlayP`, `System`, `SystemP`
-- Backend(Core): `GDrawText`, `GDrawRect`, `GDrawRectBdr` to global functions
-- Backend(Core): `HideRaceUI` global api, adjusted existing plugins to check for this
-- Backend(Core): `GHideRaceUIEnable` `GHideRaceUIDisable` `GHideRaceUIIsHidden` global functions
-- Backend(Core): Support for string-type settings
-- Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
-- Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`
-- Backend(RacerLib): Added new defs to `Model`, `Quad`, `Text`
-- Backend(RacerLib): Added new defs to `entity`, `entity/Test`, `entity/Toss`, `entity/Trig`
-- Backend(RacerLib): Added `Random`, `Vector`, `Matrix`, `Model`
-- Backend(RacerLib): Added new defs to `entity/Hang`, `entity/Jdge`, `Input`, `Timing`, `Quad`
-- Backend(Util): Added `handle_map` `handle_map_static` `handle_map_soa` for handle-based resource management
-- Backend(Util): Added `deadzone` util, `spatial` util defs
-- Backend(Util): Added `file_system` util
-- Backend(Util): `PCompileError`, `PPanic` to debug util for formatted compile/panic error messages
-- Backend(Util): x86 - helper functions and defs
+- Backend(Core): Custom Triggers via `RTrigger`
+- Backend(Core): Custom Terrain via `RTerrain`
+- Backend(Core): Unrestricted drawing via `GDraw`
+- Backend(Core): `GDraw` layers `Default` `DefaultP` `Overlay` `OverlayP` `System` `SystemP` `Debug`
+- Backend(Core): Race UI Hiding via `GHideRaceUI`
+- Backend(Core): Plugin - Enforcing semantic versioning for plugins
+- Backend(Core): Plugin - Enforcing minimum implemented functions for core modules
+- Backend(Core): Plugin - Identity tracking, for use with handle-based resources
+- Backend(Core): Settings - String type values
+- Backend(Core): Auto Update - Now also checks for `autoupdate` filename suffix
+- Backend(Core): Global Functions
+	- `ASettingSectionOccupy`
+	- `ASettingSectionVacate`
+	- `ASettingSectionRunUpdate`
+	- `ASettingOccupy`
+	- `ASettingVacate`
+	- `ASettingVacateAll`
+	- `ASettingUpdate`
+	- `ASettingSectionResetDefault`
+	- `ASettingSectionResetFile`
+	- `ASettingSectionClean`
+	- `ASettingResetAllDefault`
+	- `ASettingResetAllFile`
+	- `ASettingCleanAll`
+	- `ASettingSave`
+	- `ASettingSaveAuto`
+	- `GDrawText`
+	- `GDrawRect`
+	- `GDrawRectBdr`
+	- `GHideRaceUIEnable`
+	- `GHideRaceUIDisable`
+	- `GHideRaceUIIsHidden`
+	- `RTerrainRequest`
+	- `RTerrainRelease`
+	- `RTerrainReleaseAll`
+	- `RTriggerRequest`
+	- `RTriggerRelease`
+	- `RTriggerReleaseAll`
+- Backend(Core): Hook Functions
+	- `OnPluginInitA` (core modules only)
+	- `OnPluginLateInitA` (core modules only)
+	- `OnPluginDeinitA` (core modules only)
+- Backend(RacerLib): Modules
+	- `Random`
+	- `Vector`
+	- `Matrix`
+	- `Model`
+- Backend(RacerLib): New defs in modules
+	- `Quad`
+	- `Text`
+	- `Input`
+	- `Timing`
+	- `entity`
+	- `entity/Test`
+	- `entity/Toss`
+	- `entity/Trig`
+	- `entity/Hang`
+	- `entity/Jdge`
+- Backend(Util): Modules
+	- `handle_map`
+	- `handle_map_static`
+	- `handle_map_soa`
+	- `deadzone`
+	- `file_system`
+- Backend(Util): New defs in modules
+	- `spatial`
+	- `debug`
+	- `x86`
 
 ### Changed
 
-- Cam7: lateral movement speed - `650` -> `125..16000`
-- Cam7: vertical movement speed - `350` -> `62.5..8000`
-- Cam7: movement smoothing - `8` -> `none,16,8,4`
-- Cam7: movement speed curve - `quadratic` -> `quartic` 
-- Cam7: rotation speed - `360` -> `80..810`
-- Cam7: rotation smoothing - `none` -> `none,36,24,12,6`
-- Core: reworked toast animation/aesthetics
-- Setting: changed from init-only to dynamic - `cam7->fog_remove` `gameplay->death_speed_mod_enable` `gameplay->death_speed_drop` `gameplay->death_speed_min` `developer->dump_fonts (single-use arbitrary enable)`
-- Setting: changed `cosmetic->patch_trigger_display` -> `core/RTrigger->notify_trigger`
+- Cam7: Lateral movement speed `650` to `125..16000`
+- Cam7: Vertical movement speed `350` to `62.5..8000`
+- Cam7: Movement smoothing `8` to `none, 16, 8, 4`
+- Cam7: Movement speed curve `quadratic` to `quartic`
+- Cam7: Rotation speed `360` to `80..810`
+- Cam7: Rotation smoothing `none` to `none, 36, 24, 12, 6`
+- Core: Reworked toast notification animation/aesthetics
+- InputDisplay: Now shows recorded inputs during savestate rewind
+- Setting: `[cosmetic] patch_trigger_display` changed to `[core/RTrigger] notify_trigger`
+- Setting: Following settings now update dynamically when settings file edited (no longer launch-only)
+	- `[cam7] fog_remove`
+	- `[gameplay] death_speed_mod_enable`
+	- `[gameplay] death_speed_drop`
+	- `[gameplay] death_speed_min`
+	- `[developer] dump_fonts` (single-use arbitrary enable)
 - Backend(Build): release versioning now based on `appinfo` module
 - Backend(Core): Settings version `1` to `2`
 - Backend(Core): Settings back-end rewritten to support plugin-directed settings definitions
 - Backend(Core): Global Function version `15` to `29`
-- Backend(Core): Global Functions renamed `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
-- Backend(Core): Global Functions `GFreezeEnable->GFreezeOn` `GFreezeDisable->GFreezeOff` `GFreezeIsFrozen->GFreezeIsOn`
-- Backend(Core): Global Functions `GHideRaceUIEnable->GHideRaceUIOn` `GHideRaceUIDisable->GHideRaceUIOff` `GHideRaceUIIsHidden->GHideRaceUIIsOn`
-- Backend(Core): GFreeze switched from plugin-defined identifiers to internal ids
-- Backend(Core): GHideRaceUI switched from plugin-defined identifiers to internal ids
-- Backend(Core): moved `cosmetic->show_trigger_display` functionality to `RTrigger`
-- Backend(Util): make rewind compression logic available in `temporal_compression` util
-- Backent(Util): x86 - migrate `push_*`, `pop_*` functions to generalized `push`, `pop`
+- Backend(Core): Renamed Global Functions
+	- `Game*` to `G*` (e.g. `GameFreezeEnable` to `GFreezeEnable`)
+	- `GFreezeEnable` to `GFreezeOn`
+	- `GFreezeDisable` to `GFreezeOff`
+	- `GFreezeIsFrozen` to `GFreezeIsOn`
+	- `GHideRaceUIEnable` to `GHideRaceUIOn`
+	- `GHideRaceUIDisable` to `GHideRaceUIOff`
+	- `GHideRaceUIIsHidden` to `GHideRaceUIIsOn`
+- Backend(Core): `GFreeze` switched from plugin-defined identifiers to internal IDs
+- Backend(Core): `GHideRaceUI` switched from plugin-defined identifiers to internal IDs
+- Backend(Core): `[cosmetic] patch_trigger_display` functionality moved to `RTrigger`
+- Backend(Util): Rewind compression logic moved to `temporal_compression`
+- Backend(Util): `x86` - migrated `push_*` `pop_*` functions to generalized `push` `pop`
 
 ### Removed
 
-- Backend(Core): `Settings.zig` core module
-- Backend(Core): global functions `SettingGetB` `SettingGetU` `SettingGetI` `SettingGetF`
+- Backend(Core): `Settings.zig`
+- Backend(Core): Global Functions
+	- `SettingGetB`
+	- `SettingGetU`
+	- `SettingGetI`
+	- `SettingGetF`
 - Backend(Build): `-Dver` option in `release` builds
 - Backend(Build): `-Dminver` option in `release` builds
-- Backend(Util): `settings.zig` util lib
+- Backend(Util): `settings.zig`
 
 ### Fixed
 
-- Cam7: Corrected steering while upside-down to be more intuitive
+- Cam7: Corrected steering while upside-down to be more intuitive, with option to retain previous behaviour
 - Cam7: Corrected Y/Z movement while upside-down in planar movement mode
 - Cam7: Minimap lagging behind camera motion while in free cam
 - Cam7: Faster rotation toward diagonals with keyboard input
@@ -119,11 +173,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cam7: Main camera being in first-person internal (cam5) changing free-cam FOV
 - Savestate: Rewind ignoring saved inputs
 - Savestate: Rewind not restoring UI correctly
-- Savestate: Stuttering during rewind scrubbing
+- Savestate: Movement stuttering during rewind scrubbing
 - Savestate: Delayed camera when rewind scrubbing
-- Backend(Build): compile error building without hashfile present when build doesn't use hashfile
-- Backend(Core): slowdown due to excessively opening search handles during plugin hot reloading
-- Backend(Core): crashing when unloading a plugin that doesn't reload during hot-reload process
+- Backend(Build): Compile error building without hashfile present when build doesn't use hashfile
+- Backend(Core): Slowdown due to excessively opening search handles during plugin hot reloading
+- Backend(Core): Crashing when unloading a plugin that doesn't reload during hot-reload process
 - Backend(Core): XInput state not clearing when controller unplugged
 
 ## [0.1.5] - 2024-05-12
@@ -280,7 +334,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Triggered race events displayed on UI
 - Rainbow-colored race UI elements
 
-[unreleased]: https://github.com/everalert/annodue/compare/0.1.5...HEAD
+[unreleased]: https://github.com/everalert/annodue/compare/0.1.6...HEAD
+[0.1.6]: https://github.com/everalert/annodue/compare/0.1.5...0.1.6
 [0.1.5]: https://github.com/everalert/annodue/compare/0.1.4...0.1.5
 [0.1.4]: https://github.com/everalert/annodue/compare/0.1.3...0.1.4
 [0.1.3]: https://github.com/everalert/annodue/compare/0.1.2...0.1.3

@@ -164,7 +164,8 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             // for now: filename ends with "update.zip", e.g. annodue-0.1.0-update.zip
             // future: same file as release zip, annodue-<semver>.zip
             const name = asset.object.get("name").?.string;
-            if (!std.mem.endsWith(u8, name, "-update.zip")) continue;
+            if (!std.mem.endsWith(u8, name, "-update.zip") and
+                !std.mem.endsWith(u8, name, "-autoupdate.zip")) continue;
 
             const state = asset.object.get("state").?.string;
             if (!std.mem.eql(u8, state, "uploaded")) return; // we know we can't update now
@@ -200,7 +201,7 @@ pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
         if (gf.InputGetKb(.J, .JustOn)) {
             const alloc = allocator.allocator();
-            const fp = std.fmt.allocPrint(alloc, "{s}/{s}", .{ ANNODUE_PATH, "update.zip" }) catch return;
+            const fp = std.fmt.allocPrint(alloc, "{s}/{s}", .{ ANNODUE_PATH, "autoupdate.zip" }) catch return;
             defer alloc.free(fp);
             const f = std.fs.cwd().openFile(fp, .{}) catch return;
             defer f.close();

@@ -26,6 +26,15 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 |`f32` |any decimal number|rounded to 2 decimal places
 |`str` |any text up to 63 characters|individual setting may only accept specific strings
 
+##### Global Settings
+
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`SETTINGS_SAVE_AUTO`    |`bool`|`on`|&nbsp;
+|`SETTINGS_SAVE_DEFAULTS`|`bool`|`on`|Save settings to file even when not customized
+|`AUTO_UPDATE`           |`bool`|`on`|&nbsp;
+|`PLUGIN_HOT_RELOAD`     |`bool`|`on`|&nbsp;
+
 ## Features
 
 ##### Feature Summary
@@ -82,8 +91,8 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 |toggle hide ui         |`6`                 |&nbsp;     |&nbsp;
 |toggle disable input   |`7`                 |&nbsp;     |pod will not drive when on
 |pan and orbit mode     |`RCtrl`             |`X`        |hold
-|move pod to camera     |`Bksp`              |`A`        |hold while exiting free-cam
-|orient camera to pod   |`\`                 |&nbsp;     |&nbsp;
+|move pod to camera     |`Bksp`              |`X`        |hold while exiting free-cam
+|orient camera to pod   |`\`                 |&nbsp;     |will set rotation point to pod in pan/orbit mode
 
 ##### Settings
 

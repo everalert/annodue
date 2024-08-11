@@ -61,8 +61,8 @@ pub const panic = debug.annodue_panic;
 //   toggle hide ui             6
 //   toggle disable input       7                           pod will not drive when on
 //   pan and orbit mode         RCtrl           X           hold
-//   move pod to camera         Bksp            A           hold while exiting free-cam
-//   orient camera to pod       \
+//   move pod to camera         Bksp            X           hold while exiting free-cam
+//   orient camera to pod       \                           will set rotation point to pod in pan/orbit mode
 // - SETTINGS:
 //   enable                     bool
 //   fog_patch                  bool
@@ -195,7 +195,7 @@ const Cam7 = extern struct {
     //var i_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
     var i_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
     var i_disable_input_data = ButtonInputMap{ .kb = .@"7" };
-    var i_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .A };
+    var i_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .X };
     var i_look_at_vehicle_data = ButtonInputMap{ .kb = .OEM_5 }; // backslash
     var i_toggle = i_toggle_data.inputMap();
     var i_look_x = i_look_x_data.inputMap();
@@ -665,6 +665,9 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         sp.vec3_dirToEulerXY(&dirEulerXY, &dir);
         sp.mat4x4_setRotation(&Cam7.xf, &dirEulerXY);
         Cam7.rot = dirEulerXY;
+
+        if (move_sweep) Cam7.orbit_dist =
+            rv.Vec3_Dist(@ptrCast(&re.Test.PLAYER.*.transform.T), @ptrCast(&Cam7.xf.T));
     }
 
     // SOUND EFFECTS

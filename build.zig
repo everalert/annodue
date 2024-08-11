@@ -15,7 +15,7 @@ const appinfo = @import("src/patch/appinfo.zig");
 // hotcopy etc., only running the pieces that need to be for the command and ordered well, etc. ..
 
 // example release build command
-// zig build release -Doptimize=ReleaseSafe -Dver="0.0.1" -Dminver="0.0.0" -Drop="F:\Projects\swe1r\annodue\.release"
+// zig build release -Doptimize=ReleaseSafe -Drop="F:\Projects\swe1r\annodue\.release"
 
 fn allocFmtSemVer(alloc: Allocator, ver: *const SemVer) ![]u8 {
     if (ver.pre) |pre|
@@ -363,25 +363,24 @@ pub fn build(b: *std.Build) void {
     // CLEANUP
 
     // FIXME: cache part causes failure (on windows?)
-    //var output_size: f32 = 0; // MiB
-    //blk: {
-    //    var cache_dir = b.cache_root.handle.openIterableDir("", .{}) catch break :blk;
-    //    defer cache_dir.close();
-    //    output_size += getDirSize(gpa.allocator(), cache_dir);
-    //    //std.debug.print("cache dir size: {d:4.2} MiB\n", .{size});
-    //}
-    //blk: {
-    //    var install_dir = std.fs.openIterableDirAbsolute(b.install_path, .{}) catch break :blk;
-    //    defer install_dir.close();
-    //    output_size += getDirSize(gpa.allocator(), install_dir);
-    //    //std.debug.print("install dir size: {d:4.2} MiB\n", .{size});
-    //}
-    //if (output_size > 100) {
-    //    plugin_step.dependOn(clean_step);
-    //    dinput_install.step.dependOn(clean_step);
-    //    core_install.step.dependOn(clean_step);
-    //    std.debug.print("Cleaning output directories before build ({d:4.2} MiB!!!)\n", .{output_size});
-    //}
+    // TODO: automate deletion, not just warn
+    var output_size: f32 = 0; // MiB
+    blk: {
+        var cache_dir = b.cache_root.handle.openIterableDir("", .{}) catch break :blk;
+        defer cache_dir.close();
+        output_size += getDirSize(gpa.allocator(), cache_dir);
+        //std.debug.print("cache dir size: {d:4.2} MiB\n", .{size});
+    }
+    blk: {
+        var install_dir = std.fs.openIterableDirAbsolute(b.install_path, .{}) catch break :blk;
+        defer install_dir.close();
+        output_size += getDirSize(gpa.allocator(), install_dir);
+        //std.debug.print("install dir size: {d:4.2} MiB\n", .{size});
+    }
+    const output_limit: f32 = 500;
+    if (output_size > output_limit) {
+        std.debug.print("\x1b[31m[WARNING]\x1b[33m Zig output exceeds {d:1.0} MiB - run zig-clean.bat\x1b[0m\n", .{output_limit});
+    }
 
     // DEFAULT STEP
 

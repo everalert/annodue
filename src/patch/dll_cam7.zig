@@ -61,7 +61,7 @@ pub const panic = debug.annodue_panic;
 //   toggle hide ui             6
 //   toggle disable input       7                           pod will not drive when on
 //   pan and orbit mode         RCtrl           X           hold
-//   move pod to camera         Bksp            A           hold while exiting free-cam
+//   move pod to camera         Bksp            X           hold while exiting free-cam
 //   orient camera to pod       \
 // - SETTINGS:
 //   enable                     bool
@@ -195,7 +195,7 @@ const Cam7 = extern struct {
     //var i_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
     var i_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
     var i_disable_input_data = ButtonInputMap{ .kb = .@"7" };
-    var i_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .A };
+    var i_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .X };
     var i_look_at_vehicle_data = ButtonInputMap{ .kb = .OEM_5 }; // backslash
     var i_toggle = i_toggle_data.inputMap();
     var i_look_x = i_look_x_data.inputMap();

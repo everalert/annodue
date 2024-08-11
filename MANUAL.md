@@ -82,7 +82,7 @@ Usable both in race and in cantina. Controlling the camera will not override gam
 |toggle hide ui         |`6`                 |&nbsp;     |&nbsp;
 |toggle disable input   |`7`                 |&nbsp;     |pod will not drive when on
 |pan and orbit mode     |`RCtrl`             |`X`        |hold
-|move pod to camera     |`Bksp`              |`A`        |hold while exiting free-cam
+|move pod to camera     |`Bksp`              |`X`        |hold while exiting free-cam
 |orient camera to pod   |`\`                 |&nbsp;     |&nbsp;
 
 ##### Settings

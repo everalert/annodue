@@ -161,7 +161,7 @@ pub fn main() !void {
     defer archive_up.deinit();
     try z_up.write(&archive_up, null);
 
-    const o_filename_up = try std.fmt.allocPrint(alloc, "annodue-{s}-update.zip", .{ver.?});
+    const o_filename_up = try std.fmt.allocPrint(alloc, "annodue-{s}-autoupdate.zip", .{ver.?});
     const out_up = try o_dir.createFile(o_filename_up, .{});
     defer out_up.close();
     try out_up.writeAll(archive_up.items);

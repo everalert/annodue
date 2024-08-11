@@ -400,6 +400,34 @@ fn PatchCyYungaCheatAudio(enable: bool) void {
     _ = mem.write(comptime 0x41057D + 0x01, u8, id);
 }
 
+// CONFIGURABLE VSYNC
+
+// ddraw surface contains a pointer to the vtable
+const FrontBufferIDirectDrawSurface4: **[]u32 = @ptrFromInt(0x00EC8D00);
+var IDirectDraw4_Flip: *fn (*void, *void, u32) callconv(.Stdcall) u32 = undefined;
+
+fn IDirectDraw4_Flip_Hook(this: *void, other: *void, flags: u32) callconv(.Stdcall) u32 {
+    var flags_ = flags;
+    if(QuickRaceMenu.gs.in_race.on() and QuickRaceMenu.values.vsync == 0)
+        flags_ |= 8; // DDFLIP_NOVSYNC
+
+    return IDirectDraw4_Flip(this, other, flags_);
+}
+
+fn PatchConfigurableVSync(enable: bool) void {
+    const w32mem = w32.system.memory;
+
+    var old_protect: w32mem.PAGE_PROTECTION_FLAGS = undefined;
+    if (enable) {
+        IDirectDraw4_Flip = @ptrFromInt(FrontBufferIDirectDrawSurface4.*.*[11]);
+        FrontBufferIDirectDrawSurface4.*.*[11] = @intFromPtr(&IDirectDraw4_Flip_Hook);
+        _ = w32mem.VirtualProtect(&FrontBufferIDirectDrawSurface4.*.*[11], 4, .{ .PAGE_EXECUTE_READWRITE = 1 }, &old_protect);
+    } else {
+        FrontBufferIDirectDrawSurface4.*.*[11] = @intFromPtr(IDirectDraw4_Flip);
+        _ = w32mem.VirtualProtect(&FrontBufferIDirectDrawSurface4.*.*[11], 4, .{ .PAGE_EXECUTE_READ = 1 }, &old_protect);
+    }
+}
+
 // FAST COUNTDOWN
 
 // TODO: settings for count length, enable
@@ -607,6 +635,7 @@ const QuickRaceMenu = extern struct {
 
     const values = extern struct {
         var fps: i32 = 24;
+        var vsync: i32 = 1;
         var vehicle: i32 = 0;
         var track: i32 = 0;
         var up_lv = [_]i32{0} ** 7;
@@ -752,6 +781,7 @@ const QuickRaceMenu = extern struct {
 
 const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCallback),
+    mi.MenuItemToggle(&QuickRaceMenu.values.vsync, "VSYNC"),
     mi.MenuItemSpacer(),
     mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, null),
     // FIXME: maybe change to menu order?
@@ -903,6 +933,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
+    PatchConfigurableVSync(true);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -921,6 +952,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);
     PatchCyYungaCheatAudio(false);
+    PatchConfigurableVSync(false);
 
     FastCountdown.patch(false);
 }

@@ -19,7 +19,7 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 ##### Setting Types
 
 |Type|Possible Values|Note
-|:---|:---|:---|:---|
+|:---|:---|:---|
 |`bool`|`1`, `on` or `true` to enable|&nbsp;
 |`u32` |`0` to `4294967295`|whole number
 |`i32` |`-2147483648` to `2147483647`|whole number
@@ -179,7 +179,7 @@ Configurable under `[inputdisplay]`
 Configured under `[overlay]`
 
 |Option|Type|Default|
-|:---|:---|:---|:---|
+|:---|:---|:---|
 |`enable`          |`bool`|`off`|
 |`show_fps`        |`bool`|`on` |
 |`show_lap_times`  |`bool`|`on` |
@@ -317,7 +317,7 @@ Configurable under `[multiplayer]`
 Configurable under `[gameplay]`
 
 |Option|Type|Default|
-|:---|:---|:---|:---|
+|:---|:---|:---|
 |`death_speed_mod_enable`|`bool`|`off`|
 |`death_speed_min`       |`f32` |`325`|
 |`death_speed_drop`      |`f32` |`140`|

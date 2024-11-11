@@ -31,6 +31,7 @@ pub const panic = debug.annodue_panic;
 // - SETTINGS:
 //   enable             bool
 //   show_fps           bool
+//   show_speed         bool
 //   show_heat_timer    bool
 //   show_lap_times     bool
 //   show_death_count   bool
@@ -50,12 +51,14 @@ const Overlay = struct {
     var h_s_show_death_count: ?SettingHandle = null;
     var h_s_show_fall_timer: ?SettingHandle = null;
     var h_s_show_fps: ?SettingHandle = null;
+    var h_s_show_speed: ?SettingHandle = null;
     var s_enable: bool = false;
     var s_show_lap_times: bool = true;
     var s_show_heat_timer: bool = true;
     var s_show_death_count: bool = true;
     var s_show_fall_timer: bool = true;
     var s_show_fps: bool = true;
+    var s_show_speed: bool = true;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
@@ -73,6 +76,8 @@ const Overlay = struct {
             gf.ASettingOccupy(section, "show_fall_timer", .B, .{ .b = true }, &s_show_fall_timer, null);
         h_s_show_fps =
             gf.ASettingOccupy(section, "show_fps", .B, .{ .b = true }, &s_show_fps, null);
+        h_s_show_speed =
+            gf.ASettingOccupy(section, "show_speed", .B, .{ .b = true }, &s_show_speed, null);
     }
 };
 
@@ -164,6 +169,26 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     _ = gf.GDrawText(.OverlayP, rt.MakeText(lbx, lby + sty * 1, "~3{d:0>5.3} ~1Fall", .{
                         oob_timer,
                     }, null, null) catch null);
+            }
+
+            if (Overlay.s_show_speed) {
+                const p = rete.PLAYER.*;
+                const b = gs.player.boosting.on();
+
+                const speed_cur = @max(p.speed, 0.0);
+                const speed_max = if (b) p.stats.MaxSpeed + p.stats.BoostThrust else p.stats.MaxSpeed;
+                const speed_percent = speed_cur / speed_max;
+
+                const speed_color: u32 = if (b) 0xFF6759FE else 0x26C5FFFE;
+                const x: i32 = 508;
+                const y: i32 = 426;
+
+                _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y, "~r{d:>5.3}", .{
+                    speed_cur,
+                }, speed_color, null) catch null);
+                _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y + 8, "~r~1{d:>5.3}", .{
+                    speed_percent * 100,
+                }, null, null) catch null);
             }
         }
     }

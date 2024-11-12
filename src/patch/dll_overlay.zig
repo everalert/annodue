@@ -13,9 +13,11 @@ const rrd = @import("racer").RaceData;
 const rete = @import("racer").Entity.Test;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
+const ModelMesh_GetBehavior = @import("racer").Model.Mesh_GetBehavior;
 
 const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
+const ActiveState = @import("util/active_state.zig").ActiveState;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -32,6 +34,7 @@ pub const panic = debug.annodue_panic;
 //   enable             bool
 //   show_fps           bool
 //   show_speed         bool
+//   show_speed_offsets bool
 //   show_heat_timer    bool
 //   show_lap_times     bool
 //   show_death_count   bool
@@ -52,6 +55,7 @@ const Overlay = struct {
     var h_s_show_fall_timer: ?SettingHandle = null;
     var h_s_show_fps: ?SettingHandle = null;
     var h_s_show_speed: ?SettingHandle = null;
+    var h_s_show_speed_offsets: ?SettingHandle = null;
     var s_enable: bool = false;
     var s_show_lap_times: bool = true;
     var s_show_heat_timer: bool = true;
@@ -59,6 +63,14 @@ const Overlay = struct {
     var s_show_fall_timer: bool = true;
     var s_show_fps: bool = true;
     var s_show_speed: bool = true;
+    var s_show_speed_offsets: bool = true;
+
+    var fast_state: ActiveState = .Off;
+    var fast_time: f32 = 0;
+    var slow_state: ActiveState = .Off;
+    var slow_time: f32 = 0;
+    var swst_state: ActiveState = .Off;
+    var swst_time: f32 = 0;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
@@ -78,6 +90,8 @@ const Overlay = struct {
             gf.ASettingOccupy(section, "show_fps", .B, .{ .b = true }, &s_show_fps, null);
         h_s_show_speed =
             gf.ASettingOccupy(section, "show_speed", .B, .{ .b = true }, &s_show_speed, null);
+        h_s_show_speed_offsets =
+            gf.ASettingOccupy(section, "show_speed_offsets", .B, .{ .b = true }, &s_show_speed_offsets, null);
     }
 };
 
@@ -122,6 +136,16 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on() and !gf.GHideRaceUIIsOn()) {
         const lap: u32 = rrd.PLAYER.*.lap;
         const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
+
+        const terrain_model = rete.PLAYER.*._unk_0140_terrainModel;
+        const behavior = if (terrain_model) |tm| ModelMesh_GetBehavior(tm) else null;
+        const grounded = rete.PLAYER.*.flags2.IS_NEAR_GROUND;
+        Overlay.fast_state.update(behavior != null and behavior.?.TerrainFlags.FAST);
+        Overlay.slow_state.update(grounded and behavior != null and behavior.?.TerrainFlags.SLOW);
+        Overlay.swst_state.update(grounded and behavior != null and behavior.?.TerrainFlags.SWST);
+        Overlay.fast_time = if (Overlay.fast_state.on()) Overlay.fast_time + gs.dt_f else 0;
+        Overlay.slow_time = if (Overlay.slow_state.on()) Overlay.slow_time + gs.dt_f else 0;
+        Overlay.swst_time = if (Overlay.swst_state.on()) Overlay.swst_time + gs.dt_f else 0;
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
             if (Overlay.s_show_heat_timer) {
@@ -189,6 +213,48 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y + 8, "~r~1{d:>5.3}", .{
                     speed_percent * 100,
                 }, null, null) catch null);
+            }
+
+            if (Overlay.s_show_speed_offsets) {
+                const x: i32 = 420;
+                const y: i32 = 426;
+                const mx: i32 = 64;
+
+                if (rete.PLAYER.*.speedOffset != 0.0 or rete.PLAYER.*.speedMult != 1.0) {
+                    const col_off: u32 = if (rete.PLAYER.*.speedOffset != 0.0) 0xFFFFFFBE else 0xAAAAAABE;
+                    const col_mul: u32 = if (rete.PLAYER.*.speedMult != 1.0) 0xFFFFFFBE else 0xAAAAAABE;
+                    const x2 = x + 8;
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r{d:>5.3}", .{
+                        rete.PLAYER.*.speedOffset,
+                    }, col_off, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~rx{d:>5.3}", .{
+                        rete.PLAYER.*.speedMult,
+                    }, col_mul, null) catch null);
+                }
+
+                if (Overlay.fast_time > 0) {
+                    const x2 = x - mx * 1;
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r~3FAST", .{}, null, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~r~1{d:>5.3}", .{
+                        Overlay.fast_time,
+                    }, null, null) catch null);
+                }
+
+                if (Overlay.slow_time > 0) {
+                    const x2 = x - mx * 2;
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r~3SLOW", .{}, null, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~r~1{d:>5.3}", .{
+                        Overlay.slow_time,
+                    }, null, null) catch null);
+                }
+
+                if (Overlay.swst_time > 0) {
+                    const x2 = x - mx * 3;
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r~3SWST", .{}, null, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~r~1{d:>5.3}", .{
+                        Overlay.swst_time,
+                    }, null, null) catch null);
+                }
             }
         }
     }

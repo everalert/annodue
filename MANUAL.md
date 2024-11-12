@@ -175,19 +175,21 @@ Configurable under `[inputdisplay]`
 - Show fall timer
 - Show FPS readout
 - Show detailed speed readout
+- Show speed effects from FAST, SLOW and SWST terrain
 
 ##### Settings
 Configured under `[overlay]`
 
 |Option|Type|Default|
 |:---|:---|:---|:---|
-|`enable`          |`bool`|`off`|&nbsp;
-|`show_fps`        |`bool`|`on` |&nbsp;
-|`show_speed`      |`bool`|`on` |&nbsp;
-|`show_lap_times`  |`bool`|`on` |&nbsp;
-|`show_heat_timer` |`bool`|`on` |&nbsp;
-|`show_death_count`|`bool`|`on` |&nbsp;
-|`show_fall_timer` |`bool`|`on` |&nbsp;
+|`enable`            |`bool`|`off`|&nbsp;
+|`show_fps`          |`bool`|`on` |&nbsp;
+|`show_speed`        |`bool`|`on` |&nbsp;
+|`show_speed_offsets`|`bool`|`on` |&nbsp;
+|`show_lap_times`    |`bool`|`on` |&nbsp;
+|`show_heat_timer`   |`bool`|`on` |&nbsp;
+|`show_death_count`  |`bool`|`on` |&nbsp;
+|`show_fall_timer`   |`bool`|`on` |&nbsp;
 
 ### Quality of Life
 

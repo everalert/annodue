@@ -58,7 +58,7 @@ pub const Test = extern struct {
     moveTick: i32, // resets to 0 when going backward on track, and tick up to max 200 when moving fwd
     _unk_0118_013B: [0x13C - 0x118]u8,
     _unkptr_013C: *anyopaque, // collision-related?
-    _unk_0140_terrainModel: *ModelMesh, // terrain-related struct
+    _unk_0140_terrainModel: ?*ModelMesh, // terrain-related struct
     _unkvec3_0144: Vec3,
     speedLoss: f32,
     _unkvec3_0154: Vec3,
@@ -221,7 +221,7 @@ pub const TEST_FLAGS2 = packed struct {
     _24: bool,
     RACE_COMPLETE: bool,
     _26: bool,
-    _27: bool,
+    IS_NEAR_GROUND: bool,
     _28: bool,
     _29: bool,
     _30: bool,

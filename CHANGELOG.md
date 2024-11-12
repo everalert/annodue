@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Overlay: Detailed speed readout with percentage of top speed
+- Overlay: Readout of speed effects from FAST, SLOW and SWST terrain
 
 ## [0.1.6] - 2024-08-11
 

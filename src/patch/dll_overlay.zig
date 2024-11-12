@@ -33,6 +33,7 @@ pub const panic = debug.annodue_panic;
 // - SETTINGS:
 //   enable             bool
 //   show_fps           bool
+//   show_fps_simple    bool
 //   show_speed         bool
 //   show_speed_offsets bool
 //   show_heat_timer    bool
@@ -54,6 +55,7 @@ const Overlay = struct {
     var h_s_show_death_count: ?SettingHandle = null;
     var h_s_show_fall_timer: ?SettingHandle = null;
     var h_s_show_fps: ?SettingHandle = null;
+    var h_s_show_fps_simple: ?SettingHandle = null;
     var h_s_show_speed: ?SettingHandle = null;
     var h_s_show_speed_offsets: ?SettingHandle = null;
     var s_enable: bool = false;
@@ -62,6 +64,7 @@ const Overlay = struct {
     var s_show_death_count: bool = true;
     var s_show_fall_timer: bool = true;
     var s_show_fps: bool = true;
+    var s_show_fps_simple: bool = false;
     var s_show_speed: bool = true;
     var s_show_speed_offsets: bool = true;
 
@@ -88,6 +91,8 @@ const Overlay = struct {
             gf.ASettingOccupy(section, "show_fall_timer", .B, .{ .b = true }, &s_show_fall_timer, null);
         h_s_show_fps =
             gf.ASettingOccupy(section, "show_fps", .B, .{ .b = true }, &s_show_fps, null);
+        h_s_show_fps_simple =
+            gf.ASettingOccupy(section, "show_fps_simple", .B, .{ .b = false }, &s_show_fps_simple, null);
         h_s_show_speed =
             gf.ASettingOccupy(section, "show_speed", .B, .{ .b = true }, &s_show_speed, null);
         h_s_show_speed_offsets =
@@ -175,9 +180,15 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             }
 
             if (Overlay.s_show_fps) {
-                _ = gf.GDrawText(.Overlay, rt.MakeText(624, 464, "~r{d:>2.0}  {d:>5.2}  {d:>5.3}", .{
-                    gs.fps_avg, gs.fps, gs.dt_f,
-                }, null, null) catch null);
+                if (Overlay.s_show_fps_simple) {
+                    _ = gf.GDrawText(.Overlay, rt.MakeText(624, 464, "~r{d:>2.0}", .{
+                        gs.fps_avg,
+                    }, null, null) catch null);
+                } else {
+                    _ = gf.GDrawText(.Overlay, rt.MakeText(624, 464, "~r{d:>2.0}  {d:>5.2}  {d:>5.3}", .{
+                        gs.fps_avg, gs.fps, gs.dt_f,
+                    }, null, null) catch null);
+                }
             }
 
             if (Overlay.s_show_death_count) {

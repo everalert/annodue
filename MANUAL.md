@@ -173,7 +173,7 @@ Configurable under `[inputdisplay]`
 - Show time to overheat and underheat
 - Show death count
 - Show fall timer
-- Show FPS readout
+- Show FPS readout, with simplified option
 - Show detailed speed readout
 - Show speed effects from FAST, SLOW and SWST terrain
 
@@ -184,6 +184,7 @@ Configured under `[overlay]`
 |:---|:---|:---|:---|
 |`enable`            |`bool`|`off`|&nbsp;
 |`show_fps`          |`bool`|`on` |&nbsp;
+|`show_fps_simple`   |`bool`|`off`|&nbsp;
 |`show_speed`        |`bool`|`on` |&nbsp;
 |`show_speed_offsets`|`bool`|`on` |&nbsp;
 |`show_lap_times`    |`bool`|`on` |&nbsp;

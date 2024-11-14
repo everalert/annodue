@@ -74,6 +74,10 @@ const Overlay = struct {
     var slow_time: f32 = 0;
     var swst_state: ActiveState = .Off;
     var swst_time: f32 = 0;
+    var mfg_time: f32 = 0;
+    var mfg_timing: bool = false;
+    var mfg_delay: f32 = 0;
+    var mfg_power: f32 = 0;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
@@ -142,15 +146,33 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         const lap: u32 = rrd.PLAYER.*.lap;
         const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
 
-        const terrain_model = rete.PLAYER.*._unk_0140_terrainModel;
+        const p = rete.PLAYER.*;
+
+        const terrain_model = p._unk_0140_terrainModel;
         const behavior = if (terrain_model) |tm| ModelMesh_GetBehavior(tm) else null;
-        const grounded = rete.PLAYER.*.flags2.IS_NEAR_GROUND;
+        const grounded = p.flags2.IS_NEAR_GROUND;
         Overlay.fast_state.update(behavior != null and behavior.?.TerrainFlags.FAST);
         Overlay.slow_state.update(grounded and behavior != null and behavior.?.TerrainFlags.SLOW);
         Overlay.swst_state.update(grounded and behavior != null and behavior.?.TerrainFlags.SWST);
         Overlay.fast_time = if (Overlay.fast_state.on()) Overlay.fast_time + gs.dt_f else 0;
         Overlay.slow_time = if (Overlay.slow_state.on()) Overlay.slow_time + gs.dt_f else 0;
         Overlay.swst_time = if (Overlay.swst_state.on()) Overlay.swst_time + gs.dt_f else 0;
+
+        if (p._fall_float_rate > 0.001 and p.nextPosition.x == p.positionPrev.x and p.nextPosition.y == p.positionPrev.y and p.nextPosition.z == p.positionPrev.z) {
+            Overlay.mfg_time = if (!Overlay.mfg_timing) 0 else Overlay.mfg_time + gs.dt_f;
+            Overlay.mfg_timing = true;
+            Overlay.mfg_power = p._fall_float_rate;
+        } else {
+            if (Overlay.mfg_timing) {
+                Overlay.mfg_delay = 1.0;
+                Overlay.mfg_timing = false;
+            } else {
+                Overlay.mfg_delay -= gs.dt_f;
+            }
+            if (Overlay.mfg_delay <= 0) {
+                Overlay.mfg_time = 0;
+            }
+        }
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
             if (Overlay.s_show_heat_timer) {
@@ -206,8 +228,20 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     }, null, null) catch null);
             }
 
+            // FIXME: add setting, docs
+            // mfg
+            if (true) {
+                if (Overlay.mfg_time > 0 or Overlay.mfg_delay > 0) {
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(lbx, lby + sty * 2, "~3MFG ~1{d:0>5.3}", .{
+                        Overlay.mfg_time,
+                    }, null, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(lbx, lby + sty * 3 - 4, "~1{d:0>5.3}", .{
+                        Overlay.mfg_power,
+                    }, null, null) catch null);
+                }
+            }
+
             if (Overlay.s_show_speed) {
-                const p = rete.PLAYER.*;
                 const b = gs.player.boosting.on();
 
                 const speed_cur = @max(p.speed, 0.0);

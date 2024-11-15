@@ -54,6 +54,7 @@ const Overlay = struct {
     var h_s_show_heat_timer: ?SettingHandle = null;
     var h_s_show_death_count: ?SettingHandle = null;
     var h_s_show_fall_timer: ?SettingHandle = null;
+    var h_s_show_mfg_timer: ?SettingHandle = null;
     var h_s_show_fps: ?SettingHandle = null;
     var h_s_show_fps_simple: ?SettingHandle = null;
     var h_s_show_speed: ?SettingHandle = null;
@@ -63,6 +64,7 @@ const Overlay = struct {
     var s_show_heat_timer: bool = true;
     var s_show_death_count: bool = true;
     var s_show_fall_timer: bool = true;
+    var s_show_mfg_timer: bool = true;
     var s_show_fps: bool = true;
     var s_show_fps_simple: bool = false;
     var s_show_speed: bool = true;
@@ -93,6 +95,8 @@ const Overlay = struct {
             gf.ASettingOccupy(section, "show_death_count", .B, .{ .b = true }, &s_show_death_count, null);
         h_s_show_fall_timer =
             gf.ASettingOccupy(section, "show_fall_timer", .B, .{ .b = true }, &s_show_fall_timer, null);
+        h_s_show_mfg_timer =
+            gf.ASettingOccupy(section, "show_mfg_timer", .B, .{ .b = true }, &s_show_mfg_timer, null);
         h_s_show_fps =
             gf.ASettingOccupy(section, "show_fps", .B, .{ .b = true }, &s_show_fps, null);
         h_s_show_fps_simple =
@@ -230,7 +234,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
             // FIXME: add setting, docs
             // mfg
-            if (true) {
+            if (Overlay.s_show_mfg_timer) {
                 if (Overlay.mfg_time > 0 or Overlay.mfg_delay > 0) {
                     _ = gf.GDrawText(.OverlayP, rt.MakeText(lbx, lby + sty * 2, "~3MFG ~1{d:0>5.3}", .{
                         Overlay.mfg_time,

@@ -173,6 +173,7 @@ Configurable under `[inputdisplay]`
 - Show time to overheat and underheat
 - Show death count
 - Show fall timer
+- Show MFG (bounce glitch) timer
 - Show FPS readout, with simplified option
 - Show detailed speed readout
 - Show speed effects from FAST, SLOW and SWST terrain

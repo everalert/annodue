@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Overlay: Detailed speed readout
+- Overlay: Detailed speed readout, with raw readout option
 - Overlay: Terrain speed readout
 - Overlay: Simplified FPS readout option
 - Overlay: MFG (bounce glitch) timer

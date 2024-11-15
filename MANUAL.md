@@ -175,7 +175,7 @@ Configurable under `[inputdisplay]`
 - Show fall timer
 - Show MFG (bounce glitch) timer
 - Show FPS readout, with simplified option
-- Show detailed speed readout
+- Show detailed speed readout, with raw speed only option
 - Show speed effects from FAST, SLOW and SWST terrain
 
 ##### Settings
@@ -187,6 +187,7 @@ Configured under `[overlay]`
 |`show_fps`          |`bool`|`on` |&nbsp;
 |`show_fps_simple`   |`bool`|`off`|&nbsp;
 |`show_speed`        |`bool`|`on` |&nbsp;
+|`show_speed_raw`    |`bool`|`on` |&nbsp;
 |`show_speed_offsets`|`bool`|`on` |&nbsp;
 |`show_lap_times`    |`bool`|`on` |&nbsp;
 |`show_heat_timer`   |`bool`|`on` |&nbsp;

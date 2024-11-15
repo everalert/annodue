@@ -35,6 +35,7 @@ pub const panic = debug.annodue_panic;
 //   show_fps           bool
 //   show_fps_simple    bool
 //   show_speed         bool
+//   show_speed_raw     bool
 //   show_speed_offsets bool
 //   show_heat_timer    bool
 //   show_lap_times     bool
@@ -58,6 +59,7 @@ const Overlay = struct {
     var h_s_show_fps: ?SettingHandle = null;
     var h_s_show_fps_simple: ?SettingHandle = null;
     var h_s_show_speed: ?SettingHandle = null;
+    var h_s_show_speed_raw: ?SettingHandle = null;
     var h_s_show_speed_offsets: ?SettingHandle = null;
     var s_enable: bool = false;
     var s_show_lap_times: bool = true;
@@ -68,6 +70,7 @@ const Overlay = struct {
     var s_show_fps: bool = true;
     var s_show_fps_simple: bool = false;
     var s_show_speed: bool = true;
+    var s_show_speed_raw: bool = true;
     var s_show_speed_offsets: bool = true;
 
     var fast_state: ActiveState = .Off;
@@ -80,6 +83,7 @@ const Overlay = struct {
     var mfg_timing: bool = false;
     var mfg_delay: f32 = 0;
     var mfg_power: f32 = 0;
+    var speed: f32 = 0;
     var speed_prev: f32 = 0;
 
     fn settingsInit(gf: *GlobalFn) void {
@@ -104,6 +108,8 @@ const Overlay = struct {
             gf.ASettingOccupy(section, "show_fps_simple", .B, .{ .b = false }, &s_show_fps_simple, null);
         h_s_show_speed =
             gf.ASettingOccupy(section, "show_speed", .B, .{ .b = true }, &s_show_speed, null);
+        h_s_show_speed_raw =
+            gf.ASettingOccupy(section, "show_speed_raw", .B, .{ .b = true }, &s_show_speed_raw, null);
         h_s_show_speed_offsets =
             gf.ASettingOccupy(section, "show_speed_offsets", .B, .{ .b = true }, &s_show_speed_offsets, null);
     }
@@ -154,6 +160,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             Overlay.fast_state = .Off;
             Overlay.slow_state = .Off;
             Overlay.swst_state = .Off;
+            Overlay.speed = 0;
             Overlay.speed_prev = 0;
             Overlay.mfg_timing = false;
             Overlay.mfg_time = 0;
@@ -189,6 +196,9 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 Overlay.mfg_time = 0;
             }
         }
+
+        Overlay.speed_prev = Overlay.speed;
+        Overlay.speed = if (Overlay.s_show_speed_raw) rete.GetSpeedBase(p) + rete.GetSpeedBoost(p) else @max(p.speed, 0.0);
 
         // rendering
 
@@ -260,7 +270,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             if (Overlay.s_show_speed) {
                 const b = gs.player.boosting.on();
 
-                const speed_cur = @max(p.speed, 0.0);
+                const speed_cur = Overlay.speed;
                 const speed_dif = speed_cur - Overlay.speed_prev;
                 const speed_max = if (b) p.stats.MaxSpeed + p.stats.BoostThrust else p.stats.MaxSpeed;
                 const speed_percent = speed_cur / speed_max;
@@ -322,10 +332,6 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     x -= mx * 1;
                 }
             }
-
-            // post-processing
-
-            Overlay.speed_prev = @max(p.speed, 0.0);
         }
     }
 }

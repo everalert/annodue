@@ -230,4 +230,29 @@ pub const TEST_FLAGS2 = packed struct {
 
 // HELPERS
 
-// ...
+// based on code in fn_4783E0
+pub fn GetSpeedBase(t: *Test) f32 {
+    const accel: f32 = t.accelThrust;
+    const stat_accel: f32 = t.stats.Acceleration;
+    const stat_max_speed: f32 = t.stats.MaxSpeed;
+
+    var speed: f32 = 0;
+    if (accel <= 0) {
+        speed = -(-accel * stat_max_speed / (stat_accel - accel));
+    } else {
+        speed = accel * stat_max_speed / (stat_accel + accel);
+    }
+    speed *= t._speed_mult;
+
+    return speed;
+}
+
+// based on code in fn_4787F0
+pub fn GetSpeedBoost(t: *Test) f32 {
+    const accel: f32 = t.accelBoost;
+    const stat_boost_speed: f32 = t.stats.BoostThrust;
+
+    const speed: f32 = if (accel <= 0) 0 else accel * stat_boost_speed / (accel + 0.33);
+
+    return speed;
+}

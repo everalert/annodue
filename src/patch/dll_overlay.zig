@@ -80,6 +80,7 @@ const Overlay = struct {
     var mfg_timing: bool = false;
     var mfg_delay: f32 = 0;
     var mfg_power: f32 = 0;
+    var speed_prev: f32 = 0;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
@@ -146,11 +147,22 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // FIXME: port setting to new system
     if (!gs.practice_mode or !Overlay.s_enable) return;
 
+    const p = rete.PLAYER.*;
+
     if (gs.in_race.on() and !gf.GHideRaceUIIsOn()) {
+        if (gs.in_race == .JustOn or p.flags1.IS_DEAD) {
+            Overlay.fast_state = .Off;
+            Overlay.slow_state = .Off;
+            Overlay.swst_state = .Off;
+            Overlay.speed_prev = 0;
+            Overlay.mfg_timing = false;
+            Overlay.mfg_time = 0;
+        }
+
+        // preprocessing
+
         const lap: u32 = rrd.PLAYER.*.lap;
         const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
-
-        const p = rete.PLAYER.*;
 
         const terrain_model = p._unk_0140_terrainModel;
         const behavior = if (terrain_model) |tm| ModelMesh_GetBehavior(tm) else null;
@@ -177,6 +189,8 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 Overlay.mfg_time = 0;
             }
         }
+
+        // rendering
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
             if (Overlay.s_show_heat_timer) {
@@ -232,8 +246,6 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     }, null, null) catch null);
             }
 
-            // FIXME: add setting, docs
-            // mfg
             if (Overlay.s_show_mfg_timer) {
                 if (Overlay.mfg_time > 0 or Overlay.mfg_delay > 0) {
                     _ = gf.GDrawText(.OverlayP, rt.MakeText(lbx, lby + sty * 2, "~3MFG ~1{d:0>5.3}", .{
@@ -249,6 +261,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 const b = gs.player.boosting.on();
 
                 const speed_cur = @max(p.speed, 0.0);
+                const speed_dif = speed_cur - Overlay.speed_prev;
                 const speed_max = if (b) p.stats.MaxSpeed + p.stats.BoostThrust else p.stats.MaxSpeed;
                 const speed_percent = speed_cur / speed_max;
 
@@ -260,6 +273,9 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     speed_cur,
                 }, speed_color, null) catch null);
                 _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y + 8, "~r~1{d:>5.3}", .{
+                    speed_dif,
+                }, null, null) catch null);
+                _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y + 19, "~r~3{d:>5.3}", .{
                     speed_percent * 100,
                 }, null, null) catch null);
             }
@@ -269,15 +285,15 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 const y: i32 = 426;
                 const mx: i32 = 64;
 
-                if (rete.PLAYER.*.speedOffset != 0.0 or rete.PLAYER.*.speedMult != 1.0) {
-                    const col_off: u32 = if (rete.PLAYER.*.speedOffset != 0.0) 0xFFFFFFBE else 0xAAAAAABE;
-                    const col_mul: u32 = if (rete.PLAYER.*.speedMult != 1.0) 0xFFFFFFBE else 0xAAAAAABE;
+                if (p.speedOffset != 0.0 or p.speedMult != 1.0) {
+                    const col_off: u32 = if (p.speedOffset != 0.0) 0xFFFFFFBE else 0xAAAAAABE;
+                    const col_mul: u32 = if (p.speedMult != 1.0) 0xFFFFFFBE else 0xAAAAAABE;
                     const x2 = x + 8;
                     _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r{d:>5.3}", .{
-                        rete.PLAYER.*.speedOffset,
+                        p.speedOffset,
                     }, col_off, null) catch null);
                     _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~rx{d:>5.3}", .{
-                        rete.PLAYER.*.speedMult,
+                        p.speedMult,
                     }, col_mul, null) catch null);
                 }
 
@@ -305,6 +321,10 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     }, null, null) catch null);
                 }
             }
+
+            // post-processing
+
+            Overlay.speed_prev = @max(p.speed, 0.0);
         }
     }
 }

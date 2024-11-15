@@ -281,9 +281,9 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             }
 
             if (Overlay.s_show_speed_offsets) {
-                const x: i32 = 420;
-                const y: i32 = 426;
-                const mx: i32 = 64;
+                var x: i16 = 420;
+                const y: i16 = 426;
+                const mx: i16 = 64;
 
                 if (p.speedOffset != 0.0 or p.speedMult != 1.0) {
                     const col_off: u32 = if (p.speedOffset != 0.0) 0xFFFFFFBE else 0xAAAAAABE;
@@ -295,30 +295,31 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~rx{d:>5.3}", .{
                         p.speedMult,
                     }, col_mul, null) catch null);
+                    x -= mx * 1;
                 }
 
                 if (Overlay.fast_time > 0) {
-                    const x2 = x - mx * 1;
-                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r~3FAST", .{}, null, null) catch null);
-                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~r~1{d:>5.3}", .{
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y, "~r~3FAST", .{}, null, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y + 8, "~r~1{d:>5.3}", .{
                         Overlay.fast_time,
                     }, null, null) catch null);
+                    x -= mx * 1;
                 }
 
                 if (Overlay.slow_time > 0) {
-                    const x2 = x - mx * 2;
-                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r~3SLOW", .{}, null, null) catch null);
-                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~r~1{d:>5.3}", .{
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y, "~r~3SLOW", .{}, null, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y + 8, "~r~1{d:>5.3}", .{
                         Overlay.slow_time,
                     }, null, null) catch null);
+                    x -= mx * 1;
                 }
 
                 if (Overlay.swst_time > 0) {
-                    const x2 = x - mx * 3;
-                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y, "~r~3SWST", .{}, null, null) catch null);
-                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x2, y + 8, "~r~1{d:>5.3}", .{
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y, "~r~3SWST", .{}, null, null) catch null);
+                    _ = gf.GDrawText(.OverlayP, rt.MakeText(x, y + 8, "~r~1{d:>5.3}", .{
                         Overlay.swst_time,
                     }, null, null) catch null);
+                    x -= mx * 1;
                 }
             }
 

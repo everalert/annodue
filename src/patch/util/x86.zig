@@ -147,6 +147,14 @@ pub fn mov_eax_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
     return offset;
 }
 
+pub fn mov_esi_imm32(memory: usize, comptime T: type, imm32: T) usize {
+    std.debug.assert(T == u8 or T == u32);
+    var offset = memory;
+    offset = mem.write(offset, u8, 0xBE);
+    offset = mem.write(offset, T, imm32);
+    return offset;
+}
+
 pub fn mov_eax_moffs32(memory_offset: usize, moffs32: usize) usize {
     var offset = memory_offset;
     offset = mem.write(offset, u8, 0xA1);

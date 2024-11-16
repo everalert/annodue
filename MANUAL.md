@@ -181,7 +181,7 @@ Configurable under `[inputdisplay]`
 ##### Settings
 Configured under `[overlay]`
 
-|Option|Type|Default|
+|Option|Type|Default|Note|
 |:---|:---|:---|:---|
 |`enable`            |`bool`|`off`|&nbsp;
 |`show_fps`          |`bool`|`on` |&nbsp;
@@ -213,6 +213,7 @@ Configured under `[overlay]`
 - Custom default number of racers
 - Custom default number of laps
 - Fast countdown timer
+- Run game in background
 
 ##### Quick Race Menu Controls
 
@@ -248,6 +249,7 @@ Configured under `[qol]`
 |`fast_countdown_enable`  |`bool`|`off` |&nbsp;
 |`fast_countdown_duration`|`f32` |`1.00`|0.05 to 3.00
 |`fix_viewport_edges`     |`bool`|`off` |May cause sprites at edge to be slightly cut off
+|`run_in_background`      |`bool`|`off` |
 
 ### Collision Viewer
 
@@ -323,7 +325,7 @@ Configurable under `[multiplayer]`
 
 Configurable under `[gameplay]`
 
-|Option|Type|Default|
+|Option|Type|Default|Note|
 |:---|:---|:---|:---|
 |`death_speed_mod_enable`|`bool`|`off`|&nbsp;
 |`death_speed_min`       |`f32` |`325`|&nbsp;

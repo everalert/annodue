@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overlay: Terrain speed offsets readout (setting: `show_speed_offsets`)
 - Overlay: Simplified FPS readout option (setting: `show_fps_simple`)
 - Overlay: MFG (bounce glitch) timer (setting: `show_mfg_timer`)
+- QOL: Run game in background (setting: `run_in_background`)
 
 ### Changed
 

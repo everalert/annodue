@@ -41,9 +41,6 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-// FIXME: remove, for testing
-const dbg = @import("util/debug.zig");
-
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -90,6 +87,7 @@ pub const panic = debug.annodue_panic;
 // - feat: custom default number of racers
 // - feat: custom default number of laps
 // - feat: fast countdown timer
+// - feat: run game in background
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -99,6 +97,8 @@ pub const panic = debug.annodue_panic;
 //   default_laps               u32     max 5
 //   fast_countdown_enable      bool
 //   fast_countdown_duration    f32     min 0.05, max 3.00
+//   fix_viewport_edges         bool
+//   run_in_background          bool
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -123,6 +123,7 @@ const QolState = struct {
     var h_s_skip_planet_cutscenes: ?SettingHandle = null;
     var h_s_skip_podium_cutscene: ?SettingHandle = null;
     var h_s_fix_viewport_edges: ?SettingHandle = null;
+    var h_s_run_in_background: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -132,6 +133,7 @@ const QolState = struct {
     var s_skip_planet_cutscenes: bool = false;
     var s_skip_podium_cutscene: bool = false;
     var s_fix_viewport_edges: bool = false;
+    var s_run_in_background: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -168,6 +170,8 @@ const QolState = struct {
             gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .b = false }, &s_skip_podium_cutscene, null);
         h_s_fix_viewport_edges =
             gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, &s_fix_viewport_edges, null);
+        h_s_run_in_background =
+            gf.ASettingOccupy(section, "run_in_background", .B, .{ .b = false }, &s_run_in_background, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -225,6 +229,10 @@ const QolState = struct {
             }
             if (nlen == 18 and std.mem.eql(u8, "fix_viewport_edges", setting.name[0..nlen])) {
                 PatchViewportEdges(s_fix_viewport_edges);
+                continue;
+            }
+            if (nlen == 17 and std.mem.eql(u8, "run_in_background", setting.name[0..nlen])) {
+                PatchWindowBackgroundActivity(s_run_in_background);
                 continue;
             }
 
@@ -305,6 +313,23 @@ fn PatchViewportEdges(enable: bool) void {
     const w: u8 = if (enable) 0x90 else 0x49; // dec ecx = width
     _ = mem.write(0x44F610, u8, h);
     _ = mem.write(0x44F611, u8, w);
+}
+
+// WINDOW
+
+const window_activity_asm = [_]u8{ 0x8B, 0x74, 0x24, 0x0C, 0x85, 0xF6, 0x74, 0x6A };
+
+// TODO: get keyboard input to work when unfocused; presumably because window messages not being passed
+// force Window_SetActive__423AE0 to always set window as active
+fn PatchWindowBackgroundActivity(enable: bool) void {
+    var offset: usize = 0x423AE1;
+    if (enable) {
+        offset = x86.mov_esi_imm32(offset, u32, 1);
+        offset = x86.nop_until(offset, 0x423AE1 + window_activity_asm.len);
+    } else {
+        offset = mem.write_bytes(offset, &window_activity_asm, window_activity_asm.len);
+    }
+    std.debug.assert(offset == 0x423AE9);
 }
 
 // GAME CHEATS

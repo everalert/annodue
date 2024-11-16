@@ -18,8 +18,8 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 
 ##### Setting Types
 
-|Type|Possible Values|Note
-|:---|:---|:---|:---|
+|Type|Possible Values|Note|
+|:---|:---|:---|
 |`bool`|`1`, `on` or `true` to enable|&nbsp;
 |`u32` |`0` to `4294967295`|whole number
 |`i32` |`-2147483648` to `2147483647`|whole number
@@ -173,19 +173,26 @@ Configurable under `[inputdisplay]`
 - Show time to overheat and underheat
 - Show death count
 - Show fall timer
-- Show FPS readout
+- Show MFG (bounce glitch) timer
+- Show FPS readout, with simplified option
+- Show detailed speed readout, with raw speed only option
+- Show speed effects from FAST, SLOW and SWST terrain
 
 ##### Settings
 Configured under `[overlay]`
 
 |Option|Type|Default|
 |:---|:---|:---|:---|
-|`enable`          |`bool`|`off`|
-|`show_fps`        |`bool`|`on` |
-|`show_lap_times`  |`bool`|`on` |
-|`show_heat_timer` |`bool`|`on` |
-|`show_death_count`|`bool`|`on` |
-|`show_fall_timer` |`bool`|`on` |
+|`enable`            |`bool`|`off`|&nbsp;
+|`show_fps`          |`bool`|`on` |&nbsp;
+|`show_fps_simple`   |`bool`|`off`|&nbsp;
+|`show_speed`        |`bool`|`on` |&nbsp;
+|`show_speed_raw`    |`bool`|`on` |&nbsp;
+|`show_speed_offsets`|`bool`|`on` |&nbsp;
+|`show_lap_times`    |`bool`|`on` |&nbsp;
+|`show_heat_timer`   |`bool`|`on` |&nbsp;
+|`show_death_count`  |`bool`|`on` |&nbsp;
+|`show_fall_timer`   |`bool`|`on` |&nbsp;
 
 ### Quality of Life
 
@@ -318,9 +325,9 @@ Configurable under `[gameplay]`
 
 |Option|Type|Default|
 |:---|:---|:---|:---|
-|`death_speed_mod_enable`|`bool`|`off`|
-|`death_speed_min`       |`f32` |`325`|
-|`death_speed_drop`      |`f32` |`140`|
+|`death_speed_mod_enable`|`bool`|`off`|&nbsp;
+|`death_speed_min`       |`f32` |`325`|&nbsp;
+|`death_speed_drop`      |`f32` |`140`|&nbsp;
 
 ### Developer Tools
 

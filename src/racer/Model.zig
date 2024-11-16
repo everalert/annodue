@@ -12,7 +12,7 @@ pub const Node_SetTransform: *fn (*ModelNodeXf, *Mat4x4) callconv(.C) void = @pt
 pub const Node_SetFlags: *fn (*ModelNode, i32, i32, i8, i32) callconv(.C) void = @ptrFromInt(0x431A50);
 pub const Node_SetColorsOnAllMaterials: *fn (*ModelNode, unk2: u8, unk1: u8, R: u8, G: u8, B: u8, A: u8) callconv(.C) void = @ptrFromInt(0x42B640);
 
-pub const Mesh_GetBehavior: *fn (*ModelMesh) callconv(.C) *ModelBehavior = @ptrFromInt(0x4318B0);
+pub const Mesh_GetBehavior: *fn (*ModelMesh) callconv(.C) ?*ModelBehavior = @ptrFromInt(0x4318B0);
 
 pub const MeshMaterial_SetColors: *fn (*ModelMeshMaterial, unk2: i16, unk1: i16, R: i16, G: i16, B: i16, A: i16) callconv(.C) void = @ptrFromInt(0x42B640);
 
@@ -66,12 +66,48 @@ pub const ModelBehavior = extern struct {
     _unk_12_14: [2]u8,
     LightPosition: Vec3, // position
     LightLocation: Vec3, // rotation
-    TerrainFlags: u32, // TODO: enum
+    TerrainFlags: ModelBehaviorTerrainFlags,
     _unk_30_32: [2]u8,
     _unk_32_34: [2]u8,
     VisualLayersDisable: u32,
     VisualLayersEnable: u32,
     pTriggers: *ModelTriggerDescription,
+};
+
+// TODO: testing assert size 32 bits
+pub const ModelBehaviorTerrainFlags = packed struct {
+    ZON: bool,
+    ZOFF: bool,
+    FAST: bool, // +200 terrain speed
+    SLOW: bool, // 0.75x terrain speed; cancels zon state
+    SWST: bool, // 'slowest'; 0.1x terrain speed
+    SLIP: bool, // ice; 0.2x traction
+    DUST: bool,
+    SNOW: bool,
+    WET: bool,
+    RUFF: bool,
+    SWMP: bool,
+    NSNW: bool,
+    MIRR: bool,
+    LAVA: bool,
+    FALL: bool,
+    SOFT: bool,
+    NRSP: bool,
+    FLAT: bool,
+    _18: bool, // unused
+    _19: bool, // unused
+    _20: bool, // unused
+    _21: bool, // unused
+    _22: bool, // unused
+    _23: bool, // unused
+    _24: bool, // unused
+    _25: bool, // unused
+    _26: bool, // unused
+    _27: bool, // unused
+    _28: bool, // unused
+    SIDE: bool,
+    _30: bool, // unused
+    _31: bool, // unused
 };
 
 // size 0x2C

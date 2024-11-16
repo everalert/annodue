@@ -53,7 +53,7 @@ fn global_player_reset(self: *GlobalState) void {
         if (p.upgrades_lv[i] > 0 and p.upgrades_hp[i] > 0) break true;
     } else false;
 
-    p.flags1 = 0;
+    p.flags1 = std.mem.zeroInit(re.Test.TEST_FLAGS1, .{});
     p.boosting = .Off;
     p.underheating = .On; // you start the race underheating
     p.overheating = .Off;
@@ -71,12 +71,12 @@ fn global_player_update(self: *GlobalState) void {
     p.heat = re.Test.PLAYER.*.temperature; // TODO: remove from gs, now that it's easy?
     const engine = re.Test.PLAYER.*.engineStatus; // TODO: remove from gs, now that it's easy?
 
-    p.boosting.update((p.flags1 & (1 << 23)) > 0);
+    p.boosting.update(p.flags1.IS_BOOSTING);
     p.underheating.update(p.heat >= 100);
     p.overheating.update(for (0..6) |i| {
         if (engine[i] & (1 << 3) > 0) break true;
     } else false);
-    p.dead.update((p.flags1 & (1 << 14)) > 0);
+    p.dead.update(p.flags1.IS_DEAD);
     if (p.dead == .JustOn) p.deaths += 1;
 }
 
@@ -183,9 +183,8 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
         if (rg.IN_RACE.* == 0) break :blk .PreRace;
         // TODO: figure out how the engine knows to set these and use those instead
         const flags1 = re.Test.PLAYER.*.flags1;
-        const countdown: bool = flags1 & (1 << 0) != 0;
-        if (countdown) break :blk .Countdown;
-        const postrace: bool = flags1 & (1 << 5) == 0;
+        if (flags1.IN_COUNTDOWN) break :blk .Countdown;
+        const postrace: bool = !flags1.RACE_NOT_ENDED;
         const show_stats: bool = re.Manager.entity(.Jdge, 0).Flags & 0x0F == 2;
         if (postrace and show_stats) break :blk .PostRace;
         if (postrace) break :blk .PostRaceExiting;

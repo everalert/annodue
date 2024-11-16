@@ -69,11 +69,11 @@ const CustomTerrain = struct {
         Test_HandleTerrain(te);
 
         const terrain_model = te._unk_0140_terrainModel;
-        if (@intFromPtr(terrain_model) == 0) return;
-        const behavior = ModelMesh_GetBehavior(terrain_model);
-        if (@intFromPtr(behavior) == 0) return;
+        if (terrain_model == null) return;
+        const behavior = ModelMesh_GetBehavior(terrain_model.?);
+        if (behavior == null) return;
 
-        const flags = behavior.TerrainFlags;
+        const flags = @as(u32, @bitCast(behavior.?.TerrainFlags));
         const base: u16 = @intCast(((flags >> 30) & 0b11) * 11);
         var custom_flags = (flags >> 18) & 0b0111_1111_1111;
         for (0..11) |i| {

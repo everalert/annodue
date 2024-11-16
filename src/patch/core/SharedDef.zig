@@ -22,6 +22,7 @@ const GDrawLayer = @import("GDraw.zig").GDrawLayer;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
+const TestFlags1 = r.Entity.Test.TEST_FLAGS1;
 const Trig = r.Entity.Trig.Trig;
 const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 const TextDef = r.Text.TextDef;
@@ -64,7 +65,7 @@ pub const GlobalState = extern struct {
         upgrades_lv: [7]u8 = undefined,
         upgrades_hp: [7]u8 = undefined,
 
-        flags1: u32 = 0,
+        flags1: TestFlags1 = std.mem.zeroInit(TestFlags1, .{}),
         boosting: ActiveState = .Off,
         underheating: ActiveState = .On,
         overheating: ActiveState = .Off,

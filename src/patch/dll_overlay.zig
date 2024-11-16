@@ -43,7 +43,8 @@ pub const panic = debug.annodue_panic;
 //   show_fall_timer    bool
 
 // TODO: finish porting overlay features from original practice tool
-// TODO: settings for individual elements, hot-reloadable, with local settings change handling
+// TODO: implement additional 'show overlay' core setting used on layer directly, see GDraw.zig
+// TODO: reconsider location of overlay features after global overlay is formalized as above
 
 const PLUGIN_NAME: [*:0]const u8 = "Overlay";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -149,13 +150,11 @@ const lby: i16 = 128 + 16 * 6;
 const sty: i16 = 12;
 
 export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    // TODO: change practice mode check to 'show overlay' (core setting, not plugin) check
-    // FIXME: port setting to new system
-    if (!gs.practice_mode or !Overlay.s_enable) return;
-
-    const p = rete.PLAYER.*;
+    if (!Overlay.s_enable) return;
 
     if (gs.in_race.on() and !gf.GHideRaceUIIsOn()) {
+        const p = rete.PLAYER.*;
+
         if (gs.in_race == .JustOn or p.flags1.IS_DEAD) {
             Overlay.fast_state = .Off;
             Overlay.slow_state = .Off;

@@ -87,6 +87,7 @@ pub const panic = debug.annodue_panic;
 // - feat: skip podium cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
+// - feat: custom default race camera
 // - feat: fast countdown timer
 // - feat: run game in background
 // - SETTINGS:
@@ -96,6 +97,7 @@ pub const panic = debug.annodue_panic;
 //   fps_limiter_enable         bool
 //   default_racers             u32     max 12
 //   default_laps               u32     max 5
+//   default_camera             u32     1,2,4,5
 //   fast_countdown_enable      bool
 //   fast_countdown_duration    f32     min 0.05, max 3.00
 //   fix_viewport_edges         bool
@@ -119,6 +121,7 @@ const QolState = struct {
     var h_s_quickrace: ?SettingHandle = null;
     var h_s_default_racers: ?SettingHandle = null;
     var h_s_default_laps: ?SettingHandle = null;
+    var h_s_default_camera: ?SettingHandle = null;
     var h_s_ms_timer: ?SettingHandle = null;
     var h_s_fps_limiter: ?SettingHandle = null;
     var h_s_skip_planet_cutscenes: ?SettingHandle = null;
@@ -129,6 +132,7 @@ const QolState = struct {
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
     var s_default_laps: u32 = 3;
+    var s_default_camera: u32 = 3;
     var s_ms_timer: bool = false;
     var s_fps_limiter: bool = false;
     var s_skip_planet_cutscenes: bool = false;
@@ -165,6 +169,8 @@ const QolState = struct {
             gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null, settingsUpdateRacers);
         h_s_default_laps =
             gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null, settingsUpdateLaps);
+        h_s_default_camera =
+            gf.ASettingOccupy(section, "default_camera", .U, .{ .u = 1 }, null, settingsUpdateCamera);
         h_s_ms_timer =
             gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, &s_ms_timer, null);
         h_s_fps_limiter =
@@ -206,6 +212,15 @@ const QolState = struct {
         if (QuickRaceMenu.gs.init_late_passed) {
             re.Manager.entity(.Hang, 0).Laps = @intCast(s_default_laps);
         }
+    }
+
+    // patch CMan_SetNewCamera_451D60 call at end of CMan_HandlePreRaceSweepCam_451EF0
+    fn settingsUpdateCamera(new_value: Setting.Value) callconv(.C) void {
+        s_default_camera = std.math.clamp(new_value.u, 1, 5);
+        if (s_default_camera == 3) s_default_camera = 1;
+        if (h_s_default_camera) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_camera });
+
+        _ = mem.write(0x4525AE, u8, @as(u8, @intCast(s_default_camera)));
     }
 
     fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {

@@ -213,6 +213,7 @@ Configured under `[overlay]`
 - Skip podium cutscene
 - Custom default number of racers
 - Custom default number of laps
+- Custom default race camera
 - Fast countdown timer
 - Run game in background
 
@@ -247,6 +248,7 @@ Configured under `[qol]`
 |`skip_podium_cutscene`   |`bool`|`off` |&nbsp;
 |`default_racers`         |`u32` |`12`  |1 to 12
 |`default_laps`           |`u32` |`3`   |1 to 5
+|`default_camera`         |`u32` |`1`   |1,2,4,5
 |`fast_countdown_enable`  |`bool`|`off` |&nbsp;
 |`fast_countdown_duration`|`f32` |`1.00`|0.05 to 3.00
 |`fix_viewport_edges`     |`bool`|`off` |May cause sprites at edge to be slightly cut off

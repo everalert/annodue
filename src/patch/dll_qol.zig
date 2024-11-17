@@ -51,6 +51,7 @@ pub const panic = debug.annodue_panic;
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - fix: bugfix Cy Yunga cheat having no audio
 // - fix: bugfix map rendering not accounting for hi-res flag
+// - fix: bugfix changing camera with F1-F4 keys not persisting after a crash
 // - fix: remove 1px gap on right and bottom of viewport when rendering sprites
 //     - this may cut off sprites placed right at the edge, depending on your resolution settings
 // - feat: quick restart
@@ -141,6 +142,10 @@ const QolState = struct {
     var input_pause = input_pause_data.inputMap();
     var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
+
+    var fcam_mem: u32 = 0;
+    var fcam_mem_end: u32 = 0;
+    const fcam_mem_size: u32 = 32;
 
     fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
         input_pause.update(gf);
@@ -256,6 +261,37 @@ const QolState = struct {
         }
     }
 };
+
+// F-KEY CAMERA GLITCH
+
+// TODO: convert hand-rolled asm to x86.zig fns
+// adds CMan.CamModeOnRespawn=NewCamMode to fn_451D60, which is called by all ccf* paths
+fn PatchCameraFKeys(enable: bool) void {
+    std.debug.assert(QolState.fcam_mem != 0);
+    std.debug.assert(QolState.fcam_mem < QolState.fcam_mem_end);
+    const fn451D60_src_addr: u32 = 0x451D64;
+    const fn451D60_src_end_addr: u32 = 0x451D6B;
+
+    var off_cave = QolState.fcam_mem;
+    var off_src = fn451D60_src_addr;
+    if (enable) {
+        off_src = x86.jmp(off_src, off_cave);
+        off_cave = x86.mov_ecx_esp_add(off_cave, 0x08);
+        off_cave = mem.write_bytes(off_cave, &[3]u8{ 0x89, 0x48, 0x7C }, 3); // mov [eax+7C], ecx
+        off_cave = mem.write_bytes(off_cave, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }, 6); // mov [eax+80], ecx
+        off_cave = x86.jmp(off_cave, fn451D60_src_end_addr);
+    } else {
+        off_src = mem.write_bytes(off_src, &[_]u8{
+            0x8B, 0x4C, 0x24, 0x08, // mov ecx, [esp+08]
+            0x89, 0x48, 0x7C, // mov [eax+7C], ecx
+        }, 7);
+    }
+
+    std.debug.assert(off_src <= fn451D60_src_end_addr);
+    std.debug.assert(off_cave <= QolState.fcam_mem_end);
+    off_src = x86.nop_until(off_src, fn451D60_src_end_addr);
+    off_cave = x86.nop_until(off_cave, QolState.fcam_mem_end);
+}
 
 // HUD TIMER MS
 
@@ -925,6 +961,12 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = w32wm.ShowCursor(0); // cursor fix
     QolState.settingsInit(gf);
 
+    QolState.fcam_mem = gs.patch_offset;
+    QolState.fcam_mem_end = QolState.fcam_mem + QolState.fcam_mem_size;
+    gs.patch_offset = QolState.fcam_mem_end;
+    std.debug.assert(gs.patch_offset <= @as(u32, @intFromPtr(gs.patch_memory)) + gs.patch_size);
+    PatchCameraFKeys(true);
+
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
@@ -946,6 +988,8 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);
     PatchCyYungaCheatAudio(false);
+
+    PatchCameraFKeys(false);
 
     FastCountdown.patch(false);
 }

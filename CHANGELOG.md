@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overlay: Simplified FPS readout option (setting: `show_fps_simple`)
 - Overlay: MFG (bounce glitch) timer (setting: `show_mfg_timer`)
 - QOL: Run game in background (setting: `run_in_background`)
+- QOL: Game bugfix for changing camera with F1-F4 not persisting after crashing
 
 ### Changed
 

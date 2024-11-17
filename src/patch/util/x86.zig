@@ -239,6 +239,26 @@ pub fn mov_edx_esp(memory_offset: usize) usize {
     return mov_rm32_r32(memory_offset, 0xE2);
 }
 
+// FIXME: not functional, in progress
+//pub inline fn mov(
+//    memory: usize,
+//    tgt: union(enum) { r16: GenReg16, r32: GenReg32 },
+//    src: union(enum) { rm16: GenReg16, rm32: GenReg32, imm32: u32 },
+//    reg_offset: ?i32,
+//) usize {
+//    _ = reg_offset;
+//    var off = memory;
+//    off = switch (tgt) {
+//        .r32 => |dest| switch (src) {
+//            .rm16 => @panic("mov: r32->rm16 not impl"),
+//            .rm32 => |source| op_modRM(off, 0x8B, .mem8, dest, source),
+//            else => @panic("mov: r32 invalid src"),
+//        },
+//        .r16 => @panic("mov: r16 not impl"),
+//    };
+//    return off;
+//}
+
 // TODO: r/m16, r/m32 (FF /6)
 pub inline fn push(
     offset: usize,

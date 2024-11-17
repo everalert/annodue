@@ -200,6 +200,7 @@ Configured under `[overlay]`
 - Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Fix Cy Yunga cheat audio
 - Fix map rendering hi-res text
+- Fix changing camera with F1-F4 keys not persisting after a crash
 - Fix 1px gap on right and bottom of viewport when rendering sprites at the edge
     - This may cause the sprite to be clipped instead, depending on your resolution settings
 - Map controller `Start` to `Esc`

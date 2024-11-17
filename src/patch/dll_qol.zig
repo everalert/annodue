@@ -87,7 +87,7 @@ pub const panic = debug.annodue_panic;
 // - feat: skip podium cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
-// - feat: custom default race camera
+// - feat: custom default race camera, with option to auto-update
 // - feat: fast countdown timer
 // - feat: run game in background
 // - SETTINGS:
@@ -98,6 +98,7 @@ pub const panic = debug.annodue_panic;
 //   default_racers             u32     max 12
 //   default_laps               u32     max 5
 //   default_camera             u32     1,2,4,5
+//   default_camera_auto        bool
 //   fast_countdown_enable      bool
 //   fast_countdown_duration    f32     min 0.05, max 3.00
 //   fix_viewport_edges         bool
@@ -122,6 +123,7 @@ const QolState = struct {
     var h_s_default_racers: ?SettingHandle = null;
     var h_s_default_laps: ?SettingHandle = null;
     var h_s_default_camera: ?SettingHandle = null;
+    var h_s_default_camera_auto: ?SettingHandle = null;
     var h_s_ms_timer: ?SettingHandle = null;
     var h_s_fps_limiter: ?SettingHandle = null;
     var h_s_skip_planet_cutscenes: ?SettingHandle = null;
@@ -133,6 +135,7 @@ const QolState = struct {
     var s_default_racers: u32 = 12;
     var s_default_laps: u32 = 3;
     var s_default_camera: u32 = 3;
+    var s_default_camera_auto: bool = false;
     var s_ms_timer: bool = false;
     var s_fps_limiter: bool = false;
     var s_skip_planet_cutscenes: bool = false;
@@ -150,6 +153,9 @@ const QolState = struct {
     var fcam_mem: u32 = 0;
     var fcam_mem_end: u32 = 0;
     const fcam_mem_size: u32 = 32;
+
+    var cam_prev: u32 = 1;
+    var cam_cman: ?*re.cMan.cMan = null;
 
     fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
         input_pause.update(gf);
@@ -171,6 +177,8 @@ const QolState = struct {
             gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null, settingsUpdateLaps);
         h_s_default_camera =
             gf.ASettingOccupy(section, "default_camera", .U, .{ .u = 1 }, null, settingsUpdateCamera);
+        h_s_default_camera_auto =
+            gf.ASettingOccupy(section, "default_camera_auto", .B, .{ .b = false }, &s_default_camera_auto, null);
         h_s_ms_timer =
             gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, &s_ms_timer, null);
         h_s_fps_limiter =
@@ -214,12 +222,12 @@ const QolState = struct {
         }
     }
 
-    // patch CMan_SetNewCamera_451D60 call at end of CMan_HandlePreRaceSweepCam_451EF0
     fn settingsUpdateCamera(new_value: Setting.Value) callconv(.C) void {
         s_default_camera = std.math.clamp(new_value.u, 1, 5);
         if (s_default_camera == 3) s_default_camera = 1;
         if (h_s_default_camera) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_camera });
 
+        // patch CMan_SetNewCamera_451D60 call at end of CMan_HandlePreRaceSweepCam_451EF0
         _ = mem.write(0x4525AE, u8, @as(u8, @intCast(s_default_camera)));
     }
 
@@ -1072,6 +1080,18 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     if (gs.in_race.on()) {
         if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
+
+        if (QolState.s_default_camera_auto and (gs.race_state == .Countdown or gs.race_state == .Racing)) {
+            if (QolState.cam_cman == null or gs.race_state_new)
+                QolState.cam_cman = re.cMan.FindFromPlayerEntity(re.Test.PLAYER.*);
+
+            if (QolState.cam_cman) |cman| {
+                if (cman.mode != QolState.cam_prev and cman.mode != QolState.s_default_camera and
+                    (cman.mode == 1 or cman.mode == 2 or cman.mode == 4 or cman.mode == 5))
+                    if (QolState.h_s_default_camera) |h| gf.ASettingUpdate(h, .{ .u = cman.mode });
+                QolState.cam_prev = cman.mode;
+            }
+        }
 
         const total_time: f32 = rrd.PLAYER.*.time.total;
 

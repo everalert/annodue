@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overlay: MFG (bounce glitch) timer (setting: `show_mfg_timer`)
 - QOL: Run game in background (setting: `run_in_background`)
 - QOL: Game bugfix for changing camera with F1-F4 not persisting after crashing
-- QOL: Option to set custom default camera (setting: `default_camera`)
+- QOL: Option to set custom default camera, and set it automatically (setting: `default_camera` `default_camera_auto`)
 
 ### Changed
 

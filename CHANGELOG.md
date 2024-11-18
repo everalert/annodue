@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Run game in background (setting: `run_in_background`)
 - QOL: Game bugfix for changing camera with F1-F4 not persisting after crashing
 - QOL: Option to set custom default camera, and set it automatically (setting: `default_camera` `default_camera_auto`)
+- QOL: Patch truguts cheat (Shift+F4+4) to give 10,000 truguts and have infinite uses
 
 ### Changed
 

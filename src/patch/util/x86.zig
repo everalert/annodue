@@ -352,6 +352,7 @@ pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
     return offset;
 }
 
+// TODO: generalized fn that automatically checks for short jumps, etc.
 // WARN: could underflow, but not likely for our use case i guess
 // jmp_rel32
 pub fn jmp(memory_offset: usize, address: usize) usize {

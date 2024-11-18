@@ -90,6 +90,7 @@ pub const panic = debug.annodue_panic;
 // - feat: custom default race camera, with option to auto-update
 // - feat: fast countdown timer
 // - feat: run game in background
+// - feat: patch truguts cheat to give more truguts and have infinite uses
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -394,7 +395,6 @@ fn PatchWindowBackgroundActivity(enable: bool) void {
 // GAME CHEATS
 
 // TODO: add quick toggle to menus
-// TODO: fix sound bug when activating cy yunga cheat (use sound 45)
 // TODO: setting to actually enable the jinn/cy patches?
 
 fn PatchJinnReesoCheat(enable: bool) void {
@@ -482,6 +482,21 @@ fn DisableCyYunga() callconv(.C) void {
 fn PatchCyYungaCheatAudio(enable: bool) void {
     const id: u8 = if (enable) 0x2D else 0xFF;
     _ = mem.write(comptime 0x41057D + 0x01, u8, id);
+}
+
+// infinite uses and greater amount
+fn PatchTrugutsCheat(enable: bool) void {
+    const amount_addr: u32 = 0x410700 + 6;
+    const uses_addr: u32 = 0x410F8C;
+    if (enable) {
+        _ = mem.write(amount_addr, u32, 10000);
+        var off: u32 = uses_addr;
+        off = mem.write_bytes(off, &[2]u8{ 0xEB, 0x26 }, 2); // jmp short 0x410FB4
+        off = x86.nop_until(off, 0x410F90);
+    } else {
+        _ = mem.write(amount_addr, u32, 1000);
+        _ = mem.write_bytes(uses_addr, &[4]u8{ 0x8B, 0x44, 0x24, 0x10 }, 4); // mov eax, [esp+0x10]
+    }
 }
 
 // FAST COUNTDOWN
@@ -993,6 +1008,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
+    PatchTrugutsCheat(true);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -1011,6 +1027,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);
     PatchCyYungaCheatAudio(false);
+    PatchTrugutsCheat(false);
 
     PatchCameraFKeys(false);
 

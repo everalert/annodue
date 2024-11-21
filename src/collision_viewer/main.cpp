@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <d3d.h>
 #include <ddraw.h>
+#include <set>
 
 // headers are from https://github.com/tim-tim707/SW_RACER_RE
 #define INCLUDE_DX_HEADERS
@@ -23,8 +24,10 @@ auto swrModel_UnkDraw = (void (*)(int x))0x00483A90; // <-- will be hooked
 
 const auto swrModel_NodeGetTransform = (void (*)(const swrModel_NodeTransformed* node, rdMatrix44* matrix))0x004316A0;
 const auto swrEvent_GetItem = (void* (*)(int event, int index))0x00450b30;
+const auto swrEvent_GetEventCount = (int (*)(int event))0x00450b00;
 const auto std3D_SetRenderState = (void (*)(Std3DRenderState rdflags))0x0048a450;
-const auto stdDisplay_BackBufferFill = (void (*)(unsigned int r, unsigned int b, unsigned int g, LECRECT* lpRect))0x00489cd0;
+const auto stdDisplay_BackBufferFill =
+    (void (*)(unsigned int r, unsigned int b, unsigned int g, LECRECT* lpRect))0x00489cd0;
 const auto rdCache_Flush = (void (*)(void))0x0048dce0;
 
 // math functions, not strictly needed, it would be better to reimplement them for performance reasons.
@@ -32,7 +35,8 @@ const auto rdMatrix_Multiply44 = (void (*)(rdMatrix44* out, const rdMatrix44* ma
 const auto rdVector_Sub3 = (void (*)(rdVector3* v1, const rdVector3* v2, const rdVector3* v3))0x0042f860;
 const auto rdVector_Normalize3Acc = (float (*)(rdVector3* v1))0x0042f9b0;
 const auto rdVector_Scale3 = (void (*)(rdVector3* v1, float scale, const rdVector3* v2))0x0042fa50;
-const auto rdVector_Scale3Add3 = (void (*)(rdVector3* v1, const rdVector3* v2, float scale, const rdVector3* v3))0x0042fa80;
+const auto rdVector_Scale3Add3 =
+    (void (*)(rdVector3* v1, const rdVector3* v2, float scale, const rdVector3* v3))0x0042fa80;
 const auto rdVector_Cross3 = (void (*)(rdVector3* v1, const rdVector3* v2, const rdVector3* v3))0x0042f9f0;
 const auto rdMatrix_Copy44_34 = (void (*)(rdMatrix44* dest, const rdMatrix34* src))0x0044bad0;
 const auto rdMatrix_SetIdentity44 = (void (*)(rdMatrix44* mat))0x004313d0;
@@ -53,12 +57,141 @@ struct D3DVertex
     Color c;
 };
 
-void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat, const rdMatrix44& model_matrix)
+constexpr std::array<D3DVertex, 14> box_triangle_strip = []() constexpr {
+    std::array<D3DVertex, 14> vertices;
+    for (int k = 0; k < 14; k++)
+    {
+        // 0x05e8, 0x238e, 0x0f43
+        vertices[k] = {
+            2 * float((0x05e8 >> k) & 1) - 1,
+            2 * float((0x238e >> k) & 1) - 1,
+            2 * float((0x0f43 >> k) & 1) - 1,
+        };
+    }
+    return vertices;
+}();
+
+void render_triangle_strip(auto vertices, const Color& color)
+{
+    const auto& settings = global_state->settings;
+
+    const Color line_color{
+        uint8_t(color.b * settings.collision_line_brightness),
+        uint8_t(color.g * settings.collision_line_brightness),
+        uint8_t(color.r * settings.collision_line_brightness),
+        uint8_t(255 * settings.collision_line_opacity),
+    };
+
+    const Color mesh_color{
+        uint8_t(color.b * settings.collision_mesh_brightness),
+        uint8_t(color.g * settings.collision_mesh_brightness),
+        uint8_t(color.r * settings.collision_mesh_brightness),
+        uint8_t(255 * settings.collision_mesh_opacity),
+    };
+
+    for (auto& v : vertices)
+        v.c = mesh_color;
+
+    if (settings.collision_mesh_opacity != 0.0)
+    {
+        std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_SOLID);
+        std3D_pD3Device->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(),
+                                       vertices.size(), 0);
+    }
+
+    for (auto& v : vertices)
+        v.c = line_color;
+
+    if (settings.collision_line_opacity != 0.0)
+    {
+        std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_WIREFRAME);
+        std3D_pD3Device->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(),
+                                       vertices.size(), 0);
+    }
+}
+
+void debug_render_triggers(const swrModel_Node* node, const CollisionViewerSettings& settings)
+{
+    static std::array<D3DVertex, 4> plane_triangle_strip = {
+        { { -1, 0, -1 }, { 1, 0, -1 }, { -1, 0, 1 }, { 1, 0, 1 } }
+    };
+
+    static std::array<D3DVertex, 42> capsule_triangle_strip = [] {
+        std::array<D3DVertex, 42> vertices;
+        D3DVertex* v = vertices.data();
+        for (int i = 0; i < 10; i++)
+        {
+            const float t = i / 9.0 * 3.14159;
+            const float c = cos(t);
+            const float s = sin(t);
+            *v++ = { (1 + s), c, 1 };
+            *v++ = { (1 + s), c, -1 };
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            const float t = (i / 9.0 + 1) * 3.14159;
+            const float c = cos(t);
+            const float s = sin(t);
+            *v++ = { -1 + s, c, 1 };
+            *v++ = { -1 + s, c, -1 };
+        }
+
+        *v++ = vertices[0];
+        *v++ = vertices[1];
+        return vertices;
+    }();
+
+    if (!node)
+        return;
+
+    if (node->type & NODE_HAS_CHILDREN)
+    {
+        for (int i = 0; i < node->num_children; i++)
+            debug_render_triggers(node->child_nodes[i], settings);
+    }
+    if (node->type == NODE_MESH_GROUP)
+    {
+        for (int i = 0; i < node->num_children; i++)
+        {
+            const swrModel_Mesh* mesh = node->meshes[i];
+            if (!mesh || !mesh->behavior)
+                continue;
+
+            for (auto it = mesh->behavior->triggers; it; it = it->next)
+            {
+                if (it->flags & 0x1)
+                    continue;
+
+                const auto& p = it->center;
+                const auto& d = it->direction;
+                const float s_xy = it->size_xy * 0.5f;
+                const float s_z = it->size_z * 0.5f;
+
+                const rdMatrix44 model_matrix{
+                    { -d.y * s_xy, d.x * s_xy, 0, 0 },
+                    { d.x * s_xy, d.y * s_xy, 0, 0 },
+                    { 0, 0, s_z, 0 },
+                    { p.x, p.y, p.z, 1 },
+                };
+
+                std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_matrix.vA.x);
+                if (it->type == 102 || it->type == 104)
+                    render_triangle_strip(plane_triangle_strip, { 0, 0, 255 });
+                else
+                    render_triangle_strip(capsule_triangle_strip, { 0, 0, 255 });
+            }
+        }
+    }
+}
+
+void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat,
+                       const rdMatrix44& model_matrix)
 {
     if (!mesh->collision_vertices)
         return;
 
-    uint32_t vehicle_reaction_bitset = mesh->mapping ? mesh->mapping->vehicle_reaction : 0;
+    uint32_t vehicle_reaction_bitset = mesh->behavior ? mesh->behavior->vehicle_reaction : 0;
 
     static std::array<std::optional<Color>, 32> vehicle_reaction_colors = [] {
         std::array<std::optional<Color>, 32> colors;
@@ -169,7 +302,8 @@ void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix4
     if (settings.collision_mesh_opacity != 0.0)
     {
         std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_SOLID);
-        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(), vertices.size(), indices.data(), indices.size(), 0);
+        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(),
+                                              vertices.size(), indices.data(), indices.size(), 0);
     }
 
     for (auto& v : vertices)
@@ -178,16 +312,22 @@ void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix4
     if (settings.collision_line_opacity != 0.0)
     {
         std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_WIREFRAME);
-        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(), vertices.size(), indices.data(), indices.size(), 0);
+        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(),
+                                              vertices.size(), indices.data(), indices.size(), 0);
     }
 }
 
-void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat, rdMatrix44 model_mat, uint32_t col_flags)
+void debug_render_node(const swrViewport& current, const swrModel_Node* node, bool mirrored, const rdMatrix44& proj_mat,
+                       const rdMatrix44& view_mat, rdMatrix44 model_mat, uint32_t col_flags_exact_match,
+                       uint32_t col_flags_any_match)
 {
     if (!node)
         return;
 
-    if ((node->flags_2 & col_flags) != col_flags)
+    if ((node->flags_2 & col_flags_exact_match) != col_flags_exact_match)
+        return;
+
+    if ((node->flags_2 & col_flags_any_match) == 0)
         return;
 
     if (node->type == NODE_TRANSFORMED || node->type == NODE_TRANSFORMED_WITH_PIVOT)
@@ -285,7 +425,8 @@ void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, b
                 break;
         }
         if (i - 1 < node->num_children)
-            debug_render_node(current, node->child_nodes[i - 1], mirrored, proj_mat, view_mat, model_mat, col_flags);
+            debug_render_node(current, node->child_nodes[i - 1], mirrored, proj_mat, view_mat, model_mat,
+                              col_flags_exact_match, col_flags_any_match);
     }
     else if (node->type == NODE_SELECTOR)
     {
@@ -299,11 +440,13 @@ void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, b
         case -1:
             // render all child nodes
             for (int i = 0; i < node->num_children; i++)
-                debug_render_node(current, node->child_nodes[i], mirrored, proj_mat, view_mat, model_mat, col_flags);
+                debug_render_node(current, node->child_nodes[i], mirrored, proj_mat, view_mat, model_mat,
+                                  col_flags_exact_match, col_flags_any_match);
             break;
         default:
             if (child >= 0 && child < node->num_children)
-                debug_render_node(current, node->child_nodes[child], mirrored, proj_mat, view_mat, model_mat, col_flags);
+                debug_render_node(current, node->child_nodes[child], mirrored, proj_mat, view_mat, model_mat,
+                                  col_flags_exact_match, col_flags_any_match);
 
             break;
         }
@@ -311,35 +454,33 @@ void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, b
     else
     {
         for (int i = 0; i < node->num_children; i++)
-            debug_render_node(current, node->child_nodes[i], mirrored, proj_mat, view_mat, model_mat, col_flags);
+            debug_render_node(current, node->child_nodes[i], mirrored, proj_mat, view_mat, model_mat,
+                              col_flags_exact_match, col_flags_any_match);
     }
 }
 
 void render_spline()
 {
-    auto hang = (const swrObjHang*)swrEvent_GetItem('Hang', 0);
-    if (!hang)
-        return;
-
     auto judge = (const swrObjJdge*)swrEvent_GetItem('Jdge', 0);
     if (!judge)
         return;
 
-    const swrSpline* spline = judge->spline;
+    const swrSpline* spline = judge->unk2c_spline;
     if (!spline)
         return;
 
-    int track_index = hang->track_index;
+    const int spline_id = judge->unk1b4_splineId;
 
     struct PrecomputedSpline
     {
         std::vector<std::vector<D3DVertex>> segments;
     };
     static std::map<int, PrecomputedSpline> precomputed_splines;
-    if (!precomputed_splines.contains(track_index))
+    if (!precomputed_splines.contains(spline_id))
     {
         PrecomputedSpline precomputed_spline;
-        auto draw_cubic_bezier = [&](const rdVector3& p0, const rdVector3& p1, const rdVector3& p2, const rdVector3& p3) {
+        auto draw_cubic_bezier = [&](const rdVector3& p0, const rdVector3& p1, const rdVector3& p2,
+                                     const rdVector3& p3) {
             const rdMatrix44 P{ p0.x, p1.x, p2.x, p3.x, p0.y, p1.y, p2.y, p3.y, p0.z, p1.z, p2.z, p3.z, 0, 0, 0, 0 };
             const rdMatrix44 bezier_matrix{ 1, -3, 3, -1, 0, 3, -6, 3, 0, 0, 3, -3, 0, 0, 0, 1 };
 
@@ -369,10 +510,10 @@ void render_spline()
 
         for (int i = 0; i < spline->num_control_points; i++)
         {
-            const auto& point = spline->contrl_points[i];
+            const auto& point = spline->control_points[i];
             for (int j = 0; j < point.next_count; j++)
             {
-                const auto& next = spline->contrl_points[(&point.next1)[j]];
+                const auto& next = spline->control_points[(&point.next1)[j]];
 
                 const auto& p0 = point.position;
                 const auto& p1 = point.handle2;
@@ -382,17 +523,18 @@ void render_spline()
             }
         }
 
-        precomputed_splines.emplace(track_index, std::move(precomputed_spline));
+        precomputed_splines.emplace(spline_id, std::move(precomputed_spline));
     }
 
-    const auto& segments = precomputed_splines.at(track_index).segments;
+    const auto& segments = precomputed_splines.at(spline_id).segments;
 
     rdMatrix44 model_mat;
     rdMatrix_SetIdentity44(&model_mat);
     std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_mat.vA.x);
 
     for (const auto& vertices : segments)
-        std3D_pD3Device->DrawPrimitive(D3DPT_LINESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, (void*)vertices.data(), vertices.size(), 0);
+        std3D_pD3Device->DrawPrimitive(D3DPT_LINESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, (void*)vertices.data(),
+                                       vertices.size(), 0);
 }
 
 void render_collision_meshes()
@@ -400,14 +542,30 @@ void render_collision_meshes()
     if (!std3D_pD3Device || !rdCamera_pCurCamera)
         return;
 
-    swrModel_Node* root_node = swrModel_unk_array[0].model_root_node;
+    swrModel_Node* root_node = swrViewport_array[0].model_root_node;
     if (!root_node)
         return;
 
+    uint32_t col_flags_exact_match = swrModel_CollisionFlagsExactMatch;
+    uint32_t col_flags_any_match = swrModel_CollisionFlagsAnyMatch;
+    if (global_state->show_active_collision_only)
+    {
+        const int num_players = swrEvent_GetEventCount('Test');
+        for (int i = 0; i < num_players; i++)
+        {
+            auto player = (const swrRace*)swrEvent_GetItem('Test', i);
+            if (player->score_ptr->identifier == 'Locl')
+            {
+                if (player->speedValue > 150)
+                    col_flags_exact_match |= 4;
+
+                col_flags_any_match = player->unk12_3;
+                break;
+            }
+        }
+    }
+
     const auto& settings = global_state->settings;
-    auto hang = (const swrObjHang*)swrEvent_GetItem('Hang', 0);
-    const auto& track_info = g_aTrackInfos[hang->track_index];
-    const uint32_t col_flags = 0x2 | (1 << (4 + track_info.PlanetTrackNumber));
     const bool mirrored = (GameSettingFlags & 0x4000) != 0;
 
     IDirect3DViewport3* backup_viewport = nullptr;
@@ -477,10 +635,34 @@ void render_collision_meshes()
         std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_PROJECTION, (D3DMATRIX*)&proj_mat.vA.x);
 
         if (global_state->show_collision_mesh)
-            debug_render_node(swrModel_unk_array[0], root_node->child_nodes[3], mirrored, proj_mat, view_mat_corrected, model_mat, col_flags);
+            debug_render_node(swrViewport_array[0], root_node->child_nodes[3], mirrored, proj_mat, view_mat_corrected,
+                              model_mat, col_flags_exact_match, col_flags_any_match);
 
         if (global_state->show_spline)
             render_spline();
+
+        if (global_state->show_triggers)
+        {
+            debug_render_triggers(root_node, settings);
+            std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_mat.vA.x);
+            int num_test_objects = swrEvent_GetEventCount('Test');
+            for (int i = 0; i < num_test_objects; i++)
+            {
+                auto test = (const swrRace*)swrEvent_GetItem('Test', i);
+                if (test)
+                {
+                    const auto& p = test->transform.vD;
+                    const rdMatrix44 model_matrix{
+                        { 0.15, 0, 0, 0 },
+                        { 0, 0.15, 0, 0 },
+                        { 0, 0, 0.15, 0 },
+                        { p.x, p.y, p.z, 1 },
+                    };
+                    std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_matrix.vA.x);
+                    render_triangle_strip(box_triangle_strip, { 255, 255, 0 });
+                }
+            }
+        }
 
         std3D_pD3Device->EndScene();
     }
@@ -503,7 +685,7 @@ void swrModel_UnkDraw_Hook(int x)
         return;
     }
 
-    auto* root_node = swrModel_unk_array[x].model_root_node;
+    auto* root_node = swrViewport_array[x].model_root_node;
     std::vector<swrModel_Node*> temp_children(root_node->child_nodes, root_node->child_nodes + root_node->num_children);
 
     // first render the terrain...

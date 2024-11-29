@@ -91,6 +91,7 @@ pub const panic = debug.annodue_panic;
 // - feat: fast countdown timer
 // - feat: run game in background
 // - feat: patch truguts cheat to give more truguts and have infinite uses
+// - feat: auto-reset on death and engine fire
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -104,6 +105,11 @@ pub const panic = debug.annodue_panic;
 //   fast_countdown_duration    f32     min 0.05, max 3.00
 //   fix_viewport_edges         bool
 //   run_in_background          bool
+//   autoreset_enable           bool
+//   autoreset_dead_enable      bool
+//   autoreset_dead_delay       f32     default 0.5
+//   autoreset_fire_enable      bool
+//   autoreset_fire_delay       f32     default 3.0
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -131,6 +137,11 @@ const QolState = struct {
     var h_s_skip_podium_cutscene: ?SettingHandle = null;
     var h_s_fix_viewport_edges: ?SettingHandle = null;
     var h_s_run_in_background: ?SettingHandle = null;
+    var h_s_autoreset_enable: ?SettingHandle = null;
+    var h_s_autoreset_dead_enable: ?SettingHandle = null;
+    var h_s_autoreset_dead_delay: ?SettingHandle = null;
+    var h_s_autoreset_fire_enable: ?SettingHandle = null;
+    var h_s_autoreset_fire_delay: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -143,6 +154,11 @@ const QolState = struct {
     var s_skip_podium_cutscene: bool = false;
     var s_fix_viewport_edges: bool = false;
     var s_run_in_background: bool = false;
+    var s_autoreset_enable: bool = false;
+    var s_autoreset_dead_enable: bool = false;
+    var s_autoreset_dead_delay: f32 = 0.5;
+    var s_autoreset_fire_enable: bool = false;
+    var s_autoreset_fire_delay: f32 = 3.0;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -154,9 +170,12 @@ const QolState = struct {
     var fcam_mem: u32 = 0;
     var fcam_mem_end: u32 = 0;
     const fcam_mem_size: u32 = 32;
-
     var cam_prev: u32 = 1;
     var cam_cman: ?*re.cMan.cMan = null;
+
+    var autoreset_dead: st.ActiveState = .Off;
+    var autoreset_dead_timer: f32 = 0;
+    var autoreset_fire_timer: f32 = 0;
 
     fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
         input_pause.update(gf);
@@ -192,6 +211,17 @@ const QolState = struct {
             gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, &s_fix_viewport_edges, null);
         h_s_run_in_background =
             gf.ASettingOccupy(section, "run_in_background", .B, .{ .b = false }, &s_run_in_background, null);
+
+        h_s_autoreset_enable =
+            gf.ASettingOccupy(section, "autoreset_enable", .B, .{ .b = false }, &s_autoreset_enable, null);
+        h_s_autoreset_dead_enable =
+            gf.ASettingOccupy(section, "autoreset_dead_enable", .B, .{ .b = false }, &s_autoreset_dead_enable, null);
+        h_s_autoreset_dead_delay =
+            gf.ASettingOccupy(section, "autoreset_dead_delay", .F, .{ .f = 0.5 }, &s_autoreset_dead_delay, null);
+        h_s_autoreset_fire_enable =
+            gf.ASettingOccupy(section, "autoreset_fire_enable", .B, .{ .b = false }, &s_autoreset_fire_enable, null);
+        h_s_autoreset_fire_delay =
+            gf.ASettingOccupy(section, "autoreset_fire_delay", .F, .{ .f = 3.0 }, &s_autoreset_fire_delay, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -1117,7 +1147,11 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         }
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
-            const speed = re.Test.PLAYER.*.speed;
+            const p = re.Test.PLAYER.*;
+
+            // stats
+
+            const speed = p.speed;
             race.update_position();
             const this_distance = race.this_position.distance(&race.prev_position);
             race.set_motion(total_time, speed, this_distance);
@@ -1134,6 +1168,45 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating.on()) race.set_total_overheat(total_time);
             if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
             if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
+
+            // auto reset
+
+            if (QolState.s_autoreset_enable) {
+                var reset_race = false;
+
+                if (QolState.s_autoreset_dead_enable) {
+                    QolState.autoreset_dead.update(p.flags1.IS_DEAD or
+                        p.flags2.IS_EXPLODING or
+                        p.flags2.IS_EXPLODING_RIGHT_SPIN or
+                        p.flags2.IS_EXPLODING_LEFT_SPIN);
+                    if (QolState.autoreset_dead == .JustOn)
+                        QolState.autoreset_dead_timer = 0;
+                    if (QolState.autoreset_dead.on()) {
+                        QolState.autoreset_dead_timer += gs.dt_f;
+                        if (QolState.autoreset_dead_timer >= QolState.s_autoreset_dead_delay)
+                            reset_race = true;
+                    }
+                }
+
+                if (QolState.s_autoreset_fire_enable) {
+                    if (gs.player.overheating == .JustOn)
+                        QolState.autoreset_fire_timer = 0;
+                    if (gs.player.overheating.on()) {
+                        QolState.autoreset_fire_timer += gs.dt_f;
+                        if (QolState.autoreset_fire_timer >= QolState.s_autoreset_fire_delay)
+                            reset_race = true;
+                    }
+                }
+
+                if (reset_race) {
+                    const jdge = re.Manager.entity(.Jdge, 0);
+                    rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+                    re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
+                    QolState.autoreset_dead.update(false);
+                    QolState.autoreset_dead_timer = 0;
+                    QolState.autoreset_fire_timer = 0;
+                }
+            }
         }
 
         if (gs.race_state == .PostRace and !gf.GHideRaceUIIsOn()) {

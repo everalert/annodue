@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Game bugfix for changing camera with F1-F4 not persisting after crashing
 - QOL: Option to set custom default camera, and set it automatically (setting: `default_camera` `default_camera_auto`)
 - QOL: Patch truguts cheat (Shift+F4+4) to give 10,000 truguts and have infinite uses
+- QOL: Auto-reset race on death or engine fire (settings: `autoreset_enable` `autoreset_dead_enable` `autoreset_dead_delay` `autoreset_fire_enable` `autoreset_fire_delay`)
 
 ### Changed
 

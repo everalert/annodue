@@ -216,6 +216,8 @@ Configured under `[overlay]`
 - Custom default race camera, with option to auto-update
 - Fast countdown timer
 - Run game in background
+- Patch truguts cheat to give more truguts and have infinite uses
+- Auto-reset on death and engine fire
 
 ##### Quick Race Menu Controls
 
@@ -254,6 +256,11 @@ Configured under `[qol]`
 |`fast_countdown_duration`|`f32` |`1.00`|0.05 to 3.00
 |`fix_viewport_edges`     |`bool`|`off` |May cause sprites at edge to be slightly cut off
 |`run_in_background`      |`bool`|`off` |
+|`autoreset_enable`       |`bool`|`off` |
+|`autoreset_dead_enable`  |`bool`|`off` |
+|`autoreset_dead_delay`   |`f32` |`0.5` |
+|`autoreset_fire_enable`  |`bool`|`off` |
+|`autoreset_fire_delay`   |`f32` |`3.0` |
 
 ### Collision Viewer
 

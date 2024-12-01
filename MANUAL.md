@@ -218,6 +218,7 @@ Configured under `[overlay]`
 - Run game in background
 - Patch truguts cheat to give more truguts and have infinite uses
 - Auto-reset on death and engine fire
+- Track select remembers selection when leaving menu and between sessions
 
 ##### Quick Race Menu Controls
 
@@ -261,6 +262,8 @@ Configured under `[qol]`
 |`autoreset_dead_delay`   |`f32` |`0.5` |
 |`autoreset_fire_enable`  |`bool`|`off` |
 |`autoreset_fire_delay`   |`f32` |`3.0` |
+|`trackselect_remember`   |`bool`|`off` |
+|`trackselect_last`       |`u32` |`0`   |0 to 24
 
 ### Collision Viewer
 

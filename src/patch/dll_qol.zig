@@ -92,6 +92,7 @@ pub const panic = debug.annodue_panic;
 // - feat: run game in background
 // - feat: patch truguts cheat to give more truguts and have infinite uses
 // - feat: auto-reset on death and engine fire
+// - feat: track select remembers selection when leaving menu and between sessions
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -110,6 +111,8 @@ pub const panic = debug.annodue_panic;
 //   autoreset_dead_delay       f32     default 0.5
 //   autoreset_fire_enable      bool
 //   autoreset_fire_delay       f32     default 3.0
+//   trackselect_remember       bool
+//   trackselect_last           u32     0..24
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -142,6 +145,8 @@ const QolState = struct {
     var h_s_autoreset_dead_delay: ?SettingHandle = null;
     var h_s_autoreset_fire_enable: ?SettingHandle = null;
     var h_s_autoreset_fire_delay: ?SettingHandle = null;
+    var h_s_trackselect_remember: ?SettingHandle = null;
+    var h_s_trackselect_last: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -159,6 +164,8 @@ const QolState = struct {
     var s_autoreset_dead_delay: f32 = 0.5;
     var s_autoreset_fire_enable: bool = false;
     var s_autoreset_fire_delay: f32 = 3.0;
+    var s_trackselect_remember: bool = false;
+    var s_trackselect_last: u32 = 0;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -222,6 +229,11 @@ const QolState = struct {
             gf.ASettingOccupy(section, "autoreset_fire_enable", .B, .{ .b = false }, &s_autoreset_fire_enable, null);
         h_s_autoreset_fire_delay =
             gf.ASettingOccupy(section, "autoreset_fire_delay", .F, .{ .f = 3.0 }, &s_autoreset_fire_delay, null);
+
+        h_s_trackselect_remember =
+            gf.ASettingOccupy(section, "trackselect_remember", .B, .{ .b = false }, &s_trackselect_remember, null);
+        h_s_trackselect_last =
+            gf.ASettingOccupy(section, "trackselect_last", .U, .{ .u = 0 }, null, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -292,6 +304,14 @@ const QolState = struct {
             }
             if (nlen == 17 and std.mem.eql(u8, "run_in_background", setting.name[0..nlen])) {
                 PatchWindowBackgroundActivity(s_run_in_background);
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "trackselect_remember", setting.name[0..nlen])) {
+                PatchTrackSelectEntry(s_trackselect_remember);
+                continue;
+            }
+            if (nlen == 16 and std.mem.eql(u8, "trackselect_last", setting.name[0..nlen])) {
+                s_trackselect_last = if (setting.value.u > 24) 0 else setting.value.u;
                 continue;
             }
 
@@ -527,6 +547,36 @@ fn PatchTrugutsCheat(enable: bool) void {
         _ = mem.write(amount_addr, u32, 1000);
         _ = mem.write_bytes(uses_addr, &[4]u8{ 0x8B, 0x44, 0x24, 0x10 }, 4); // mov eax, [esp+0x10]
     }
+}
+
+// REMEMBERING TRACK SELECTION
+
+// in fn_43B240 Hang_DrawTrackSelect
+fn PatchTrackSelectEntry(enable: bool) void {
+    // - 0043B29A -> 88 5E 5E (mov [esi+5E], bl; pHang->Circuit = 0)
+    //   could start as early as 43B28D and include if statement in nop'ing
+    const off1: u32 = 0x43B29A;
+    const end1: u32 = off1 + 3;
+
+    // - 0043B2BE -> 89 1D D0 95 E2 00 (mov [MenuPosX], ebx; MenuPosX = 0)
+    const off2: u32 = 0x43B2BE;
+    const end2: u32 = off2 + 6;
+
+    if (enable) {
+        _ = x86.nop_until(off1, end1);
+        var o = x86.call(off2, @intFromPtr(&TrackSelectEntryCallback));
+        _ = x86.nop_until(o, end2);
+    } else {
+        _ = mem.write_bytes(off1, &[3]u8{ 0x88, 0x5E, 0x5E }, 3);
+        _ = mem.write_bytes(off2, &[6]u8{ 0x89, 0x1D, 0xD0, 0x95, 0xE2, 0x00 }, 6);
+    }
+}
+
+fn TrackSelectEntryCallback() callconv(.C) void {
+    const p_menu_pos_x: *i32 = @ptrFromInt(0xE295D0);
+
+    const hang = re.Manager.entity(.Hang, 0);
+    p_menu_pos_x.* = rtr.TrackCircuitNthTrackMap[hang.Track];
 }
 
 // FAST COUNTDOWN
@@ -1042,12 +1092,18 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    var hang = re.Manager.entity(.Hang, 0);
+
     // TODO: look into using in-game default setter as hook, see fn_45BD90
     // TODO: change annodue setting to i32 for both, also look into anywhere
     // else like this that might have been affected by new Hang stuff
-
-    re.Manager.entity(.Hang, 0).Laps = @intCast(QolState.s_default_laps);
+    hang.Laps = @intCast(QolState.s_default_laps);
     _ = mem.write(0x50C558, i8, @as(i8, @intCast(QolState.s_default_racers))); // racers
+
+    if (QolState.s_trackselect_remember) {
+        hang.Track = @truncate(QolState.s_trackselect_last);
+        hang.Circuit = rtr.TrackCircuitIdMap[QolState.s_trackselect_last];
+    }
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -1058,6 +1114,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchCyYungaCheat(false);
     PatchCyYungaCheatAudio(false);
     PatchTrugutsCheat(false);
+    PatchTrackSelectEntry(false);
 
     PatchCameraFKeys(false);
 
@@ -1125,6 +1182,10 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
 // however, the text flushing DOES run on those frames, apparently from a different callsite
 export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    const hang = re.Manager.entity(.Hang, 0);
+    if (QolState.h_s_trackselect_last != null and QolState.s_trackselect_last != hang.Track)
+        gf.ASettingUpdate(QolState.h_s_trackselect_last.?, .{ .u = hang.Track });
+
     if (gs.in_race.on()) {
         if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
 

@@ -78,3 +78,10 @@ pub const TrackCircuitIdMap = [_]u8{
     2, 3, 1, 2, 2, 3, 0, 0, 1, 0,
     2, 3, 0, 1, 2,
 };
+
+// track id -> nth track in circuit
+pub const TrackCircuitNthTrackMap = [_]u8{
+    0, 6, 2, 1, 3, 0, 3, 0, 6, 3,
+    4, 1, 5, 2, 5, 3, 1, 6, 4, 5,
+    0, 2, 4, 2, 1,
+};

@@ -93,6 +93,7 @@ pub const panic = debug.annodue_panic;
 // - feat: patch truguts cheat to give more truguts and have infinite uses
 // - feat: auto-reset on death and engine fire
 // - feat: track select remembers selection when leaving menu and between sessions
+// - feat: fast menu navigation
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -113,6 +114,7 @@ pub const panic = debug.annodue_panic;
 //   autoreset_fire_delay       f32     default 3.0
 //   trackselect_remember       bool
 //   trackselect_last           u32     0..24
+//   fast_navigation            bool
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -147,6 +149,7 @@ const QolState = struct {
     var h_s_autoreset_fire_delay: ?SettingHandle = null;
     var h_s_trackselect_remember: ?SettingHandle = null;
     var h_s_trackselect_last: ?SettingHandle = null;
+    var h_s_fast_navigation: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -166,6 +169,7 @@ const QolState = struct {
     var s_autoreset_fire_delay: f32 = 3.0;
     var s_trackselect_remember: bool = false;
     var s_trackselect_last: u32 = 0;
+    var s_fast_navigation: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -234,6 +238,8 @@ const QolState = struct {
             gf.ASettingOccupy(section, "trackselect_remember", .B, .{ .b = false }, &s_trackselect_remember, null);
         h_s_trackselect_last =
             gf.ASettingOccupy(section, "trackselect_last", .U, .{ .u = 0 }, null, null);
+        h_s_fast_navigation =
+            gf.ASettingOccupy(section, "fast_navigation", .B, .{ .b = false }, &s_fast_navigation, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -312,6 +318,10 @@ const QolState = struct {
             }
             if (nlen == 16 and std.mem.eql(u8, "trackselect_last", setting.name[0..nlen])) {
                 s_trackselect_last = if (setting.value.u > 24) 0 else setting.value.u;
+                continue;
+            }
+            if (nlen == 15 and std.mem.eql(u8, "fast_navigation", setting.name[0..nlen])) {
+                PatchMenuNavigationSpeed(s_fast_navigation);
                 continue;
             }
 
@@ -579,9 +589,155 @@ fn TrackSelectEntryCallback() callconv(.C) void {
     p_menu_pos_x.* = rtr.TrackCircuitNthTrackMap[hang.Track];
 }
 
-// FAST COUNTDOWN
+// FAST MENU NAVIGATION
 
-// TODO: settings for count length, enable
+var nav_asm: [256]u8 = undefined;
+var nav_asm_off: u32 = undefined;
+
+fn PatchMenuNavigationSpeed(enable: bool) void {
+    nav_asm_off = @intFromPtr(&nav_asm);
+    var off: u32 = 0;
+
+    // TODO: pause menu: inputs ignored while scrolling in
+
+    // pod select: select/cancel input ignored while scrolling
+    if (enable) {
+        _ = x86.nop_until(0x435E23, 0x435E23 + 2); // skip scroll timer check (cancel)
+        _ = x86.nop_until(0x435E43, 0x435E43 + 2); // skip scroll timer check (select)
+    } else {
+        _ = x86.jnz_rel8(0x435E23, 0x0D); // jnz short 0x435E32
+        _ = x86.jnz_rel8(0x435E43, 0x1D); // jnz short 0x435E62
+    }
+
+    // pod select: wait time before advancing after selecting pod
+    if (enable) {
+        // skip through special state that makes you wait before transitioning
+        off = mem.write_bytes(0x435B6D, &[10]u8{ //mov [E295A0], 00000000 (MenuTimer1=0.0)
+            0xC7, 0x05, 0xA0, 0x95, 0xE2, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+        }, 10); // set timer to how it would be at the end of running normally
+        off = x86.nop_until(off, 0x435B87); // skip everything until part where state is changed
+    } else {
+        _ = mem.write_bytes(0x435B6D, &[_]u8{ // original logic decrementing and checking timer
+            0x68, 0x33, 0x33, 0x53, 0xC0, 0xE8, 0x19, 0x40, 0x03, 0x00, 0xD8, 0x1D,
+            0x78, 0xC7, 0x4A, 0x00, 0x83, 0xC4, 0x04, 0xDF, 0xE0, 0xF6, 0xC4, 0x40,
+            0x74, 0x0A,
+        }, 26);
+    }
+
+    // track select: circuit change up/down scroll lag
+    if (enable) {
+        _ = x86.nop_until(0x43B6F4, 0x43B6F4 + 2); // skip waiting for circuit to transition
+    } else {
+        _ = x86.jnz_rel8(0x43B6F4, 0x70); // jnz short 0x43B766
+    }
+
+    // track detail: input ignored during transition into
+    if (enable) {
+        _ = x86.nop_until(0x43B8E6, 0x43B8E6 + 2); // skip wait time
+    } else {
+        _ = x86.jnz_rel8(0x43B8E6, 0x0A); // jnz short 0x43B8F2
+    }
+
+    // inspect vehicle: camera angle change speed (input lockout)
+    // TODO: fix animation snapping on repetitive inputs
+    // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
+    if (enable) {
+        _ = mem.write(0x43921E + 2, u32, ri.MENU_JUST_ON_ADDR); // input raw -> JustOn check (left)
+        _ = mem.write(0x4392E4 + 2, u32, ri.MENU_JUST_ON_ADDR); // input raw -> JustOn check (right)
+        _ = x86.nop_until(0x439233, 0x439233 + 6); // camera is animating check (left)
+        _ = x86.nop_until(0x4392F9, 0x4392F9 + 6); // camera is animating check (right)
+    } else {
+        _ = mem.write(0x43921E + 2, u32, ri.MENU_RAW_ADDR); // test byte ptr [50C908], 0x10
+        _ = mem.write(0x4392E4 + 2, u32, ri.MENU_RAW_ADDR); // test byte ptr [50C908], 0x20
+        _ = x86.jz(0x439233, 0x4392E4);
+        _ = x86.jz(0x4392F9, 0x4393A2);
+    }
+
+    // junkyard: item change speed (input lockout)
+    // TODO: convert asm reroute into x86 macro function
+    // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
+    if (enable) {
+        _ = mem.write(0x43AE9D + 1, u32, ri.MENU_JUST_ON_ADDR); // input raw -> JustOn check
+        _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
+        off = x86.jmp(0x43AFAE, nav_asm_off); // reroute camera state checks (left)
+        off = x86.nop_until(off, 0x43AFB9);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFBE);
+        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFB9);
+        nav_asm_off = x86.nop_align(nav_asm_off, 16);
+        off = x86.jmp(0x43AFCB, nav_asm_off); // reroute camera state checks (right)
+        off = x86.nop_until(off, 0x43AFD6);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFDA);
+        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFD6);
+        nav_asm_off = x86.nop_align(nav_asm_off, 16);
+    } else {
+        _ = mem.write(0x43AE9D + 1, u32, ri.MENU_RAW_ADDR); // mov ebp, 50C908
+        _ = x86.jnz_rel8(0x43AF93, 0x4B); // jnz short 0x43AFE0
+        _ = mem.write_bytes(0x43AFAE, &[11]u8{ // camera anim state checks (left scroll)
+            0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
+            0x66, 0x3B, 0xCF, 0x75, 0x05,
+        }, 11);
+        _ = mem.write_bytes(0x43AFCB, &[11]u8{ // camera anim state checks (right scroll)
+            0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
+            0x66, 0x3B, 0xCF, 0x75, 0x04,
+        }, 11);
+    }
+
+    // general: horizontal hold scroll speed (pod, track, watto shop)
+    if (enable) {
+        _ = mem.write(0x469D46 + 6, f32, 0.24); // hold initial delay (left)
+        _ = mem.write(0x469CBC + 6, f32, 0.24); // hold initial delay (right)
+        _ = mem.write(0x4AD588, f32, 0.04); // hold fast delay (both)
+    } else {
+        _ = mem.write(0x469D46 + 6, f32, 0.6); // dflt 0.6 3F19999A
+        _ = mem.write(0x469CBC + 6, f32, 0.6); // dflt 0.6 3F19999A
+        _ = mem.write(0x4AD588, f32, 0.1); // dflt 0.1 3DCCCCCD
+    }
+
+    // general: cutscene speed (affects several camera transitions)
+    PatchMenuNavigationSpeedTransitions(enable);
+
+    std.debug.assert(nav_asm_off - @intFromPtr(&nav_asm) <= nav_asm.len);
+}
+
+// TODO: patch other 'transition' functions at end of hang cb14, only
+// first one patched here
+fn PatchMenuNavigationSpeedTransitions(enable: bool) void {
+    var actually_enable: bool = enable;
+    if (enable) {
+        const hang = re.Manager.entity(.Hang, 0);
+        actually_enable = switch (hang.MenuScreen) {
+            .Junkyard,
+            .CSRival,
+            .CSPodium,
+            .CSNewRacer,
+            .CSCantinaEntrance,
+            => false,
+            else => true,
+        };
+    }
+
+    if (actually_enable) {
+        // increase last arg of calls to Hang__45C560 in Hang_DoCameraTransition__45C3C0
+        _ = mem.write(0x45C44D + 1, f32, 30.0); // push 30.0
+        _ = mem.write(0x45C471 + 1, f32, 20.0); // push 20.0
+    } else {
+        _ = mem.write(0x45C44D + 1, f32, 1.5); // dflt 1.5 3FC00000
+        _ = mem.write(0x45C471 + 1, f32, 1.0); // dflt 1.0 3F800000
+    }
+}
+
+// FAST COUNTDOWN
 
 const FastCountdown = struct {
     var h_s_enable: ?SettingHandle = null;
@@ -1115,6 +1271,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchCyYungaCheatAudio(false);
     PatchTrugutsCheat(false);
     PatchTrackSelectEntry(false);
+    PatchMenuNavigationSpeed(false);
 
     PatchCameraFKeys(false);
 
@@ -1157,10 +1314,18 @@ export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .u = racers });
 }
 
-// FIXME: settings toggles for both of these
-// FIXME: probably want this mid-engine update, immediately before Jdge gets
-// processed? (a fn in EngineUpdateStage14 iirc)
 export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // Fast Menu Navigation
+    if (QolState.s_fast_navigation) {
+        const hang = re.Manager.entity(.Hang, 0);
+        if (hang.MenuScreen != hang.MenuScreenPrev)
+            PatchMenuNavigationSpeedTransitions(true);
+    }
+
+    // FIXME: settings toggles for both of these
+    // FIXME: probably want this mid-engine update, immediately before Jdge gets
+    // processed? (a fn in EngineUpdateStage14 iirc)
+
     // Quick Restart
     if (gs.in_race.on() and
         QolState.s_quickstart and

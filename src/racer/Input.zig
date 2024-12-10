@@ -109,7 +109,6 @@ pub const RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR: usize = 0xEC88A0;
 pub const RACE_BUTTON_FLOAT_HOLD_TIME: *RaceInputs(BUTTON, f32) = @ptrFromInt(RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR);
 
 // TODO: global struct typedef
-// TODO: bitfield typedef
 // TODO: remove slice?
 pub const GLOBAL_ADDR: usize = 0xE98E80;
 pub const GLOBAL_SIZE: usize = 0x50;
@@ -118,11 +117,53 @@ pub const GLOBAL_AXIS_Y: *[4]f32 = @ptrFromInt(GLOBAL_AXIS_Y_ADDR);
 pub const GLOBAL_AXIS_X_ADDR: usize = 0xE98EA0;
 pub const GLOBAL_AXIS_X: *[4]f32 = @ptrFromInt(GLOBAL_AXIS_X_ADDR);
 pub const GLOBAL_BITFIELD_RAW_ADDR: usize = 0xE98E90;
-pub const GLOBAL_BITFIELD_RAW: *[4]u32 = @ptrFromInt(GLOBAL_BITFIELD_RAW_ADDR);
+pub const GLOBAL_BITFIELD_RAW: *[4]INPUT_BITFIELD = @ptrFromInt(GLOBAL_BITFIELD_RAW_ADDR);
 pub const GLOBAL_BITFIELD_JUST_ON_ADDR: usize = 0xE98EB0;
-pub const GLOBAL_BITFIELD_JUST_ON: *[4]u32 = @ptrFromInt(GLOBAL_BITFIELD_JUST_ON_ADDR);
+pub const GLOBAL_BITFIELD_JUST_ON: *[4]INPUT_BITFIELD = @ptrFromInt(GLOBAL_BITFIELD_JUST_ON_ADDR);
 pub const GLOBAL_BITFIELD_JUST_OFF_ADDR: usize = 0xE98EC0;
-pub const GLOBAL_BITFIELD_JUST_OFF: *[4]u32 = @ptrFromInt(GLOBAL_BITFIELD_JUST_OFF_ADDR);
+pub const GLOBAL_BITFIELD_JUST_OFF: *[4]INPUT_BITFIELD = @ptrFromInt(GLOBAL_BITFIELD_JUST_OFF_ADDR);
+
+pub const MENU_RAW_ADDR: usize = 0x50C908;
+pub const MENU_RAW: *[4]INPUT_BITFIELD = @ptrFromInt(MENU_RAW_ADDR);
+pub const MENU_JUST_ON_ADDR: usize = 0x50C918;
+pub const MENU_JUST_ON: *[4]INPUT_BITFIELD = @ptrFromInt(MENU_JUST_ON_ADDR);
+
+// TODO: separate into menu and race structs for different labels?
+// TODO: testing assert size 32 bits
+pub const INPUT_BITFIELD = packed struct {
+    ACCELERATE: bool,
+    BRAKE: bool,
+    CAMERA_CYCLE: bool,
+    CAMERA_LOOK_BACK: bool,
+    TILT_LEFT: bool,
+    TILT_RIGHT: bool,
+    _06: bool,
+    _07: bool,
+    SLIDE: bool,
+    PAUSE: bool,
+    _10: bool,
+    _11: bool,
+    _12: bool,
+    _13: bool,
+    AXIS_Y_UP: bool,
+    AXIS_Y_DN: bool,
+    AXIS_X_LF: bool,
+    AXIS_X_RT: bool,
+    AXIS_Y_N: bool,
+    AXIS_X_N: bool,
+    AXIS_X_LF_SOFT: bool,
+    AXIS_X_RT_SOFT: bool,
+    AXIS_Y_UP_SOFT: bool,
+    AXIS_Y_DN_SOFT: bool,
+    _24: bool, // seems to be unused bits, at least for menus; see fn_45A460
+    _25: bool,
+    _26: bool,
+    _27: bool,
+    _28: bool,
+    _29: bool,
+    _30: bool,
+    _31: bool,
+};
 
 // HELPERS
 

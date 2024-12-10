@@ -353,6 +353,7 @@ pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
 }
 
 // TODO: generalized fn that automatically checks for short jumps, etc.
+// TODO: same for all jcc stuff
 // WARN: could underflow, but not likely for our use case i guess
 // jmp_rel32
 pub fn jmp(memory_offset: usize, address: usize) usize {
@@ -372,9 +373,18 @@ pub fn jnz(memory_offset: usize, address: usize) usize {
     return offset;
 }
 
+// TODO: auto-calculate offset like the other jcc fns
 pub fn jz_rel8(memory: usize, value: i8) usize {
     var offset = memory;
     offset = mem.write(offset, u8, 0x74);
+    offset = mem.write(offset, i8, value);
+    return offset;
+}
+
+// TODO: auto-calculate offset like the other jcc fns
+pub fn jnz_rel8(memory: usize, value: i8) usize {
+    var offset = memory;
+    offset = mem.write(offset, u8, 0x75);
     offset = mem.write(offset, i8, value);
     return offset;
 }

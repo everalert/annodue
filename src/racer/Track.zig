@@ -1,10 +1,11 @@
 // GAME FUNCTIONS
 
-// ...
+pub const GetTrackName: *fn (i32) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x440620);
+// use with swrText_Translate
 
 // GAME CONSTANTS
 
-// ...
+pub const CircuitSelectionTrackLUT: *[28]u8 = @ptrFromInt(0x4C0018);
 
 // HELPERS
 

@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 
+### Fixed
+
+- QOL: Settings not saving when closing Quick Race Menu without loading race
+
 ## [0.1.6] - 2024-08-11
 
 ### Added

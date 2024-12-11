@@ -1007,7 +1007,6 @@ const QuickRaceMenu = extern struct {
         if (h_s_fps_default) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
         if (QolState.h_s_default_laps) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.laps) });
         if (QolState.h_s_default_racers) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.racers) });
-        gf.ASettingSaveAuto();
 
         // NOTE: laps, racers handled by settings update fn
         FpsTimer.SetPeriod(@intCast(values.fps));
@@ -1056,6 +1055,7 @@ const QuickRaceMenu = extern struct {
     }
 
     fn close() void {
+        gf.ASettingSaveAuto();
         if (!gf.GFreezeOff()) return;
         rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rg.PAUSE_STATE.* = 3;
@@ -1352,7 +1352,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         gf.ASettingUpdate(QolState.h_s_trackselect_last.?, .{ .u = hang.Track });
 
     if (gs.in_race.on()) {
-        if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
+        if (gs.race_state_new and gs.race_state == .PreRace)
+            race.reset();
 
         if (QolState.s_default_camera_auto and (gs.race_state == .Countdown or gs.race_state == .Racing)) {
             if (QolState.cam_cman == null or gs.race_state_new)

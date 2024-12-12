@@ -29,7 +29,7 @@ const TextDef = r.Text.TextDef;
 
 const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
-pub const GLOBAL_STATE_VERSION = 5;
+pub const GLOBAL_STATE_VERSION = 6;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -47,8 +47,7 @@ pub const GlobalState = extern struct {
 
     practice_mode: bool = false,
 
-    hwnd: ?HWND = null,
-    hinstance: ?HINSTANCE = null,
+    window_in_foreground: bool = true,
 
     dt_f: f32 = 0,
     fps: f32 = 0,

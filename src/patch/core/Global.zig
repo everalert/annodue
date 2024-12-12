@@ -156,10 +156,6 @@ pub fn init() bool {
     if (kb_shift_dn)
         return false;
 
-    // TODO: remove? probably don't need these anymore lol
-    GLOBAL_STATE.hwnd = rg.HWND.*;
-    GLOBAL_STATE.hinstance = rg.HINSTANCE.*;
-
     return true;
 }
 
@@ -172,6 +168,12 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn OnDeinit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
+
+pub fn EarlyEngineUpdateB(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    const hwnd_racer: u32 = @intFromPtr(rg.HWND.*);
+    const hwnd_fg: u32 = if (w32wm.GetForegroundWindow()) |h| @intFromPtr(h) else 0;
+    gs.window_in_foreground = hwnd_racer == hwnd_fg;
+}
 
 pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;

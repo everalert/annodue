@@ -20,13 +20,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Auto-reset race on death or engine fire (settings: `autoreset_enable` `autoreset_dead_enable` `autoreset_dead_delay` `autoreset_fire_enable` `autoreset_fire_delay`)
 - QOL: Track select remembers your selection when leaving menu, and between game sessions (settings: `trackselect_remember` `trackselect_last`)
 - QOL: Fast menu navigation by removing input wait times (settings: `fast_navigation`)
+- Backend(Core): `GlobalState.window_in_foreground`
 
 ### Changed
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
+- Backend(Core): Global State version `5` to `6`
+
+### Removed
+
+- Backend(Core): 
+    - `GlobalState.hwnd` (use racerlib->global->HWND)
+    - `GlobalState.hinstance` (use racerlib->global->HINSTANCE)
 
 ### Fixed
 
+- Cam7: Mouse position locking when tabbing out with free cam active
 - QOL: Settings not saving when closing Quick Race Menu without loading race
 
 ## [0.1.6] - 2024-08-11

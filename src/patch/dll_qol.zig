@@ -714,8 +714,9 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
 // first one patched here
 fn PatchMenuNavigationSpeedTransitions(enable: bool) void {
     var actually_enable: bool = enable;
-    if (enable) {
+    if (enable) blk: {
         const hang = re.Manager.entity(.Hang, 0);
+        if (0 == @intFromPtr(hang)) break :blk;
         actually_enable = switch (hang.MenuScreen) {
             .Junkyard,
             .CSRival,

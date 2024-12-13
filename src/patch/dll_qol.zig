@@ -94,6 +94,7 @@ pub const panic = debug.annodue_panic;
 // - feat: auto-reset on death and engine fire
 // - feat: track select remembers selection when leaving menu and between sessions
 // - feat: fast menu navigation
+// - feat: allow dpad input for menu navigation
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -115,6 +116,7 @@ pub const panic = debug.annodue_panic;
 //   trackselect_remember       bool
 //   trackselect_last           u32     0..24
 //   fast_navigation            bool
+//   dpad_navigation            bool
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -150,6 +152,7 @@ const QolState = struct {
     var h_s_trackselect_remember: ?SettingHandle = null;
     var h_s_trackselect_last: ?SettingHandle = null;
     var h_s_fast_navigation: ?SettingHandle = null;
+    var h_s_dpad_navigation: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -170,6 +173,7 @@ const QolState = struct {
     var s_trackselect_remember: bool = false;
     var s_trackselect_last: u32 = 0;
     var s_fast_navigation: bool = false;
+    var s_dpad_navigation: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -240,6 +244,8 @@ const QolState = struct {
             gf.ASettingOccupy(section, "trackselect_last", .U, .{ .u = 0 }, null, null);
         h_s_fast_navigation =
             gf.ASettingOccupy(section, "fast_navigation", .B, .{ .b = false }, &s_fast_navigation, null);
+        h_s_dpad_navigation =
+            gf.ASettingOccupy(section, "dpad_navigation", .B, .{ .b = false }, &s_dpad_navigation, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -1286,12 +1292,33 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.update_input();
 }
 
+export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // add dpad input to menu navigation
+    if (QolState.s_dpad_navigation and ri.JOYSTICK_DEVICE_COUNT.* > 0) {
+        // TODO: convert to object ref instead of building joy_index manually, after
+        // typedef done in racerlib/Input
+        const joy_index: u32 = 0x100 + 0x20 * ri.JOYSTICK_DEVICE_ACTIVE.* + 0x10;
+
+        var off_x: i16 = 0;
+        off_x -= @intCast(ri.RAW_STATE_ON.*[joy_index + 0] * 100); // lf
+        off_x += @intCast(ri.RAW_STATE_ON.*[joy_index + 2] * 100); // rt
+        if (off_x != 0)
+            ri.INPUT_BUFFER.AxisX = @divTrunc(ri.INPUT_BUFFER.AxisX + off_x, 2);
+
+        var off_y: i16 = 0;
+        off_y += @intCast(ri.RAW_STATE_ON.*[joy_index + 1] * 100); // up
+        off_y -= @intCast(ri.RAW_STATE_ON.*[joy_index + 3] * 100); // dn
+        if (off_y != 0)
+            ri.INPUT_BUFFER.AxisY = @divTrunc(ri.INPUT_BUFFER.AxisY + off_y, 2);
+    }
+}
+
 export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
-    _ = mem.write(ri.RAW_STATE_ON + 4, u32, start_on);
-    _ = mem.write(ri.RAW_STATE_JUST_ON + 4, u32, start_just_on);
+    _ = mem.write(ri.RAW_STATE_ON_ADDR + 4, u32, start_on);
+    _ = mem.write(ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
 }
 
 export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {

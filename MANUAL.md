@@ -220,6 +220,7 @@ Configured under `[overlay]`
 - Auto-reset on death and engine fire
 - Track select remembers selection when leaving menu and between sessions
 - Fast menu navigation
+- Allow dpad input for menu navigation
 
 ##### Quick Race Menu Controls
 
@@ -266,6 +267,7 @@ Configured under `[qol]`
 |`trackselect_remember`   |`bool`|`off` |
 |`trackselect_last`       |`u32` |`0`   |0 to 24
 |`fast_navigation`        |`bool`|`off` |
+|`dpad_navigation`        |`bool`|`off` |
 
 ### Collision Viewer
 

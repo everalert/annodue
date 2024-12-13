@@ -1,5 +1,7 @@
 const std = @import("std");
 
+// TODO: get up to date with personal notes, update naming to match new understanding, etc.
+
 // GAME FUNCTIONS
 
 pub const swrInput_ProcessInput: *fn () callconv(.C) void = @ptrFromInt(0x404DD0);
@@ -10,9 +12,13 @@ pub const swrInput_ReadMouse: *fn () callconv(.C) void = @ptrFromInt(0x486710);
 
 // GAME CONSTANTS
 
-pub const RAW_STATE_TIMESTAMP: usize = 0x50E028;
-pub const RAW_STATE_ON: usize = 0x50E868;
-pub const RAW_STATE_JUST_ON: usize = 0x50F668;
+// TODO: typedef for raw input
+pub const RAW_STATE_TIMESTAMP_ADDR: usize = 0x50E028;
+pub const RAW_STATE_TIMESTAMP: *[0x210]u32 = @ptrFromInt(RAW_STATE_TIMESTAMP_ADDR);
+pub const RAW_STATE_ON_ADDR: usize = 0x50E868;
+pub const RAW_STATE_ON: *[0x210]u32 = @ptrFromInt(RAW_STATE_ON_ADDR);
+pub const RAW_STATE_JUST_ON_ADDR: usize = 0x50F668;
+pub const RAW_STATE_JUST_ON: *[0x210]u32 = @ptrFromInt(RAW_STATE_JUST_ON_ADDR);
 
 pub const BUTTON_LENGTH: usize = 15;
 pub const BUTTON_SIZE: usize = 16;
@@ -82,6 +88,11 @@ pub fn RaceInputs(comptime E: type, comptime T: type) type {
     };
 }
 
+pub const JOYSTICK_DEVICE_COUNT_ADDR: u32 = 0x50FEC8;
+pub const JOYSTICK_DEVICE_COUNT: *u32 = @ptrFromInt(JOYSTICK_DEVICE_COUNT_ADDR);
+pub const JOYSTICK_DEVICE_ACTIVE_ADDR: u32 = 0x4D6B3C;
+pub const JOYSTICK_DEVICE_ACTIVE: *u32 = @ptrFromInt(JOYSTICK_DEVICE_ACTIVE_ADDR);
+
 // TODO: collective race inputs struct typedef
 // TODO: remove slice?
 pub const RACE_COMBINED_ADDR: usize = 0xEC8810;
@@ -107,6 +118,10 @@ pub const RACE_BUTTON_FLOAT: *RaceInputs(BUTTON, f32) = @ptrFromInt(RACE_BUTTON_
 pub const RACE_UNK_EC8880: usize = 0xEC8880; // likely settings
 pub const RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR: usize = 0xEC88A0;
 pub const RACE_BUTTON_FLOAT_HOLD_TIME: *RaceInputs(BUTTON, f32) = @ptrFromInt(RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR);
+
+// filled out in ProcessInput before being packed into INPUT_BITFIELDs
+pub const INPUT_BUFFER_ADDR: usize = 0xE98EE0;
+pub const INPUT_BUFFER: *INPUT_BITFIELD_BUFFER = @ptrFromInt(INPUT_BUFFER_ADDR);
 
 // TODO: global struct typedef
 // TODO: remove slice?
@@ -163,6 +178,12 @@ pub const INPUT_BITFIELD = packed struct {
     _29: bool,
     _30: bool,
     _31: bool,
+};
+
+pub const INPUT_BITFIELD_BUFFER = extern struct {
+    AxisX: i16,
+    AxisY: i16,
+    Buttons: [16]u8,
 };
 
 // HELPERS

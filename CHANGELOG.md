@@ -15,11 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overlay: MFG (bounce glitch) timer (setting: `show_mfg_timer`)
 - QOL: Run game in background (setting: `run_in_background`)
 - QOL: Game bugfix for changing camera with F1-F4 not persisting after crashing
-- QOL: Option to set custom default camera, and set it automatically (setting: `default_camera` `default_camera_auto`)
+- QOL: Option to set custom default camera, and set it automatically (settings: `default_camera` `default_camera_auto`)
 - QOL: Patch truguts cheat (Shift+F4+4) to give 10,000 truguts and have infinite uses
 - QOL: Auto-reset race on death or engine fire (settings: `autoreset_enable` `autoreset_dead_enable` `autoreset_dead_delay` `autoreset_fire_enable` `autoreset_fire_delay`)
 - QOL: Track select remembers your selection when leaving menu, and between game sessions (settings: `trackselect_remember` `trackselect_last`)
-- QOL: Fast menu navigation by removing input wait times (settings: `fast_navigation`)
+- QOL: Fast menu navigation by removing input wait times (setting: `fast_navigation`)
+- QOL: Allow hat (d-pad) input for menu navigation (setting: `dpad_navigation`)
 - Backend(Core): `GlobalState.window_in_foreground`
 
 ### Changed

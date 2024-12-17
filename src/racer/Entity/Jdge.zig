@@ -4,9 +4,12 @@ const e = @import("entity.zig");
 const m = @import("../Model.zig");
 const ModelNodeXf = m.ModelNodeXf;
 
+const w = std.os.windows;
+const BOOL = w.BOOL;
+
 // GAME FUNCTIONS
 
-pub const TriggerLoad_InRace: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
+pub const QueueLoad: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
 
 pub const fnStage14: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x45E200);
 //pub const fnStage18: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x00);
@@ -16,7 +19,7 @@ pub const fnEvent: *fn (jdge: *Jdge, magic: *e.MAGIC_EVENT, payload: u32) callco
 
 // GAME CONSTANTS
 
-// ...
+pub const LOAD_QUEUED: *BOOL = @ptrFromInt(0x50CA34);
 
 // GAME TYPEDEFS
 
@@ -26,7 +29,7 @@ pub const SIZE: usize = e.EntitySize(.Jdge);
 pub const Jdge = extern struct {
     EntityMagic: u32,
     EntityFlags: u32,
-    Flags: u32,
+    Flags: u32, // TODO: typedef
     RaceTimer: f32,
     pSplineMarkers: [6]*ModelNodeXf,
     _unk_028_63: [0x64 - 0x28]u8,
@@ -51,4 +54,12 @@ pub const Jdge = extern struct {
 
 // HELPERS
 
-// ...
+// based on fn_462D40 (Pause_ShouldPause)
+pub fn CouldPause(jdge: *Jdge) bool {
+    if (0 != jdge.Flags & 0x20)
+        return false;
+    switch (jdge.Flags & 0xF) {
+        2, 4, 5, 6 => return false,
+        else => return true,
+    }
+}

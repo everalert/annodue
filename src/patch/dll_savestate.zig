@@ -169,8 +169,7 @@ const state = struct {
     // apis like Freeze (same for saveable())
     fn loadable(gs: *GlobalSt) bool {
         const race_ok = gs.in_race.on();
-        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
-        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;
         return race_ok and loading_ok;
     }
 
@@ -182,8 +181,7 @@ const state = struct {
         const tabbed_out = rg.GUI_STOPPED.* > 0;
         const paused = rg.PAUSE_STATE.* > 0;
         const race_ok = gs.in_race.on();
-        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
-        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;
 
         return race_ok and !tabbed_out and !paused and loading_ok;
     }

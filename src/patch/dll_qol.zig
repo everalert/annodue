@@ -1029,8 +1029,7 @@ const QuickRaceMenu = extern struct {
             rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
         }
 
-        const jdge = re.Manager.entity(.Jdge, 0);
-        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
+        RestartRace(false);
         close();
     }
 
@@ -1220,6 +1219,20 @@ fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
     return false;
 }
 
+// MISC.
+
+// TODO: confirm there is no case where jdge would not be initialized
+// TODO: validate in-race??
+fn RestartRace(play_sound: bool) void {
+    if (0 != re.Jdge.LOAD_QUEUED.*) return;
+
+    const jdge = re.Manager.entity(.Jdge, 0);
+    if (!re.Jdge.CouldPause(jdge)) return;
+
+    if (play_sound) rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+    re.Jdge.QueueLoad(jdge, re.M_RSTR);
+}
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -1361,9 +1374,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
         (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
     {
-        const jdge = re.Manager.entity(.Jdge, 0);
-        rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
+        RestartRace(true);
         return; // skip quick race menu
     }
 
@@ -1454,9 +1465,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 }
 
                 if (reset_race) {
-                    const jdge = re.Manager.entity(.Jdge, 0);
-                    rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-                    re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
+                    RestartRace(true);
                     QolState.autoreset_dead.update(false);
                     QolState.autoreset_dead_timer = 0;
                     QolState.autoreset_fire_timer = 0;

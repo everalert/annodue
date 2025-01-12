@@ -71,7 +71,7 @@ pub const panic = debug.annodue_panic;
 //       Scroll next FPS preset     End             RB
 //       Scroll prev planet         Home            LB              While highlighting TRACK
 //       Scroll next planet         End             RB              While highlighting TRACK
-// - feat: end-race stats readout
+// - feat: post-race stats readout
 //     - tfps
 //     - full upgrade stack with healths
 //     - death count
@@ -81,6 +81,7 @@ pub const panic = debug.annodue_panic;
 //     - underheat duration
 //     - fire finish duration
 //     - overheat duration
+// - feat: show true values of times on post-race screen, via the underlying hexadecimal number
 // - feat: show milliseconds on all timers
 // - feat: limit fps during races (configurable via quick race menu)
 // - feat: skip planet cutscene
@@ -117,6 +118,7 @@ pub const panic = debug.annodue_panic;
 //   trackselect_last           u32     0..24
 //   fast_navigation            bool
 //   dpad_navigation            bool
+//   show_postrace_times_hex    bool
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -153,6 +155,7 @@ const QolState = struct {
     var h_s_trackselect_last: ?SettingHandle = null;
     var h_s_fast_navigation: ?SettingHandle = null;
     var h_s_dpad_navigation: ?SettingHandle = null;
+    var h_s_show_postrace_times_hex: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -174,6 +177,7 @@ const QolState = struct {
     var s_trackselect_last: u32 = 0;
     var s_fast_navigation: bool = false;
     var s_dpad_navigation: bool = false;
+    var s_show_postrace_times_hex: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -246,6 +250,9 @@ const QolState = struct {
             gf.ASettingOccupy(section, "fast_navigation", .B, .{ .b = false }, &s_fast_navigation, null);
         h_s_dpad_navigation =
             gf.ASettingOccupy(section, "dpad_navigation", .B, .{ .b = false }, &s_dpad_navigation, null);
+
+        h_s_show_postrace_times_hex =
+            gf.ASettingOccupy(section, "show_postrace_times_hex", .B, .{ .b = false }, &s_show_postrace_times_hex, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -388,12 +395,12 @@ fn PatchCameraFKeys(enable: bool) void {
 // TODO: cleanup
 fn PatchHudTimerMs(enable: bool) void {
     const draw_fn = if (enable) rt.swrText_DrawTime3 else rt.swrText_DrawTime2;
-    const end_race_timer_offset: u8 = if (enable) 12 else 0;
     // hudDrawRaceHud
     _ = x86.call(0x460BD3, @intFromPtr(draw_fn));
     _ = x86.call(0x460E6B, @intFromPtr(draw_fn));
     _ = x86.call(0x460ED9, @intFromPtr(draw_fn));
     // hudDrawRaceResults
+    const end_race_timer_offset: u8 = if (enable) 12 else 0;
     _ = x86.call(0x46252F, @intFromPtr(draw_fn));
     _ = x86.call(0x462660, @intFromPtr(draw_fn));
     _ = mem.write(0x4623D7, u8, end_race_timer_offset + 91);
@@ -1387,6 +1394,8 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // however, the text flushing DOES run on those frames, apparently from a different callsite
 export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
+    const jdge = re.Manager.entity(.Jdge, 0);
+
     if (QolState.h_s_trackselect_last != null and QolState.s_trackselect_last != hang.Track)
         gf.ASettingUpdate(QolState.h_s_trackselect_last.?, .{ .u = hang.Track });
 
@@ -1474,6 +1483,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         }
 
         if (gs.race_state == .PostRace and !gf.GHideRaceUIIsOn()) {
+            // summary readout thing
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(gf, 0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
@@ -1503,6 +1513,25 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             RenderRaceResultStatF(gf, 17, "Boost Distance", race.total_boost_distance);
             RenderRaceResultStatF(gf, 18, "Avg. Boost Distance", race.avg_boost_distance);
             RenderRaceResultStatF(gf, 19, "Boost Ratio", race.total_boost_ratio);
+
+            // show detailed lap times
+            // FIXME: add setting
+            if (QolState.s_show_postrace_times_hex) {
+                const color: u32 = 0xCCCCCCBE;
+                const line_height: i16 = 28;
+                const x: i16 = 50;
+                var y: i16 = 305 + (5 - @as(i16, @intCast(jdge.*.Laps))) * line_height;
+                for (&rrd.PLAYER.*.time.lap) |t| {
+                    if (t < 0) break;
+                    _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
+                        @as(u32, @bitCast(t)),
+                    }, color, null) catch null);
+                    y += line_height;
+                }
+                _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
+                    @as(u32, @bitCast(rrd.PLAYER.*.time.total)),
+                }, color, null) catch null);
+            }
         }
     }
 }

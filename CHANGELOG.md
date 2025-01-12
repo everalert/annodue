@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Track select remembers your selection when leaving menu, and between game sessions (settings: `trackselect_remember` `trackselect_last`)
 - QOL: Fast menu navigation by removing input wait times (setting: `fast_navigation`)
 - QOL: Allow hat (d-pad) input for menu navigation (setting: `dpad_navigation`)
+- QOL: Show true values of times on post-race screen (setting: `show_postrace_times_hex`)
 - Backend(Core): `GlobalState.window_in_foreground`
 
 ### Changed

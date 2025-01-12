@@ -206,7 +206,8 @@ Configured under `[overlay]`
 - Map controller `Start` to `Esc`
 - Race restart hotkey -- `Esc + Tab` or `Back + Start`
 - Quick Race Menu
-- End-race stats readout
+- Post-race stats readout
+- Show true values of times on post-race screen, via the underlying hexadecimal number
 - Show milliseconds on all timers
 - Limit framerate during races (configurable via Quick Race Menu)
 - Skip planet cutscenes
@@ -268,6 +269,7 @@ Configured under `[qol]`
 |`trackselect_last`       |`u32` |`0`   |0 to 24
 |`fast_navigation`        |`bool`|`off` |
 |`dpad_navigation`        |`bool`|`off` |
+|`show_postrace_times_hex`|`bool`|`off` |
 
 ### Collision Viewer
 

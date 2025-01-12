@@ -37,6 +37,7 @@ pub const TracksByMenu = [_][*:0]const u8{
     "Inferno",
 };
 
+// FIXME: deprecate, ingame function GetTrackName__440620 does this
 pub const TracksById = [_][*:0]const u8{
     "The Boonta Training Course",
     "The Boonta Classic",
@@ -66,6 +67,7 @@ pub const TracksById = [_][*:0]const u8{
 };
 
 // menu order idx -> track id
+// FIXME: deprecate, ingame 0x4C0018 [28]i32 array is this map
 pub const TrackMenuIdMap = [_]u8{
     0x00, 0x10, 0x02, 0x06, 0x16, 0x13, 0x11,
     0x07, 0x03, 0x17, 0x09, 0x12, 0x0C, 0x08,

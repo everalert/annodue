@@ -33,6 +33,7 @@ const rvi = @import("racer").Video;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
+const rs = @import("racer").Save;
 
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
@@ -96,6 +97,10 @@ pub const panic = debug.annodue_panic;
 // - feat: track select remembers selection when leaving menu and between sessions
 // - feat: fast menu navigation
 // - feat: allow dpad input for menu navigation
+// - feat: clear best times with hotkey on track detail screen
+//     - CONTROLS:              keyboard
+//       Clear Best Lap         1+Backspace
+//       Clear 3-Lap Record     3+Backspace
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -119,6 +124,7 @@ pub const panic = debug.annodue_panic;
 //   fast_navigation            bool
 //   dpad_navigation            bool
 //   show_postrace_times_hex    bool
+//   clear_records_enable       bool
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -156,6 +162,7 @@ const QolState = struct {
     var h_s_fast_navigation: ?SettingHandle = null;
     var h_s_dpad_navigation: ?SettingHandle = null;
     var h_s_show_postrace_times_hex: ?SettingHandle = null;
+    var h_s_clear_records_enable: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -178,6 +185,7 @@ const QolState = struct {
     var s_fast_navigation: bool = false;
     var s_dpad_navigation: bool = false;
     var s_show_postrace_times_hex: bool = false;
+    var s_clear_records_enable: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -253,6 +261,8 @@ const QolState = struct {
 
         h_s_show_postrace_times_hex =
             gf.ASettingOccupy(section, "show_postrace_times_hex", .B, .{ .b = false }, &s_show_postrace_times_hex, null);
+        h_s_clear_records_enable =
+            gf.ASettingOccupy(section, "clear_records_enable", .B, .{ .b = false }, &s_clear_records_enable, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -1353,13 +1363,29 @@ export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    const laps: u32 = @intCast(re.Manager.entity(.Hang, 0).Laps);
+    const hang = re.Manager.entity(.Hang, 0);
+    const laps: u32 = @intCast(hang.Laps);
     if (QolState.h_s_default_laps != null and laps != QolState.s_default_laps)
         gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .u = laps });
 
     const racers: u32 = @intCast(mem.read(0x50C558, i8));
     if (QolState.h_s_default_racers != null and racers != QolState.s_default_racers)
         gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .u = racers });
+
+    // FIXME: convert to mapped inputs
+    if (QolState.s_clear_records_enable and gf.InputGetKbRaw(.BACK) == .JustOn) {
+        var buf: [127:0]u8 = undefined;
+        if (gf.InputGetKbRaw(.@"1").on()) {
+            rs.BestTimeClear(rs.GameSaveData, hang.Track, 1, hang.Mirror != 0);
+            _ = std.fmt.bufPrintZ(&buf, "{s} Best Lap cleared", .{rtr.TracksById[hang.Track]}) catch return;
+            _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
+        }
+        if (gf.InputGetKbRaw(.@"3").on()) {
+            rs.BestTimeClear(rs.GameSaveData, hang.Track, 3, hang.Mirror != 0);
+            _ = std.fmt.bufPrintZ(&buf, "{s} 3-Lap Record cleared", .{rtr.TracksById[hang.Track]}) catch return;
+            _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
+        }
+    }
 }
 
 export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {

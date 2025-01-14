@@ -6,6 +6,20 @@ pub const GetTrackName: *fn (i32) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x44
 // GAME CONSTANTS
 
 pub const CircuitSelectionTrackLUT: *[28]u8 = @ptrFromInt(0x4C0018);
+pub const TrackMetadata: *[25]TRACK_METADATA = @ptrFromInt(0x4BFEE8);
+
+// GAME DEFINITIONS
+
+// FIXME: assert size
+// len 0x0C
+pub const TRACK_METADATA = extern struct {
+    ModelBlockId: i32,
+    SplineBlockId: i32,
+    PlanetTrack: u8,
+    Planet: u8,
+    TrackFavorite: u8, // TODO: vehicle typedef
+    _0B: u8, // TODO: unk
+};
 
 // HELPERS
 

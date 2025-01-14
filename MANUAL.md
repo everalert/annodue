@@ -239,6 +239,13 @@ Configured under `[overlay]`
 |Scroll prev planet     |`Home`    |`LB`    |While highlighting `TRACK`
 |Scroll next planet     |`End`     |`RB`    |While highlighting `TRACK`
 
+##### Other QOL Controls
+
+|Action|Keyboard|XInput|Note|
+|:---|:---|:---|:---|
+|Clear track Best Lap     |`1+Backspace`|&nbsp;|On track detail screen
+|Clear track 3-Lap Record |`3+Backspace`|&nbsp;|On track detail screen
+
 ##### Settings
 
 Configured under `[qol]`
@@ -270,6 +277,7 @@ Configured under `[qol]`
 |`fast_navigation`        |`bool`|`off` |
 |`dpad_navigation`        |`bool`|`off` |
 |`show_postrace_times_hex`|`bool`|`off` |
+|`clear_records_enable`   |`bool`|`off` |
 
 ### Collision Viewer
 

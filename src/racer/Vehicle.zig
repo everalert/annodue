@@ -1,3 +1,5 @@
+const Vec3 = @import("Vector.zig").Vec3;
+
 // GAME FUNCTIONS
 
 pub const Vehicle_EnableJinnReeso: *fn () callconv(.C) void = @ptrFromInt(0x44B530);
@@ -5,19 +7,97 @@ pub const Vehicle_EnableCyYunga: *fn () callconv(.C) void = @ptrFromInt(0x44B5E0
 
 // GAME CONSTANTS
 
+pub const BaseStats: *[23]BASE_STATS = @intFromPtr(0x4C2BB0);
+pub const VehicleMetadata: *[23]BASE_STATS = @intFromPtr(0x4C2700);
+pub const VehicleVisualMetadata: *[23]BASE_STATS = @intFromPtr(0x4C7088);
+
 // TODO: vehicle metadata struct def
-pub const METADATA_ARRAY_ADDR: usize = 0x4C2700;
+pub const METADATA_ARRAY_ADDR: usize = 0x4C2700; // TODO: deprecate
 pub const METADATA_ITEM_SIZE: usize = 0x34;
 
 // TODO: figure out what the mystery struct is
-pub const MYSTERY_ARRAY_ADDR: usize = 0x4C7088;
+pub const MYSTERY_ARRAY_ADDR: usize = 0x4C7088; // TODO: deprecate; visual metadata
 pub const MYSTERY_ITEM_SIZE: usize = 0x6C;
 
 pub const JINN_REESO_METADATA_ADDR: usize = METADATA_ARRAY_ADDR + METADATA_ITEM_SIZE * 8;
 pub const JINN_REESO_MYSTERY_ADDR: usize = MYSTERY_ARRAY_ADDR + MYSTERY_ITEM_SIZE * 8;
-
 pub const CY_YUNGA_METADATA_ADDR: usize = METADATA_ARRAY_ADDR + METADATA_ITEM_SIZE * 22;
 pub const CY_YUNGA_MYSTERY_ADDR: usize = MYSTERY_ARRAY_ADDR + MYSTERY_ITEM_SIZE * 22;
+
+// GAME DEFINITIONS
+
+// FIXME: test assert size
+// len 0x3C
+pub const BASE_STATS = extern struct {
+    AntiSkid: f32,
+    TurnResponse: f32,
+    MaxTurnRate: f32,
+    Acceleration: f32,
+    MaxSpeed: f32,
+    AirBrakeInv: f32,
+    DecelInv: f32,
+    BoostThrust: f32,
+    HeatRate: f32,
+    CoolRate: f32,
+    HoverHeight: f32,
+    RepairRate: f32,
+    BumpMass: f32,
+    DamageImmunity: f32,
+    ISectRadius: f32,
+};
+
+// FIXME: test assert size
+// len 0x40
+pub const CALCULATED_STATS = extern struct {
+    AntiSkid: f32,
+    TurnResponse: f32,
+    MaxTurnRate: f32,
+    Acceleration: f32,
+    MaxSpeed: f32,
+    AirBrakeInv: f32,
+    DecelInv: f32,
+    BoostThrust: f32,
+    HeatRate: f32,
+    CoolRate: f32,
+    HoverHeight: f32,
+    RepairRate: f32,
+    BumpMass: f32,
+    DamageImmunity: f32,
+    BaseHoverHeight: f32,
+    ISectRadius: f32,
+};
+
+// FIXME: test assert size
+// len 0x34
+pub const VEHICLE_METADATA = extern struct {
+    VehicleId: i32,
+    PoddId: i32,
+    MAltId: i32,
+    PartIdLo: i32,
+    PartIdHi: i32,
+    pFirstName: [*:0]const u8,
+    pLastName: [*:0]const u8,
+    HolotablePodScale: f32,
+    CharacterHeight: f32,
+    PodInspectHoverHeight: f32,
+    SpriteIdPortrait: i32,
+    SpriteIdFlag: i32,
+    PuppId: i32,
+};
+
+// FIXME: test assert size
+// len 0x6C
+pub const VEHICLE_VISUAL_METADATA = extern struct {
+    CockpitPos: Vec3,
+    EnginePosR: Vec3,
+    CamSweepBaseOffset: Vec3,
+    CableConnectionPointCockpit: Vec3,
+    CableConnectionPointEngineR: Vec3,
+    EnergyBinderConnectionPointR: Vec3,
+    Cam3POffset: Vec3,
+    AirstreamPosR: Vec3,
+    AirstreamScaleR: Vec3,
+};
 
 // HELPERS
 
@@ -44,7 +124,7 @@ pub const VehicleNames = [_][*:0]const u8{
     "Ben Quadinaros",
     "Slide Paramita",
     "Toy Dampner",
-    "Bullseye 'Navior'",
+    "'Bullseye' Navior",
 };
 
 // TODO: move upgrades/parts stuff to Stats.zig?

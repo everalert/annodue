@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - Backend(Core): Global State version `5` to `6`
+- Backend(Code): Settings now also autosave on race reset
 
 ### Removed
 

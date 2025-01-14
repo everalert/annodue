@@ -1045,7 +1045,7 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 }
 
 pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (gs.in_race.new())
+    if (gs.in_race.new() or (gs.race_state_new and gs.race_state == .PreRace))
         ASettings.saveAuto() catch {};
 
     if (gs.timestamp > ASettings.last_check + ASettings.check_freq)

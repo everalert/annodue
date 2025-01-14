@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Fast menu navigation by removing input wait times (setting: `fast_navigation`)
 - QOL: Allow hat (d-pad) input for menu navigation (setting: `dpad_navigation`)
 - QOL: Show true values of times on post-race screen (setting: `show_postrace_times_hex`)
-- QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`, hotkey: `1+Backspace` `3+Backspace`)
+- QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`)
+- QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
 - Backend(Core): `GlobalState.window_in_foreground`
 - Backend(RacerLib): `Save` util
 

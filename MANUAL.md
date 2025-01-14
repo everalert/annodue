@@ -227,17 +227,19 @@ Configured under `[overlay]`
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
-|Open                   |`Esc`     |`Start` |Hold or double-tap while unpaused
-|Close                  |`Esc`     |`B`     |&nbsp;
-|Navigate               |`↑ ↓ ← →` |`D-Pad` |&nbsp;
-|Interact               |`Enter`   |`A`     |&nbsp;
-|Quick Confirm          |`Space`   |`Start` |&nbsp;
-|All Upgrades OFF       |`Home`    |`LB`    |While highlighing any upgrade
-|All Upgrades MAX       |`End`     |`RB`    |While highlighing any upgrade
-|Scroll prev FPS preset |`Home`    |`LB`    |&nbsp;
-|Scroll next FPS preset |`End`     |`RB`    |&nbsp;
-|Scroll prev planet     |`Home`    |`LB`    |While highlighting `TRACK`
-|Scroll next planet     |`End`     |`RB`    |While highlighting `TRACK`
+|Open                         |`Esc`     |`Start` |Hold or double-tap while unpaused
+|Close                        |`Esc`     |`B`     |&nbsp;
+|Navigate                     |`↑ ↓ ← →` |`D-Pad` |&nbsp;
+|Interact                     |`Enter`   |`A`     |Set FPS (in Practice Mode), toggle vehicle favorite, etc.
+|Quick Confirm                |`Space`   |`Start` |&nbsp;
+|All Upgrades OFF             |`Home`    |`LB`    |While highlighing any upgrade
+|All Upgrades MAX             |`End`     |`RB`    |While highlighing any upgrade
+|Scroll prev FPS preset       |`Home`    |`LB`    |&nbsp;
+|Scroll next FPS preset       |`End`     |`RB`    |&nbsp;
+|Scroll prev planet           |`Home`    |`LB`    |While highlighting `TRACK`
+|Scroll next planet           |`End`     |`RB`    |While highlighting `TRACK`
+|Scroll prev favorite vehicle |`Home`    |`LB`    |While highlighting `VEHICLE`
+|Scroll next favorite vehicle |`End`     |`RB`    |While highlighting `VEHICLE`
 
 ##### Other QOL Controls
 

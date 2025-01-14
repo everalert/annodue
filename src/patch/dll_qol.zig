@@ -60,18 +60,20 @@ pub const panic = debug.annodue_panic;
 // - feat: quick race menu
 //     - create a new race from inside a race
 //     - select pod, track, upgrade stack and other race settings
-//     - CONTROLS:          keyboard        xinput
-//       Open                       Esc             Start           Hold or double-tap while unpaused
-//       Close                      Esc             B
-//       Navigate                   ↑↓→←            D-Pad
-//       Interact                   Enter           A
-//       Quick Confirm              Space           Start
-//       All Upgrades MIN           Home            LB              While highlighting any upgrade
-//       All Upgrades MAX           End             RB              While highlighting any upgrade
-//       Scroll prev FPS preset     Home            LB
-//       Scroll next FPS preset     End             RB
-//       Scroll prev planet         Home            LB              While highlighting TRACK
-//       Scroll next planet         End             RB              While highlighting TRACK
+//     - CONTROLS:                          keyboard        xinput
+//       Open                               Esc             Start           Hold or double-tap while unpaused
+//       Close                              Esc             B
+//       Navigate                           ↑↓→←            D-Pad
+//       Interact*                          Enter           A               Set FPS (in Practice Mode), toggle vehicle favorite, etc.
+//       Quick Confirm                      Space           Start
+//       All Upgrades MIN                   Home            LB              While highlighting any upgrade
+//       All Upgrades MAX                   End             RB              While highlighting any upgrade
+//       Scroll prev FPS preset             Home            LB
+//       Scroll next FPS preset             End             RB
+//       Scroll prev planet                 Home            LB              While highlighting TRACK
+//       Scroll next planet                 End             RB              While highlighting TRACK
+//       Scroll prev favorite vehicle       Home            LB              While highlighting VEHICLE
+//       Scroll next favorite vehicle       End             RB              While highlighting VEHICLE
 // - feat: post-race stats readout
 //     - tfps
 //     - full upgrade stack with healths
@@ -271,6 +273,8 @@ const QolState = struct {
 
         QuickRaceMenu.h_s_fps_default =
             gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, &QuickRaceMenu.s_fps_default, null);
+        QuickRaceMenu.h_s_favorite_vehicles =
+            gf.ASettingOccupy(section, "favorite_vehicles", .U, .{ .u = 0 }, &QuickRaceMenu.s_favorite_vehicles, null);
     }
 
     fn settingsUpdateRacers(new_value: Setting.Value) callconv(.C) void {
@@ -953,7 +957,9 @@ const QuickRaceMenuInput = extern struct {
 
 const QuickRaceMenu = extern struct {
     var h_s_fps_default: ?SettingHandle = null;
+    var h_s_favorite_vehicles: ?SettingHandle = null;
     var s_fps_default: u32 = 24;
+    var s_favorite_vehicles: u32 = 0; // bitfield where vehicle id maps to nth bit
 
     const open_threshold: f32 = 0.75;
     var menu_active: st.ActiveState = .Off;
@@ -1111,7 +1117,7 @@ const QuickRaceMenu = extern struct {
 const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, null),
+    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, &QuickRaceVehicleCallback),
     // FIXME: maybe change to menu order?
     mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rtr.TracksById, true, &QuickRaceTrackCallback),
     mi.MenuItemSpacer(),
@@ -1192,7 +1198,51 @@ fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
             if (QuickRaceMenu.h_s_fps_default) |h|
                 QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = @intCast(QuickRaceMenu.values.fps) });
 
-            rso.swrSound_PlaySoundMacro(0x2D);
+            rso.swrSound_PlaySoundMacro(45); // sfx_vox_pdroid_i1.wav
+        }
+    }
+    return false;
+}
+
+// TODO: add color to vehicle names when they are favorited
+// TODO: implement this behaviour on normal vehicle select
+fn QuickRaceVehicleCallback(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        // scroll favorites
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.vehicle = blk: {
+                var next: i32 = @mod(QuickRaceMenu.values.vehicle - 1, 23);
+                if (QuickRaceMenu.s_favorite_vehicles & 0x7FFFFF == 0) break :blk next;
+                while (true) {
+                    const next_bit: u32 = @as(u32, 1) << @intCast(next);
+                    if (QuickRaceMenu.s_favorite_vehicles & next_bit > 0) break :blk next;
+                    next = @mod(next - 1, 23);
+                }
+            };
+            return true;
+        }
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.vehicle = blk: {
+                var next: i32 = @mod(QuickRaceMenu.values.vehicle + 1, 23);
+                if (QuickRaceMenu.s_favorite_vehicles & 0x7FFFFF == 0) break :blk next;
+                while (true) {
+                    const next_bit: u32 = @as(u32, 1) << @intCast(next);
+                    if (QuickRaceMenu.s_favorite_vehicles & next_bit > 0) break :blk next;
+                    next = @mod(next + 1, 23);
+                }
+            };
+            return true;
+        }
+
+        // interact = toggle favorite
+        if (cb[0](.JustOn)) {
+            const vehicle_bit: u32 = @as(u32, 1) << @intCast(QuickRaceMenu.values.vehicle);
+            if (QuickRaceMenu.h_s_favorite_vehicles) |h|
+                QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = QuickRaceMenu.s_favorite_vehicles ^ vehicle_bit });
+
+            var sound_id: i16 = 44; // sfx_vox_pdroid_h2.wav
+            if (QuickRaceMenu.s_favorite_vehicles & vehicle_bit > 0) sound_id = 45; // sfx_vox_pdroid_i1.wav
+            rso.swrSound_PlaySoundMacro(sound_id);
         }
     }
     return false;

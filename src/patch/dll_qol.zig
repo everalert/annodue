@@ -199,7 +199,7 @@ const QolState = struct {
     var fcam_mem: u32 = 0;
     var fcam_mem_end: u32 = 0;
     const fcam_mem_size: u32 = 32;
-    var cam_prev: u32 = 1;
+    var cam_prev: u32 = 0xFFFFFFFF;
     var cam_cman: ?*re.cMan.cMan = null;
 
     var autoreset_dead: st.ActiveState = .Off;
@@ -1479,7 +1479,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         if (gs.race_state_new and gs.race_state == .PreRace)
             race.reset();
 
-        if (QolState.s_default_camera_auto and (gs.race_state == .Countdown or gs.race_state == .Racing)) {
+        if (QolState.s_default_camera_auto and gs.race_state == .Racing) {
             if (QolState.cam_cman == null or gs.race_state_new)
                 QolState.cam_cman = re.cMan.FindFromPlayerEntity(re.Test.PLAYER.*);
 

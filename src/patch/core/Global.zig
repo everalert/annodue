@@ -179,15 +179,16 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
     const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;
     gs.in_race.update(player_ready);
 
+    // FIXME: use jdge flags
     gs.race_state_prev = gs.race_state;
     gs.race_state = blk: {
         if (!gs.in_race.on()) break :blk .None;
-        if (rg.IN_RACE.* == 0) break :blk .PreRace;
+        if (rg.IN_RACE.* == 0) break :blk .PreRace; // i.e. in race scene?
         // TODO: figure out how the engine knows to set these and use those instead
         const flags1 = re.Test.PLAYER.*.flags1;
         if (flags1.IN_COUNTDOWN) break :blk .Countdown;
         const postrace: bool = !flags1.RACE_NOT_ENDED;
-        const show_stats: bool = re.Manager.entity(.Jdge, 0).Flags & 0x0F == 2;
+        const show_stats: bool = re.Manager.entity(.Jdge, 0).Flags.RACE_STATE == .PostRace;
         if (postrace and show_stats) break :blk .PostRace;
         if (postrace) break :blk .PostRaceExiting;
         break :blk .Racing;

@@ -1518,7 +1518,8 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
             if (gs.player.overheating.on()) race.set_total_overheat(total_time);
             if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
-            if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
+            if (gs.player.overheating.on() and gs.race_state == .PostRace)
+                race.set_fire_finish_duration(total_time);
 
             // auto reset
 

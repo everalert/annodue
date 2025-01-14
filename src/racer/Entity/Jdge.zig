@@ -29,7 +29,7 @@ pub const SIZE: usize = e.EntitySize(.Jdge);
 pub const Jdge = extern struct {
     EntityMagic: u32,
     EntityFlags: u32,
-    Flags: u32, // TODO: typedef
+    Flags: JDGE_FLAGS,
     RaceTimer: f32,
     pSplineMarkers: [6]*ModelNodeXf,
     _unk_028_63: [0x64 - 0x28]u8,
@@ -52,14 +52,36 @@ pub const Jdge = extern struct {
     _unk_1D8_1E7: [0x20]u8,
 };
 
+// TODO: testing assert size 32 bits
+pub const JDGE_FLAGS = packed struct {
+    RACE_STATE: enum(u4) {
+        Countdown,
+        Racing,
+        PostRace,
+        _3,
+        CameraSweepInit,
+        CameraSweep,
+        Loading,
+    },
+    _04: bool,
+    _05_cannot_pause: bool,
+    _06: bool,
+    _07: bool,
+    COUNT_3_SOUND_NOT_PLAYED: bool,
+    COUNT_2_SOUND_NOT_PLAYED: bool,
+    COUNT_1_SOUND_NOT_PLAYED: bool,
+    _11: bool,
+    _12_31: u20, // NOTE: may be unused
+};
+
 // HELPERS
 
 // based on fn_462D40 (Pause_ShouldPause)
 pub fn CouldPause(jdge: *Jdge) bool {
-    if (0 != jdge.Flags & 0x20)
+    if (jdge.Flags._05_cannot_pause)
         return false;
-    switch (jdge.Flags & 0xF) {
-        2, 4, 5, 6 => return false,
+    switch (jdge.Flags.RACE_STATE) {
+        .PostRace, .CameraSweepInit, .CameraSweep, .Loading => return false,
         else => return true,
     }
 }

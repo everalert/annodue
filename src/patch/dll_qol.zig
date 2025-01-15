@@ -127,6 +127,7 @@ pub const panic = debug.annodue_panic;
 //   dpad_navigation            bool
 //   show_postrace_times_hex    bool
 //   clear_records_enable       bool
+//   favorite_characters        u32     bitfield where character id = nth bit
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -277,6 +278,7 @@ const QolState = struct {
             gf.ASettingOccupy(section, "favorite_vehicles", .U, .{ .u = 0 }, &QuickRaceMenu.s_favorite_vehicles, null);
     }
 
+    // TODO: setting to control whether default racers automatically updates
     fn settingsUpdateRacers(new_value: Setting.Value) callconv(.C) void {
         s_default_racers = std.math.clamp(new_value.u, 1, 12);
         if (h_s_default_racers) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_racers });
@@ -288,6 +290,7 @@ const QolState = struct {
         }
     }
 
+    // TODO: setting to control whether default laps automatically updates
     fn settingsUpdateLaps(new_value: Setting.Value) callconv(.C) void {
         s_default_laps = std.math.clamp(new_value.u, 1, 5);
         if (h_s_default_laps) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_laps });
@@ -1414,6 +1417,7 @@ export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
+
     const laps: u32 = @intCast(hang.Laps);
     if (QolState.h_s_default_laps != null and laps != QolState.s_default_laps)
         gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .u = laps });
@@ -1592,7 +1596,6 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             RenderRaceResultStatF(gf, 19, "Boost Ratio", race.total_boost_ratio);
 
             // show detailed lap times
-            // FIXME: add setting
             if (QolState.s_show_postrace_times_hex) {
                 const color: u32 = 0xCCCCCCBE;
                 const line_height: i16 = 28;

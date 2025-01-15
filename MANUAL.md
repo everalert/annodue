@@ -268,18 +268,19 @@ Configured under `[qol]`
 |`fast_countdown_enable`  |`bool`|`off` |&nbsp;
 |`fast_countdown_duration`|`f32` |`1.00`|0.05 to 3.00
 |`fix_viewport_edges`     |`bool`|`off` |May cause sprites at edge to be slightly cut off
-|`run_in_background`      |`bool`|`off` |
-|`autoreset_enable`       |`bool`|`off` |
-|`autoreset_dead_enable`  |`bool`|`off` |
-|`autoreset_dead_delay`   |`f32` |`0.5` |
-|`autoreset_fire_enable`  |`bool`|`off` |
-|`autoreset_fire_delay`   |`f32` |`3.0` |
-|`trackselect_remember`   |`bool`|`off` |
+|`run_in_background`      |`bool`|`off` |&nbsp;
+|`autoreset_enable`       |`bool`|`off` |&nbsp;
+|`autoreset_dead_enable`  |`bool`|`off` |&nbsp;
+|`autoreset_dead_delay`   |`f32` |`0.5` |&nbsp;
+|`autoreset_fire_enable`  |`bool`|`off` |&nbsp;
+|`autoreset_fire_delay`   |`f32` |`3.0` |&nbsp;
+|`trackselect_remember`   |`bool`|`off` |&nbsp;
 |`trackselect_last`       |`u32` |`0`   |0 to 24
-|`fast_navigation`        |`bool`|`off` |
-|`dpad_navigation`        |`bool`|`off` |
-|`show_postrace_times_hex`|`bool`|`off` |
-|`clear_records_enable`   |`bool`|`off` |
+|`fast_navigation`        |`bool`|`off` |&nbsp;
+|`dpad_navigation`        |`bool`|`off` |&nbsp;
+|`show_postrace_times_hex`|`bool`|`off` |&nbsp;
+|`clear_records_enable`   |`bool`|`off` |&nbsp;
+|`favorite_characters`    |`u32` |`0`   |bitfield where character id = nth bit
 
 ### Collision Viewer
 

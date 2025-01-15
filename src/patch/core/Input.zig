@@ -248,7 +248,7 @@ pub fn update_mouse() callconv(.C) void {
         var c: RECT = undefined;
     };
 
-    const hwnd: HWND = @ptrCast(rg.HWND.*);
+    const hwnd: HWND = @ptrCast(rg.WINDOW_HWND.*);
     if (w32wm.GetCursorPos(&static.m) > 0 and w32wm.GetClientRect(hwnd, &static.c) > 0) {
         const s: *INPUT_MOUSE = &InputState.mouse;
 

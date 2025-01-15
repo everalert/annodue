@@ -178,7 +178,7 @@ const state = struct {
     fn updateable(gs: *GlobalSt) bool {
         if (!gs.practice_mode) return false;
 
-        const tabbed_out = rg.GUI_STOPPED.* > 0;
+        const tabbed_out = rti.STOPPED.* != 0;
         const paused = rg.PAUSE_STATE.* > 0;
         const race_ok = gs.in_race.on();
         const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;

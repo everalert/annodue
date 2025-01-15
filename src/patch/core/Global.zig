@@ -170,7 +170,7 @@ pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
 pub fn OnDeinit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
 
 pub fn EarlyEngineUpdateB(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
-    const hwnd_racer: u32 = @intFromPtr(rg.HWND.*);
+    const hwnd_racer: u32 = @intFromPtr(rg.WINDOW_HWND.*);
     const hwnd_fg: u32 = if (w32wm.GetForegroundWindow()) |h| @intFromPtr(h) else 0;
     gs.window_in_foreground = hwnd_racer == hwnd_fg;
 }

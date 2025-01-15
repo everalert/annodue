@@ -792,7 +792,7 @@ const FastCountdown = struct {
     }
 
     fn patch(enable: bool) void {
-        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rti.FRAMETIME_64_ADDR;
+        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else @intFromPtr(rti.FRAMETIME_64);
         const prerace_max_time: u32 = if (enable) @bitCast(9.10 + CountDif) else 0x4111999A; // 9.10
         const boost_window_min: u32 = if (enable) @bitCast(0.05 * CountRatio) else 0x3D4CCCCD; // 0.05
         const boost_window_max: u32 = if (enable) @bitCast(0.30 * CountRatio) else 0x3E99999A; // 0.30
@@ -1405,9 +1405,7 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    // TODO: confirm tabbed_in is actually needed here, possibly move to global state
-    const tabbed_in: bool = rg.GUI_STOPPED.* == 0;
-    if (gs.in_race.on() and tabbed_in and QolState.s_fps_limiter)
+    if (gs.in_race.on() and QolState.s_fps_limiter and rti.STOPPED.* == 0)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 

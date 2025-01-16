@@ -1586,19 +1586,22 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             );
 
             RenderRaceResultStatF(gf, 10, "Top Speed", race.top_speed);
-            RenderRaceResultStatF(gf, 11, "Avg. Speed", race.avg_speed);
+            RenderRaceResultStatF(gf, 11, "Avg Speed", race.avg_speed);
             RenderRaceResultStatF(gf, 12, "Distance", race.total_distance);
             RenderRaceResultStatU(gf, 13, "Deaths", gs.player.deaths);
-            RenderRaceResultStatTime(gf, 20, "First Boost", race.first_boost_time);
-            RenderRaceResultStatTime(gf, 21, "Underheat Time", race.total_underheat);
-            RenderRaceResultStatTime(gf, 22, "Fire Finish", race.fire_finish_duration);
-            RenderRaceResultStatTime(gf, 23, "Overheat Time", race.total_overheat);
-            RenderRaceResultStatU(gf, 14, "Boosts", race.total_boosts);
-            RenderRaceResultStatTime(gf, 15, "Boost Time", race.total_boost_duration);
-            RenderRaceResultStatTime(gf, 16, "Avg. Boost Time", race.avg_boost_duration);
-            RenderRaceResultStatF(gf, 17, "Boost Distance", race.total_boost_distance);
-            RenderRaceResultStatF(gf, 18, "Avg. Boost Distance", race.avg_boost_distance);
-            RenderRaceResultStatF(gf, 19, "Boost Ratio", race.total_boost_ratio);
+
+            // zig fmt: off
+            RenderRaceResultStatU(gf,    15, "Boosts",          race.total_boosts);
+            RenderRaceResultStatTime(gf, 16, "First Boost",     race.first_boost_time);
+            RenderRaceResultStatTime(gf, 17, "Fire Finish",     race.fire_finish_duration);
+            RenderRaceResultStatTime(gf, 18, "Underheat Time",  race.total_underheat);
+            RenderRaceResultStatTime(gf, 19, "Overheat Time",   race.total_overheat);
+            RenderRaceResultStatTime(gf, 20, "Boost Time",      race.total_boost_duration);
+            RenderRaceResultStatTime(gf, 21, "Avg Boost Time",  race.avg_boost_duration);
+            RenderRaceResultStatF(gf,    22, "Boost Dist",      race.total_boost_distance);
+            RenderRaceResultStatF(gf,    23, "Avg Boost Dist",  race.avg_boost_distance);
+            RenderRaceResultStatF(gf,    24, "Boost Ratio",     race.total_boost_ratio);
+            // zig fmt: on
 
             // show detailed lap times
             if (QolState.s_show_postrace_times_hex) {

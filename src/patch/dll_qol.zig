@@ -673,13 +673,13 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // TODO: fix animation snapping on repetitive inputs
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
     if (enable) {
-        _ = mem.write(0x43921E + 2, u32, ri.MENU_JUST_ON_ADDR); // input raw -> JustOn check (left)
-        _ = mem.write(0x4392E4 + 2, u32, ri.MENU_JUST_ON_ADDR); // input raw -> JustOn check (right)
+        _ = mem.write(0x43921E + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (left)
+        _ = mem.write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (right)
         _ = x86.nop_until(0x439233, 0x439233 + 6); // camera is animating check (left)
         _ = x86.nop_until(0x4392F9, 0x4392F9 + 6); // camera is animating check (right)
     } else {
-        _ = mem.write(0x43921E + 2, u32, ri.MENU_RAW_ADDR); // test byte ptr [50C908], 0x10
-        _ = mem.write(0x4392E4 + 2, u32, ri.MENU_RAW_ADDR); // test byte ptr [50C908], 0x20
+        _ = mem.write(0x43921E + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x10
+        _ = mem.write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x20
         _ = x86.jz(0x439233, 0x4392E4);
         _ = x86.jz(0x4392F9, 0x4393A2);
     }
@@ -688,7 +688,7 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // TODO: convert asm reroute into x86 macro function
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
     if (enable) {
-        _ = mem.write(0x43AE9D + 1, u32, ri.MENU_JUST_ON_ADDR); // input raw -> JustOn check
+        _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
         off = x86.jmp(0x43AFAE, nav_asm_off); // reroute camera state checks (left)
         off = x86.nop_until(off, 0x43AFB9);
@@ -711,7 +711,7 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         nav_asm_off = x86.jmp(nav_asm_off, 0x43AFD6);
         nav_asm_off = x86.nop_align(nav_asm_off, 16);
     } else {
-        _ = mem.write(0x43AE9D + 1, u32, ri.MENU_RAW_ADDR); // mov ebp, 50C908
+        _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
         _ = x86.jnz_rel8(0x43AF93, 0x4B); // jnz short 0x43AFE0
         _ = mem.write_bytes(0x43AFAE, &[11]u8{ // camera anim state checks (left scroll)
             0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
@@ -1386,13 +1386,13 @@ export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         off_x -= @intCast(ri.RAW_STATE_ON.*[joy_index + 0] * 100); // lf
         off_x += @intCast(ri.RAW_STATE_ON.*[joy_index + 2] * 100); // rt
         if (off_x != 0)
-            ri.INPUT_BUFFER.AxisX = @divTrunc(ri.INPUT_BUFFER.AxisX + off_x, 2);
+            ri.PACKING_BUFFER[0].AxisX = @divTrunc(ri.PACKING_BUFFER[0].AxisX + off_x, 2);
 
         var off_y: i16 = 0;
         off_y += @intCast(ri.RAW_STATE_ON.*[joy_index + 1] * 100); // up
         off_y -= @intCast(ri.RAW_STATE_ON.*[joy_index + 3] * 100); // dn
         if (off_y != 0)
-            ri.INPUT_BUFFER.AxisY = @divTrunc(ri.INPUT_BUFFER.AxisY + off_y, 2);
+            ri.PACKING_BUFFER[0].AxisY = @divTrunc(ri.PACKING_BUFFER[0].AxisY + off_y, 2);
     }
 }
 

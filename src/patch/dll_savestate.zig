@@ -108,8 +108,8 @@ const state = struct {
         .{}, // cMan
         .{}, // Smok
         .{}, // Toss
-        .{ .data = @as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE] }, // Input
-        .{ .data = @as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrCast(rin.MAPPED_BUTTON))[0..0xD0] }, // Input
+        .{ .data = @as([*]u8, @ptrCast(rin.PACKED))[0..@sizeOf(rin.INPUT_PACKED)] }, // Input
         .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
         .{ .data = @as([*]u8, @ptrCast(rr.NUMBER))[0..4] }, // RNG
     };

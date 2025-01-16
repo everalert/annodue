@@ -74,8 +74,8 @@ const InputDisplay = struct {
     const style_left = rt.MakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
     fn ReadInputs() void {
-        analog = mem.read(ri.RACE_AXIS_COMBINED_BASE_ADDR, @TypeOf(analog));
-        digital = mem.read(ri.RACE_BUTTON_COMBINED_BASE_ADDR, @TypeOf(digital));
+        analog = mem.read(@intFromPtr(ri.MAPPED_AXIS), @TypeOf(analog));
+        digital = mem.read(@intFromPtr(ri.MAPPED_BUTTON), @TypeOf(digital));
     }
 
     fn GetStick(input: ri.AXIS) f32 {
@@ -92,8 +92,8 @@ const InputDisplay = struct {
         UpdateIconThrust(gf, &icons[2 + ri.BUTTON_ACCELERATION], &icons[2 + ri.BUTTON_BRAKE], .Thrust, .Acceleration, .Brake);
         UpdateIconButton(&icons[2 + ri.BUTTON_BOOST], .Boost);
         UpdateIconButton(&icons[2 + ri.BUTTON_SLIDE], .Slide);
-        UpdateIconButton(&icons[2 + ri.BUTTON_ROLL_LEFT], .RollLeft);
-        UpdateIconButton(&icons[2 + ri.BUTTON_ROLL_RIGHT], .RollRight);
+        UpdateIconButton(&icons[2 + ri.BUTTON_TILT_LEFT], .TiltLeft);
+        UpdateIconButton(&icons[2 + ri.BUTTON_TILT_RIGHT], .TiltRight);
         //UpdateIconButton(&icons[2 + ri.BUTTON_TAUNT], .Taunt);
         UpdateIconButton(&icons[2 + ri.BUTTON_REPAIR], .Repair);
     }
@@ -106,8 +106,8 @@ const InputDisplay = struct {
         InitIconThrust(&icons[2 + ri.BUTTON_ACCELERATION], &icons[2 + ri.BUTTON_BRAKE], s_pos_x, s_pos_y, 2);
         InitIconButton(&icons[2 + ri.BUTTON_BOOST], s_pos_x - 18, s_pos_y + 19, 1, 1);
         InitIconButton(&icons[2 + ri.BUTTON_SLIDE], s_pos_x - 8, s_pos_y + 19, 2, 1);
-        InitIconButton(&icons[2 + ri.BUTTON_ROLL_LEFT], s_pos_x - 28, s_pos_y + 19, 1, 1);
-        InitIconButton(&icons[2 + ri.BUTTON_ROLL_RIGHT], s_pos_x + 20, s_pos_y + 19, 1, 1);
+        InitIconButton(&icons[2 + ri.BUTTON_TILT_LEFT], s_pos_x - 28, s_pos_y + 19, 1, 1);
+        InitIconButton(&icons[2 + ri.BUTTON_TILT_RIGHT], s_pos_x + 20, s_pos_y + 19, 1, 1);
         //InitIconButton(&icons[2 + ri.BUTTON_TAUNT], s_pos_x, s_pos_y, 1);
         InitIconButton(&icons[2 + ri.BUTTON_REPAIR], s_pos_x + 10, s_pos_y + 19, 1, 1);
 

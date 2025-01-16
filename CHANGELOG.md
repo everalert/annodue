@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
 - Backend(Core): `GlobalState.window_in_foreground`
 - Backend(RacerLib): `Save` util
+- Backend(RacerLib): `Input` defs
 
 ### Changed
 

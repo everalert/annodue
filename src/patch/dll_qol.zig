@@ -1360,10 +1360,17 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchCyYungaCheat(false);
     PatchCyYungaCheatAudio(false);
     PatchTrugutsCheat(false);
-    PatchTrackSelectEntry(false);
-    PatchMenuNavigationSpeed(false);
 
     PatchCameraFKeys(false);
+
+    PatchHudTimerMs(false);
+    PatchPlanetCutscenes(false);
+    PatchPodiumCutscene(false);
+    PatchViewportEdges(false);
+    PatchWindowBackgroundActivity(false);
+    PatchTrackSelectEntry(false);
+    PatchMenuNavigationSpeed(false);
+    _ = mem.write(0x4525AE, u8, 1); // undo 'default_camera'
 
     FastCountdown.patch(false);
 }

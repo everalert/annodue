@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Settings not saving when closing Quick Race Menu without loading race
 - QOL: Being able to stack race resets when a load is already queued
 - QOL: Fire finish timer counting any healed overheat for post-race stats
+- QOL: Game not being returned to original code for some features when plugin unloads
 
 ## [0.1.6] - 2024-08-11
 

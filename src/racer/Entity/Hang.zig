@@ -105,7 +105,26 @@ pub const Hang = extern struct {
 
 const HangMenuScreen = enum(i32) {
     None = -1,
-    // TODO
+    Legal = 0,
+    Title = 1,
+    NameEntry = 2,
+    MainMenu = 3,
+    Junkyard = 4,
+    RaceResults = 5,
+    _unk_06 = 6,
+    WattosShop = 7,
+    VehicleInspect = 8,
+    VehicleSelect = 9,
+    _unk_10 = 10,
+    _unk_11 = 11,
+    TrackSelect = 12,
+    TrackInfo = 13,
+    Load = 14,
+    CSRival = 15,
+    CSPodium = 16,
+    CSNewRacer = 17,
+    CSCantinaEntrance = 18,
+    _unk_19 = 19,
 };
 
 const HangRoom = enum(i32) {

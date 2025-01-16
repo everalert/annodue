@@ -218,7 +218,7 @@ const Cam7 = extern struct {
     var i_mouse_d_y: f32 = 0;
 
     // TODO: maybe normalizing XY stuff (or do it at input system level)
-    fn update_input(gf: *GlobalFn) void {
+    fn update_input(gs: *GlobalSt, gf: *GlobalFn) void {
         i_toggle.update(gf);
         i_look_x.update(gf);
         i_look_y.update(gf);
@@ -237,7 +237,9 @@ const Cam7 = extern struct {
         i_move_vehicle.update(gf);
         i_look_at_vehicle.update(gf);
 
-        if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0) {
+        i_mouse_d_x = 0;
+        i_mouse_d_y = 0;
+        if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0 and gs.window_in_foreground) {
             gf.InputLockMouse();
             // TODO: move to InputMap (after input customization)
             const mouse_d: POINT = gf.InputGetMouseDelta();
@@ -718,16 +720,16 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    Cam7.update_input(gf);
+export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    Cam7.update_input(gs, gf);
 }
 
 export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     if (Cam7.cam_state == .FreeCam and Cam7.s_disable_input and rg.PAUSE_STATE.* == 0) { // kill race input
         // NOTE: unk block starting at 0xEC8820 still written to, but no observable ill-effects
-        @memset(@as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..0x70], 0);
-        @memset(@as([*]u8, @ptrFromInt(rin.RACE_BUTTON_FLOAT_HOLD_TIME_BASE_ADDR))[0..0x40], 0);
-        @memset(@as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE], 0);
+        @memset(@as([*]u8, @ptrCast(rin.MAPPED_BUTTON))[0..0x70], 0); // split to avoid clearing settings
+        @memset(@as([*]u8, @ptrCast(rin.MAPPED_BUTTON_F_HOLD_TIME))[0..0x40], 0);
+        @memset(@as([*]u8, @ptrCast(rin.PACKED))[0..@sizeOf(rin.INPUT_PACKED)], 0);
     }
 }
 

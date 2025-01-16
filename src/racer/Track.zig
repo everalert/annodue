@@ -1,10 +1,25 @@
 // GAME FUNCTIONS
 
-// ...
+pub const GetTrackName: *fn (i32) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x440620);
+// use with swrText_Translate
 
 // GAME CONSTANTS
 
-// ...
+pub const CircuitSelectionTrackLUT: *[28]u8 = @ptrFromInt(0x4C0018);
+pub const TrackMetadata: *[25]TRACK_METADATA = @ptrFromInt(0x4BFEE8);
+
+// GAME DEFINITIONS
+
+// FIXME: assert size
+// len 0x0C
+pub const TRACK_METADATA = extern struct {
+    ModelBlockId: i32,
+    SplineBlockId: i32,
+    PlanetTrack: u8,
+    Planet: u8,
+    TrackFavorite: u8, // TODO: vehicle typedef
+    _0B: u8, // TODO: unk
+};
 
 // HELPERS
 
@@ -36,6 +51,7 @@ pub const TracksByMenu = [_][*:0]const u8{
     "Inferno",
 };
 
+// FIXME: deprecate, ingame function GetTrackName__440620 does this
 pub const TracksById = [_][*:0]const u8{
     "The Boonta Training Course",
     "The Boonta Classic",
@@ -65,6 +81,7 @@ pub const TracksById = [_][*:0]const u8{
 };
 
 // menu order idx -> track id
+// FIXME: deprecate, ingame 0x4C0018 [28]i32 array is this map
 pub const TrackMenuIdMap = [_]u8{
     0x00, 0x10, 0x02, 0x06, 0x16, 0x13, 0x11,
     0x07, 0x03, 0x17, 0x09, 0x12, 0x0C, 0x08,
@@ -77,4 +94,11 @@ pub const TrackCircuitIdMap = [_]u8{
     0, 2, 0, 1, 2, 3, 0, 1, 1, 1,
     2, 3, 1, 2, 2, 3, 0, 0, 1, 0,
     2, 3, 0, 1, 2,
+};
+
+// track id -> nth track in circuit
+pub const TrackCircuitNthTrackMap = [_]u8{
+    0, 6, 2, 1, 3, 0, 3, 0, 6, 3,
+    4, 1, 5, 2, 5, 3, 1, 6, 4, 5,
+    0, 2, 4, 2, 1,
 };

@@ -1,5 +1,6 @@
 const std = @import("std");
 const e = @import("entity.zig");
+const eTest = e.Test.Test;
 
 // GAME FUNCTIONS
 
@@ -48,7 +49,7 @@ pub const cMan = extern struct {
     _unk_0AC: u32,
     _unk_0B0: u32,
     _unkmat44_0B4: [16]f32, // TODO: typedef
-    pTest: ?*e.Test,
+    pTest: ?*eTest,
     _unk_0F8: u32,
     _unk_0FC: u32,
     _unk_100: u32,
@@ -147,3 +148,14 @@ pub const cMan = extern struct {
     camShakeSpeed: f32,
     camShakeOffsetMax: f32,
 };
+
+// HELPER FUNCTIONS
+
+pub fn FindFromPlayerEntity(player: *eTest) ?*cMan {
+    const entities: []cMan = e.Manager.entitySliceAllObj(.cMan);
+    for (entities) |*entity| {
+        if (entity.pTest == player)
+            return entity;
+    }
+    return null;
+}

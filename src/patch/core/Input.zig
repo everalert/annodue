@@ -12,6 +12,8 @@ const HWND = w32.foundation.HWND;
 const xinput = @import("../util/xinput.zig");
 const st = @import("../util/active_state.zig");
 
+const rg = @import("racer").Global;
+
 const app = @import("../appinfo.zig");
 const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
@@ -38,11 +40,11 @@ pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-pub fn InputUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn InputUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     update_xinput();
     update_kb();
     //update_mouse();
-    update_mouse(@ptrCast(gs.hwnd));
+    update_mouse();
 }
 
 // MAPPING
@@ -240,12 +242,13 @@ pub const INPUT_MOUSE = extern struct {
 // FIXME: add window-relative coordinates to output in OS units, not 640x480
 // old code worked properly at one point, but now behaves like the normal
 // game cursor. maybe it only worked because of dgvoodoo forcing a resize after tab-out?
-pub fn update_mouse(hwnd: HWND) callconv(.C) void {
+pub fn update_mouse() callconv(.C) void {
     const static = struct {
         var m: POINT = undefined;
         var c: RECT = undefined;
     };
 
+    const hwnd: HWND = @ptrCast(rg.WINDOW_HWND.*);
     if (w32wm.GetCursorPos(&static.m) > 0 and w32wm.GetClientRect(hwnd, &static.c) > 0) {
         const s: *INPUT_MOUSE = &InputState.mouse;
 

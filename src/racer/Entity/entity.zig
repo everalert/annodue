@@ -8,6 +8,8 @@ pub const Elmo = @import("Elmo.zig");
 pub const Smok = @import("Smok.zig");
 pub const cMan = @import("cMan.zig");
 
+// TODO: entity header typedef, impl in entity defs
+
 // GAME FUNCTIONS
 
 pub const CallFreeEvent: *fn (*anyopaque) callconv(.C) void = @ptrFromInt(0x450E30);
@@ -35,6 +37,8 @@ pub const Manager = extern struct {
     fnStage1C: *fn (entity: *align(4) anyopaque) callconv(.C) void,
     fnStage20: *fn (entity: *align(4) anyopaque) callconv(.C) void,
     fnEvent: *fn (entity: *align(4) anyopaque, magic: [*]u32, payload: u32) callconv(.C) void,
+
+    // FIXME: convert entity helpers to ingame functions? fn_450B30
 
     pub fn entity(comptime E: ENTITY, i: usize) *ENTITY.t(E) {
         const manager = MANAGER_JUMPTABLE.*[@intFromEnum(E)].*;

@@ -30,24 +30,26 @@ const std = @import("std");
 
 // GAME FUNCTIONS
 
-pub const swrText_CreateEntry: *fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
-pub const swrText_CreateEntry1: *fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
-pub const swrText_CreateEntry2: *fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
-pub const swrText_DrawTime2: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
-pub const swrText_DrawTime3: *fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
-pub const swrText_NewNotification: *fn (str: [*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
+pub const swrText_CreateEntry: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+pub const swrText_CreateEntry1: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+pub const swrText_CreateEntry2: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+pub const swrText_DrawTime2: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
+pub const swrText_DrawTime3: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
+pub const swrText_NewNotification: *const fn (str: [*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
 
-pub const RenderSetColor: *fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x42D950);
-pub const RenderSetPosition: *fn (x: i16, y: i16) callconv(.C) void = @ptrFromInt(0x42D910);
-pub const RenderString: *fn (str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x42EC50);
+pub const swrText_Translate: *const fn ([*:0]const u8) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x421360);
 
-pub const GetStringWidthByFontIndex: *fn (str: [*:0]const u8, font: u32) callconv(.C) i32 =
+pub const RenderSetColor: *const fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x42D950);
+pub const RenderSetPosition: *const fn (x: i16, y: i16) callconv(.C) void = @ptrFromInt(0x42D910);
+pub const RenderString: *const fn (str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x42EC50);
+
+pub const GetStringWidthByFontIndex: *const fn (str: [*:0]const u8, font: u32) callconv(.C) i32 =
     @ptrFromInt(0x42DE10);
-pub const GetStringWidth: *fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const GetStringWidth: *const fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DE30);
-pub const GetStringHeight: *fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const GetStringHeight: *const fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DF70);
-pub const SetCurrentFont: *fn (index: u32) callconv(.C) void =
+pub const SetCurrentFont: *const fn (index: u32) callconv(.C) void =
     @ptrFromInt(0x42D8D0);
 
 // GAME CONSTANTS
@@ -264,4 +266,67 @@ pub fn TextGetDimensions(str: [*:0]const u8) struct { w: i16, h: i16 } {
         .w = @truncate(GetStringWidth(str, font)), // FIXME: crash
         .h = @truncate(GetStringHeight(str, font)), // FIXME: crash
     };
+}
+
+// TODO: Ex version with more decimal places and std.fmt-based logic
+//       current version limited in decimal places due to i32 max value
+// TODO: unit testing for equivalency against DrawTime2 and DrawTime3
+/// based on swrText_DrawTime3_450760
+/// intended to generate functions compatible as a drop-in replacement at
+/// DrawTime2/DrawTime3 callsites, using as equivalent logic as possible
+pub fn DrawTimeNF(comptime decimal_places: u32) @TypeOf(swrText_DrawTime3) {
+    if (decimal_places > 9) @compileError("decimal_places must be less than 10");
+
+    const s = struct {
+        // original: %s%d:%.2d.%.3d
+        const fmt_ms = blk: {
+            if (decimal_places == 0) break :blk "{s}{d}:{d:0>2}";
+            break :blk std.fmt.comptimePrint("{{s}}{{d}}:{{d:0>2}}.{{d:0>{d}}}", .{decimal_places});
+        };
+        // original: %s%.2d.%.3d
+        const fmt_s = blk: {
+            if (decimal_places == 0) break :blk "{s}{d:0>2}";
+            break :blk std.fmt.comptimePrint("{{s}}{{d:0>2}}.{{d:0>{d}}}", .{decimal_places});
+        };
+
+        fn DrawTimeN(x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void {
+            const mag_i: u32 = comptime std.math.powi(u32, 10, decimal_places) catch unreachable;
+            const mag_f: f32 = comptime @as(f32, @floatFromInt(mag_i));
+            const mag_half: f32 = comptime 1 / mag_f / 2;
+
+            var buf: [31:0]u8 = undefined;
+
+            const min_f: f32 = time / 60.0;
+            var min_i: u32 = @intFromFloat(min_f);
+            const sec_f: f32 = (min_f - @as(f32, @floatFromInt(min_i))) * 60.0;
+            var sec_i: u32 = @intFromFloat(sec_f);
+            var ms_i: u32 = @intFromFloat((sec_f - @as(f32, @floatFromInt(sec_i)) + mag_half) * mag_f);
+            if (ms_i == mag_i) {
+                ms_i = 0;
+                sec_i += 1;
+                if (sec_i == 60) {
+                    sec_i = 0;
+                    min_i += 1;
+                }
+            }
+
+            if (decimal_places == 0) {
+                if (min_i > 0) {
+                    _ = std.fmt.bufPrintZ(&buf, fmt_ms, .{ prefix, min_i, sec_i }) catch unreachable;
+                } else {
+                    _ = std.fmt.bufPrintZ(&buf, fmt_s, .{ prefix, sec_i }) catch unreachable;
+                }
+            } else {
+                if (min_i > 0) {
+                    _ = std.fmt.bufPrintZ(&buf, fmt_ms, .{ prefix, min_i, sec_i, ms_i }) catch unreachable;
+                } else {
+                    _ = std.fmt.bufPrintZ(&buf, fmt_s, .{ prefix, sec_i, ms_i }) catch unreachable;
+                }
+            }
+
+            swrText_CreateEntry1(x, y, r, g, b, a, &buf);
+        }
+    };
+
+    return &s.DrawTimeN;
 }

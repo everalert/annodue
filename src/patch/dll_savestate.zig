@@ -108,8 +108,8 @@ const state = struct {
         .{}, // cMan
         .{}, // Smok
         .{}, // Toss
-        .{ .data = @as([*]u8, @ptrFromInt(rin.RACE_COMBINED_ADDR))[0..rin.RACE_COMBINED_SIZE] }, // Input
-        .{ .data = @as([*]u8, @ptrFromInt(rin.GLOBAL_ADDR))[0..rin.GLOBAL_SIZE] }, // Input
+        .{ .data = @as([*]u8, @ptrCast(rin.MAPPED_BUTTON))[0..0xD0] }, // Input
+        .{ .data = @as([*]u8, @ptrCast(rin.PACKED))[0..@sizeOf(rin.INPUT_PACKED)] }, // Input
         .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
         .{ .data = @as([*]u8, @ptrCast(rr.NUMBER))[0..4] }, // RNG
     };
@@ -169,8 +169,7 @@ const state = struct {
     // apis like Freeze (same for saveable())
     fn loadable(gs: *GlobalSt) bool {
         const race_ok = gs.in_race.on();
-        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
-        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;
         return race_ok and loading_ok;
     }
 
@@ -179,11 +178,10 @@ const state = struct {
     fn updateable(gs: *GlobalSt) bool {
         if (!gs.practice_mode) return false;
 
-        const tabbed_out = rg.GUI_STOPPED.* > 0;
+        const tabbed_out = rti.STOPPED.* != 0;
         const paused = rg.PAUSE_STATE.* > 0;
         const race_ok = gs.in_race.on();
-        // TODO: migrate to racerlib, see also fn_45D0B0; also maybe add to gs.race_state as .Loading
-        const loading_ok = mem.read(0x50CA34, u32) == 0;
+        const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;
 
         return race_ok and !tabbed_out and !paused and loading_ok;
     }

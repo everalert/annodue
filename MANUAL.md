@@ -181,7 +181,7 @@ Configurable under `[inputdisplay]`
 ##### Settings
 Configured under `[overlay]`
 
-|Option|Type|Default|
+|Option|Type|Default|Note|
 |:---|:---|:---|:---|
 |`enable`            |`bool`|`off`|&nbsp;
 |`show_fps`          |`bool`|`on` |&nbsp;
@@ -200,35 +200,53 @@ Configured under `[overlay]`
 - Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Fix Cy Yunga cheat audio
 - Fix map rendering hi-res text
+- Fix changing camera with F1-F4 keys not persisting after a crash
 - Fix 1px gap on right and bottom of viewport when rendering sprites at the edge
     - This may cause the sprite to be clipped instead, depending on your resolution settings
 - Map controller `Start` to `Esc`
 - Race restart hotkey -- `Esc + Tab` or `Back + Start`
 - Quick Race Menu
-- End-race stats readout
+- Post-race stats readout
+- Show true values of times on post-race screen, via the underlying hexadecimal number
 - Show milliseconds on all timers
 - Limit framerate during races (configurable via Quick Race Menu)
 - Skip planet cutscenes
 - Skip podium cutscene
 - Custom default number of racers
 - Custom default number of laps
+- Custom default race camera, with option to auto-update
 - Fast countdown timer
+- Run game in background
+- Patch truguts cheat to give more truguts and have infinite uses
+- Auto-reset on death and engine fire
+- Track select remembers selection when leaving menu and between sessions
+- Fast menu navigation
+- Allow dpad input for menu navigation
 
 ##### Quick Race Menu Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
-|Open                   |`Esc`     |`Start` |Hold or double-tap while unpaused
-|Close                  |`Esc`     |`B`     |&nbsp;
-|Navigate               |`↑ ↓ ← →` |`D-Pad` |&nbsp;
-|Interact               |`Enter`   |`A`     |&nbsp;
-|Quick Confirm          |`Space`   |`Start` |&nbsp;
-|All Upgrades OFF       |`Home`    |`LB`    |While highlighing any upgrade
-|All Upgrades MAX       |`End`     |`RB`    |While highlighing any upgrade
-|Scroll prev FPS preset |`Home`    |`LB`    |&nbsp;
-|Scroll next FPS preset |`End`     |`RB`    |&nbsp;
-|Scroll prev planet     |`Home`    |`LB`    |While highlighting `TRACK`
-|Scroll next planet     |`End`     |`RB`    |While highlighting `TRACK`
+|Open                         |`Esc`     |`Start` |Hold or double-tap while unpaused
+|Close                        |`Esc`     |`B`     |&nbsp;
+|Navigate                     |`↑ ↓ ← →` |`D-Pad` |&nbsp;
+|Interact                     |`Enter`   |`A`     |Set FPS (in Practice Mode), toggle vehicle favorite, etc.
+|Quick Confirm                |`Space`   |`Start` |&nbsp;
+|All Upgrades OFF             |`Home`    |`LB`    |While highlighing any upgrade
+|All Upgrades MAX             |`End`     |`RB`    |While highlighing any upgrade
+|Scroll prev FPS preset       |`Home`    |`LB`    |&nbsp;
+|Scroll next FPS preset       |`End`     |`RB`    |&nbsp;
+|Scroll prev planet           |`Home`    |`LB`    |While highlighting `TRACK`
+|Scroll next planet           |`End`     |`RB`    |While highlighting `TRACK`
+|Scroll prev favorite vehicle |`Home`    |`LB`    |While highlighting `VEHICLE`
+|Scroll next favorite vehicle |`End`     |`RB`    |While highlighting `VEHICLE`
+
+##### Other QOL Controls
+
+|Action|Keyboard|XInput|Note|
+|:---|:---|:---|:---|
+|Clear track Best Lap     |`1+Backspace`|&nbsp;|On track detail screen
+|Clear track 3-Lap Record |`3+Backspace`|&nbsp;|On track detail screen
 
 ##### Settings
 
@@ -245,9 +263,24 @@ Configured under `[qol]`
 |`skip_podium_cutscene`   |`bool`|`off` |&nbsp;
 |`default_racers`         |`u32` |`12`  |1 to 12
 |`default_laps`           |`u32` |`3`   |1 to 5
+|`default_camera`         |`u32` |`1`   |1,2,4,5
+|`default_camera_auto`    |`bool`|`off` |&nbsp;
 |`fast_countdown_enable`  |`bool`|`off` |&nbsp;
 |`fast_countdown_duration`|`f32` |`1.00`|0.05 to 3.00
 |`fix_viewport_edges`     |`bool`|`off` |May cause sprites at edge to be slightly cut off
+|`run_in_background`      |`bool`|`off` |&nbsp;
+|`autoreset_enable`       |`bool`|`off` |&nbsp;
+|`autoreset_dead_enable`  |`bool`|`off` |&nbsp;
+|`autoreset_dead_delay`   |`f32` |`0.5` |&nbsp;
+|`autoreset_fire_enable`  |`bool`|`off` |&nbsp;
+|`autoreset_fire_delay`   |`f32` |`3.0` |&nbsp;
+|`trackselect_remember`   |`bool`|`off` |&nbsp;
+|`trackselect_last`       |`u32` |`0`   |0 to 24
+|`fast_navigation`        |`bool`|`off` |&nbsp;
+|`dpad_navigation`        |`bool`|`off` |&nbsp;
+|`show_postrace_times_hex`|`bool`|`off` |&nbsp;
+|`clear_records_enable`   |`bool`|`off` |&nbsp;
+|`favorite_characters`    |`u32` |`0`   |bitfield where character id = nth bit
 
 ### Collision Viewer
 
@@ -323,7 +356,7 @@ Configurable under `[multiplayer]`
 
 Configurable under `[gameplay]`
 
-|Option|Type|Default|
+|Option|Type|Default|Note|
 |:---|:---|:---|:---|
 |`death_speed_mod_enable`|`bool`|`off`|&nbsp;
 |`death_speed_min`       |`f32` |`325`|&nbsp;

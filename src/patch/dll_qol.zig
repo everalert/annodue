@@ -33,6 +33,7 @@ const rvi = @import("racer").Video;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
+const rs = @import("racer").Save;
 
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
@@ -40,9 +41,6 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
-
-// FIXME: remove, for testing
-const dbg = @import("util/debug.zig");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -54,6 +52,7 @@ pub const panic = debug.annodue_panic;
 // - fix: toggle Cy Yunga with cheat, instead of only enabling
 // - fix: bugfix Cy Yunga cheat having no audio
 // - fix: bugfix map rendering not accounting for hi-res flag
+// - fix: bugfix changing camera with F1-F4 keys not persisting after a crash
 // - fix: remove 1px gap on right and bottom of viewport when rendering sprites
 //     - this may cut off sprites placed right at the edge, depending on your resolution settings
 // - feat: quick restart
@@ -61,19 +60,21 @@ pub const panic = debug.annodue_panic;
 // - feat: quick race menu
 //     - create a new race from inside a race
 //     - select pod, track, upgrade stack and other race settings
-//     - CONTROLS:          keyboard        xinput
-//       Open                       Esc             Start           Hold or double-tap while unpaused
-//       Close                      Esc             B
-//       Navigate                   ↑↓→←            D-Pad
-//       Interact                   Enter           A
-//       Quick Confirm              Space           Start
-//       All Upgrades MIN           Home            LB              While highlighting any upgrade
-//       All Upgrades MAX           End             RB              While highlighting any upgrade
-//       Scroll prev FPS preset     Home            LB
-//       Scroll next FPS preset     End             RB
-//       Scroll prev planet         Home            LB              While highlighting TRACK
-//       Scroll next planet         End             RB              While highlighting TRACK
-// - feat: end-race stats readout
+//     - CONTROLS:                          keyboard        xinput
+//       Open                               Esc             Start           Hold or double-tap while unpaused
+//       Close                              Esc             B
+//       Navigate                           ↑↓→←            D-Pad
+//       Interact*                          Enter           A               Set FPS (in Practice Mode), toggle vehicle favorite, etc.
+//       Quick Confirm                      Space           Start
+//       All Upgrades MIN                   Home            LB              While highlighting any upgrade
+//       All Upgrades MAX                   End             RB              While highlighting any upgrade
+//       Scroll prev FPS preset             Home            LB
+//       Scroll next FPS preset             End             RB
+//       Scroll prev planet                 Home            LB              While highlighting TRACK
+//       Scroll next planet                 End             RB              While highlighting TRACK
+//       Scroll prev favorite vehicle       Home            LB              While highlighting VEHICLE
+//       Scroll next favorite vehicle       End             RB              While highlighting VEHICLE
+// - feat: post-race stats readout
 //     - tfps
 //     - full upgrade stack with healths
 //     - death count
@@ -83,13 +84,25 @@ pub const panic = debug.annodue_panic;
 //     - underheat duration
 //     - fire finish duration
 //     - overheat duration
+// - feat: show true values of times on post-race screen, via the underlying hexadecimal number
 // - feat: show milliseconds on all timers
 // - feat: limit fps during races (configurable via quick race menu)
 // - feat: skip planet cutscene
 // - feat: skip podium cutscene
 // - feat: custom default number of racers
 // - feat: custom default number of laps
+// - feat: custom default race camera, with option to auto-update
 // - feat: fast countdown timer
+// - feat: run game in background
+// - feat: patch truguts cheat to give more truguts and have infinite uses
+// - feat: auto-reset on death and engine fire
+// - feat: track select remembers selection when leaving menu and between sessions
+// - feat: fast menu navigation
+// - feat: allow dpad input for menu navigation
+// - feat: clear best times with hotkey on track detail screen
+//     - CONTROLS:              keyboard
+//       Clear Best Lap         1+Backspace
+//       Clear 3-Lap Record     3+Backspace
 // - SETTINGS:
 //   quick_restart_enable       bool
 //   quick_race_menu_enable     bool
@@ -97,8 +110,24 @@ pub const panic = debug.annodue_panic;
 //   fps_limiter_enable         bool
 //   default_racers             u32     max 12
 //   default_laps               u32     max 5
+//   default_camera             u32     1,2,4,5
+//   default_camera_auto        bool
 //   fast_countdown_enable      bool
 //   fast_countdown_duration    f32     min 0.05, max 3.00
+//   fix_viewport_edges         bool
+//   run_in_background          bool
+//   autoreset_enable           bool
+//   autoreset_dead_enable      bool
+//   autoreset_dead_delay       f32     default 0.5
+//   autoreset_fire_enable      bool
+//   autoreset_fire_delay       f32     default 3.0
+//   trackselect_remember       bool
+//   trackselect_last           u32     0..24
+//   fast_navigation            bool
+//   dpad_navigation            bool
+//   show_postrace_times_hex    bool
+//   clear_records_enable       bool
+//   favorite_characters        u32     bitfield where character id = nth bit
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -118,20 +147,48 @@ const QolState = struct {
     var h_s_quickrace: ?SettingHandle = null;
     var h_s_default_racers: ?SettingHandle = null;
     var h_s_default_laps: ?SettingHandle = null;
+    var h_s_default_camera: ?SettingHandle = null;
+    var h_s_default_camera_auto: ?SettingHandle = null;
     var h_s_ms_timer: ?SettingHandle = null;
     var h_s_fps_limiter: ?SettingHandle = null;
     var h_s_skip_planet_cutscenes: ?SettingHandle = null;
     var h_s_skip_podium_cutscene: ?SettingHandle = null;
     var h_s_fix_viewport_edges: ?SettingHandle = null;
+    var h_s_run_in_background: ?SettingHandle = null;
+    var h_s_autoreset_enable: ?SettingHandle = null;
+    var h_s_autoreset_dead_enable: ?SettingHandle = null;
+    var h_s_autoreset_dead_delay: ?SettingHandle = null;
+    var h_s_autoreset_fire_enable: ?SettingHandle = null;
+    var h_s_autoreset_fire_delay: ?SettingHandle = null;
+    var h_s_trackselect_remember: ?SettingHandle = null;
+    var h_s_trackselect_last: ?SettingHandle = null;
+    var h_s_fast_navigation: ?SettingHandle = null;
+    var h_s_dpad_navigation: ?SettingHandle = null;
+    var h_s_show_postrace_times_hex: ?SettingHandle = null;
+    var h_s_clear_records_enable: ?SettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
     var s_default_laps: u32 = 3;
+    var s_default_camera: u32 = 3;
+    var s_default_camera_auto: bool = false;
     var s_ms_timer: bool = false;
     var s_fps_limiter: bool = false;
     var s_skip_planet_cutscenes: bool = false;
     var s_skip_podium_cutscene: bool = false;
     var s_fix_viewport_edges: bool = false;
+    var s_run_in_background: bool = false;
+    var s_autoreset_enable: bool = false;
+    var s_autoreset_dead_enable: bool = false;
+    var s_autoreset_dead_delay: f32 = 0.5;
+    var s_autoreset_fire_enable: bool = false;
+    var s_autoreset_fire_delay: f32 = 3.0;
+    var s_trackselect_remember: bool = false;
+    var s_trackselect_last: u32 = 0;
+    var s_fast_navigation: bool = false;
+    var s_dpad_navigation: bool = false;
+    var s_show_postrace_times_hex: bool = false;
+    var s_clear_records_enable: bool = false;
 
     var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
     var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
@@ -139,6 +196,16 @@ const QolState = struct {
     var input_pause = input_pause_data.inputMap();
     var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
+
+    var fcam_mem: u32 = 0;
+    var fcam_mem_end: u32 = 0;
+    const fcam_mem_size: u32 = 32;
+    var cam_prev: u32 = 0xFFFFFFFF;
+    var cam_cman: ?*re.cMan.cMan = null;
+
+    var autoreset_dead: st.ActiveState = .Off;
+    var autoreset_dead_timer: f32 = 0;
+    var autoreset_fire_timer: f32 = 0;
 
     fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
         input_pause.update(gf);
@@ -158,6 +225,10 @@ const QolState = struct {
             gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null, settingsUpdateRacers);
         h_s_default_laps =
             gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null, settingsUpdateLaps);
+        h_s_default_camera =
+            gf.ASettingOccupy(section, "default_camera", .U, .{ .u = 1 }, null, settingsUpdateCamera);
+        h_s_default_camera_auto =
+            gf.ASettingOccupy(section, "default_camera_auto", .B, .{ .b = false }, &s_default_camera_auto, null);
         h_s_ms_timer =
             gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, &s_ms_timer, null);
         h_s_fps_limiter =
@@ -168,6 +239,33 @@ const QolState = struct {
             gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .b = false }, &s_skip_podium_cutscene, null);
         h_s_fix_viewport_edges =
             gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, &s_fix_viewport_edges, null);
+        h_s_run_in_background =
+            gf.ASettingOccupy(section, "run_in_background", .B, .{ .b = false }, &s_run_in_background, null);
+
+        h_s_autoreset_enable =
+            gf.ASettingOccupy(section, "autoreset_enable", .B, .{ .b = false }, &s_autoreset_enable, null);
+        h_s_autoreset_dead_enable =
+            gf.ASettingOccupy(section, "autoreset_dead_enable", .B, .{ .b = false }, &s_autoreset_dead_enable, null);
+        h_s_autoreset_dead_delay =
+            gf.ASettingOccupy(section, "autoreset_dead_delay", .F, .{ .f = 0.5 }, &s_autoreset_dead_delay, null);
+        h_s_autoreset_fire_enable =
+            gf.ASettingOccupy(section, "autoreset_fire_enable", .B, .{ .b = false }, &s_autoreset_fire_enable, null);
+        h_s_autoreset_fire_delay =
+            gf.ASettingOccupy(section, "autoreset_fire_delay", .F, .{ .f = 3.0 }, &s_autoreset_fire_delay, null);
+
+        h_s_trackselect_remember =
+            gf.ASettingOccupy(section, "trackselect_remember", .B, .{ .b = false }, &s_trackselect_remember, null);
+        h_s_trackselect_last =
+            gf.ASettingOccupy(section, "trackselect_last", .U, .{ .u = 0 }, null, null);
+        h_s_fast_navigation =
+            gf.ASettingOccupy(section, "fast_navigation", .B, .{ .b = false }, &s_fast_navigation, null);
+        h_s_dpad_navigation =
+            gf.ASettingOccupy(section, "dpad_navigation", .B, .{ .b = false }, &s_dpad_navigation, null);
+
+        h_s_show_postrace_times_hex =
+            gf.ASettingOccupy(section, "show_postrace_times_hex", .B, .{ .b = false }, &s_show_postrace_times_hex, null);
+        h_s_clear_records_enable =
+            gf.ASettingOccupy(section, "clear_records_enable", .B, .{ .b = false }, &s_clear_records_enable, null);
 
         FastCountdown.h_s_enable =
             gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
@@ -176,8 +274,11 @@ const QolState = struct {
 
         QuickRaceMenu.h_s_fps_default =
             gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, &QuickRaceMenu.s_fps_default, null);
+        QuickRaceMenu.h_s_favorite_vehicles =
+            gf.ASettingOccupy(section, "favorite_vehicles", .U, .{ .u = 0 }, &QuickRaceMenu.s_favorite_vehicles, null);
     }
 
+    // TODO: setting to control whether default racers automatically updates
     fn settingsUpdateRacers(new_value: Setting.Value) callconv(.C) void {
         s_default_racers = std.math.clamp(new_value.u, 1, 12);
         if (h_s_default_racers) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_racers });
@@ -189,6 +290,7 @@ const QolState = struct {
         }
     }
 
+    // TODO: setting to control whether default laps automatically updates
     fn settingsUpdateLaps(new_value: Setting.Value) callconv(.C) void {
         s_default_laps = std.math.clamp(new_value.u, 1, 5);
         if (h_s_default_laps) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_laps });
@@ -197,6 +299,15 @@ const QolState = struct {
         if (QuickRaceMenu.gs.init_late_passed) {
             re.Manager.entity(.Hang, 0).Laps = @intCast(s_default_laps);
         }
+    }
+
+    fn settingsUpdateCamera(new_value: Setting.Value) callconv(.C) void {
+        s_default_camera = std.math.clamp(new_value.u, 1, 5);
+        if (s_default_camera == 3) s_default_camera = 1;
+        if (h_s_default_camera) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_camera });
+
+        // patch CMan_SetNewCamera_451D60 call at end of CMan_HandlePreRaceSweepCam_451EF0
+        _ = mem.write(0x4525AE, u8, @as(u8, @intCast(s_default_camera)));
     }
 
     fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
@@ -227,6 +338,22 @@ const QolState = struct {
                 PatchViewportEdges(s_fix_viewport_edges);
                 continue;
             }
+            if (nlen == 17 and std.mem.eql(u8, "run_in_background", setting.name[0..nlen])) {
+                PatchWindowBackgroundActivity(s_run_in_background);
+                continue;
+            }
+            if (nlen == 20 and std.mem.eql(u8, "trackselect_remember", setting.name[0..nlen])) {
+                PatchTrackSelectEntry(s_trackselect_remember);
+                continue;
+            }
+            if (nlen == 16 and std.mem.eql(u8, "trackselect_last", setting.name[0..nlen])) {
+                s_trackselect_last = if (setting.value.u > 24) 0 else setting.value.u;
+                continue;
+            }
+            if (nlen == 15 and std.mem.eql(u8, "fast_navigation", setting.name[0..nlen])) {
+                PatchMenuNavigationSpeed(s_fast_navigation);
+                continue;
+            }
 
             if (nlen == 19 and std.mem.eql(u8, "fps_limiter_default", setting.name[0..nlen])) {
                 QuickRaceMenu.FpsTimer.SetPeriod(QuickRaceMenu.s_fps_default);
@@ -249,17 +376,48 @@ const QolState = struct {
     }
 };
 
+// F-KEY CAMERA GLITCH
+
+// TODO: convert hand-rolled asm to x86.zig fns
+// adds CMan.CamModeOnRespawn=NewCamMode to fn_451D60, which is called by all ccf* paths
+fn PatchCameraFKeys(enable: bool) void {
+    std.debug.assert(QolState.fcam_mem != 0);
+    std.debug.assert(QolState.fcam_mem < QolState.fcam_mem_end);
+    const fn451D60_src_addr: u32 = 0x451D64;
+    const fn451D60_src_end_addr: u32 = 0x451D6B;
+
+    var off_cave = QolState.fcam_mem;
+    var off_src = fn451D60_src_addr;
+    if (enable) {
+        off_src = x86.jmp(off_src, off_cave);
+        off_cave = x86.mov_ecx_esp_add(off_cave, 0x08);
+        off_cave = mem.write_bytes(off_cave, &[3]u8{ 0x89, 0x48, 0x7C }, 3); // mov [eax+7C], ecx
+        off_cave = mem.write_bytes(off_cave, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }, 6); // mov [eax+80], ecx
+        off_cave = x86.jmp(off_cave, fn451D60_src_end_addr);
+    } else {
+        off_src = mem.write_bytes(off_src, &[_]u8{
+            0x8B, 0x4C, 0x24, 0x08, // mov ecx, [esp+08]
+            0x89, 0x48, 0x7C, // mov [eax+7C], ecx
+        }, 7);
+    }
+
+    std.debug.assert(off_src <= fn451D60_src_end_addr);
+    std.debug.assert(off_cave <= QolState.fcam_mem_end);
+    off_src = x86.nop_until(off_src, fn451D60_src_end_addr);
+    off_cave = x86.nop_until(off_cave, QolState.fcam_mem_end);
+}
+
 // HUD TIMER MS
 
 // TODO: cleanup
 fn PatchHudTimerMs(enable: bool) void {
     const draw_fn = if (enable) rt.swrText_DrawTime3 else rt.swrText_DrawTime2;
-    const end_race_timer_offset: u8 = if (enable) 12 else 0;
     // hudDrawRaceHud
     _ = x86.call(0x460BD3, @intFromPtr(draw_fn));
     _ = x86.call(0x460E6B, @intFromPtr(draw_fn));
     _ = x86.call(0x460ED9, @intFromPtr(draw_fn));
     // hudDrawRaceResults
+    const end_race_timer_offset: u8 = if (enable) 12 else 0;
     _ = x86.call(0x46252F, @intFromPtr(draw_fn));
     _ = x86.call(0x462660, @intFromPtr(draw_fn));
     _ = mem.write(0x4623D7, u8, end_race_timer_offset + 91);
@@ -307,10 +465,26 @@ fn PatchViewportEdges(enable: bool) void {
     _ = mem.write(0x44F611, u8, w);
 }
 
+// WINDOW
+
+const window_activity_asm = [_]u8{ 0x8B, 0x74, 0x24, 0x0C, 0x85, 0xF6, 0x74, 0x6A };
+
+// TODO: get keyboard input to work when unfocused; presumably because window messages not being passed
+// force Window_SetActive__423AE0 to always set window as active
+fn PatchWindowBackgroundActivity(enable: bool) void {
+    var offset: usize = 0x423AE1;
+    if (enable) {
+        offset = x86.mov_esi_imm32(offset, u32, 1);
+        offset = x86.nop_until(offset, 0x423AE1 + window_activity_asm.len);
+    } else {
+        offset = mem.write_bytes(offset, &window_activity_asm, window_activity_asm.len);
+    }
+    std.debug.assert(offset == 0x423AE9);
+}
+
 // GAME CHEATS
 
 // TODO: add quick toggle to menus
-// TODO: fix sound bug when activating cy yunga cheat (use sound 45)
 // TODO: setting to actually enable the jinn/cy patches?
 
 fn PatchJinnReesoCheat(enable: bool) void {
@@ -400,9 +574,201 @@ fn PatchCyYungaCheatAudio(enable: bool) void {
     _ = mem.write(comptime 0x41057D + 0x01, u8, id);
 }
 
-// FAST COUNTDOWN
+// infinite uses and greater amount
+fn PatchTrugutsCheat(enable: bool) void {
+    const amount_addr: u32 = 0x410700 + 6;
+    const uses_addr: u32 = 0x410F8C;
+    if (enable) {
+        _ = mem.write(amount_addr, u32, 10000);
+        var off: u32 = uses_addr;
+        off = mem.write_bytes(off, &[2]u8{ 0xEB, 0x26 }, 2); // jmp short 0x410FB4
+        off = x86.nop_until(off, 0x410F90);
+    } else {
+        _ = mem.write(amount_addr, u32, 1000);
+        _ = mem.write_bytes(uses_addr, &[4]u8{ 0x8B, 0x44, 0x24, 0x10 }, 4); // mov eax, [esp+0x10]
+    }
+}
 
-// TODO: settings for count length, enable
+// REMEMBERING TRACK SELECTION
+
+// in fn_43B240 Hang_DrawTrackSelect
+fn PatchTrackSelectEntry(enable: bool) void {
+    // - 0043B29A -> 88 5E 5E (mov [esi+5E], bl; pHang->Circuit = 0)
+    //   could start as early as 43B28D and include if statement in nop'ing
+    const off1: u32 = 0x43B29A;
+    const end1: u32 = off1 + 3;
+
+    // - 0043B2BE -> 89 1D D0 95 E2 00 (mov [MenuPosX], ebx; MenuPosX = 0)
+    const off2: u32 = 0x43B2BE;
+    const end2: u32 = off2 + 6;
+
+    if (enable) {
+        _ = x86.nop_until(off1, end1);
+        var o = x86.call(off2, @intFromPtr(&TrackSelectEntryCallback));
+        _ = x86.nop_until(o, end2);
+    } else {
+        _ = mem.write_bytes(off1, &[3]u8{ 0x88, 0x5E, 0x5E }, 3);
+        _ = mem.write_bytes(off2, &[6]u8{ 0x89, 0x1D, 0xD0, 0x95, 0xE2, 0x00 }, 6);
+    }
+}
+
+fn TrackSelectEntryCallback() callconv(.C) void {
+    const p_menu_pos_x: *i32 = @ptrFromInt(0xE295D0);
+
+    const hang = re.Manager.entity(.Hang, 0);
+    p_menu_pos_x.* = rtr.TrackCircuitNthTrackMap[hang.Track];
+}
+
+// FAST MENU NAVIGATION
+
+var nav_asm: [256]u8 = undefined;
+var nav_asm_off: u32 = undefined;
+
+fn PatchMenuNavigationSpeed(enable: bool) void {
+    nav_asm_off = @intFromPtr(&nav_asm);
+    var off: u32 = 0;
+
+    // TODO: pause menu: inputs ignored while scrolling in
+
+    // pod select: select/cancel input ignored while scrolling
+    if (enable) {
+        _ = x86.nop_until(0x435E23, 0x435E23 + 2); // skip scroll timer check (cancel)
+        _ = x86.nop_until(0x435E43, 0x435E43 + 2); // skip scroll timer check (select)
+    } else {
+        _ = x86.jnz_rel8(0x435E23, 0x0D); // jnz short 0x435E32
+        _ = x86.jnz_rel8(0x435E43, 0x1D); // jnz short 0x435E62
+    }
+
+    // pod select: wait time before advancing after selecting pod
+    if (enable) {
+        // skip through special state that makes you wait before transitioning
+        off = mem.write_bytes(0x435B6D, &[10]u8{ //mov [E295A0], 00000000 (MenuTimer1=0.0)
+            0xC7, 0x05, 0xA0, 0x95, 0xE2, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+        }, 10); // set timer to how it would be at the end of running normally
+        off = x86.nop_until(off, 0x435B87); // skip everything until part where state is changed
+    } else {
+        _ = mem.write_bytes(0x435B6D, &[_]u8{ // original logic decrementing and checking timer
+            0x68, 0x33, 0x33, 0x53, 0xC0, 0xE8, 0x19, 0x40, 0x03, 0x00, 0xD8, 0x1D,
+            0x78, 0xC7, 0x4A, 0x00, 0x83, 0xC4, 0x04, 0xDF, 0xE0, 0xF6, 0xC4, 0x40,
+            0x74, 0x0A,
+        }, 26);
+    }
+
+    // track select: circuit change up/down scroll lag
+    if (enable) {
+        _ = x86.nop_until(0x43B6F4, 0x43B6F4 + 2); // skip waiting for circuit to transition
+    } else {
+        _ = x86.jnz_rel8(0x43B6F4, 0x70); // jnz short 0x43B766
+    }
+
+    // track detail: input ignored during transition into
+    if (enable) {
+        _ = x86.nop_until(0x43B8E6, 0x43B8E6 + 2); // skip wait time
+    } else {
+        _ = x86.jnz_rel8(0x43B8E6, 0x0A); // jnz short 0x43B8F2
+    }
+
+    // inspect vehicle: camera angle change speed (input lockout)
+    // TODO: fix animation snapping on repetitive inputs
+    // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
+    if (enable) {
+        _ = mem.write(0x43921E + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (left)
+        _ = mem.write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (right)
+        _ = x86.nop_until(0x439233, 0x439233 + 6); // camera is animating check (left)
+        _ = x86.nop_until(0x4392F9, 0x4392F9 + 6); // camera is animating check (right)
+    } else {
+        _ = mem.write(0x43921E + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x10
+        _ = mem.write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x20
+        _ = x86.jz(0x439233, 0x4392E4);
+        _ = x86.jz(0x4392F9, 0x4393A2);
+    }
+
+    // junkyard: item change speed (input lockout)
+    // TODO: convert asm reroute into x86 macro function
+    // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
+    if (enable) {
+        _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
+        _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
+        off = x86.jmp(0x43AFAE, nav_asm_off); // reroute camera state checks (left)
+        off = x86.nop_until(off, 0x43AFB9);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFBE);
+        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFB9);
+        nav_asm_off = x86.nop_align(nav_asm_off, 16);
+        off = x86.jmp(0x43AFCB, nav_asm_off); // reroute camera state checks (right)
+        off = x86.nop_until(off, 0x43AFD6);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
+        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFDA);
+        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFD6);
+        nav_asm_off = x86.nop_align(nav_asm_off, 16);
+    } else {
+        _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
+        _ = x86.jnz_rel8(0x43AF93, 0x4B); // jnz short 0x43AFE0
+        _ = mem.write_bytes(0x43AFAE, &[11]u8{ // camera anim state checks (left scroll)
+            0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
+            0x66, 0x3B, 0xCF, 0x75, 0x05,
+        }, 11);
+        _ = mem.write_bytes(0x43AFCB, &[11]u8{ // camera anim state checks (right scroll)
+            0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
+            0x66, 0x3B, 0xCF, 0x75, 0x04,
+        }, 11);
+    }
+
+    // general: horizontal hold scroll speed (pod, track, watto shop)
+    if (enable) {
+        _ = mem.write(0x469D46 + 6, f32, 0.24); // hold initial delay (left)
+        _ = mem.write(0x469CBC + 6, f32, 0.24); // hold initial delay (right)
+        _ = mem.write(0x4AD588, f32, 0.04); // hold fast delay (both)
+    } else {
+        _ = mem.write(0x469D46 + 6, f32, 0.6); // dflt 0.6 3F19999A
+        _ = mem.write(0x469CBC + 6, f32, 0.6); // dflt 0.6 3F19999A
+        _ = mem.write(0x4AD588, f32, 0.1); // dflt 0.1 3DCCCCCD
+    }
+
+    // general: cutscene speed (affects several camera transitions)
+    PatchMenuNavigationSpeedTransitions(enable);
+
+    std.debug.assert(nav_asm_off - @intFromPtr(&nav_asm) <= nav_asm.len);
+}
+
+// TODO: patch other 'transition' functions at end of hang cb14, only
+// first one patched here
+fn PatchMenuNavigationSpeedTransitions(enable: bool) void {
+    var actually_enable: bool = enable;
+    if (enable) blk: {
+        const hang = re.Manager.entity(.Hang, 0);
+        if (0 == @intFromPtr(hang)) break :blk;
+        actually_enable = switch (hang.MenuScreen) {
+            .Junkyard,
+            .CSRival,
+            .CSPodium,
+            .CSNewRacer,
+            .CSCantinaEntrance,
+            => false,
+            else => true,
+        };
+    }
+
+    if (actually_enable) {
+        // increase last arg of calls to Hang__45C560 in Hang_DoCameraTransition__45C3C0
+        _ = mem.write(0x45C44D + 1, f32, 30.0); // push 30.0
+        _ = mem.write(0x45C471 + 1, f32, 20.0); // push 20.0
+    } else {
+        _ = mem.write(0x45C44D + 1, f32, 1.5); // dflt 1.5 3FC00000
+        _ = mem.write(0x45C471 + 1, f32, 1.0); // dflt 1.0 3F800000
+    }
+}
+
+// FAST COUNTDOWN
 
 const FastCountdown = struct {
     var h_s_enable: ?SettingHandle = null;
@@ -426,7 +792,7 @@ const FastCountdown = struct {
     }
 
     fn patch(enable: bool) void {
-        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else rti.FRAMETIME_64_ADDR;
+        const addr: usize = if (enable) @intFromPtr(&CurrentFrametime) else @intFromPtr(rti.FRAMETIME_64);
         const prerace_max_time: u32 = if (enable) @bitCast(9.10 + CountDif) else 0x4111999A; // 9.10
         const boost_window_min: u32 = if (enable) @bitCast(0.05 * CountRatio) else 0x3D4CCCCD; // 0.05
         const boost_window_max: u32 = if (enable) @bitCast(0.30 * CountRatio) else 0x3E99999A; // 0.30
@@ -594,7 +960,9 @@ const QuickRaceMenuInput = extern struct {
 
 const QuickRaceMenu = extern struct {
     var h_s_fps_default: ?SettingHandle = null;
+    var h_s_favorite_vehicles: ?SettingHandle = null;
     var s_fps_default: u32 = 24;
+    var s_favorite_vehicles: u32 = 0; // bitfield where vehicle id maps to nth bit
 
     const open_threshold: f32 = 0.75;
     var menu_active: st.ActiveState = .Off;
@@ -672,7 +1040,6 @@ const QuickRaceMenu = extern struct {
         if (h_s_fps_default) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
         if (QolState.h_s_default_laps) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.laps) });
         if (QolState.h_s_default_racers) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.racers) });
-        gf.ASettingSaveAuto();
 
         // NOTE: laps, racers handled by settings update fn
         FpsTimer.SetPeriod(@intCast(values.fps));
@@ -688,8 +1055,7 @@ const QuickRaceMenu = extern struct {
             rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
         }
 
-        const jdge = re.Manager.entity(.Jdge, 0);
-        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
+        RestartRace(false);
         close();
     }
 
@@ -721,6 +1087,7 @@ const QuickRaceMenu = extern struct {
     }
 
     fn close() void {
+        gf.ASettingSaveAuto();
         if (!gf.GFreezeOff()) return;
         rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         rg.PAUSE_STATE.* = 3;
@@ -753,7 +1120,7 @@ const QuickRaceMenu = extern struct {
 const QuickRaceMenuItems = [_]mi.MenuItem{
     mi.MenuItemRange(&QuickRaceMenu.values.fps, "FPS", 10, 500, true, &QuickRaceFpsCallback),
     mi.MenuItemSpacer(),
-    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, null),
+    mi.MenuItemList(&QuickRaceMenu.values.vehicle, "Vehicle", &rv.VehicleNames, true, &QuickRaceVehicleCallback),
     // FIXME: maybe change to menu order?
     mi.MenuItemList(&QuickRaceMenu.values.track, "Track", &rtr.TracksById, true, &QuickRaceTrackCallback),
     mi.MenuItemSpacer(),
@@ -834,7 +1201,51 @@ fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
             if (QuickRaceMenu.h_s_fps_default) |h|
                 QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = @intCast(QuickRaceMenu.values.fps) });
 
-            rso.swrSound_PlaySoundMacro(0x2D);
+            rso.swrSound_PlaySoundMacro(45); // sfx_vox_pdroid_i1.wav
+        }
+    }
+    return false;
+}
+
+// TODO: add color to vehicle names when they are favorited
+// TODO: implement this behaviour on normal vehicle select
+fn QuickRaceVehicleCallback(m: *Menu) callconv(.C) bool {
+    if (m.inputs.cb) |cb| {
+        // scroll favorites
+        if (cb[2](.JustOn)) {
+            QuickRaceMenu.values.vehicle = blk: {
+                var next: i32 = @mod(QuickRaceMenu.values.vehicle - 1, 23);
+                if (QuickRaceMenu.s_favorite_vehicles & 0x7FFFFF == 0) break :blk next;
+                while (true) {
+                    const next_bit: u32 = @as(u32, 1) << @intCast(next);
+                    if (QuickRaceMenu.s_favorite_vehicles & next_bit > 0) break :blk next;
+                    next = @mod(next - 1, 23);
+                }
+            };
+            return true;
+        }
+        if (cb[3](.JustOn)) {
+            QuickRaceMenu.values.vehicle = blk: {
+                var next: i32 = @mod(QuickRaceMenu.values.vehicle + 1, 23);
+                if (QuickRaceMenu.s_favorite_vehicles & 0x7FFFFF == 0) break :blk next;
+                while (true) {
+                    const next_bit: u32 = @as(u32, 1) << @intCast(next);
+                    if (QuickRaceMenu.s_favorite_vehicles & next_bit > 0) break :blk next;
+                    next = @mod(next + 1, 23);
+                }
+            };
+            return true;
+        }
+
+        // interact = toggle favorite
+        if (cb[0](.JustOn)) {
+            const vehicle_bit: u32 = @as(u32, 1) << @intCast(QuickRaceMenu.values.vehicle);
+            if (QuickRaceMenu.h_s_favorite_vehicles) |h|
+                QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = QuickRaceMenu.s_favorite_vehicles ^ vehicle_bit });
+
+            var sound_id: i16 = 44; // sfx_vox_pdroid_h2.wav
+            if (QuickRaceMenu.s_favorite_vehicles & vehicle_bit > 0) sound_id = 45; // sfx_vox_pdroid_i1.wav
+            rso.swrSound_PlaySoundMacro(sound_id);
         }
     }
     return false;
@@ -878,6 +1289,20 @@ fn QuickRaceConfirm(m: *Menu) callconv(.C) bool {
     return false;
 }
 
+// MISC.
+
+// TODO: confirm there is no case where jdge would not be initialized
+// TODO: validate in-race??
+fn RestartRace(play_sound: bool) void {
+    if (0 != re.Jdge.LOAD_QUEUED.*) return;
+
+    const jdge = re.Manager.entity(.Jdge, 0);
+    if (!re.Jdge.CouldPause(jdge)) return;
+
+    if (play_sound) rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+    re.Jdge.QueueLoad(jdge, re.M_RSTR);
+}
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -900,18 +1325,31 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = w32wm.ShowCursor(0); // cursor fix
     QolState.settingsInit(gf);
 
+    QolState.fcam_mem = gs.patch_offset;
+    QolState.fcam_mem_end = QolState.fcam_mem + QolState.fcam_mem_size;
+    gs.patch_offset = QolState.fcam_mem_end;
+    std.debug.assert(gs.patch_offset <= @as(u32, @intFromPtr(gs.patch_memory)) + gs.patch_size);
+    PatchCameraFKeys(true);
+
     PatchJinnReesoCheat(true);
     PatchCyYungaCheat(true);
     PatchCyYungaCheatAudio(true);
+    PatchTrugutsCheat(true);
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    var hang = re.Manager.entity(.Hang, 0);
+
     // TODO: look into using in-game default setter as hook, see fn_45BD90
     // TODO: change annodue setting to i32 for both, also look into anywhere
     // else like this that might have been affected by new Hang stuff
-
-    re.Manager.entity(.Hang, 0).Laps = @intCast(QolState.s_default_laps);
+    hang.Laps = @intCast(QolState.s_default_laps);
     _ = mem.write(0x50C558, i8, @as(i8, @intCast(QolState.s_default_racers))); // racers
+
+    if (QolState.s_trackselect_remember) {
+        hang.Track = @truncate(QolState.s_trackselect_last);
+        hang.Circuit = rtr.TrackCircuitIdMap[QolState.s_trackselect_last];
+    }
 }
 
 export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -921,6 +1359,18 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);
     PatchCyYungaCheatAudio(false);
+    PatchTrugutsCheat(false);
+
+    PatchCameraFKeys(false);
+
+    PatchHudTimerMs(false);
+    PatchPlanetCutscenes(false);
+    PatchPodiumCutscene(false);
+    PatchViewportEdges(false);
+    PatchWindowBackgroundActivity(false);
+    PatchTrackSelectEntry(false);
+    PatchMenuNavigationSpeed(false);
+    _ = mem.write(0x4525AE, u8, 1); // undo 'default_camera'
 
     FastCountdown.patch(false);
 }
@@ -932,18 +1382,37 @@ export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.update_input();
 }
 
+export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // add dpad input to menu navigation
+    if (QolState.s_dpad_navigation and ri.JOYSTICK_DEVICE_COUNT.* > 0) {
+        // TODO: convert to object ref instead of building joy_index manually, after
+        // typedef done in racerlib/Input
+        const joy_index: u32 = 0x100 + 0x20 * ri.JOYSTICK_DEVICE_ACTIVE.* + 0x10;
+
+        var off_x: i16 = 0;
+        off_x -= @intCast(ri.RAW_STATE_ON.*[joy_index + 0] * 100); // lf
+        off_x += @intCast(ri.RAW_STATE_ON.*[joy_index + 2] * 100); // rt
+        if (off_x != 0)
+            ri.PACKING_BUFFER[0].AxisX = @divTrunc(ri.PACKING_BUFFER[0].AxisX + off_x, 2);
+
+        var off_y: i16 = 0;
+        off_y += @intCast(ri.RAW_STATE_ON.*[joy_index + 1] * 100); // up
+        off_y -= @intCast(ri.RAW_STATE_ON.*[joy_index + 3] * 100); // dn
+        if (off_y != 0)
+            ri.PACKING_BUFFER[0].AxisY = @divTrunc(ri.PACKING_BUFFER[0].AxisY + off_y, 2);
+    }
+}
+
 export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
-    _ = mem.write(ri.RAW_STATE_ON + 4, u32, start_on);
-    _ = mem.write(ri.RAW_STATE_JUST_ON + 4, u32, start_just_on);
+    _ = mem.write(ri.RAW_STATE_ON_ADDR + 4, u32, start_on);
+    _ = mem.write(ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
 }
 
 export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    // TODO: confirm tabbed_in is actually needed here, possibly move to global state
-    const tabbed_in: bool = rg.GUI_STOPPED.* == 0;
-    if (gs.in_race.on() and tabbed_in and QolState.s_fps_limiter)
+    if (gs.in_race.on() and QolState.s_fps_limiter and rti.STOPPED.* == 0)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
@@ -952,19 +1421,44 @@ export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 }
 
 export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    const laps: u32 = @intCast(re.Manager.entity(.Hang, 0).Laps);
+    const hang = re.Manager.entity(.Hang, 0);
+
+    const laps: u32 = @intCast(hang.Laps);
     if (QolState.h_s_default_laps != null and laps != QolState.s_default_laps)
         gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .u = laps });
 
     const racers: u32 = @intCast(mem.read(0x50C558, i8));
     if (QolState.h_s_default_racers != null and racers != QolState.s_default_racers)
         gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .u = racers });
+
+    // FIXME: convert to mapped inputs
+    if (QolState.s_clear_records_enable and gf.InputGetKbRaw(.BACK) == .JustOn) {
+        var buf: [127:0]u8 = undefined;
+        if (gf.InputGetKbRaw(.@"1").on()) {
+            rs.BestTimeClear(rs.GameSaveData, hang.Track, 1, hang.Mirror != 0);
+            _ = std.fmt.bufPrintZ(&buf, "{s} Best Lap cleared", .{rtr.TracksById[hang.Track]}) catch return;
+            _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
+        }
+        if (gf.InputGetKbRaw(.@"3").on()) {
+            rs.BestTimeClear(rs.GameSaveData, hang.Track, 3, hang.Mirror != 0);
+            _ = std.fmt.bufPrintZ(&buf, "{s} 3-Lap Record cleared", .{rtr.TracksById[hang.Track]}) catch return;
+            _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
+        }
+    }
 }
 
-// FIXME: settings toggles for both of these
-// FIXME: probably want this mid-engine update, immediately before Jdge gets
-// processed? (a fn in EngineUpdateStage14 iirc)
 export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+    // Fast Menu Navigation
+    if (QolState.s_fast_navigation) {
+        const hang = re.Manager.entity(.Hang, 0);
+        if (hang.MenuScreen != hang.MenuScreenPrev)
+            PatchMenuNavigationSpeedTransitions(true);
+    }
+
+    // FIXME: settings toggles for both of these
+    // FIXME: probably want this mid-engine update, immediately before Jdge gets
+    // processed? (a fn in EngineUpdateStage14 iirc)
+
     // Quick Restart
     if (gs.in_race.on() and
         QolState.s_quickstart and
@@ -972,9 +1466,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
         (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
     {
-        const jdge = re.Manager.entity(.Jdge, 0);
-        rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-        re.Jdge.TriggerLoad_InRace(jdge, re.M_RSTR);
+        RestartRace(true);
         return; // skip quick race menu
     }
 
@@ -986,8 +1478,27 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
 // however, the text flushing DOES run on those frames, apparently from a different callsite
 export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    const hang = re.Manager.entity(.Hang, 0);
+    const jdge = re.Manager.entity(.Jdge, 0);
+
+    if (QolState.h_s_trackselect_last != null and QolState.s_trackselect_last != hang.Track)
+        gf.ASettingUpdate(QolState.h_s_trackselect_last.?, .{ .u = hang.Track });
+
     if (gs.in_race.on()) {
-        if (gs.race_state_new and gs.race_state == .PreRace) race.reset();
+        if (gs.race_state_new and gs.race_state == .PreRace)
+            race.reset();
+
+        if (QolState.s_default_camera_auto and gs.race_state == .Racing) {
+            if (QolState.cam_cman == null or gs.race_state_new)
+                QolState.cam_cman = re.cMan.FindFromPlayerEntity(re.Test.PLAYER.*);
+
+            if (QolState.cam_cman) |cman| {
+                if (cman.mode != QolState.cam_prev and cman.mode != QolState.s_default_camera and
+                    (cman.mode == 1 or cman.mode == 2 or cman.mode == 4 or cman.mode == 5))
+                    if (QolState.h_s_default_camera) |h| gf.ASettingUpdate(h, .{ .u = cman.mode });
+                QolState.cam_prev = cman.mode;
+            }
+        }
 
         const total_time: f32 = rrd.PLAYER.*.time.total;
 
@@ -996,7 +1507,11 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         }
 
         if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
-            const speed = re.Test.PLAYER.*.speed;
+            const p = re.Test.PLAYER.*;
+
+            // stats
+
+            const speed = p.speed;
             race.update_position();
             const this_distance = race.this_position.distance(&race.prev_position);
             race.set_motion(total_time, speed, this_distance);
@@ -1012,10 +1527,49 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             if (gs.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
             if (gs.player.overheating.on()) race.set_total_overheat(total_time);
             if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
-            if (gs.player.overheating == .JustOff) race.set_fire_finish_duration(total_time);
+            if (gs.player.overheating.on() and gs.race_state == .PostRace)
+                race.set_fire_finish_duration(total_time);
+
+            // auto reset
+
+            if (QolState.s_autoreset_enable) {
+                var reset_race = false;
+
+                if (QolState.s_autoreset_dead_enable) {
+                    QolState.autoreset_dead.update(p.flags1.IS_DEAD or
+                        p.flags2.IS_EXPLODING or
+                        p.flags2.IS_EXPLODING_RIGHT_SPIN or
+                        p.flags2.IS_EXPLODING_LEFT_SPIN);
+                    if (QolState.autoreset_dead == .JustOn)
+                        QolState.autoreset_dead_timer = 0;
+                    if (QolState.autoreset_dead.on()) {
+                        QolState.autoreset_dead_timer += gs.dt_f;
+                        if (QolState.autoreset_dead_timer >= QolState.s_autoreset_dead_delay)
+                            reset_race = true;
+                    }
+                }
+
+                if (QolState.s_autoreset_fire_enable) {
+                    if (gs.player.overheating == .JustOn)
+                        QolState.autoreset_fire_timer = 0;
+                    if (gs.player.overheating.on()) {
+                        QolState.autoreset_fire_timer += gs.dt_f;
+                        if (QolState.autoreset_fire_timer >= QolState.s_autoreset_fire_delay)
+                            reset_race = true;
+                    }
+                }
+
+                if (reset_race) {
+                    RestartRace(true);
+                    QolState.autoreset_dead.update(false);
+                    QolState.autoreset_dead_timer = 0;
+                    QolState.autoreset_fire_timer = 0;
+                }
+            }
         }
 
         if (gs.race_state == .PostRace and !gf.GHideRaceUIIsOn()) {
+            // summary readout thing
             const upg_postfix = if (gs.player.upgrades) "" else "  NU";
             RenderRaceResultHeader(gf, 0, "{d:>2.0}/{s}{s}", .{
                 gs.fps_avg,
@@ -1032,19 +1586,40 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             );
 
             RenderRaceResultStatF(gf, 10, "Top Speed", race.top_speed);
-            RenderRaceResultStatF(gf, 11, "Avg. Speed", race.avg_speed);
+            RenderRaceResultStatF(gf, 11, "Avg Speed", race.avg_speed);
             RenderRaceResultStatF(gf, 12, "Distance", race.total_distance);
             RenderRaceResultStatU(gf, 13, "Deaths", gs.player.deaths);
-            RenderRaceResultStatTime(gf, 20, "First Boost", race.first_boost_time);
-            RenderRaceResultStatTime(gf, 21, "Underheat Time", race.total_underheat);
-            RenderRaceResultStatTime(gf, 22, "Fire Finish", race.fire_finish_duration);
-            RenderRaceResultStatTime(gf, 23, "Overheat Time", race.total_overheat);
-            RenderRaceResultStatU(gf, 14, "Boosts", race.total_boosts);
-            RenderRaceResultStatTime(gf, 15, "Boost Time", race.total_boost_duration);
-            RenderRaceResultStatTime(gf, 16, "Avg. Boost Time", race.avg_boost_duration);
-            RenderRaceResultStatF(gf, 17, "Boost Distance", race.total_boost_distance);
-            RenderRaceResultStatF(gf, 18, "Avg. Boost Distance", race.avg_boost_distance);
-            RenderRaceResultStatF(gf, 19, "Boost Ratio", race.total_boost_ratio);
+
+            // zig fmt: off
+            RenderRaceResultStatU(gf,    15, "Boosts",          race.total_boosts);
+            RenderRaceResultStatTime(gf, 16, "First Boost",     race.first_boost_time);
+            RenderRaceResultStatTime(gf, 17, "Fire Finish",     race.fire_finish_duration);
+            RenderRaceResultStatTime(gf, 18, "Underheat Time",  race.total_underheat);
+            RenderRaceResultStatTime(gf, 19, "Overheat Time",   race.total_overheat);
+            RenderRaceResultStatTime(gf, 20, "Boost Time",      race.total_boost_duration);
+            RenderRaceResultStatTime(gf, 21, "Avg Boost Time",  race.avg_boost_duration);
+            RenderRaceResultStatF(gf,    22, "Boost Dist",      race.total_boost_distance);
+            RenderRaceResultStatF(gf,    23, "Avg Boost Dist",  race.avg_boost_distance);
+            RenderRaceResultStatF(gf,    24, "Boost Ratio",     race.total_boost_ratio);
+            // zig fmt: on
+
+            // show detailed lap times
+            if (QolState.s_show_postrace_times_hex) {
+                const color: u32 = 0xCCCCCCBE;
+                const line_height: i16 = 28;
+                const x: i16 = 50;
+                var y: i16 = 305 + (5 - @as(i16, @intCast(jdge.*.Laps))) * line_height;
+                for (&rrd.PLAYER.*.time.lap) |t| {
+                    if (t < 0) break;
+                    _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
+                        @as(u32, @bitCast(t)),
+                    }, color, null) catch null);
+                    y += line_height;
+                }
+                _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
+                    @as(u32, @bitCast(rrd.PLAYER.*.time.total)),
+                }, color, null) catch null);
+            }
         }
     }
 }

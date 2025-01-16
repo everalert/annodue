@@ -147,6 +147,14 @@ pub fn mov_eax_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
     return offset;
 }
 
+pub fn mov_esi_imm32(memory: usize, comptime T: type, imm32: T) usize {
+    std.debug.assert(T == u8 or T == u32);
+    var offset = memory;
+    offset = mem.write(offset, u8, 0xBE);
+    offset = mem.write(offset, T, imm32);
+    return offset;
+}
+
 pub fn mov_eax_moffs32(memory_offset: usize, moffs32: usize) usize {
     var offset = memory_offset;
     offset = mem.write(offset, u8, 0xA1);
@@ -230,6 +238,26 @@ pub fn mov_rm32_r32(memory_offset: usize, r32: u8) usize {
 pub fn mov_edx_esp(memory_offset: usize) usize {
     return mov_rm32_r32(memory_offset, 0xE2);
 }
+
+// FIXME: not functional, in progress
+//pub inline fn mov(
+//    memory: usize,
+//    tgt: union(enum) { r16: GenReg16, r32: GenReg32 },
+//    src: union(enum) { rm16: GenReg16, rm32: GenReg32, imm32: u32 },
+//    reg_offset: ?i32,
+//) usize {
+//    _ = reg_offset;
+//    var off = memory;
+//    off = switch (tgt) {
+//        .r32 => |dest| switch (src) {
+//            .rm16 => @panic("mov: r32->rm16 not impl"),
+//            .rm32 => |source| op_modRM(off, 0x8B, .mem8, dest, source),
+//            else => @panic("mov: r32 invalid src"),
+//        },
+//        .r16 => @panic("mov: r16 not impl"),
+//    };
+//    return off;
+//}
 
 // TODO: r/m16, r/m32 (FF /6)
 pub inline fn push(
@@ -324,6 +352,8 @@ pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
     return offset;
 }
 
+// TODO: generalized fn that automatically checks for short jumps, etc.
+// TODO: same for all jcc stuff
 // WARN: could underflow, but not likely for our use case i guess
 // jmp_rel32
 pub fn jmp(memory_offset: usize, address: usize) usize {
@@ -343,9 +373,18 @@ pub fn jnz(memory_offset: usize, address: usize) usize {
     return offset;
 }
 
+// TODO: auto-calculate offset like the other jcc fns
 pub fn jz_rel8(memory: usize, value: i8) usize {
     var offset = memory;
     offset = mem.write(offset, u8, 0x74);
+    offset = mem.write(offset, i8, value);
+    return offset;
+}
+
+// TODO: auto-calculate offset like the other jcc fns
+pub fn jnz_rel8(memory: usize, value: i8) usize {
+    var offset = memory;
+    offset = mem.write(offset, u8, 0x75);
     offset = mem.write(offset, i8, value);
     return offset;
 }

@@ -4,9 +4,12 @@ const e = @import("entity.zig");
 const m = @import("../Model.zig");
 const ModelNodeXf = m.ModelNodeXf;
 
+const w = std.os.windows;
+const BOOL = w.BOOL;
+
 // GAME FUNCTIONS
 
-pub const TriggerLoad_InRace: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
+pub const QueueLoad: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
 
 pub const fnStage14: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x45E200);
 //pub const fnStage18: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x00);
@@ -16,7 +19,7 @@ pub const fnEvent: *fn (jdge: *Jdge, magic: *e.MAGIC_EVENT, payload: u32) callco
 
 // GAME CONSTANTS
 
-// ...
+pub const LOAD_QUEUED: *BOOL = @ptrFromInt(0x50CA34);
 
 // GAME TYPEDEFS
 
@@ -26,7 +29,7 @@ pub const SIZE: usize = e.EntitySize(.Jdge);
 pub const Jdge = extern struct {
     EntityMagic: u32,
     EntityFlags: u32,
-    Flags: u32,
+    Flags: JDGE_FLAGS,
     RaceTimer: f32,
     pSplineMarkers: [6]*ModelNodeXf,
     _unk_028_63: [0x64 - 0x28]u8,
@@ -49,6 +52,36 @@ pub const Jdge = extern struct {
     _unk_1D8_1E7: [0x20]u8,
 };
 
+// TODO: testing assert size 32 bits
+pub const JDGE_FLAGS = packed struct {
+    RACE_STATE: enum(u4) {
+        Countdown,
+        Racing,
+        PostRace,
+        _3,
+        CameraSweepInit,
+        CameraSweep,
+        Loading,
+    },
+    _04: bool,
+    _05_cannot_pause: bool,
+    _06: bool,
+    _07: bool,
+    COUNT_3_SOUND_NOT_PLAYED: bool,
+    COUNT_2_SOUND_NOT_PLAYED: bool,
+    COUNT_1_SOUND_NOT_PLAYED: bool,
+    _11: bool,
+    _12_31: u20, // NOTE: may be unused
+};
+
 // HELPERS
 
-// ...
+// based on fn_462D40 (Pause_ShouldPause)
+pub fn CouldPause(jdge: *Jdge) bool {
+    if (jdge.Flags._05_cannot_pause)
+        return false;
+    switch (jdge.Flags.RACE_STATE) {
+        .PostRace, .CameraSweepInit, .CameraSweep, .Loading => return false,
+        else => return true,
+    }
+}

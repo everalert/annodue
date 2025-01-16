@@ -1,44 +1,38 @@
 const std = @import("std");
 const w = std.os.windows;
+const BOOL = w.BOOL;
+const HWND = w.HWND;
+const LPARAM = w.LPARAM;
+const WPARAM = w.WPARAM;
 
 // GAME FUNCTIONS
 
-// ...
+pub const Window_SetActive: *const fn (hwnd: HWND, active: BOOL) callconv(.C) void =
+    @ptrFromInt(0x423AE0);
+pub const Window_ActivateApp: *const fn (hwnd: HWND, active: BOOL) callconv(.C) void =
+    @ptrFromInt(0x423AA0); // window message 0x1C handler
+pub const Window_Activate: *const fn (hwnd: HWND, active: BOOL) callconv(.C) void =
+    @ptrFromInt(0x423AC0); // window message 0x06 handler
 
 // GAME CONSTANTS
 
 // Window
 
-pub const HWND_ADDR: usize = 0x52EE70;
-pub const HWND: *w.HWND = @ptrFromInt(HWND_ADDR);
-pub const HINSTANCE_ADDR: usize = 0x52EE74;
-pub const HINSTANCE: *w.HINSTANCE = @ptrFromInt(HINSTANCE_ADDR);
+pub const WINDOW_HWND: *w.HWND = @ptrFromInt(0x52EE70);
+pub const HINSTANCE: *w.HINSTANCE = @ptrFromInt(0x52EE74);
+pub const WINDOW_ACTIVE: *w.BOOL = @ptrFromInt(0x50B5D0); // only accurate if game has been tabbed out and in
 
 // Game State
 
-pub const SCENE_ID_ADDR: usize = 0xE9BA62; // u16
-pub const SCENE_ID: *u16 = @ptrFromInt(SCENE_ID_ADDR); // u16
-pub const IN_RACE_ADDR: usize = 0xE9BB81; //u8
-pub const IN_RACE: *u8 = @ptrFromInt(IN_RACE_ADDR); //u8
-pub const IN_TOURNAMENT_ADDR: usize = 0x50C450; // u8
-pub const IN_TOURNAMENT: *u8 = @ptrFromInt(IN_TOURNAMENT_ADDR); // u8
+pub const SCENE_ID: *u16 = @ptrFromInt(0xE9BA62); // u16
+pub const IN_RACE: *u8 = @ptrFromInt(0xE9BB81); //u8
+pub const IN_TOURNAMENT: *u8 = @ptrFromInt(0x50C450); // u8
 
 // Pausing
 
-pub const PAUSE_STATE_ADDR: usize = 0x50C5F0; // u8
-pub const PAUSE_STATE: *u8 = @ptrFromInt(PAUSE_STATE_ADDR);
-pub const PAUSE_PAGE_ADDR: usize = 0x50C07C; // u8
-pub const PAUSE_PAGE: *u8 = @ptrFromInt(PAUSE_PAGE_ADDR);
-pub const PAUSE_SCROLLINOUT_ADDR: usize = 0xE9824C; // f32
-pub const PAUSE_SCROLLINOUT: *f32 = @ptrFromInt(PAUSE_SCROLLINOUT_ADDR);
-
-// GUI
-
-// TODO: naming to something less ambiguous?
-
-// TODO: try converting to bool
-pub const GUI_STOPPED_ADDR: usize = 0x50CB64; // b32
-pub const GUI_STOPPED: *u32 = @ptrFromInt(GUI_STOPPED_ADDR);
+pub const PAUSE_STATE: *u8 = @ptrFromInt(0x50C5F0);
+pub const PAUSE_PAGE: *u8 = @ptrFromInt(0x50C07C);
+pub const PAUSE_SCROLLINOUT: *f32 = @ptrFromInt(0xE9824C);
 
 // HELPERS
 

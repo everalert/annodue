@@ -13,10 +13,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overlay: Terrain speed offsets readout (setting: `show_speed_offsets`)
 - Overlay: Simplified FPS readout option (setting: `show_fps_simple`)
 - Overlay: MFG (bounce glitch) timer (setting: `show_mfg_timer`)
+- QOL: Run game in background (setting: `run_in_background`)
+- QOL: Game bugfix for changing camera with F1-F4 not persisting after crashing
+- QOL: Option to set custom default camera, and set it automatically (settings: `default_camera` `default_camera_auto`)
+- QOL: Patch truguts cheat (Shift+F4+4) to give 10,000 truguts and have infinite uses
+- QOL: Auto-reset race on death or engine fire (settings: `autoreset_enable` `autoreset_dead_enable` `autoreset_dead_delay` `autoreset_fire_enable` `autoreset_fire_delay`)
+- QOL: Track select remembers your selection when leaving menu, and between game sessions (settings: `trackselect_remember` `trackselect_last`)
+- QOL: Fast menu navigation by removing input wait times (setting: `fast_navigation`)
+- QOL: Allow hat (d-pad) input for menu navigation (setting: `dpad_navigation`)
+- QOL: Show true values of times on post-race screen (setting: `show_postrace_times_hex`)
+- QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`)
+- QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
+- Backend(Core): `GlobalState.window_in_foreground`
+- Backend(RacerLib): `Save` util
+- Backend(RacerLib): `Input` defs
 
 ### Changed
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
+- QOL: More organized formatting of post-race stats
+- Backend(Core): Global State version `5` to `6`
+- Backend(Code): Settings now also autosave on race reset
+
+### Removed
+
+- Backend(Core): 
+    - `GlobalState.hwnd` (use racerlib->global->HWND)
+    - `GlobalState.hinstance` (use racerlib->global->HINSTANCE)
+
+### Fixed
+
+- Cam7: Mouse position locking when tabbing out with free cam active
+- QOL: Settings not saving when closing Quick Race Menu without loading race
+- QOL: Being able to stack race resets when a load is already queued
+- QOL: Fire finish timer counting any healed overheat for post-race stats
+- QOL: Game not being returned to original code for some features when plugin unloads
 
 ## [0.1.6] - 2024-08-11
 

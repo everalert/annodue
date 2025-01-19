@@ -42,6 +42,9 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -609,11 +612,12 @@ fn TrackSelectEntryCallback() callconv(.C) void {
 
 // FAST MENU NAVIGATION
 
-var nav_asm: [256]u8 = undefined;
-var nav_asm_off: u32 = undefined;
+var nav_asm: [96]u8 = undefined;
+//var nav_asm_off: u32 = undefined;
 
 fn PatchMenuNavigationSpeed(enable: bool) void {
-    nav_asm_off = @intFromPtr(&nav_asm);
+    // FIXME: remove, refactor
+    //nav_asm_off = @intFromPtr(&nav_asm);
     var off: u32 = 0;
 
     // TODO: pause menu: inputs ignored while scrolling in
@@ -676,28 +680,25 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // TODO: convert asm reroute into x86 macro function
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
     if (enable) {
+        var d: x86.Detour = undefined;
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
-        off = x86.jmp(0x43AFAE, nav_asm_off); // reroute camera state checks (left)
-        off = x86.nop_until(off, 0x43AFB9);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
-        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFBE);
-        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFB9);
-        nav_asm_off = x86.nop_align(nav_asm_off, 16);
-        off = x86.jmp(0x43AFCB, nav_asm_off); // reroute camera state checks (right)
-        off = x86.nop_until(off, 0x43AFD6);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
-        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFDA);
-        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFD6);
-        nav_asm_off = x86.nop_align(nav_asm_off, 16);
+        x86.detour_start(&d, 0x43AFAE, 0x43AFB9, nav_asm[0..48]);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        d.addr = x86.jz(d.addr, 0x43AFB9);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        d.addr = x86.jz(d.addr, 0x43AFB9);
+        d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        d.addr = x86.jnz(d.addr, 0x43AFBE);
+        x86.detour_end(&d);
+        x86.detour_start(&d, 0x43AFCB, 0x43AFD6, nav_asm[48..96]);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        d.addr = x86.jz(d.addr, 0x43AFD6);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        d.addr = x86.jz(d.addr, 0x43AFD6);
+        d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        d.addr = x86.jnz(d.addr, 0x43AFDA);
+        x86.detour_end(&d);
     } else {
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
         _ = x86.jnz_rel8(0x43AF93, 0x4B); // jnz short 0x43AFE0
@@ -724,8 +725,6 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
 
     // general: cutscene speed (affects several camera transitions)
     PatchMenuNavigationSpeedTransitions(enable);
-
-    std.debug.assert(nav_asm_off - @intFromPtr(&nav_asm) <= nav_asm.len);
 }
 
 // TODO: patch other 'transition' functions at end of hang cb14, only

@@ -548,7 +548,11 @@ pub const Detour = struct {
     addr: u32,
 };
 
+// TODO: optional nop_until
+// TODO: option to auto copy overwritten bytes to detour buffer
 pub fn detour_start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) void {
+    std.debug.assert(return_to > write_at);
+    std.debug.assert(return_to - write_at >= 5); // jmp long instruction size
     data.entry_addr = write_at;
     data.return_addr = return_to;
     data.buf = buf;
@@ -562,7 +566,11 @@ pub fn detour_start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) voi
 // example: my_detour.addr = jmp(my_detour.addr, 0xDEADBEEF);
 
 pub fn detour_end(data: *Detour) void {
-    data.addr = jmp(data.buf_off, data.return_addr);
+    data.addr = jmp(data.addr, data.return_addr);
     data.addr = nop_align(data.addr, 0x10);
     std.debug.assert(data.addr - @intFromPtr(data.buf.ptr) <= data.buf.len);
+}
+
+pub fn detour_unused_space(data: *Detour) u32 {
+    return data.buf.len - (data.addr - @intFromPtr(data.buf.ptr));
 }

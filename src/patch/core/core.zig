@@ -1,4 +1,6 @@
 // TODO: revisit organisation, ordering
+// order must respect internal dependencies/assumptions about things already
+// being initialized
 
 // this stuff was outside core and hooked in this order before making this file
 pub const Hook = @import("Hook.zig");
@@ -17,6 +19,7 @@ pub const Allocator = @import("Allocator.zig");
 pub const Debug = @import("Debug.zig");
 
 // plugin-facing 'game' functions
+pub const GAssetBuffer = @import("GAssetBuffer.zig");
 pub const Draw = @import("GDraw.zig");
 pub const Freeze = @import("GFreeze.zig");
 pub const HideRaceUI = @import("GHideRaceUI.zig");

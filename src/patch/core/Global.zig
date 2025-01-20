@@ -2,6 +2,7 @@ const Self = @This();
 
 const GlobalState = @import("SharedDef.zig").GlobalState;
 const GlobalFunction = @import("SharedDef.zig").GlobalFunction;
+const RaceState = @import("SharedDef.zig").RaceState;
 
 const std = @import("std");
 const win = std.os.windows;
@@ -20,6 +21,7 @@ const xinput = @import("../util/xinput.zig");
 const dbg = @import("../util/debug.zig");
 const msg = @import("../util/message.zig");
 const mem = @import("../util/memory.zig");
+const ActiveState = @import("../util/active_state.zig").ActiveState;
 
 const app = @import("../appinfo.zig");
 const VERSION = app.VERSION;
@@ -31,6 +33,7 @@ const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
+const TestFlags1 = @import("racer").Entity.Test.TEST_FLAGS1;
 
 const w32 = @import("zigwin32");
 const w32kb = w32.ui.input.keyboard_and_mouse;
@@ -44,6 +47,8 @@ const KS_PRESSED: i16 = 1; // since last call
 // TODO: split up the versioning, global structs, etc. from the business logic
 
 // STATE
+
+pub var GLOBAL_STATE: GlobalState = .{};
 
 fn global_player_reset(self: *GlobalState) void {
     const p = &self.player;
@@ -80,7 +85,115 @@ fn global_player_update(self: *GlobalState) void {
     if (p.dead == .JustOn) p.deaths += 1;
 }
 
-pub var GLOBAL_STATE: GlobalState = .{};
+fn SPatchMemory() callconv(.C) [*]u8 {
+    return GLOBAL_STATE.patch_memory;
+} // patch_memory
+
+fn SPatchSize() callconv(.C) u32 {
+    return GLOBAL_STATE.patch_size;
+} // patch_size
+
+fn SPatchOffset() callconv(.C) u32 {
+    return GLOBAL_STATE.patch_offset;
+} // patch_offset, WARN: some funcs write to this
+
+fn SInitLatePassed() callconv(.C) bool {
+    return GLOBAL_STATE.init_late_passed;
+} // init_late_passed
+
+fn SPracticeMode() callconv(.C) bool {
+    return GLOBAL_STATE.practice_mode;
+} // practice_mode
+
+fn SWindowInForeground() callconv(.C) bool {
+    return GLOBAL_STATE.window_in_foreground;
+} // window_in_foreground
+
+fn SDt() callconv(.C) f32 {
+    return GLOBAL_STATE.dt_f;
+} // dt_f
+
+fn SFPS() callconv(.C) f32 {
+    return GLOBAL_STATE.fps;
+} // fps
+
+fn SFPSAvg() callconv(.C) f32 {
+    return GLOBAL_STATE.fps_avg;
+} // fps_avg
+
+fn STimestamp() callconv(.C) u32 {
+    return GLOBAL_STATE.timestamp;
+} // timestamp
+
+fn SFrameCount() callconv(.C) u32 {
+    return GLOBAL_STATE.framecount;
+} // frame_count
+
+fn SInRace() callconv(.C) ActiveState {
+    return GLOBAL_STATE.in_race;
+} // in_race
+
+fn SRaceState() callconv(.C) RaceState {
+    return GLOBAL_STATE.race_state;
+} // race_state
+
+fn SRaceStatePrev() callconv(.C) RaceState {
+    return GLOBAL_STATE.race_state_prev;
+} // race_state_prev
+
+fn SRaceStateNew() callconv(.C) bool {
+    return GLOBAL_STATE.race_state_new;
+} // race_state_new
+
+fn SPlayerUpgrades() callconv(.C) bool {
+    return GLOBAL_STATE.player.upgrades;
+} // player -> upgrades
+
+fn SPlayerUpgradesLv(out: [*]u8) callconv(.C) void {
+    @memcpy(@as(*[7]u8, @ptrCast(out)), &GLOBAL_STATE.player.upgrades_lv);
+} // 7-byte array; player -> upgrades_lv
+
+fn SPlayerUpgradesHP(out: [*]u8) callconv(.C) void {
+    @memcpy(@as(*[7]u8, @ptrCast(out)), &GLOBAL_STATE.player.upgrades_hp);
+} // 7-byte array; player -> upgrades_hp
+
+fn SPlayerFlags1() callconv(.C) TestFlags1 {
+    return GLOBAL_STATE.player.flags1;
+} // player -> flags1
+
+fn SPlayerBoosting() callconv(.C) ActiveState {
+    return GLOBAL_STATE.player.boosting;
+} // player -> boosting
+
+fn SPlayerUnderheating() callconv(.C) ActiveState {
+    return GLOBAL_STATE.player.underheating;
+} // player -> underheating
+
+fn SPlayerOverheating() callconv(.C) ActiveState {
+    return GLOBAL_STATE.player.overheating;
+} // player -> overheating
+
+fn SPlayerDead() callconv(.C) ActiveState {
+    return GLOBAL_STATE.player.dead;
+} // player -> dead
+
+fn SPlayerDeaths() callconv(.C) u32 {
+    return GLOBAL_STATE.player.deaths;
+} // player -> deaths
+
+fn SPlayerHeatRate() callconv(.C) f32 {
+    return GLOBAL_STATE.player.heat_rate;
+} // player -> heat_rate
+
+fn SPlayerCoolRate() callconv(.C) f32 {
+    return GLOBAL_STATE.player.cool_rate;
+} // player -> cool_rate
+
+fn SPlayerHeat() callconv(.C) f32 {
+    return GLOBAL_STATE.player.heat;
+} // player -> heat
+
+// GLOBAL FUNCTIONS
 
 pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Settings
@@ -128,6 +241,34 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .RTriggerRequest = &rtrigger.RRequest,
     .RTriggerRelease = &rtrigger.RRelease,
     .RTriggerReleaseAll = &rtrigger.RReleaseAll,
+    // State
+    .SPatchMemory = &SPatchMemory,
+    .SPatchSize = &SPatchSize,
+    .SPatchOffset = &SPatchOffset,
+    .SInitLatePassed = &SInitLatePassed,
+    .SPracticeMode = &SPracticeMode,
+    .SWindowInForeground = &SWindowInForeground,
+    .SDt = &SDt,
+    .SFPS = &SFPS,
+    .SFPSAvg = &SFPSAvg,
+    .STimestamp = &STimestamp,
+    .SFrameCount = &SFrameCount,
+    .SInRace = &SInRace,
+    .SRaceState = &SRaceState,
+    .SRaceStatePrev = &SRaceStatePrev,
+    .SRaceStateNew = &SRaceStateNew,
+    .SPlayerUpgrades = &SPlayerUpgrades,
+    .SPlayerUpgradesLv = &SPlayerUpgradesLv,
+    .SPlayerUpgradesHP = &SPlayerUpgradesHP,
+    .SPlayerFlags1 = &SPlayerFlags1,
+    .SPlayerBoosting = &SPlayerBoosting,
+    .SPlayerUnderheating = &SPlayerUnderheating,
+    .SPlayerOverheating = &SPlayerOverheating,
+    .SPlayerDead = &SPlayerDead,
+    .SPlayerDeaths = &SPlayerDeaths,
+    .SPlayerHeatRate = &SPlayerHeatRate,
+    .SPlayerCoolRate = &SPlayerCoolRate,
+    .SPlayerHeat = &SPlayerHeat,
 };
 
 // UTIL

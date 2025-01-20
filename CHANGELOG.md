@@ -35,7 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - QOL: More organized formatting of post-race stats
 - Backend(Core): Global State version `5` to `6`
+- Backend(Core): Global Function version `29` to `30`
 - Backend(Core): Settings now also autosave on race reset
+- Backend(Core): All global state migrated to getter functions in Global Function API
 
 ### Removed
 

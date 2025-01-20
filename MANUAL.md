@@ -390,3 +390,18 @@ Configurable under `[core/RTrigger]`
 |Option|Type|Default|
 |:---|:---|:---|
 |`notify_trigger`|`bool`|`off`
+
+### Asset Buffer Patches
+
+- Patches to enable loading larger amounts of data from asset files
+
+##### Settings
+
+Configurable under `[core/GAssetBuffer]`
+
+*All settings in this section require game restart to apply*
+
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`texbuf_enable`|`bool`|`off`|&nbsp;
+|`texbuf_size`|`u32`|`5120`|Number of textures loadable from TextureBlock; 1700 is equivalent to unpatched

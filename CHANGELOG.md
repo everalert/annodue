@@ -24,16 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Show true values of times on post-race screen (setting: `show_postrace_times_hex`)
 - QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`)
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
+- Core: Patch texture buffer size to allow custom tracks with large number of textures (settings: `texbuf_enable` `texbuf_size`, category: `core/GAssetBuffer`)
 - Backend(Core): `GlobalState.window_in_foreground`
-- Backend(RacerLib): `Save` util
+- Backend(RacerLib): `Save`, `Asset` utils
 - Backend(RacerLib): `Input` defs
+- Backend(Util): Detour- and calling convention-related x86 helpers
 
 ### Changed
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - QOL: More organized formatting of post-race stats
 - Backend(Core): Global State version `5` to `6`
-- Backend(Code): Settings now also autosave on race reset
+- Backend(Core): Settings now also autosave on race reset
 
 ### Removed
 

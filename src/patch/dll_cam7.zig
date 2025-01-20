@@ -34,9 +34,6 @@ const nt = @import("util/normalized_transform.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-// FIXME: remove, for testing
-const dbg = @import("util/debug.zig");
-
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 

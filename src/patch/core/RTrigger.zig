@@ -43,9 +43,6 @@ const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 //   - shifted down to bits 0..9, with bits 10..15 zeroed out
 //   - use it however you like, as bitfield, packed struct, int/float, etc.
 
-// FIXME: remove, for testing
-const dbg = @import("../util/debug.zig");
-
 // FEATURES
 // - ..
 // - Show race trigger interactions via game notification system

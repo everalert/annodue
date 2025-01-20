@@ -13,11 +13,15 @@ const PPanic = @import("../util/debug.zig").PPanic;
 
 const ra = @import("racer").Asset;
 
-// FIXME: remove, for testing
-const dbg = @import("../util/debug.zig");
+// FEATURES
+// - expand texture buffer size to allow for a greater number of textures in textureblock
+// - SETTINGS:
+//   ..             type    note
+//   texbuf_enable  bool    requires restart
+//   texbuf_size    u32     textureblock texture limit; requires restart
 
-// TODO: test realloc to resize buf
-// TODO: also resize asset buffer to 2x
+// TODO: patch asset buffer, default 2x (16MiB)
+// TODO: test realloc to resize texbuf, change to dynamically update buffer size if possible
 
 const GAssetBuffer = struct {
     var h_s_section: ?SettingHandle = null;

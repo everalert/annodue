@@ -42,9 +42,6 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-// FIXME: remove, for testing
-const dbg = @import("util/debug.zig");
-
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -613,11 +610,8 @@ fn TrackSelectEntryCallback() callconv(.C) void {
 // FAST MENU NAVIGATION
 
 var nav_asm: [96]u8 = undefined;
-//var nav_asm_off: u32 = undefined;
 
 fn PatchMenuNavigationSpeed(enable: bool) void {
-    // FIXME: remove, refactor
-    //nav_asm_off = @intFromPtr(&nav_asm);
     var off: u32 = 0;
 
     // TODO: pause menu: inputs ignored while scrolling in

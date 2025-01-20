@@ -259,11 +259,10 @@ pub fn mov_edx_esp(memory_offset: usize) usize {
 //    return off;
 //}
 
+pub const PushSrc = union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 };
+
 // TODO: r/m16, r/m32 (FF /6)
-pub inline fn push(
-    offset: usize,
-    src: union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 },
-) usize {
+pub inline fn push(offset: usize, src: PushSrc) usize {
     switch (src) {
         .r16 => |reg| return op_r16(offset, 0x50, reg),
         .r32 => |reg| return op_r32(offset, 0x50, reg),
@@ -280,11 +279,10 @@ pub inline fn push(
     }
 }
 
+pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
+
 // TODO: r/m16, r/m32 (8F /0)
-pub inline fn pop(
-    offset: usize,
-    dest: union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 },
-) usize {
+pub inline fn pop(offset: usize, dest: PopDest) usize {
     switch (dest) {
         .r16 => |reg| return op_r16(offset, 0x58, reg),
         .r32 => |reg| return op_r32(offset, 0x58, reg),
@@ -474,13 +472,13 @@ pub fn stackframe_end(write_at: u32) u32 {
 
 // cdecl: _FunctionName
 
-pub fn cdecl_call(write_at: u32, fn_ptr: u32, arguments: ?[]u32) u32 {
+pub fn cdecl_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
     var addr = write_at;
     if (arguments) |args| {
         std.debug.assert(args.len > 0);
         std.debug.assert(args.len < 32);
         for (args, 0..) |_, i|
-            addr = push(addr, .{ .imm32 = args[args.len - i - 1] });
+            addr = push(addr, args[args.len - i - 1]);
     }
     addr = call(addr, fn_ptr);
     if (arguments) |args|
@@ -503,13 +501,13 @@ pub fn cdecl_body_exit(write_at: u32) u32 {
 
 // stdcall: _FunctionName@<args*4>
 
-pub fn stdcall_call(write_at: u32, fn_ptr: u32, arguments: ?[]u32) u32 {
+pub fn stdcall_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
     var addr = write_at;
     if (arguments) |args| {
         std.debug.assert(args.len > 0);
         std.debug.assert(args.len < 32);
         for (args, 0..) |_, i|
-            addr = push(addr, .{ .imm32 = args[args.len - i - 1] });
+            addr = push(addr, args[args.len - i - 1]);
     }
     addr = call(addr, fn_ptr);
     return addr;

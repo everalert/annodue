@@ -22,6 +22,7 @@ pub const Video = @import("Video.zig");
 pub const Quad = @import("Quad.zig");
 pub const Text = @import("Text.zig");
 pub const Model = @import("Model.zig");
+pub const Asset = @import("Asset.zig");
 
 pub const Camera = @import("Camera.zig");
 pub const Vehicle = @import("Vehicle.zig");

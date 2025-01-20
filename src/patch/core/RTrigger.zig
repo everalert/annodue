@@ -199,17 +199,19 @@ const CustomTrigger = struct {
     // - original fn may need to be called manually if you do non-dynamic stuff
     //fn hookDoEntityCreate(_: *Trig) callconv(.C) void {}
 
+    // TODO: cmp util in x86.zig
     const buf = struct {
         var init: [32]u8 = undefined;
         var destroy: [32]u8 = undefined;
         const d_ins = [_]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 }; // cmp dword ptr [esi+08], 0x1F5 (501)
-        var update: [32]u8 = undefined;
+        var update: [48]u8 = undefined;
         const u_ins = [_]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 }; // cmp eax, 0x134 (308)
     };
 
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
     // fine since it has the same pattern as destroy; may also want save_esi on destroy
     pub fn init(alloc: Allocator) void {
+        var d: x86.Detour = undefined;
         data = THandleMap.init(alloc);
 
         // triggers
@@ -218,45 +220,24 @@ const CustomTrigger = struct {
         _ = x86.call(0x476E80, @intFromPtr(&hookTrigger));
 
         // init
-        var init_buf: usize = @intFromPtr(&buf.init);
-        var init_addr: usize = 0x47D397;
-        const init_end: usize = 0x47D3A0;
-        init_addr = x86.jmp(init_addr, init_buf);
-        init_buf = x86.push(init_buf, .{ .r32 = .esi });
-        init_buf = x86.call(init_buf, @intFromPtr(TriggerDescription_AddItem));
-        init_buf = x86.add_esp32(init_buf, 4);
-        init_buf = x86.push(init_buf, .{ .r32 = .ebp });
-        init_buf = x86.push(init_buf, .{ .r32 = .esi });
-        init_buf = x86.call(init_buf, @intFromPtr(&hookInit));
-        init_buf = x86.add_esp32(init_buf, 8);
-        init_buf = x86.jmp(init_buf, init_addr);
-        init_addr = x86.nop_until(init_addr, init_end);
+        x86.detour_start(&d, 0x47D397, 0x47D3A0, &buf.init);
+        d.addr = x86.cdecl_call(d.addr, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
+        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookInit), &[_]x86.PushSrc{ .{ .r32 = .esi }, .{ .r32 = .ebp } });
+        x86.detour_end(&d);
 
         // destroy
-        var destroy_buf: usize = @intFromPtr(&buf.destroy);
-        var destroy_addr: usize = 0x47C4D9;
-        const destroy_end: usize = 0x47C4E0;
-        destroy_addr = x86.jmp(destroy_addr, destroy_buf);
-        destroy_buf = x86.push(destroy_buf, .{ .r32 = .esi });
-        destroy_buf = x86.call(destroy_buf, @intFromPtr(&hookDestroy));
-        destroy_buf = x86.add_esp32(destroy_buf, 4);
-        destroy_buf = mem.write_bytes(destroy_buf, &buf.d_ins, 7);
-        destroy_buf = x86.jmp(destroy_buf, destroy_addr);
-        destroy_addr = x86.nop_until(destroy_addr, destroy_end);
+        x86.detour_start(&d, 0x47C4D9, 0x47C4E0, &buf.destroy);
+        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookDestroy), &[_]x86.PushSrc{.{ .r32 = .esi }});
+        d.addr = mem.write_bytes(d.addr, &buf.d_ins, 7);
+        x86.detour_end(&d);
 
         // update
-        var update_buf: usize = @intFromPtr(&buf.update);
-        var update_addr: usize = 0x47C51B;
-        const update_end: usize = 0x47C520;
-        update_addr = x86.jmp(update_addr, update_buf);
-        update_buf = x86.save_eax(update_buf);
-        update_buf = x86.push(update_buf, .{ .r32 = .esi });
-        update_buf = x86.call(update_buf, @intFromPtr(&hookUpdate));
-        update_buf = x86.add_esp32(update_buf, 4);
-        update_buf = x86.restore_eax(update_buf);
-        update_buf = mem.write_bytes(update_buf, &buf.u_ins, 5);
-        update_buf = x86.jmp(update_buf, update_addr);
-        update_addr = x86.nop_until(update_addr, update_end);
+        x86.detour_start(&d, 0x47C51B, 0x47C520, &buf.update);
+        d.addr = x86.save_eax(d.addr); // TODO: is this detour meant to replace a function body?
+        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
+        d.addr = x86.restore_eax(d.addr);
+        d.addr = mem.write_bytes(d.addr, &buf.u_ins, 5);
+        x86.detour_end(&d);
     }
 
     // FIXME: crashes after reinit -> track load
@@ -268,18 +249,16 @@ const CustomTrigger = struct {
         _ = x86.call(0x476E80, @intFromPtr(&Trig_HandleTriggers));
 
         // init
-        var init_addr: usize = 0x47D397;
-        init_addr = x86.push(init_addr, .{ .r32 = .esi });
-        init_addr = x86.call(init_addr, @intFromPtr(TriggerDescription_AddItem));
-        init_addr = x86.add_esp32(init_addr, 4);
+        // WARN: cdecl_call ends with add_esp8, which is fewer bytes than the source
+        // asm, but should not cause problems in this case; safer if auto asm restore
+        // implemented in x86 util detour functions though
+        _ = x86.cdecl_call(0x47D397, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
 
         // destroy
-        var destroy_addr: usize = 0x47C4D9;
-        destroy_addr = mem.write_bytes(destroy_addr, &buf.d_ins, 7);
+        _ = mem.write_bytes(0x47C4D9, &buf.d_ins, 7);
 
         // update
-        var update_addr: usize = 0x47C51B;
-        update_addr = mem.write_bytes(update_addr, &buf.u_ins, 5);
+        _ = mem.write_bytes(0x47C51B, &buf.u_ins, 5);
     }
 
     fn settingsInit(gf: *GlobalFn) void {

@@ -259,11 +259,10 @@ pub fn mov_edx_esp(memory_offset: usize) usize {
 //    return off;
 //}
 
+pub const PushSrc = union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 };
+
 // TODO: r/m16, r/m32 (FF /6)
-pub inline fn push(
-    offset: usize,
-    src: union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 },
-) usize {
+pub inline fn push(offset: usize, src: PushSrc) usize {
     switch (src) {
         .r16 => |reg| return op_r16(offset, 0x50, reg),
         .r32 => |reg| return op_r32(offset, 0x50, reg),
@@ -280,11 +279,10 @@ pub inline fn push(
     }
 }
 
+pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
+
 // TODO: r/m16, r/m32 (8F /0)
-pub inline fn pop(
-    offset: usize,
-    dest: union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 },
-) usize {
+pub inline fn pop(offset: usize, dest: PopDest) usize {
     switch (dest) {
         .r16 => |reg| return op_r16(offset, 0x58, reg),
         .r32 => |reg| return op_r32(offset, 0x58, reg),
@@ -298,6 +296,11 @@ pub inline fn pop(
         },
     }
 }
+
+// --------
+// old callconv stuff
+// TODO: remove, migrate use cases to callconv functions
+// --------
 
 pub fn save_esp(memory_offset: usize) usize {
     var offset: usize = memory_offset;
@@ -327,6 +330,10 @@ pub fn restore_eax(memory_offset: usize) usize {
     return offset;
 }
 
+// --------
+// call
+// --------
+
 // WARN: could underflow, but not likely for our use case i guess
 // call_rel32
 pub fn call(memory_offset: usize, address: usize) usize {
@@ -351,6 +358,10 @@ pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
     offset = restore_esp(offset);
     return offset;
 }
+
+// --------
+// jump/jcc
+// --------
 
 // TODO: generalized fn that automatically checks for short jumps, etc.
 // TODO: same for all jcc stuff
@@ -399,9 +410,24 @@ pub fn jz(memory_offset: usize, address: usize) usize {
     return offset;
 }
 
+// --------
+// return
+// --------
+
 pub fn retn(memory_offset: usize) usize {
     return mem.write(memory_offset, u8, 0xC3);
 }
+
+pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xC2);
+    addr = mem.write(addr, u16, bytes);
+    return addr;
+}
+
+// --------
+// no-op
+// --------
 
 pub fn nop(memory_offset: usize) usize {
     return mem.write(memory_offset, u8, 0x90);
@@ -421,4 +447,128 @@ pub fn nop_until(memory_offset: usize, end: usize) usize {
         offset = nop(offset);
     }
     return offset;
+}
+
+// --------
+// function calls
+// https://en.wikibooks.org/wiki/X86_Disassembly/Calling_Conventions
+// https://blog.aaronballman.com/2012/02/describing-the-msvc-abi-for-structure-return-types/
+// --------
+
+pub fn stackframe_start(write_at: u32) u32 {
+    var addr = write_at;
+    addr = push(addr, .{ .r32 = .ebp });
+    addr = mov_rm32_r32(addr, 0xE5); // mov ebp, esp
+    return addr;
+}
+
+// NOTE: not sure if 'mov esp, ebp' needed, seems always skipped in practice?
+pub fn stackframe_end(write_at: u32) u32 {
+    var addr = write_at;
+    //addr = mov_rm32_r32(addr, 0xEC); // mov esp, ebp
+    addr = pop(addr, .{ .r32 = .ebp });
+    return addr;
+}
+
+// cdecl: _FunctionName
+
+pub fn cdecl_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
+    var addr = write_at;
+    if (arguments) |args| {
+        std.debug.assert(args.len > 0);
+        std.debug.assert(args.len < 32);
+        for (args, 0..) |_, i|
+            addr = push(addr, args[args.len - i - 1]);
+    }
+    addr = call(addr, fn_ptr);
+    if (arguments) |args|
+        addr = add_esp8(addr, @intCast(4 * args.len));
+    return addr;
+}
+
+pub fn cdecl_body_entry(write_at: u32) u32 {
+    return stackframe_start(write_at);
+}
+
+pub fn cdecl_body_exit(write_at: u32) u32 {
+    var addr = write_at;
+    // TODO: return value; 4b=eax, 8b=eax/edx
+    addr = stackframe_end(addr);
+    addr = retn(addr);
+    addr = nop_align(addr, 0x10);
+    return addr;
+}
+
+// stdcall: _FunctionName@<args*4>
+
+pub fn stdcall_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
+    var addr = write_at;
+    if (arguments) |args| {
+        std.debug.assert(args.len > 0);
+        std.debug.assert(args.len < 32);
+        for (args, 0..) |_, i|
+            addr = push(addr, args[args.len - i - 1]);
+    }
+    addr = call(addr, fn_ptr);
+    return addr;
+}
+
+pub fn stdcall_body_entry(write_at: u32) u32 {
+    return stackframe_start(write_at);
+}
+
+pub fn stdcall_body_exit(write_at: u32, num_args: u16) u32 {
+    std.debug.assert(num_args < 32);
+    var addr = write_at;
+    // TODO: return value; 4b=eax, 8b=eax/edx
+    addr = stackframe_end(addr);
+    addr = retn_imm16(addr, num_args * 4);
+    addr = nop_align(addr, 0x10);
+    return addr;
+}
+
+// fastcall: @FunctionName@<args*4>
+
+// assert arguments.len <= 3
+// not standardized; i.e. this will only guarantee compatibility with itself
+// pub fn fastcall_call(write_at: u32, arguments: []u32)
+// pub fn fastcall_body_entry(write_at: u32)
+// pub fn fastcall_body_exit(write_at: u32, arguments: u16)
+
+// --------
+// detour
+// --------
+
+pub const Detour = struct {
+    entry_addr: u32,
+    return_addr: u32,
+    buf: []u8,
+    addr: u32,
+};
+
+// TODO: optional nop_until
+// TODO: option to auto copy overwritten bytes to detour buffer
+pub fn detour_start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) void {
+    std.debug.assert(return_to > write_at);
+    std.debug.assert(return_to - write_at >= 5); // jmp long instruction size
+    data.entry_addr = write_at;
+    data.return_addr = return_to;
+    data.buf = buf;
+    data.addr = @intFromPtr(buf.ptr);
+    var addr = write_at;
+    addr = jmp(write_at, data.addr);
+    addr = nop_until(addr, return_to);
+}
+
+// between these two functions, write to buf the usual way using Detour.addr
+// example: my_detour.addr = jmp(my_detour.addr, 0xDEADBEEF);
+
+pub fn detour_end(data: *Detour) void {
+    data.addr = jmp(data.addr, data.return_addr);
+    data.addr = nop_align(data.addr, 0x10);
+    std.debug.assert(data.addr - @intFromPtr(data.buf.ptr) <= data.buf.len);
+}
+
+pub fn detour_unused_space(data: *Detour) u32 {
+    return data.buf.len - (data.addr - @intFromPtr(data.buf.ptr));
 }

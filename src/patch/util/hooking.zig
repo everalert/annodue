@@ -48,13 +48,14 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
     return off;
 }
 
-// detour without hooking a function
+/// reroute asm without hooking a function body or callsite, while inserting
+/// before/after functions
 pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
     std.debug.assert(len >= 5);
     std.debug.assert(len <= DETOUR_LIMIT);
 
     var scratch: [DETOUR_LIMIT]u8 = undefined;
-    mem.read_bytes(addr, &scratch, len);
+    mem.read_bytes(addr, &scratch, len); // make copy of original asm
 
     var off: usize = memory;
 

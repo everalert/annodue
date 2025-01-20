@@ -197,9 +197,7 @@ const QolState = struct {
     var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
 
-    var fcam_mem: u32 = 0;
-    var fcam_mem_end: u32 = 0;
-    const fcam_mem_size: u32 = 32;
+    var fcam_buf: [32]u8 = undefined;
     var cam_prev: u32 = 0xFFFFFFFF;
     var cam_cman: ?*re.cMan.cMan = null;
 
@@ -378,33 +376,23 @@ const QolState = struct {
 
 // F-KEY CAMERA GLITCH
 
+const fcam_src_asm = [_]u8{
+    0x8B, 0x4C, 0x24, 0x08, // mov ecx, [esp+08]
+    0x89, 0x48, 0x7C, // mov [eax+7C], ecx
+};
+
 // TODO: convert hand-rolled asm to x86.zig fns
 // adds CMan.CamModeOnRespawn=NewCamMode to fn_451D60, which is called by all ccf* paths
 fn PatchCameraFKeys(enable: bool) void {
-    std.debug.assert(QolState.fcam_mem != 0);
-    std.debug.assert(QolState.fcam_mem < QolState.fcam_mem_end);
-    const fn451D60_src_addr: u32 = 0x451D64;
-    const fn451D60_src_end_addr: u32 = 0x451D6B;
-
-    var off_cave = QolState.fcam_mem;
-    var off_src = fn451D60_src_addr;
     if (enable) {
-        off_src = x86.jmp(off_src, off_cave);
-        off_cave = x86.mov_ecx_esp_add(off_cave, 0x08);
-        off_cave = mem.write_bytes(off_cave, &[3]u8{ 0x89, 0x48, 0x7C }, 3); // mov [eax+7C], ecx
-        off_cave = mem.write_bytes(off_cave, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }, 6); // mov [eax+80], ecx
-        off_cave = x86.jmp(off_cave, fn451D60_src_end_addr);
+        var d: x86.Detour = undefined;
+        x86.detour_start(&d, 0x451D64, 0x451D6B, &QolState.fcam_buf);
+        d.addr = mem.write_bytes(d.addr, &fcam_src_asm, 7);
+        d.addr = mem.write_bytes(d.addr, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }, 6); // mov [eax+80], ecx
+        x86.detour_end(&d);
     } else {
-        off_src = mem.write_bytes(off_src, &[_]u8{
-            0x8B, 0x4C, 0x24, 0x08, // mov ecx, [esp+08]
-            0x89, 0x48, 0x7C, // mov [eax+7C], ecx
-        }, 7);
+        _ = mem.write_bytes(0x451D64, &fcam_src_asm, 7);
     }
-
-    std.debug.assert(off_src <= fn451D60_src_end_addr);
-    std.debug.assert(off_cave <= QolState.fcam_mem_end);
-    off_src = x86.nop_until(off_src, fn451D60_src_end_addr);
-    off_cave = x86.nop_until(off_cave, QolState.fcam_mem_end);
 }
 
 // HUD TIMER MS
@@ -581,7 +569,7 @@ fn PatchTrugutsCheat(enable: bool) void {
     if (enable) {
         _ = mem.write(amount_addr, u32, 10000);
         var off: u32 = uses_addr;
-        off = mem.write_bytes(off, &[2]u8{ 0xEB, 0x26 }, 2); // jmp short 0x410FB4
+        off = mem.write_bytes(off, &[2]u8{ 0xEB, 0x26 }, 2); // jmp short 0x410FB4; skip limit check
         off = x86.nop_until(off, 0x410F90);
     } else {
         _ = mem.write(amount_addr, u32, 1000);
@@ -621,11 +609,9 @@ fn TrackSelectEntryCallback() callconv(.C) void {
 
 // FAST MENU NAVIGATION
 
-var nav_asm: [256]u8 = undefined;
-var nav_asm_off: u32 = undefined;
+var nav_asm: [96]u8 = undefined;
 
 fn PatchMenuNavigationSpeed(enable: bool) void {
-    nav_asm_off = @intFromPtr(&nav_asm);
     var off: u32 = 0;
 
     // TODO: pause menu: inputs ignored while scrolling in
@@ -688,28 +674,25 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // TODO: convert asm reroute into x86 macro function
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
     if (enable) {
+        var d: x86.Detour = undefined;
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
-        off = x86.jmp(0x43AFAE, nav_asm_off); // reroute camera state checks (left)
-        off = x86.nop_until(off, 0x43AFB9);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFB9);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
-        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFBE);
-        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFB9);
-        nav_asm_off = x86.nop_align(nav_asm_off, 16);
-        off = x86.jmp(0x43AFCB, nav_asm_off); // reroute camera state checks (right)
-        off = x86.nop_until(off, 0x43AFD6);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
-        nav_asm_off = x86.jz(nav_asm_off, 0x43AFD6);
-        nav_asm_off = mem.write_bytes(nav_asm_off, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
-        nav_asm_off = x86.jnz(nav_asm_off, 0x43AFDA);
-        nav_asm_off = x86.jmp(nav_asm_off, 0x43AFD6);
-        nav_asm_off = x86.nop_align(nav_asm_off, 16);
+        x86.detour_start(&d, 0x43AFAE, 0x43AFB9, nav_asm[0..48]);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        d.addr = x86.jz(d.addr, 0x43AFB9);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        d.addr = x86.jz(d.addr, 0x43AFB9);
+        d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        d.addr = x86.jnz(d.addr, 0x43AFBE);
+        x86.detour_end(&d);
+        x86.detour_start(&d, 0x43AFCB, 0x43AFD6, nav_asm[48..96]);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }, 4); // cmp cx, 1
+        d.addr = x86.jz(d.addr, 0x43AFD6);
+        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }, 4); // cmp cx, 5
+        d.addr = x86.jz(d.addr, 0x43AFD6);
+        d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }, 3); // cmp cx, di; check for 0
+        d.addr = x86.jnz(d.addr, 0x43AFDA);
+        x86.detour_end(&d);
     } else {
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
         _ = x86.jnz_rel8(0x43AF93, 0x4B); // jnz short 0x43AFE0
@@ -736,8 +719,6 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
 
     // general: cutscene speed (affects several camera transitions)
     PatchMenuNavigationSpeedTransitions(enable);
-
-    std.debug.assert(nav_asm_off - @intFromPtr(&nav_asm) <= nav_asm.len);
 }
 
 // TODO: patch other 'transition' functions at end of hang cb14, only
@@ -1325,9 +1306,6 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     _ = w32wm.ShowCursor(0); // cursor fix
     QolState.settingsInit(gf);
 
-    QolState.fcam_mem = gs.patch_offset;
-    QolState.fcam_mem_end = QolState.fcam_mem + QolState.fcam_mem_size;
-    gs.patch_offset = QolState.fcam_mem_end;
     std.debug.assert(gs.patch_offset <= @as(u32, @intFromPtr(gs.patch_memory)) + gs.patch_size);
     PatchCameraFKeys(true);
 

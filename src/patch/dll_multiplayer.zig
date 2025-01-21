@@ -2,7 +2,6 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -190,7 +189,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     MpState.settingsInit(gf);
 
     // TODO: move this to settings handler, once global allocation figured out
@@ -209,8 +208,8 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     //gs.patch_offset = off;
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 // HOOKS

@@ -9,7 +9,6 @@ const EnumSet = std.EnumSet;
 const Allocator = std.mem.Allocator;
 const bufPrintZ = std.fmt.bufPrintZ;
 
-const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
@@ -1030,11 +1029,11 @@ pub fn ASaveAuto() callconv(.C) void {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn OnPluginInitA(owner: u16) callconv(.C) void {
     ASettings.sectionRunUpdateOwner(owner);
@@ -1044,7 +1043,7 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     ASettings.vacateOwner(owner);
 }
 
-pub fn GameLoopB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
     if (gf.SInRace().new() or (gf.SRaceStateNew() and gf.SRaceState() == .PreRace))
         ASettings.saveAuto() catch {};
 
@@ -1103,7 +1102,7 @@ fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void 
 }
 
 // TODO: adapt for debug features
-fn drawSettingsDebugPanel(_: *GlobalSt, gf: *GlobalFn) void {
+fn drawSettingsDebugPanel(gf: *GlobalFn) void {
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 
     const s = struct {

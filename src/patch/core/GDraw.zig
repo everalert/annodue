@@ -3,7 +3,6 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
-const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
 
@@ -229,17 +228,17 @@ pub fn GDrawRectBdr(
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {
     GDraw.init(coreAllocator()) catch @panic("GDraw init failed");
 }
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     GDraw.deinit();
 }
 
-pub fn Draw2DA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn Draw2DA(gf: *GlobalFn) callconv(.C) void {
     GDraw.rect_sprite = r.Quad.MapGet(26);
     if (GDraw.rect_sprite == null) {
         _ = r.Quad.MapLoad(26, null);

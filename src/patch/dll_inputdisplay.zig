@@ -3,7 +3,6 @@ pub const Self = @This();
 const std = @import("std");
 const m = std.math;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -389,29 +388,29 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     InputDisplay.settingsInit(gf);
 
     if ((gf.SRaceState() == .Countdown or gf.SRaceState() == .Racing) and InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     InputDisplay.Deinit();
 }
 
 // HOOK FUNCTIONS
 
-export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn InitRaceQuadsA(_: *GlobalFn) callconv(.C) void {
     if (InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
 // TODO: probably cleaner with a state machine
-//export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-export fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     if (gf.SInRace().on()) {
         if (InputDisplay.s_enable and !InputDisplay.initialized)
             InputDisplay.Init();

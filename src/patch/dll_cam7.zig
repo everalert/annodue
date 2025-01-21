@@ -6,7 +6,6 @@ const rad2deg = m.radiansToDegrees;
 const w32 = @import("zigwin32");
 const POINT = w32.foundation.POINT;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
@@ -702,26 +701,26 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     Cam7.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.xf), 0);
 }
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     RestoreSavedCam();
     rc.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
 }
 
 // HOOKS
 
-export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
     Cam7.update_input(gf);
 }
 
-export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
     if (Cam7.cam_state == .FreeCam and Cam7.s_disable_input and rg.PAUSE_STATE.* == 0) { // kill race input
         // NOTE: unk block starting at 0xEC8820 still written to, but no observable ill-effects
         @memset(@as([*]u8, @ptrCast(rin.MAPPED_BUTTON))[0..0x70], 0); // split to avoid clearing settings
@@ -730,10 +729,10 @@ export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-//export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//export fn OnSettingsLoad(gf: *GlobalFn) callconv(.C) void {
 //    HandleSettings(gf);
 //}
 
-export fn EngineUpdateStage1CA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage1CA(gf: *GlobalFn) callconv(.C) void {
     UpdateState(gf);
 }

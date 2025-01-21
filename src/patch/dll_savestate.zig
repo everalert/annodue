@@ -5,7 +5,6 @@ const std = @import("std");
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -304,36 +303,36 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     state.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     state.rec_data.deinit();
 }
 
 // HOOKS
 
-//export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//export fn OnSettingsLoad(gf: *GlobalFn) callconv(.C) void {
 //    state.handle_settings(gf);
 //}
 
-export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
     state.scrub_input_dec.update(gf);
     state.scrub_input_inc.update(gf);
     state.save_input_st.update(gf);
     state.save_input_ld.update(gf);
 }
 
-export fn EngineEntityUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EngineEntityUpdateB(gf: *GlobalFn) callconv(.C) void {
     if (!state.s_enable) return;
 
     UpdateState(gf);
 }
 
-export fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     if (!state.s_enable) return;
 
     // TODO: build checks for GHideRaceUIIsHidden into drawtext api when that's done

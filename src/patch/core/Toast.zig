@@ -5,7 +5,6 @@ const nxf = @import("../util/normalized_transform.zig");
 const fl = @import("../util/flash.zig");
 
 const app = @import("../appinfo.zig");
-const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
 
 const r = @import("racer");
@@ -49,13 +48,13 @@ pub const ToastSystem = extern struct {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     const num_vis: *u32 = &ToastSystem.n_visible;
     const num_items: *const u32 = &ToastSystem.buffer.items.len;
 

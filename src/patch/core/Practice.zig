@@ -3,7 +3,6 @@ pub const Self = @This();
 const std = @import("std");
 
 const app = @import("../appinfo.zig");
-const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
 const core = @import("core.zig");
 const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
@@ -77,18 +76,18 @@ const mode_vis = struct {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn InitRaceQuadsA(_: *GlobalFn) callconv(.C) void {
     mode_vis.init();
 }
 
 // FIXME: corners not rendering in pre-race unless manually toggling practice mode
-pub fn TextRenderB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     const f = struct {
         const vis_time: f32 = 0.15;
         var start: ?u32 = null;
@@ -126,7 +125,7 @@ pub fn TextRenderB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 // some things, primarily to do with lifecycle, because the past setting assumed
 // it would be on permanently. also, do a pass on everything to integrate/migrate
 // to global practice_mode.
-pub fn EarlyEngineUpdateA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     const toggle_input: bool = gf.InputGetKb(.P, .JustOn);
 
     // TODO: convert gs.practice_mode to ActiveState

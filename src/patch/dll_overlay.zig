@@ -2,7 +2,6 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -130,13 +129,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     Overlay.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
@@ -149,7 +148,7 @@ const lbx: i16 = 48;
 const lby: i16 = 128 + 16 * 6;
 const sty: i16 = 12;
 
-export fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     if (!Overlay.s_enable) return;
 
     if (gf.SInRace().on() and !gf.GHideRaceUIIsOn()) {

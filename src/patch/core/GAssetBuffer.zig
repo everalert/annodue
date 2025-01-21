@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const coreAllocator = @import("Allocator.zig").allocator;
@@ -83,11 +82,11 @@ const GAssetBuffer = struct {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
     GAssetBuffer.settings_init(gf);
     GAssetBuffer.init();
 }
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}

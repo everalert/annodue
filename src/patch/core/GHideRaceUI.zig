@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const app = @import("../appinfo.zig");
-const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
 const GLOBAL_STATE = &@import("Global.zig").GLOBAL_STATE;
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
@@ -66,16 +65,16 @@ pub fn GHideRaceUIIsOn() bool {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     if (HideRaceUI.owner) |o|
         _ = HideRaceUI.unhide(o);
 }
 
-pub fn EarlyEngineUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
     HideRaceUI.paused.update(rg.PAUSE_STATE.* > 0);
     if (!HideRaceUI.hidden) return;
 

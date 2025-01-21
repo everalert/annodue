@@ -7,7 +7,6 @@ const w32wm = w32.ui.windows_and_messaging;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
@@ -1297,7 +1296,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: keep at top
     QuickRaceMenu.gf = gf;
 
@@ -1312,7 +1311,7 @@ export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     PatchTrugutsCheat(true);
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     var hang = re.Manager.entity(.Hang, 0);
 
     // TODO: look into using in-game default setter as hook, see fn_45BD90
@@ -1327,7 +1326,7 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.FpsTimer.End();
     QuickRaceMenu.close();
 
@@ -1352,12 +1351,12 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
     QolState.UpdateInput(gf);
     QuickRaceMenu.update_input();
 }
 
-export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
     // add dpad input to menu navigation
     if (QolState.s_dpad_navigation and ri.JOYSTICK_DEVICE_COUNT.* > 0) {
         // TODO: convert to object ref instead of building joy_index manually, after
@@ -1378,7 +1377,7 @@ export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn InputUpdateKeyboardA(_: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
@@ -1386,16 +1385,16 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     _ = mem.write(ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
 }
 
-export fn TimerUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn TimerUpdateB(gf: *GlobalFn) callconv(.C) void {
     if (gf.SInRace().on() and QolState.s_fps_limiter and rti.STOPPED.* == 0)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
-export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn TimerUpdateA(_: *GlobalFn) callconv(.C) void {
     FastCountdown.update();
 }
 
-export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
 
     const laps: u32 = @intCast(hang.Laps);
@@ -1422,7 +1421,7 @@ export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn EarlyEngineUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
     // Fast Menu Navigation
     if (QolState.s_fast_navigation) {
         const hang = re.Manager.entity(.Hang, 0);
@@ -1452,7 +1451,7 @@ export fn EarlyEngineUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
 
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
 // however, the text flushing DOES run on those frames, apparently from a different callsite
-export fn EarlyEngineUpdateA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
     const jdge = re.Manager.entity(.Jdge, 0);
 
@@ -1599,7 +1598,7 @@ export fn EarlyEngineUpdateA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn MapRenderB(_: *GlobalFn) callconv(.C) void {
     // TODO: move to core? since it only matters with running annodue
     rt.TEXT_HIRES_FLAG.* = 0;
 }

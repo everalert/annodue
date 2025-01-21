@@ -305,21 +305,21 @@ pub fn init() bool {
 
 // HOOK CALLS
 
-pub fn OnInit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFunction) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn OnInitLate(_: *GlobalFunction) callconv(.C) void {
     GLOBAL_STATE.init_late_passed = true;
 }
 
-pub fn OnDeinit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFunction) callconv(.C) void {}
 
-pub fn EarlyEngineUpdateB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn EarlyEngineUpdateB(_: *GlobalFunction) callconv(.C) void {
     const hwnd_racer: u32 = @intFromPtr(rg.WINDOW_HWND.*);
     const hwnd_fg: u32 = if (w32wm.GetForegroundWindow()) |h| @intFromPtr(h) else 0;
     GLOBAL_STATE.window_in_foreground = hwnd_racer == hwnd_fg;
 }
 
-pub fn EngineUpdateStage14A(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
     const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;
     GLOBAL_STATE.in_race.update(player_ready);
 
@@ -343,7 +343,7 @@ pub fn EngineUpdateStage14A(_: *GlobalState, _: *GlobalFunction) callconv(.C) vo
     if (GLOBAL_STATE.in_race.on()) global_player_update(&GLOBAL_STATE);
 }
 
-pub fn TimerUpdateA(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn TimerUpdateA(_: *GlobalFunction) callconv(.C) void {
     GLOBAL_STATE.dt_f = rti.FRAMETIME.*;
     GLOBAL_STATE.fps = rti.FPS.*;
     const fps_res: f32 = 1 / GLOBAL_STATE.dt_f * 2;
@@ -352,24 +352,24 @@ pub fn TimerUpdateA(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     GLOBAL_STATE.framecount = rti.FRAMECOUNT.*;
 }
 
-pub fn MenuTitleScreenB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn MenuTitleScreenB(_: *GlobalFunction) callconv(.C) void {
     // TODO: make text only appear on the actual title screen, i.e. remove from file select etc.
     DrawVersionString();
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuStartRaceB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn MenuStartRaceB(_: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuRaceResultsB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn MenuRaceResultsB(_: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrackSelectB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn MenuTrackSelectB(_: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }
 
-pub fn MenuTrackB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn MenuTrackB(_: *GlobalFunction) callconv(.C) void {
     DrawMenuPracticeModeLabel();
 }

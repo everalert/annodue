@@ -2,7 +2,6 @@ const std = @import("std");
 const SemVer = std.SemanticVersion;
 
 const shared = @import("core/SharedDef.zig");
-pub const GLOBAL_STATE = shared.GlobalState; // FIXME: remove, deprecating
 pub const GLOBAL_FUNCTION = shared.GlobalFunction;
 pub const COMPATIBILITY_VERSION =
     shared.GLOBAL_STATE_VERSION +

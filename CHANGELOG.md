@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): 
     - `GlobalState.hwnd` (use racerlib->global->HWND)
     - `GlobalState.hinstance` (use racerlib->global->HINSTANCE)
+- Backend(Core): Removed public Global State access from plugin API (use new getters from Global Function)
 
 ### Fixed
 

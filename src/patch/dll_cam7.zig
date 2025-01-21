@@ -215,7 +215,7 @@ const Cam7 = extern struct {
     var i_mouse_d_y: f32 = 0;
 
     // TODO: maybe normalizing XY stuff (or do it at input system level)
-    fn update_input(gs: *GlobalSt, gf: *GlobalFn) void {
+    fn update_input(gf: *GlobalFn) void {
         i_toggle.update(gf);
         i_look_x.update(gf);
         i_look_y.update(gf);
@@ -236,7 +236,7 @@ const Cam7 = extern struct {
 
         i_mouse_d_x = 0;
         i_mouse_d_y = 0;
-        if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0 and gs.window_in_foreground) {
+        if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0 and gf.SWindowInForeground()) {
             gf.InputLockMouse();
             // TODO: move to InputMap (after input customization)
             const mouse_d: POINT = gf.InputGetMouseDelta();
@@ -462,7 +462,7 @@ fn UpdateHideUI(gf: *GlobalFn) void {
 
 // STATE MACHINE
 
-fn DoStateNone(_: *GlobalSt, gf: *GlobalFn) CamState {
+fn DoStateNone(gf: *GlobalFn) CamState {
     if (Cam7.i_toggle.gets() == .JustOn and Cam7.s_enable) {
         SaveSavedCam();
         if (Cam7.s_hide_ui) _ = gf.GHideRaceUIOn();
@@ -471,9 +471,9 @@ fn DoStateNone(_: *GlobalSt, gf: *GlobalFn) CamState {
     return .None;
 }
 
-fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
+fn DoStateFreeCam(gf: *GlobalFn) CamState {
     if (Cam7.i_toggle.gets() == .JustOn or !Cam7.s_enable) {
-        if (gs.race_state != .None and Cam7.i_move_vehicle.gets().on()) {
+        if (gf.SRaceState() != .None and Cam7.i_move_vehicle.gets().on()) {
             re.Test.DoRespawn(re.Test.PLAYER.*, 0);
             re.Test.PLAYER.*._collision_toggles = 0xFFFFFFFF;
             re.Test.PLAYER.*.transform = Cam7.xf;
@@ -543,8 +543,8 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         Cam7.move_spd_xy_tgt = Cam7.move_spd_xy_val[Cam7.move_spd_i];
         Cam7.move_spd_z_tgt = Cam7.move_spd_z_val[Cam7.move_spd_i];
     }
-    Cam7.move_spd_xy = sp.f32_damp(Cam7.move_spd_xy, Cam7.move_spd_xy_tgt, Cam7.move_change_damp, gs.dt_f);
-    Cam7.move_spd_z = sp.f32_damp(Cam7.move_spd_z, Cam7.move_spd_z_tgt, Cam7.move_change_damp, gs.dt_f);
+    Cam7.move_spd_xy = sp.f32_damp(Cam7.move_spd_xy, Cam7.move_spd_xy_tgt, Cam7.move_change_damp, gf.SDt());
+    Cam7.move_spd_z = sp.f32_damp(Cam7.move_spd_z, Cam7.move_spd_z_tgt, Cam7.move_change_damp, gf.SDt());
 
     const rot_dec: bool = Cam7.i_rotation_dec.gets() == .JustOn;
     const rot_inc: bool = Cam7.i_rotation_inc.gets() == .JustOn;
@@ -561,7 +561,7 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         if (rot_both) Cam7.rot_spd_i = Cam7.s_rot_spd_i_dflt;
         Cam7.rot_spd_tgt = Cam7.rot_spd_val[Cam7.rot_spd_i];
     }
-    Cam7.rot_spd = sp.f32_damp(Cam7.rot_spd, Cam7.rot_spd_tgt, Cam7.rot_change_damp, gs.dt_f);
+    Cam7.rot_spd = sp.f32_damp(Cam7.rot_spd, Cam7.rot_spd_tgt, Cam7.rot_change_damp, gf.SDt());
 
     const upside_down: bool = @mod(Cam7.rot.y / (m.pi * 2) - 0.25, 1) < 0.5;
 
@@ -579,17 +579,17 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         dz.vec2_applyDeadzoneSq(@ptrCast(&Cam7.rot_d), Cam7.s_dz_i, Cam7.dz_range, Cam7.dz_fact);
         const r_scale: f32 = nt.smooth2(rv.Vec2_Mag(@ptrCast(&Cam7.rot_d)));
         rv.Vec2_Scale(@ptrCast(&Cam7.rot_d), r_scale, @ptrCast(&Cam7.rot_d));
-        rot_scale = gs.dt_f * Cam7.rot_spd / 360 * m.pi * 2;
+        rot_scale = gf.SDt() * Cam7.rot_spd / 360 * m.pi * 2;
     }
 
     if (!using_mouse and Cam7.rot_damp != null) {
-        sp.vec3_damp(&Cam7.rot_d_tgt, &Cam7.rot_d, Cam7.rot_damp.?, gs.dt_f);
+        sp.vec3_damp(&Cam7.rot_d_tgt, &Cam7.rot_d, Cam7.rot_damp.?, gf.SDt());
         rv.Vec3_AddScale1(&Cam7.rot, &Cam7.rot, rot_scale, &Cam7.rot_d_tgt);
     } else {
         rv.Vec3_Copy(&Cam7.rot_d_tgt, &Cam7.rot_d);
         rv.Vec3_AddScale1(&Cam7.rot, &Cam7.rot, rot_scale, &Cam7.rot_d);
     }
-    Cam7.rot.z = sp.f32_damp(Cam7.rot.z, 0, 8, gs.dt_f); // NOTE: straighten out, not for drone
+    Cam7.rot.z = sp.f32_damp(Cam7.rot.z, 0, 8, gf.SDt()); // NOTE: straighten out, not for drone
 
     if (move_sweep) {
         var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
@@ -623,8 +623,8 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
         Cam7.move_d_tgt.z = Cam7.move_d_tgt.y;
         sp.vec3_mul3(&Cam7.move_d_tgt, Cam7.move_spd_xy, 0, Cam7.move_spd_xy);
 
-        Cam7.orbit_dist_d = if (Cam7.move_damp) |d| sp.f32_damp(Cam7.orbit_dist_d, orbit_dist_d_tgt, d, gs.dt_f) else orbit_dist_d_tgt;
-        var dist_d: f32 = Cam7.orbit_dist_d * Cam7.move_spd_z * gs.dt_f;
+        Cam7.orbit_dist_d = if (Cam7.move_damp) |d| sp.f32_damp(Cam7.orbit_dist_d, orbit_dist_d_tgt, d, gf.SDt()) else orbit_dist_d_tgt;
+        var dist_d: f32 = Cam7.orbit_dist_d * Cam7.move_spd_z * gf.SDt();
         if (Cam7.orbit_dist + dist_d < 0) dist_d = -Cam7.orbit_dist;
         var fwd: Vec3 = .{ .y = dist_d };
         Cam7.orbit_dist += dist_d;
@@ -646,12 +646,12 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
     rv.Vec3_MulMat4x4(&Cam7.move_d_tgt, &Cam7.move_d_tgt, xf_fwd_ref);
 
     if (Cam7.move_damp) |d| {
-        sp.vec3_damp(&Cam7.move_d, &Cam7.move_d_tgt, d, gs.dt_f);
+        sp.vec3_damp(&Cam7.move_d, &Cam7.move_d_tgt, d, gf.SDt());
     } else {
         rv.Vec3_Copy(&Cam7.move_d, &Cam7.move_d_tgt);
     }
 
-    rv.Vec3_AddScale1(@ptrCast(&Cam7.xf.T), @ptrCast(&Cam7.xf.T), gs.dt_f, &Cam7.move_d);
+    rv.Vec3_AddScale1(@ptrCast(&Cam7.xf.T), @ptrCast(&Cam7.xf.T), gf.SDt(), &Cam7.move_d);
 
     // LOOK TO HOME
 
@@ -673,18 +673,18 @@ fn DoStateFreeCam(gs: *GlobalSt, gf: *GlobalFn) CamState {
 
     const vol_speed_max: f32 = @max(Cam7.move_spd_xy, 1000);
     const vol_scale: f32 = nt.pow2(@min(rv.Vec3_Mag(&Cam7.move_d) / vol_speed_max, 1));
-    Cam7.sfx_volume_scale = sp.f32_damp(Cam7.sfx_volume_scale, vol_scale, 6, gs.dt_f);
+    Cam7.sfx_volume_scale = sp.f32_damp(Cam7.sfx_volume_scale, vol_scale, 6, gf.SDt());
     const volume = Cam7.s_sfx_volume * Cam7.sfx_volume_scale;
     rs.swrSound_PlaySound(28, 6, 0.35, volume, 1); // sfx_amb_wind_tat_a_loop.wav
 
     return .FreeCam;
 }
 
-fn UpdateState(gs: *GlobalSt, gf: *GlobalFn) void {
+fn UpdateState(gf: *GlobalFn) void {
     CheckAndResetSavedCam(gf); // handle transition in and out of race scene
     Cam7.cam_state = switch (Cam7.cam_state) {
-        .None => DoStateNone(gs, gf),
-        .FreeCam => DoStateFreeCam(gs, gf),
+        .None => DoStateNone(gf),
+        .FreeCam => DoStateFreeCam(gf),
     };
 }
 
@@ -717,8 +717,8 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn InputUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    Cam7.update_input(gs, gf);
+export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    Cam7.update_input(gf);
 }
 
 export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
@@ -734,6 +734,6 @@ export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 //    HandleSettings(gf);
 //}
 
-export fn EngineUpdateStage1CA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    UpdateState(gs, gf);
+export fn EngineUpdateStage1CA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    UpdateState(gf);
 }

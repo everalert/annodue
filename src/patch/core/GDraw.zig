@@ -239,7 +239,7 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     GDraw.deinit();
 }
 
-pub fn Draw2DA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn Draw2DA(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     GDraw.rect_sprite = r.Quad.MapGet(26);
     if (GDraw.rect_sprite == null) {
         _ = r.Quad.MapLoad(26, null);
@@ -247,14 +247,14 @@ pub fn Draw2DA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 
     GDraw.drawLayer(.Default, rt.DEFAULT_COLOR);
-    if (gs.practice_mode) GDraw.drawLayer(.DefaultP, rt.DEFAULT_COLOR);
+    if (gf.SPracticeMode()) GDraw.drawLayer(.DefaultP, rt.DEFAULT_COLOR);
 
     // TODO: 'show overlay' user setting
     GDraw.drawLayer(.Overlay, rt.DEFAULT_COLOR);
-    if (gs.practice_mode) GDraw.drawLayer(.OverlayP, rt.DEFAULT_COLOR);
+    if (gf.SPracticeMode()) GDraw.drawLayer(.OverlayP, rt.DEFAULT_COLOR);
 
     GDraw.drawLayer(.System, rt.DEFAULT_COLOR);
-    if (gs.practice_mode) GDraw.drawLayer(.SystemP, rt.DEFAULT_COLOR);
+    if (gf.SPracticeMode()) GDraw.drawLayer(.SystemP, rt.DEFAULT_COLOR);
 
     GDraw.drawLayer(.Debug, rt.DEFAULT_COLOR);
 

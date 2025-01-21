@@ -75,14 +75,14 @@ pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         _ = HideRaceUI.unhide(o);
 }
 
-pub fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     HideRaceUI.paused.update(rg.PAUSE_STATE.* > 0);
     if (!HideRaceUI.hidden) return;
 
     if (HideRaceUI.paused == .JustOff)
         HideRaceUI.writeHide(true);
 
-    switch (gs.in_race) {
+    switch (gf.SInRace()) {
         .JustOn => HideRaceUI.writeHide(true),
         .JustOff => HideRaceUI.writeHide(false),
         else => {},

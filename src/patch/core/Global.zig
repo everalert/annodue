@@ -17,11 +17,11 @@ const rterrain = @import("RTerrain.zig");
 const rtrigger = @import("RTrigger.zig");
 
 const st = @import("../util/active_state.zig");
+const ActiveState = st.ActiveState;
 const xinput = @import("../util/xinput.zig");
 const dbg = @import("../util/debug.zig");
 const msg = @import("../util/message.zig");
 const mem = @import("../util/memory.zig");
-const ActiveState = @import("../util/active_state.zig").ActiveState;
 
 const app = @import("../appinfo.zig");
 const VERSION = app.VERSION;
@@ -31,9 +31,9 @@ const rti = @import("racer").Time;
 const rg = @import("racer").Global;
 const rrd = @import("racer").RaceData;
 const re = @import("racer").Entity;
+const TestFlags1 = re.Test.TEST_FLAGS1;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
-const TestFlags1 = @import("racer").Entity.Test.TEST_FLAGS1;
 
 const w32 = @import("zigwin32");
 const w32kb = w32.ui.input.keyboard_and_mouse;
@@ -149,10 +149,13 @@ fn SPlayerUpgrades() callconv(.C) bool {
     return GLOBAL_STATE.player.upgrades;
 } // player -> upgrades
 
+// FIXME: crashes when included in global fn
 fn SPlayerUpgradesLv(out: [*]u8) callconv(.C) void {
-    @memcpy(@as(*[7]u8, @ptrCast(out)), &GLOBAL_STATE.player.upgrades_lv);
+    _ = out;
+    //@memcpy(@as(*[7]u8, @ptrCast(out)), &GLOBAL_STATE.player.upgrades_lv);
 } // 7-byte array; player -> upgrades_lv
 
+// FIXME: crashes when included in global fn
 fn SPlayerUpgradesHP(out: [*]u8) callconv(.C) void {
     @memcpy(@as(*[7]u8, @ptrCast(out)), &GLOBAL_STATE.player.upgrades_hp);
 } // 7-byte array; player -> upgrades_hp
@@ -258,8 +261,8 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .SRaceStatePrev = &SRaceStatePrev,
     .SRaceStateNew = &SRaceStateNew,
     .SPlayerUpgrades = &SPlayerUpgrades,
-    .SPlayerUpgradesLv = &SPlayerUpgradesLv,
-    .SPlayerUpgradesHP = &SPlayerUpgradesHP,
+    //.SPlayerUpgradesLv = &SPlayerUpgradesLv,
+    //.SPlayerUpgradesHP = &SPlayerUpgradesHP,
     .SPlayerFlags1 = &SPlayerFlags1,
     .SPlayerBoosting = &SPlayerBoosting,
     .SPlayerUnderheating = &SPlayerUnderheating,
@@ -304,26 +307,26 @@ pub fn init() bool {
 
 pub fn OnInit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
 
-pub fn OnInitLate(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
-    gs.init_late_passed = true;
+pub fn OnInitLate(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    GLOBAL_STATE.init_late_passed = true;
 }
 
 pub fn OnDeinit(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {}
 
-pub fn EarlyEngineUpdateB(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn EarlyEngineUpdateB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     const hwnd_racer: u32 = @intFromPtr(rg.WINDOW_HWND.*);
     const hwnd_fg: u32 = if (w32wm.GetForegroundWindow()) |h| @intFromPtr(h) else 0;
-    gs.window_in_foreground = hwnd_racer == hwnd_fg;
+    GLOBAL_STATE.window_in_foreground = hwnd_racer == hwnd_fg;
 }
 
-pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+pub fn EngineUpdateStage14A(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
     const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;
-    gs.in_race.update(player_ready);
+    GLOBAL_STATE.in_race.update(player_ready);
 
     // FIXME: use jdge flags
-    gs.race_state_prev = gs.race_state;
-    gs.race_state = blk: {
-        if (!gs.in_race.on()) break :blk .None;
+    GLOBAL_STATE.race_state_prev = GLOBAL_STATE.race_state;
+    GLOBAL_STATE.race_state = blk: {
+        if (!GLOBAL_STATE.in_race.on()) break :blk .None;
         if (rg.IN_RACE.* == 0) break :blk .PreRace; // i.e. in race scene?
         // TODO: figure out how the engine knows to set these and use those instead
         const flags1 = re.Test.PLAYER.*.flags1;
@@ -334,19 +337,19 @@ pub fn EngineUpdateStage14A(gs: *GlobalState, _: *GlobalFunction) callconv(.C) v
         if (postrace) break :blk .PostRaceExiting;
         break :blk .Racing;
     };
-    gs.race_state_new = gs.race_state != gs.race_state_prev;
+    GLOBAL_STATE.race_state_new = GLOBAL_STATE.race_state != GLOBAL_STATE.race_state_prev;
 
-    if (gs.race_state_new and gs.race_state == .PreRace) global_player_reset(gs);
-    if (gs.in_race.on()) global_player_update(gs);
+    if (GLOBAL_STATE.race_state_new and GLOBAL_STATE.race_state == .PreRace) global_player_reset(&GLOBAL_STATE);
+    if (GLOBAL_STATE.in_race.on()) global_player_update(&GLOBAL_STATE);
 }
 
-pub fn TimerUpdateA(gs: *GlobalState, _: *GlobalFunction) callconv(.C) void {
-    gs.dt_f = rti.FRAMETIME.*;
-    gs.fps = rti.FPS.*;
-    const fps_res: f32 = 1 / gs.dt_f * 2;
-    gs.fps_avg = (gs.fps_avg * (fps_res - 1) + (1 / gs.dt_f)) / fps_res;
-    gs.timestamp = rti.TIMESTAMP.*;
-    gs.framecount = rti.FRAMECOUNT.*;
+pub fn TimerUpdateA(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {
+    GLOBAL_STATE.dt_f = rti.FRAMETIME.*;
+    GLOBAL_STATE.fps = rti.FPS.*;
+    const fps_res: f32 = 1 / GLOBAL_STATE.dt_f * 2;
+    GLOBAL_STATE.fps_avg = (GLOBAL_STATE.fps_avg * (fps_res - 1) + (1 / GLOBAL_STATE.dt_f)) / fps_res;
+    GLOBAL_STATE.timestamp = rti.TIMESTAMP.*;
+    GLOBAL_STATE.framecount = rti.FRAMECOUNT.*;
 }
 
 pub fn MenuTitleScreenB(_: *GlobalState, _: *GlobalFunction) callconv(.C) void {

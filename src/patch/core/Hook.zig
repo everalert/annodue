@@ -474,9 +474,9 @@ pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (PluginState.s_hot_reload and gs.timestamp > PluginState.last_check + PluginState.check_freq) {
-        PluginState.last_check = gs.timestamp;
+pub fn GameLoopB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+    if (PluginState.s_hot_reload and gf.STimestamp() > PluginState.last_check + PluginState.check_freq) {
+        PluginState.last_check = gf.STimestamp();
         PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
         const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];
 

@@ -27,6 +27,7 @@ const Setting = @import("ASettings.zig").ASettingSent;
 
 const r = @import("racer");
 const rt = r.Text;
+const rg = r.Global;
 
 const msg = @import("../util/message.zig");
 
@@ -100,7 +101,7 @@ pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     UpdateState.settingsInit(gf);
 }
 
-pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn OnInitLate(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const s = struct {
         const retry_delay: u32 = 5 * 60 * 1000; // 5min
         var last_try: u32 = 0;
@@ -116,8 +117,8 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // the update system is stable
     if (!UpdateState.s_auto_update) return;
 
-    if (s.init or gs.timestamp + s.retry_delay < s.last_try) return;
-    s.last_try = gs.timestamp;
+    if (s.init or gf.STimestamp() + s.retry_delay < s.last_try) return;
+    s.last_try = gf.STimestamp();
 
     const alloc = allocator.allocator();
 
@@ -188,7 +189,7 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // -> notify user to restart game
     _ = w32wm.ShowCursor(1); // cursor fix
     msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{update.tag.?});
-    _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
+    _ = w32wm.PostMessageA(@ptrCast(rg.WINDOW_HWND.*), w32wm.WM_CLOSE, 0, 0);
 }
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

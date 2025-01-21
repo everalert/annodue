@@ -148,11 +148,12 @@ pub const GlobalFunction = extern struct {
     RTriggerRelease: *const fn (Handle(u16)) callconv(.C) void,
     RTriggerReleaseAll: *const fn () callconv(.C) void,
     // State;  previously accessed via 'global state'
+    // TODO: revise which of these actually need to exist, i.e. which are not just copying from game state
     SPatchMemory: *const fn () callconv(.C) [*]u8, // patch_memory
     SPatchSize: *const fn () callconv(.C) u32, // patch_size
     SPatchOffset: *const fn () callconv(.C) u32, // patch_offset, WARN: some funcs write to this
     SInitLatePassed: *const fn () callconv(.C) bool, // init_late_passed
-    SPracticeMode: *const fn () callconv(.C) bool, // practice_mode
+    SPracticeMode: *const fn () callconv(.C) bool, // practice_mode, WARN: some funcs write to this
     SWindowInForeground: *const fn () callconv(.C) bool, // window_in_foreground
     SDt: *const fn () callconv(.C) f32, // dt_f
     SFPS: *const fn () callconv(.C) f32, // fps
@@ -164,8 +165,8 @@ pub const GlobalFunction = extern struct {
     SRaceStatePrev: *const fn () callconv(.C) RaceState, // race_state_prev
     SRaceStateNew: *const fn () callconv(.C) bool, // race_state_new
     SPlayerUpgrades: *const fn () callconv(.C) bool, // player -> upgrades
-    SPlayerUpgradesLv: *const fn (out: [*]u8) callconv(.C) void, // 7-byte array; player -> upgrades_lv
-    SPlayerUpgradesHP: *const fn (out: [*]u8) callconv(.C) void, // 7-byte array; player -> upgrades_hp
+    //SPlayerUpgradesLv: *const fn (out: [*]u8) callconv(.C) void, // 7-byte array; player -> upgrades_lv
+    //SPlayerUpgradesHP: *const fn (out: [*]u8) callconv(.C) void, // 7-byte array; player -> upgrades_hp
     SPlayerFlags1: *const fn () callconv(.C) TestFlags1, // player -> flags1
     SPlayerBoosting: *const fn () callconv(.C) ActiveState, // player -> boosting
     SPlayerUnderheating: *const fn () callconv(.C) ActiveState, // player -> underheating

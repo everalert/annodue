@@ -45,6 +45,12 @@ const MpState = struct {
     var s_patch_r100: bool = false;
     var s_patch_guid: bool = false;
 
+    // FIXME: doing it this way will cause the game to crash when the plugin
+    // reloads. like with dll_cosmetic, this is fine for now for the purpose of
+    // removing the global state dependency, because this plugin needs to be
+    // rewritten and should not be enabled by the user anyway
+    var asm_buf: [64]u8 = undefined;
+
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "multiplayer", null);
         h_s_section = section;
@@ -184,12 +190,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     MpState.settingsInit(gf);
 
     // TODO: move this to settings handler, once global allocation figured out
-    var off = gs.patch_offset;
+    //var off = gs.patch_offset;
     if (MpState.s_enable) {
+        var off: u32 = @intFromPtr(&MpState.asm_buf);
         const traction: u8 = if (MpState.s_patch_r100) 3 else 5;
         var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
         var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -197,8 +204,9 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
         off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.s_patch_guid);
         off = PatchNetworkCollisions(off, MpState.s_patch_guid);
+        std.debug.assert(off - @intFromPtr(&MpState.asm_buf) <= MpState.asm_buf.len);
     }
-    gs.patch_offset = off;
+    //gs.patch_offset = off;
 }
 
 export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}

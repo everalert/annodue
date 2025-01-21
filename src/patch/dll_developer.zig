@@ -183,11 +183,11 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage20A(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     m44vis: {
-        if (!gs.in_race.on() or !Developer.s_visualize_matrices) break :m44vis;
+        if (!gf.SInRace().on() or !Developer.s_visualize_matrices) break :m44vis;
 
-        if (gs.race_state == .PreRace and gs.race_state_new) {
+        if (gf.SRaceState() == .PreRace and gf.SRaceStateNew()) {
             MatVisState.targets[0] = &ret.PLAYER.*.EngineXfR;
             MatVisState.targets[1] = &ret.PLAYER.*.EngineXfL;
             MatVisState.targets[2] = &ret.PLAYER.*.EngineExhaustXfR;

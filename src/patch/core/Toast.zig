@@ -55,7 +55,7 @@ pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
 
-pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn Draw2DB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     const num_vis: *u32 = &ToastSystem.n_visible;
     const num_items: *const u32 = &ToastSystem.buffer.items.len;
 
@@ -64,7 +64,7 @@ pub fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     for (0..num_vis.*) |i| {
         const item: *ToastItem = &ToastSystem.buffer.items[(r_start + i) % num_items.*];
 
-        item.timer += gs.dt_f;
+        item.timer += gf.SDt();
         if (item.timer >= ToastSystem.dur) {
             _ = ToastSystem.buffer.dequeue(null);
             ToastSystem.n_visible -= 1;

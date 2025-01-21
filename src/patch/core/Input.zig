@@ -15,7 +15,6 @@ const st = @import("../util/active_state.zig");
 const rg = @import("racer").Global;
 
 const app = @import("../appinfo.zig");
-const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
 
 pub const INPUT_DOWN: u8 = 0b01;
@@ -34,13 +33,13 @@ const InputState = extern struct {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn InputUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn InputUpdateB(_: *GlobalFn) callconv(.C) void {
     update_xinput();
     update_kb();
     //update_mouse();

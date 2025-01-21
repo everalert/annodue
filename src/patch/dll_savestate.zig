@@ -5,7 +5,6 @@ const std = @import("std");
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -146,8 +145,8 @@ const state = struct {
 
     fn reset() void {
         rec_data.reset();
-        rec_sources[0].data = rrd.PLAYER_SLICE.*;
-        rec_sources[1].data = re.Test.PLAYER_SLICE.*;
+        rec_sources[0].data = rrd.pPlayerAsSlice.*.?;
+        rec_sources[1].data = re.Test.pPlayerAsSlice.*.?;
         rec_sources[2].data = re.Manager.entitySlice(.Hang, 0);
         rec_sources[3].data = re.Manager.entitySlice(.cMan, 0);
         rec_sources[4].data = re.Manager.entitySliceAll(.Smok);
@@ -161,26 +160,26 @@ const state = struct {
 
     // FIXME: better new-frame checking that doesn't only account for tabbing out
     // i.e. also when pausing, physics frozen with ingame feature, etc.
-    fn saveable(gs: *GlobalSt) bool {
-        return gs.in_race.on() and rec_data.canSave();
+    fn saveable(gf: *GlobalFn) bool {
+        return gf.SInRace().on() and rec_data.canSave();
     }
 
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
-    fn loadable(gs: *GlobalSt) bool {
-        const race_ok = gs.in_race.on();
+    fn loadable(gf: *GlobalFn) bool {
+        const race_ok = gf.SInRace().on();
         const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;
         return race_ok and loading_ok;
     }
 
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
-    fn updateable(gs: *GlobalSt) bool {
-        if (!gs.practice_mode) return false;
+    fn updateable(gf: *GlobalFn) bool {
+        if (!gf.SPracticeMode()) return false;
 
         const tabbed_out = rti.STOPPED.* != 0;
         const paused = rg.PAUSE_STATE.* > 0;
-        const race_ok = gs.in_race.on();
+        const race_ok = gf.SInRace().on();
         const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;
 
         return race_ok and !tabbed_out and !paused and loading_ok;
@@ -196,24 +195,24 @@ const state = struct {
 
 // LOADER LOGIC
 
-fn DoStateRecording(gs: *GlobalSt, _: *GlobalFn) LoadState {
-    if (state.saveable(gs))
-        state.rec_data.save(gs.framecount);
+fn DoStateRecording(gf: *GlobalFn) LoadState {
+    if (state.saveable(gf))
+        state.rec_data.save(rti.FRAMECOUNT.*);
 
     if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
     if (state.save_input_ld.gets() == .JustOn and state.rec_data.frames > 0) {
-        state.load_time = state.s_load_delay + gs.timestamp;
+        state.load_time = state.s_load_delay + rti.TIMESTAMP.*;
         return .Loading;
     }
 
     return .Recording;
 }
 
-fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
-    if (state.saveable(gs))
-        state.rec_data.save(gs.framecount);
+fn DoStateLoading(gf: *GlobalFn) LoadState {
+    if (state.saveable(gf))
+        state.rec_data.save(rti.FRAMECOUNT.*);
 
     if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.rec_data.frame).? - 1;
@@ -221,8 +220,8 @@ fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
         return .Scrubbing;
     }
 
-    if (gs.timestamp >= state.load_time) {
-        if (!state.loadable(gs)) return .Recording;
+    if (rti.TIMESTAMP.* >= state.load_time) {
+        if (!state.loadable(gf)) return .Recording;
         state.rec_data.restore(state.load_frame);
         state.load_count += 1;
         return .Recording;
@@ -231,13 +230,13 @@ fn DoStateLoading(gs: *GlobalSt, _: *GlobalFn) LoadState {
     return .Loading;
 }
 
-fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
+fn DoStateScrubbing(gf: *GlobalFn) LoadState {
     if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
     if (state.save_input_ld.gets() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
-        state.load_time = state.s_load_delay + gs.timestamp;
+        state.load_time = state.s_load_delay + rti.TIMESTAMP.*;
         state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
         return .ScrubExiting;
     }
@@ -248,27 +247,27 @@ fn DoStateScrubbing(gs: *GlobalSt, _: *GlobalFn) LoadState {
         false,
     );
 
-    if (!state.loadable(gs)) return .Scrubbing;
+    if (!state.loadable(gf)) return .Scrubbing;
     state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
     return .Scrubbing;
 }
 
-fn DoStateScrubExiting(gs: *GlobalSt, _: *GlobalFn) LoadState {
-    if (state.loadable(gs))
+fn DoStateScrubExiting(gf: *GlobalFn) LoadState {
+    if (state.loadable(gf))
         state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
 
     if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
 
-    if (gs.timestamp < state.load_time) return .ScrubExiting;
+    if (rti.TIMESTAMP.* < state.load_time) return .ScrubExiting;
 
     state.load_count += 1;
     return .Recording;
 }
 
-fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
-    if (!state.updateable(gs)) return;
+fn UpdateState(gf: *GlobalFn) void {
+    if (!state.updateable(gf)) return;
 
     if (!state.initialized) {
         defer state.initialized = true;
@@ -277,16 +276,16 @@ fn UpdateState(gs: *GlobalSt, gv: *GlobalFn) void {
         state.rec_data.init();
     }
 
-    if (gs.race_state_new and gs.race_state == .PreRace)
+    if (gf.SRaceStateNew() and gf.SRaceState() == .PreRace)
         state.reset();
 
-    if (gs.race_state != .Racing) return;
+    if (gf.SRaceState() != .Racing) return;
 
     state.rec_state = switch (state.rec_state) {
-        .Recording => DoStateRecording(gs, gv),
-        .Loading => DoStateLoading(gs, gv),
-        .Scrubbing => DoStateScrubbing(gs, gv),
-        .ScrubExiting => DoStateScrubExiting(gs, gv),
+        .Recording => DoStateRecording(gf),
+        .Loading => DoStateLoading(gf),
+        .Scrubbing => DoStateScrubbing(gf),
+        .ScrubExiting => DoStateScrubExiting(gf),
     };
 }
 
@@ -304,36 +303,36 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     state.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     state.rec_data.deinit();
 }
 
 // HOOKS
 
-//export fn OnSettingsLoad(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+//export fn OnSettingsLoad(gf: *GlobalFn) callconv(.C) void {
 //    state.handle_settings(gf);
 //}
 
-export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
     state.scrub_input_dec.update(gf);
     state.scrub_input_inc.update(gf);
     state.save_input_st.update(gf);
     state.save_input_ld.update(gf);
 }
 
-export fn EngineEntityUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EngineEntityUpdateB(gf: *GlobalFn) callconv(.C) void {
     if (!state.s_enable) return;
 
-    UpdateState(gs, gf);
+    UpdateState(gf);
 }
 
-export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     if (!state.s_enable) return;
 
     // TODO: build checks for GHideRaceUIIsHidden into drawtext api when that's done
@@ -341,7 +340,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // TODO: experiment with positioning
     // TODO: experiment with conditionally showing each string; only show fr
     // if playing back, only show st if a frame is actually saved?
-    if (gs.race_state == .Racing and !gf.GHideRaceUIIsOn()) {
+    if (gf.SRaceState() == .Racing and !gf.GHideRaceUIIsOn()) {
         _ = gf.GDrawText(
             .OverlayP,
             rt.MakeText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch null,

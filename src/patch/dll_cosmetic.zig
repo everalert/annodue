@@ -2,7 +2,6 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -65,6 +64,12 @@ const CosmeticState = struct {
     var s_patch_tga_loader: bool = false;
     var s_patch_audio: bool = false;
     var s_patch_fonts: bool = false;
+
+    // FIXME: sized specifically for original font patch, will need to be changed for future
+    // FIXME: doing it this way (without annodue alloc) also causes the game to crash whenever
+    // the dll unloads, which for now is fine just to get rid of global state ref, because
+    // reworking the font patch is high priority anyway
+    var font_buf: [0x1D0000]u8 = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", settingsUpdate);
@@ -163,7 +168,15 @@ const CosmeticState = struct {
 // FIXME: can probably convert font->sprite conversion to comptime embed then hook up ptrs only in code,
 // then all the allocation bs can be skipped
 // NOTE: probably cannot reverse this, because it patches something that seems to only run once during setup
-fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usize, code_end_offset: usize, width: u32, height: u32, filename: []const u8) usize {
+fn PatchTextureTable(
+    memory: usize,
+    table_offset: usize,
+    code_begin_offset: usize,
+    code_end_offset: usize,
+    width: u32,
+    height: u32,
+    filename: []const u8,
+) usize {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
 
@@ -193,35 +206,38 @@ fn PatchTextureTable(memory: usize, table_offset: usize, code_begin_offset: usiz
         @panic("failed to allocate memory for texture table patch");
     defer alloc.free(buffer);
     const buffer_slice = @as([*]u8, @ptrCast(buffer))[0..texture_size];
+    //const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..texture_size];
 
     // Loop over all textures
     var i: usize = 0;
+    var str_buf: [1023:0]u8 = undefined;
     while (i < count) : (i += 1) {
         // Load input texture to buffer
-        var path = std.fmt.allocPrintZ(alloc, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch
+        var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch
             @panic("failed to format path for texture table patch"); // FIXME: error handling
 
         const file = std.fs.cwd().openFile(path, .{}) catch
             @panic("failed to open texture table patch file"); // FIXME: error handling
         defer file.close();
-        var file_pos: usize = 0;
         @memset(buffer_slice, 0x00);
         var j: u32 = 0;
         while (j < texture_size * 2) : (j += 1) {
             var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
-            file_pos += file.pread(&pixel, file_pos) catch
+            _ = file.read(&pixel) catch
                 @panic("failed to read segment of texture table patch file"); // FIXME: error handling
             buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
         }
 
         // Write pixel data to game
         const texture_new: usize = off;
-        off = mem.write_bytes(off, &buffer[0], texture_size);
+        off = mem.write_bytes(off, buffer.ptr, texture_size);
 
         // Patch the table entry
         //const texture_old: usize = mem.read(table_offset + 4 + i * 4, u32);
         _ = mem.write(table_offset + 4 + i * 4, u32, texture_new);
         //printf("%d: 0x%X -> 0x%X\n", i, texture_old, texture_new);
+
+        //off += texture_size;
     }
 
     return off;
@@ -362,7 +378,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     CosmeticState.settingsInit(gf);
 
     // TODO: convert to use global allocator once it is part of the GlobalFn interface;
@@ -370,13 +386,15 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
     // NOTE: original function at fn_42D720
-    var off = gs.patch_offset;
+    //var off = gs.patch_offset;
     if (CosmeticState.s_patch_fonts) {
+        var off = @intFromPtr(&CosmeticState.font_buf);
         off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
         off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
         off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
         off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
         off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
+        std.debug.assert(off - @intFromPtr(&CosmeticState.font_buf) <= CosmeticState.font_buf.len);
     }
     //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
@@ -387,12 +405,12 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     //if (CosmeticState.s_patch_tga_loader) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
-    gs.patch_offset = off;
+    //gs.patch_offset = off;
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
     crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
     crot.PatchRgbArgs(0x461045, 0xFFFFFF);
@@ -404,7 +422,7 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn TextRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn TextRenderB(_: *GlobalFn) callconv(.C) void {
     if (CosmeticState.s_rb_enable) {
         CosmeticState.PatchHudColRotate(
             CosmeticState.s_rb_value_enable,

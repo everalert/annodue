@@ -17,7 +17,6 @@ const w32wm = w32.ui.windows_and_messaging;
 
 const allocator = @import("Allocator.zig");
 const app = @import("../appinfo.zig");
-const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
 const VERSION = app.VERSION;
 
@@ -27,6 +26,7 @@ const Setting = @import("ASettings.zig").ASettingSent;
 
 const r = @import("racer");
 const rt = r.Text;
+const rg = r.Global;
 
 const msg = @import("../util/message.zig");
 
@@ -96,11 +96,11 @@ fn updateToastAvailable(alloc: Allocator, gf: *GlobalFn, ver: []const u8) void {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
     UpdateState.settingsInit(gf);
 }
 
-pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
     const s = struct {
         const retry_delay: u32 = 5 * 60 * 1000; // 5min
         var last_try: u32 = 0;
@@ -116,8 +116,8 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // the update system is stable
     if (!UpdateState.s_auto_update) return;
 
-    if (s.init or gs.timestamp + s.retry_delay < s.last_try) return;
-    s.last_try = gs.timestamp;
+    if (s.init or gf.STimestamp() + s.retry_delay < s.last_try) return;
+    s.last_try = gf.STimestamp();
 
     const alloc = allocator.allocator();
 
@@ -188,16 +188,16 @@ pub fn OnInitLate(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     // -> notify user to restart game
     _ = w32wm.ShowCursor(1); // cursor fix
     msg.StdMessage("Annodue {s} installed\n\nPlease restart Episode I Racer", .{update.tag.?});
-    _ = w32wm.PostMessageA(@ptrCast(gs.hwnd), w32wm.WM_CLOSE, 0, 0);
+    _ = w32wm.PostMessageA(@ptrCast(rg.WINDOW_HWND.*), w32wm.WM_CLOSE, 0, 0);
 }
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 // FIXME: remove, or convert to proper system for manual updating
-pub fn EarlyEngineUpdateB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
     if (BuildOptions.BUILD_MODE == .Developer) {
         if (gf.InputGetKb(.U, .JustOn))
-            OnInitLate(gs, gf);
+            OnInitLate(gf);
 
         if (gf.InputGetKb(.J, .JustOn)) {
             const alloc = allocator.allocator();

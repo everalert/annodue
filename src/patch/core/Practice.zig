@@ -3,8 +3,9 @@ pub const Self = @This();
 const std = @import("std");
 
 const app = @import("../appinfo.zig");
-const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
+const core = @import("core.zig");
+const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 
 const fl = @import("../util/flash.zig");
 const st = @import("../util/active_state.zig");
@@ -15,6 +16,7 @@ const rq = @import("racer").Quad;
 const rc = @import("racer").constants;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
+const rti = @import("racer").Time;
 
 // FIXME: refactor and merge with core
 // TODO: allow toggling mode at any time (during race), but only update the visualization
@@ -75,18 +77,18 @@ const mode_vis = struct {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn InitRaceQuadsA(_: *GlobalFn) callconv(.C) void {
     mode_vis.init();
 }
 
 // FIXME: corners not rendering in pre-race unless manually toggling practice mode
-pub fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     const f = struct {
         const vis_time: f32 = 0.15;
         var start: ?u32 = null;
@@ -94,26 +96,26 @@ pub fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
         var prac: st.ActiveState = .Off;
     };
 
-    f.prac.update(gs.practice_mode);
+    f.prac.update(gf.SPracticeMode());
 
-    if (gs.in_race == .JustOff) {
+    if (gf.SInRace() == .JustOff) {
         f.start = null;
         f.vis = 0;
     }
 
-    if (gs.in_race.on()) {
+    if (gf.SInRace().on()) {
         mode_vis.update(0, 0, 0, 0);
-        if (f.start == null or f.prac == .JustOn) f.start = gs.timestamp;
+        if (f.start == null or f.prac == .JustOn) f.start = rti.TIMESTAMP.*;
     } else return;
 
-    f.vis += if (f.prac.on()) gs.dt_f else -gs.dt_f;
+    f.vis += if (f.prac.on()) rti.FRAMETIME.* else -rti.FRAMETIME.*;
     f.vis = std.math.clamp(f.vis, 0, f.vis_time);
 
     if (f.vis == 0) return;
 
     if (f.start) |ts| {
         const vis_scalar: f32 = f.vis / f.vis_time;
-        const t = @as(f32, @floatFromInt(gs.timestamp - ts)) / 1000;
+        const t = @as(f32, @floatFromInt(rti.TIMESTAMP.* - ts)) / 1000;
         const color: u32 = fl.flash_color(@intFromEnum(rt.ColorRGB.Yellow), t, 3);
         mode_vis.update(vis_scalar, @truncate(color >> 16), @truncate(color >> 8), @truncate(color >> 0));
     }
@@ -124,17 +126,17 @@ pub fn TextRenderB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 // some things, primarily to do with lifecycle, because the past setting assumed
 // it would be on permanently. also, do a pass on everything to integrate/migrate
 // to global practice_mode.
-pub fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     const toggle_input: bool = gf.InputGetKb(.P, .JustOn);
 
     // TODO: convert gs.practice_mode to ActiveState
     // TODO: queue toggling off for next reset from in race
     // TODO: disable toggling in race results screen
     if (toggle_input and
-        (!gs.practice_mode or gs.race_state == .None or gs.race_state == .PreRace))
+        (!gf.SPracticeMode() or gf.SRaceState() == .None or gf.SRaceState() == .PreRace))
     {
-        gs.practice_mode = !gs.practice_mode;
-        const text: [:0]const u8 = if (gs.practice_mode) "Practice Mode Enabled" else "Practice Mode Disabled";
+        GLOBAL_STATE.practice_mode = !gf.SPracticeMode(); // FIXME: update practice mode some other way
+        const text: [:0]const u8 = if (gf.SPracticeMode()) "Practice Mode Enabled" else "Practice Mode Disabled";
         _ = gf.ToastNew(text, rt.ColorRGB.Yellow.rgba(0));
     }
 }

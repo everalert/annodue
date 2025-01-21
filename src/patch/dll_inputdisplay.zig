@@ -3,7 +3,6 @@ pub const Self = @This();
 const std = @import("std");
 const m = std.math;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -389,30 +388,30 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     InputDisplay.settingsInit(gf);
 
-    if ((gs.race_state == .Countdown or gs.race_state == .Racing) and InputDisplay.s_enable)
+    if ((gf.SRaceState() == .Countdown or gf.SRaceState() == .Racing) and InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     InputDisplay.Deinit();
 }
 
 // HOOK FUNCTIONS
 
-export fn InitRaceQuadsA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn InitRaceQuadsA(_: *GlobalFn) callconv(.C) void {
     if (InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
 // TODO: probably cleaner with a state machine
-//export fn InputUpdateA(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (gs.in_race.on()) {
+//export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
+    if (gf.SInRace().on()) {
         if (InputDisplay.s_enable and !InputDisplay.initialized)
             InputDisplay.Init();
 
@@ -420,7 +419,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             InputDisplay.initialized and
             rg.PAUSE_STATE.* != 1 and
             !gf.GHideRaceUIIsOn() and
-            (gs.race_state == .Countdown or gs.race_state == .Racing))
+            (gf.SRaceState() == .Countdown or gf.SRaceState() == .Racing))
         {
             const a: f32 = 1 - rg.PAUSE_SCROLLINOUT.*;
             InputDisplay.ReadInputs();
@@ -429,7 +428,7 @@ export fn Draw2DB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
         } else {
             InputDisplay.HideAll();
         }
-    } else if (gs.in_race == .JustOff) {
+    } else if (gf.SInRace() == .JustOff) {
         InputDisplay.initialized = false;
     }
 }

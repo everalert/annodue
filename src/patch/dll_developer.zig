@@ -2,7 +2,6 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -173,27 +172,27 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     Developer.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-export fn EngineUpdateStage20A(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage20A(gf: *GlobalFn) callconv(.C) void {
     m44vis: {
-        if (!gs.in_race.on() or !Developer.s_visualize_matrices) break :m44vis;
+        if (!gf.SInRace().on() or !Developer.s_visualize_matrices) break :m44vis;
 
-        if (gs.race_state == .PreRace and gs.race_state_new) {
-            MatVisState.targets[0] = &ret.PLAYER.*.EngineXfR;
-            MatVisState.targets[1] = &ret.PLAYER.*.EngineXfL;
-            MatVisState.targets[2] = &ret.PLAYER.*.EngineExhaustXfR;
-            MatVisState.targets[3] = &ret.PLAYER.*.EngineExhaustXfL;
-            //MatVisState.targets[4] = &ret.PLAYER.*._unk_13D0;
-            //MatVisState.targets[5] = &ret.PLAYER.*.EngineExhaustXfR;
+        if (gf.SRaceState() == .PreRace and gf.SRaceStateNew()) {
+            MatVisState.targets[0] = &ret.pPlayer.*.?.EngineXfR;
+            MatVisState.targets[1] = &ret.pPlayer.*.?.EngineXfL;
+            MatVisState.targets[2] = &ret.pPlayer.*.?.EngineExhaustXfR;
+            MatVisState.targets[3] = &ret.pPlayer.*.?.EngineExhaustXfL;
+            //MatVisState.targets[4] = &ret.pPlayer.*.?._unk_13D0;
+            //MatVisState.targets[5] = &ret.pPlayer.*.?.EngineExhaustXfR;
         }
 
         const jdge = re.Manager.entity(.Jdge, 0);

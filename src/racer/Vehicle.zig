@@ -8,8 +8,8 @@ pub const Vehicle_EnableCyYunga: *fn () callconv(.C) void = @ptrFromInt(0x44B5E0
 // GAME CONSTANTS
 
 pub const BaseStats: *[23]BASE_STATS = @intFromPtr(0x4C2BB0);
-pub const VehicleMetadata: *[23]BASE_STATS = @intFromPtr(0x4C2700);
-pub const VehicleVisualMetadata: *[23]BASE_STATS = @intFromPtr(0x4C7088);
+pub const VehicleMetadata: *[23]VEHICLE_METADATA = @intFromPtr(0x4C2700);
+pub const VehicleVisualMetadata: *[23]VEHICLE_VISUAL_METADATA = @intFromPtr(0x4C7088);
 
 // TODO: vehicle metadata struct def
 pub const METADATA_ARRAY_ADDR: usize = 0x4C2700; // TODO: deprecate

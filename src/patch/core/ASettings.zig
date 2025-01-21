@@ -9,7 +9,6 @@ const EnumSet = std.EnumSet;
 const Allocator = std.mem.Allocator;
 const bufPrintZ = std.fmt.bufPrintZ;
 
-const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
@@ -27,6 +26,7 @@ const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
 const rt = r.Text;
+const rti = r.Time;
 
 // TODO: add global st/fn ptrs to fnOnChange defs?
 // TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
@@ -1030,11 +1030,11 @@ pub fn ASaveAuto() callconv(.C) void {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn OnPluginInitA(owner: u16) callconv(.C) void {
     ASettings.sectionRunUpdateOwner(owner);
@@ -1044,13 +1044,13 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     ASettings.vacateOwner(owner);
 }
 
-pub fn GameLoopB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (gs.in_race.new() or (gs.race_state_new and gs.race_state == .PreRace))
+pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
+    if (gf.SInRace().new() or (gf.SRaceStateNew() and gf.SRaceState() == .PreRace))
         ASettings.saveAuto() catch {};
 
-    if (gs.timestamp > ASettings.last_check + ASettings.check_freq)
+    if (rti.TIMESTAMP.* > ASettings.last_check + ASettings.check_freq)
         _ = ASettings.load();
-    ASettings.last_check = gs.timestamp;
+    ASettings.last_check = rti.TIMESTAMP.*;
 }
 
 // DEBUGGING & TESTING
@@ -1103,7 +1103,7 @@ fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void 
 }
 
 // TODO: adapt for debug features
-fn drawSettingsDebugPanel(gs: *GlobalSt, gf: *GlobalFn) void {
+fn drawSettingsDebugPanel(gf: *GlobalFn) void {
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 
     const s = struct {
@@ -1117,7 +1117,7 @@ fn drawSettingsDebugPanel(gs: *GlobalSt, gf: *GlobalFn) void {
     drawSettings(gf, null, &x, &y);
 
     var h: i16 = y - s.y_off;
-    var dif: i16 = @intFromFloat(gs.dt_f * s.rate);
+    var dif: i16 = @intFromFloat(gf.SDt() * s.rate);
     if (gf.InputGetKbRaw(.PRIOR).on()) s.y_off = @min(s.y_off + dif, 0); // scroll up
     if (gf.InputGetKbRaw(.NEXT).on()) s.y_off = std.math.clamp(s.y_off - dif, -h + 480 - 8, 0); // scroll dn
 }

@@ -7,7 +7,6 @@ const w32wm = w32.ui.windows_and_messaging;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
@@ -282,7 +281,7 @@ const QolState = struct {
         if (h_s_default_racers) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_racers });
 
         QuickRaceMenu.values.racers = @intCast(s_default_racers);
-        if (QuickRaceMenu.gs.init_late_passed) {
+        if (QuickRaceMenu.gf.SInitLatePassed()) {
             _ = mem.write(0x50C558, i8, @as(i8, @intCast(s_default_racers)));
             re.Manager.entity(.Hang, 0).Racers = @intCast(s_default_racers);
         }
@@ -294,7 +293,7 @@ const QolState = struct {
         if (h_s_default_laps) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_laps });
 
         QuickRaceMenu.values.laps = @intCast(s_default_laps);
-        if (QuickRaceMenu.gs.init_late_passed) {
+        if (QuickRaceMenu.gf.SInitLatePassed()) {
             re.Manager.entity(.Hang, 0).Laps = @intCast(s_default_laps);
         }
     }
@@ -884,7 +883,7 @@ const race = struct {
 
     fn update_position() void {
         prev_position = this_position;
-        this_position = @as(*spatial.Pos3D, @ptrCast(&re.Test.PLAYER.*.transform.T)).*; // FIXME
+        this_position = @as(*spatial.Pos3D, @ptrCast(&re.Test.pPlayer.*.?.transform.T)).*; // FIXME
     }
 };
 
@@ -949,7 +948,6 @@ const QuickRaceMenu = extern struct {
     var menu_active: st.ActiveState = .Off;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
-    var gs: *GlobalSt = undefined;
     var gf: *GlobalFn = undefined;
 
     var FpsTimer: timing.TimeSpinlock = .{};
@@ -1032,8 +1030,8 @@ const QuickRaceMenu = extern struct {
         hang.Mirror = @intCast(values.mirror);
         hang.AISpeed = @intCast(values.ai_speed + 1);
         for (0..7) |i| {
-            rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
-            rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
+            rrd.pPlayer.*.?.pFile.?.upgrade_lv[i] = @intCast(values.up_lv[i]);
+            rrd.pPlayer.*.?.pFile.?.upgrade_hp[i] = @intCast(values.up_hp[i]);
         }
 
         RestartRace(false);
@@ -1052,8 +1050,8 @@ const QuickRaceMenu = extern struct {
         values.ai_speed = hang.AISpeed - 1;
         //values.ai_speed = hang.Winnings;
         for (0..7) |i| {
-            values.up_lv[i] = rrd.PLAYER.*.pFile.upgrade_lv[i];
-            values.up_hp[i] = rrd.PLAYER.*.pFile.upgrade_hp[i];
+            values.up_lv[i] = rrd.pPlayer.*.?.pFile.?.upgrade_lv[i];
+            values.up_hp[i] = rrd.pPlayer.*.?.pFile.?.upgrade_hp[i];
         }
 
         initialized = true;
@@ -1076,10 +1074,10 @@ const QuickRaceMenu = extern struct {
     }
 
     fn update() void {
-        if (gs.in_race == .JustOn)
+        if (gf.SInRace() == .JustOn)
             init();
 
-        if (!gs.in_race.on() or !initialized) return;
+        if (!gf.SInRace().on() or !initialized) return;
 
         defer {
             if (menu_active.on()) data.UpdateAndDraw();
@@ -1177,7 +1175,7 @@ fn QuickRaceFpsCallback(m: *Menu) callconv(.C) bool {
         }
 
         // save without restarting
-        if (cb[0](.JustOn) and QuickRaceMenu.gs.practice_mode) {
+        if (cb[0](.JustOn) and QuickRaceMenu.gf.SPracticeMode()) {
             QuickRaceMenu.FpsTimer.SetPeriod(@intCast(QuickRaceMenu.values.fps));
             if (QuickRaceMenu.h_s_fps_default) |h|
                 QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = @intCast(QuickRaceMenu.values.fps) });
@@ -1298,15 +1296,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: keep at top
-    QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
 
     _ = w32wm.ShowCursor(0); // cursor fix
     QolState.settingsInit(gf);
 
-    std.debug.assert(gs.patch_offset <= @as(u32, @intFromPtr(gs.patch_memory)) + gs.patch_size);
     PatchCameraFKeys(true);
 
     PatchJinnReesoCheat(true);
@@ -1315,7 +1311,7 @@ export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     PatchTrugutsCheat(true);
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     var hang = re.Manager.entity(.Hang, 0);
 
     // TODO: look into using in-game default setter as hook, see fn_45BD90
@@ -1330,7 +1326,7 @@ export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.FpsTimer.End();
     QuickRaceMenu.close();
 
@@ -1355,12 +1351,12 @@ export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
     QolState.UpdateInput(gf);
     QuickRaceMenu.update_input();
 }
 
-export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
     // add dpad input to menu navigation
     if (QolState.s_dpad_navigation and ri.JOYSTICK_DEVICE_COUNT.* > 0) {
         // TODO: convert to object ref instead of building joy_index manually, after
@@ -1381,7 +1377,7 @@ export fn InputUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn InputUpdateKeyboardA(_: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
@@ -1389,16 +1385,16 @@ export fn InputUpdateKeyboardA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     _ = mem.write(ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
 }
 
-export fn TimerUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
-    if (gs.in_race.on() and QolState.s_fps_limiter and rti.STOPPED.* == 0)
+export fn TimerUpdateB(gf: *GlobalFn) callconv(.C) void {
+    if (gf.SInRace().on() and QolState.s_fps_limiter and rti.STOPPED.* == 0)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
-export fn TimerUpdateA(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn TimerUpdateA(_: *GlobalFn) callconv(.C) void {
     FastCountdown.update();
 }
 
-export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
 
     const laps: u32 = @intCast(hang.Laps);
@@ -1425,7 +1421,7 @@ export fn MenuTrackB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
     // Fast Menu Navigation
     if (QolState.s_fast_navigation) {
         const hang = re.Manager.entity(.Hang, 0);
@@ -1438,7 +1434,7 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
     // processed? (a fn in EngineUpdateStage14 iirc)
 
     // Quick Restart
-    if (gs.in_race.on() and
+    if (gf.SInRace().on() and
         QolState.s_quickstart and
         !QuickRaceMenu.menu_active.on() and
         ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
@@ -1455,20 +1451,20 @@ export fn EarlyEngineUpdateB(gs: *GlobalSt, _: *GlobalFn) callconv(.C) void {
 
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
 // however, the text flushing DOES run on those frames, apparently from a different callsite
-export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
     const jdge = re.Manager.entity(.Jdge, 0);
 
     if (QolState.h_s_trackselect_last != null and QolState.s_trackselect_last != hang.Track)
         gf.ASettingUpdate(QolState.h_s_trackselect_last.?, .{ .u = hang.Track });
 
-    if (gs.in_race.on()) {
-        if (gs.race_state_new and gs.race_state == .PreRace)
+    if (gf.SInRace().on()) {
+        if (gf.SRaceStateNew() and gf.SRaceState() == .PreRace)
             race.reset();
 
-        if (QolState.s_default_camera_auto and gs.race_state == .Racing) {
-            if (QolState.cam_cman == null or gs.race_state_new)
-                QolState.cam_cman = re.cMan.FindFromPlayerEntity(re.Test.PLAYER.*);
+        if (QolState.s_default_camera_auto and gf.SRaceState() == .Racing) {
+            if (QolState.cam_cman == null or gf.SRaceStateNew())
+                QolState.cam_cman = re.cMan.FindFromPlayerEntity(re.Test.pPlayer.*.?);
 
             if (QolState.cam_cman) |cman| {
                 if (cman.mode != QolState.cam_prev and cman.mode != QolState.s_default_camera and
@@ -1478,14 +1474,14 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             }
         }
 
-        const total_time: f32 = rrd.PLAYER.*.time.total;
+        const total_time: f32 = rrd.pPlayer.*.?.time.total;
 
-        if (gs.race_state == .Countdown) {
+        if (gf.SRaceState() == .Countdown) {
             race.update_position();
         }
 
-        if (gs.race_state == .Racing or (gs.race_state_new and gs.race_state == .PostRace)) {
-            const p = re.Test.PLAYER.*;
+        if (gf.SRaceState() == .Racing or (gf.SRaceStateNew() and gf.SRaceState() == .PostRace)) {
+            const p = re.Test.pPlayer.*.?;
 
             // stats
 
@@ -1494,18 +1490,18 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             const this_distance = race.this_position.distance(&race.prev_position);
             race.set_motion(total_time, speed, this_distance);
 
-            if (gs.player.boosting == .JustOn) race.set_last_boost_start(total_time);
-            if (gs.player.boosting.on()) race.set_total_boost(total_time, this_distance);
-            if (gs.player.boosting == .JustOff) race.set_total_boost(total_time, this_distance);
+            if (gf.SPlayerBoosting() == .JustOn) race.set_last_boost_start(total_time);
+            if (gf.SPlayerBoosting().on()) race.set_total_boost(total_time, this_distance);
+            if (gf.SPlayerBoosting() == .JustOff) race.set_total_boost(total_time, this_distance);
 
-            if (gs.player.underheating == .JustOn) race.set_last_underheat_start(total_time);
-            if (gs.player.underheating.on()) race.set_total_underheat(total_time);
-            if (gs.player.underheating == .JustOff) race.set_total_underheat(total_time);
+            if (gf.SPlayerUnderheating() == .JustOn) race.set_last_underheat_start(total_time);
+            if (gf.SPlayerUnderheating().on()) race.set_total_underheat(total_time);
+            if (gf.SPlayerUnderheating() == .JustOff) race.set_total_underheat(total_time);
 
-            if (gs.player.overheating == .JustOn) race.set_last_overheat_start(total_time);
-            if (gs.player.overheating.on()) race.set_total_overheat(total_time);
-            if (gs.player.overheating == .JustOff) race.set_total_overheat(total_time);
-            if (gs.player.overheating.on() and gs.race_state == .PostRace)
+            if (gf.SPlayerOverheating() == .JustOn) race.set_last_overheat_start(total_time);
+            if (gf.SPlayerOverheating().on()) race.set_total_overheat(total_time);
+            if (gf.SPlayerOverheating() == .JustOff) race.set_total_overheat(total_time);
+            if (gf.SPlayerOverheating().on() and gf.SRaceState() == .PostRace)
                 race.set_fire_finish_duration(total_time);
 
             // auto reset
@@ -1521,17 +1517,17 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     if (QolState.autoreset_dead == .JustOn)
                         QolState.autoreset_dead_timer = 0;
                     if (QolState.autoreset_dead.on()) {
-                        QolState.autoreset_dead_timer += gs.dt_f;
+                        QolState.autoreset_dead_timer += rti.FRAMETIME.*;
                         if (QolState.autoreset_dead_timer >= QolState.s_autoreset_dead_delay)
                             reset_race = true;
                     }
                 }
 
                 if (QolState.s_autoreset_fire_enable) {
-                    if (gs.player.overheating == .JustOn)
+                    if (gf.SPlayerOverheating() == .JustOn)
                         QolState.autoreset_fire_timer = 0;
-                    if (gs.player.overheating.on()) {
-                        QolState.autoreset_fire_timer += gs.dt_f;
+                    if (gf.SPlayerOverheating().on()) {
+                        QolState.autoreset_fire_timer += rti.FRAMETIME.*;
                         if (QolState.autoreset_fire_timer >= QolState.s_autoreset_fire_delay)
                             reset_race = true;
                     }
@@ -1546,12 +1542,12 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
             }
         }
 
-        if (gs.race_state == .PostRace and !gf.GHideRaceUIIsOn()) {
+        if (gf.SRaceState() == .PostRace and !gf.GHideRaceUIIsOn()) {
             // summary readout thing
-            const upg_postfix = if (gs.player.upgrades) "" else "  NU";
+            const upg_postfix = if (rrd.GetPlayerUsingUpgrades()) "" else "  NU";
             RenderRaceResultHeader(gf, 0, "{d:>2.0}/{s}{s}", .{
-                gs.fps_avg,
-                rv.PartNamesShort[gs.player.upgrades_lv[0]],
+                gf.SFPSAvg(),
+                rv.PartNamesShort[rrd.pPlayer.*.?.pFile.?.upgrade_lv[0]],
                 upg_postfix,
             });
 
@@ -1559,14 +1555,14 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 gf,
                 2 + @as(u8, @truncate(i)),
                 @as(u8, @truncate(i)),
-                gs.player.upgrades_lv[i],
-                gs.player.upgrades_hp[i],
+                rrd.pPlayer.*.?.pFile.?.upgrade_lv[i],
+                rrd.pPlayer.*.?.pFile.?.upgrade_hp[i],
             );
 
             RenderRaceResultStatF(gf, 10, "Top Speed", race.top_speed);
             RenderRaceResultStatF(gf, 11, "Avg Speed", race.avg_speed);
             RenderRaceResultStatF(gf, 12, "Distance", race.total_distance);
-            RenderRaceResultStatU(gf, 13, "Deaths", gs.player.deaths);
+            RenderRaceResultStatU(gf, 13, "Deaths", gf.SPlayerDeaths());
 
             // zig fmt: off
             RenderRaceResultStatU(gf,    15, "Boosts",          race.total_boosts);
@@ -1587,7 +1583,7 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                 const line_height: i16 = 28;
                 const x: i16 = 50;
                 var y: i16 = 305 + (5 - @as(i16, @intCast(jdge.*.Laps))) * line_height;
-                for (&rrd.PLAYER.*.time.lap) |t| {
+                for (&rrd.pPlayer.*.?.time.lap) |t| {
                     if (t < 0) break;
                     _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
                         @as(u32, @bitCast(t)),
@@ -1595,14 +1591,14 @@ export fn EarlyEngineUpdateA(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
                     y += line_height;
                 }
                 _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
-                    @as(u32, @bitCast(rrd.PLAYER.*.time.total)),
+                    @as(u32, @bitCast(rrd.pPlayer.*.?.time.total)),
                 }, color, null) catch null);
             }
         }
     }
 }
 
-export fn MapRenderB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn MapRenderB(_: *GlobalFn) callconv(.C) void {
     // TODO: move to core? since it only matters with running annodue
     rt.TEXT_HIRES_FLAG.* = 0;
 }

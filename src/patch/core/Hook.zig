@@ -17,7 +17,6 @@ const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
 
 const app = @import("../appinfo.zig");
-const GlobalSt = app.GLOBAL_STATE;
 const GlobalFn = app.GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
@@ -32,6 +31,7 @@ const Setting = @import("ASettings.zig").ASettingSent;
 
 const r = @import("racer");
 const reh = r.Entity.Hang;
+const rti = r.Time;
 
 // TODO: switch to Sha256 for perf?
 const Sha512 = std.crypto.hash.sha2.Sha512;
@@ -92,7 +92,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
         .OnPluginInitA, .OnPluginInitLateA, .OnPluginDeinitA => ?*const fn (u16) callconv(.C) void,
-        else => ?*const fn (*GlobalSt, *GlobalFn) callconv(.C) void,
+        else => ?*const fn (*GlobalFn) callconv(.C) void,
     };
 }
 
@@ -197,7 +197,7 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
             for (PluginState.core.items) |p| {
                 PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| {
-                    f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                    f(GLOBAL_FUNCTION);
                     switch (ex) {
                         .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
                         else => {},
@@ -207,7 +207,7 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
             for (PluginState.plugin.items) |p| {
                 PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| {
-                    f(GLOBAL_STATE, GLOBAL_FUNCTION);
+                    f(GLOBAL_FUNCTION);
                     switch (ex) {
                         .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
                         else => {},
@@ -335,7 +335,7 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
 
     // do we need to unload anything
     if (p.Handle) |h| {
-        p.OnDeinit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+        p.OnDeinit.?(GLOBAL_FUNCTION);
         PluginFnOnPluginInit(.OnPluginDeinitA, p.OwnerId);
         _ = w32ll.FreeLibrary(h);
     }
@@ -373,9 +373,9 @@ fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
     p.OwnerId = PluginState.owners_user;
     PluginState.owners_user += 1;
     PluginState.working_owner = p.OwnerId;
-    p.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+    p.OnInit.?(GLOBAL_FUNCTION);
     PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
-    if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+    if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_FUNCTION);
     p.Initialized = true;
     return true;
 }
@@ -421,7 +421,7 @@ pub fn init() void {
             plug.OwnerId = PluginState.owners_core;
             PluginState.owners_core += 1;
             PluginState.working_owner = plug.OwnerId;
-            plug.OnInit.?(GLOBAL_STATE, GLOBAL_FUNCTION);
+            plug.OnInit.?(GLOBAL_FUNCTION);
             PluginFnOnPluginInit(.OnPluginInitA, PluginState.working_owner);
         }
     }
@@ -465,18 +465,18 @@ pub fn init() void {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
     PluginState.h_s_hot_reload =
         gf.ASettingOccupy(SettingHandle.getNull(), "PLUGIN_HOT_RELOAD", .B, .{ .b = true }, &PluginState.s_hot_reload, null);
 }
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
-pub fn GameLoopB(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
-    if (PluginState.s_hot_reload and gs.timestamp > PluginState.last_check + PluginState.check_freq) {
-        PluginState.last_check = gs.timestamp;
+pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
+    if (PluginState.s_hot_reload and rti.TIMESTAMP.* > PluginState.last_check + PluginState.check_freq) {
+        PluginState.last_check = rti.TIMESTAMP.*;
         PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
         const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];
 

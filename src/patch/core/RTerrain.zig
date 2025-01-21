@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const GlobalSt = @import("../appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
 
@@ -128,13 +127,13 @@ pub fn RReleaseAll() callconv(.C) void {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {
     CustomTerrain.init();
 }
 
-pub fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     CustomTerrain.deinit();
 }
 
@@ -144,7 +143,7 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 
 // TODO: reintroduce when 'debug readout' thing is done
 //const rt = r.Text;
-//pub fn Draw2DB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+//pub fn Draw2DB(_: *GlobalFn) callconv(.C) void {
 //    rt.DrawText(320, 0, "TERRAINS: {d}", .{CustomTerrain.data.values.len}, null, null) catch {};
 //    for (CustomTerrain.data.handles.constSlice(), 0..) |h, i|
 //        rt.DrawText(320, @intCast(8 + 8 * i), "{X:0>4} o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{

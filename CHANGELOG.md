@@ -34,14 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - QOL: More organized formatting of post-race stats
-- Backend(Core): Global State version `5` to `6`
+- Backend(Core): Global State version `5` to `7`
+- Backend(Core): Global Function version `29` to `31`
 - Backend(Core): Settings now also autosave on race reset
+- Backend(Core): All global state migrated to getter functions in Global Function API
 
 ### Removed
 
 - Backend(Core): 
     - `GlobalState.hwnd` (use racerlib->global->HWND)
     - `GlobalState.hinstance` (use racerlib->global->HINSTANCE)
+- Backend(Core): Removed public Global State access from plugin API (use new getters from Global Function)
+- Backend(Core): Removed many redundant global state getters in favor of accessing game state via RacerLib
 
 ### Fixed
 

@@ -6,7 +6,6 @@ const w32wm = w32.ui.windows_and_messaging;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
-const GlobalSt = @import("appinfo.zig").GLOBAL_STATE;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -36,7 +35,7 @@ const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
 const rs = @import("racer").Sound;
 
-extern fn init_collision_viewer(gs: *CollisionViewerState) callconv(.C) void;
+extern fn init_collision_viewer(cvs: *CollisionViewerState) callconv(.C) void;
 extern fn deinit_collision_viewer() callconv(.C) void;
 
 const PLUGIN_NAME: [*:0]const u8 = "PluginCollisionViewer";
@@ -180,7 +179,6 @@ const QuickRaceMenu = extern struct {
     var menu_active: bool = false;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
-    var gs: *GlobalSt = undefined;
     var gf: *GlobalFn = undefined;
 
     var inputs = [_]QuickRaceMenuInput{
@@ -295,10 +293,10 @@ const QuickRaceMenu = extern struct {
     }
 
     fn update() void {
-        if (gs.in_race == .JustOn)
+        if (gf.SInRace() == .JustOn)
             init();
 
-        if (!initialized or !gs.practice_mode or !gs.in_race.on()) {
+        if (!initialized or !gf.SPracticeMode() or !gf.SInRace().on()) {
             state.enabled = false;
             return;
         }
@@ -358,30 +356,29 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gs: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     AnnodueSettings.settingsInit(gf);
 
     init_collision_viewer(&state);
 
-    QuickRaceMenu.gs = gs;
     QuickRaceMenu.gf = gf;
 }
 
-export fn OnInitLate(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.close();
     deinit_collision_viewer();
 }
 
 // HOOKS
 
-export fn InputUpdateB(_: *GlobalSt, gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
     input_enable.update(gf);
     input_pause.update(gf);
     QuickRaceMenu.update_input();
 }
 
-export fn EarlyEngineUpdateB(_: *GlobalSt, _: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateB(_: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.update();
 }

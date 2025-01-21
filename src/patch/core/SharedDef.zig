@@ -27,9 +27,9 @@ const Trig = r.Entity.Trig.Trig;
 const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 const TextDef = r.Text.TextDef;
 
-const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
+pub const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
-pub const GLOBAL_STATE_VERSION = 6;
+pub const GLOBAL_STATE_VERSION = 7;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -49,35 +49,24 @@ pub const GlobalState = extern struct {
 
     window_in_foreground: bool = true,
 
-    dt_f: f32 = 0,
-    fps: f32 = 0,
+    //dt_f: f32 = 0,
+    //fps: f32 = 0,
     fps_avg: f32 = 0,
-    timestamp: u32 = 0,
-    framecount: u32 = 0,
 
     in_race: ActiveState = .Off,
     race_state: RaceState = .None,
     race_state_prev: RaceState = .None,
     race_state_new: bool = false,
     player: extern struct {
-        upgrades: bool = false,
-        upgrades_lv: [7]u8 = undefined,
-        upgrades_hp: [7]u8 = undefined,
-
-        flags1: TestFlags1 = std.mem.zeroInit(TestFlags1, .{}),
         boosting: ActiveState = .Off,
         underheating: ActiveState = .On,
         overheating: ActiveState = .Off,
         dead: ActiveState = .Off,
         deaths: u32 = 0,
-
-        heat_rate: f32 = 0,
-        cool_rate: f32 = 0,
-        heat: f32 = 0,
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 29;
+pub const GLOBAL_FUNCTION_VERSION = 31;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -147,4 +136,18 @@ pub const GlobalFunction = extern struct {
     ) callconv(.C) Handle(u16),
     RTriggerRelease: *const fn (Handle(u16)) callconv(.C) void,
     RTriggerReleaseAll: *const fn () callconv(.C) void,
+    // State;  previously accessed via 'global state'
+    SInitLatePassed: *const fn () callconv(.C) bool, // init_late_passed
+    SPracticeMode: *const fn () callconv(.C) bool, // practice_mode, WARN: some funcs write to this
+    SWindowInForeground: *const fn () callconv(.C) bool, // window_in_foreground
+    SFPSAvg: *const fn () callconv(.C) f32, // fps_avg
+    SInRace: *const fn () callconv(.C) ActiveState, // in_race
+    SRaceState: *const fn () callconv(.C) RaceState, // race_state
+    SRaceStatePrev: *const fn () callconv(.C) RaceState, // race_state_prev
+    SRaceStateNew: *const fn () callconv(.C) bool, // race_state_new
+    SPlayerBoosting: *const fn () callconv(.C) ActiveState, // player -> boosting
+    SPlayerUnderheating: *const fn () callconv(.C) ActiveState, // player -> underheating
+    SPlayerOverheating: *const fn () callconv(.C) ActiveState, // player -> overheating
+    SPlayerDead: *const fn () callconv(.C) ActiveState, // player -> dead
+    SPlayerDeaths: *const fn () callconv(.C) u32, // player -> deaths
 };

@@ -20,19 +20,15 @@ pub const fnStage1C: *fn (*Test) callconv(.C) void = @ptrFromInt(0x47B520);
 pub const fnStage20: *fn (*Test) callconv(.C) void = @ptrFromInt(0x470610);
 pub const fnEvent: *fn (*Test, magic: *e.MAGIC_EVENT, payload: u32) callconv(.C) void = @ptrFromInt(0x474D80);
 
-// GAME CONSTANTS
-
 pub const DoRespawn: *fn (*Test, spline_offset: f32) callconv(.C) void = @ptrFromInt(0x473F40);
 
-// GAME TYPEDEFS
+// GAME CONSTANTS
 
 pub const SIZE: usize = e.EntitySize(.Test);
 
-pub const PLAYER_PTR_ADDR: usize = 0x4D78A8;
-pub const PLAYER_PTR: *usize = @ptrFromInt(PLAYER_PTR_ADDR);
 // TODO: double pointer; original data probably game state struct holding the ptr
-pub const PLAYER: **Test = @ptrFromInt(PLAYER_PTR_ADDR);
-pub const PLAYER_SLICE: **[SIZE]u8 = @ptrFromInt(PLAYER_PTR_ADDR); // TODO: convert to many-item pointer
+pub const pPlayer: *?*Test = @ptrFromInt(0x4D78A8);
+pub const pPlayerAsSlice: *?*[SIZE]u8 = @ptrCast(pPlayer); // TODO: convert to many-item pointer
 
 // GAME TYPEDEFS
 
@@ -106,7 +102,7 @@ pub const Test = extern struct {
     _collision_toggles: u32,
     engineHealthMin: [6]f32, // TODO: typedef
     engineHealth: [6]f32, // TODO: typedef
-    engineStatus: [6]u32, // TODO: typedef
+    engineStatus: [6]TEST_ENGINE_FLAGS,
     _unk_02B8_02BB: [4]u8,
     repairTimer: f32,
     damageWarningTimer: f32,
@@ -228,7 +224,22 @@ pub const TEST_FLAGS2 = packed struct {
     _31: bool,
 };
 
+// TODO: testing assert size 32 bits
+pub const TEST_ENGINE_FLAGS = packed struct {
+    UI_RECENT_DAMAGE: bool,
+    UI_BLINKING: bool,
+    IS_REPAIRING: bool,
+    IS_ON_FIRE: bool,
+    IS_EXTINGUISHING: bool,
+    _05_31_unused: u27,
+};
+
 // HELPERS
+
+pub fn GetPlayerAssertValid() *Test {
+    if (pPlayer.* == null) @panic("Pointer to player Test entity is null.");
+    return pPlayer.*.?;
+}
 
 // based on code in fn_4783E0
 pub fn GetSpeedBase(t: *Test) f32 {
@@ -255,4 +266,38 @@ pub fn GetSpeedBoost(t: *Test) f32 {
     const speed: f32 = if (accel <= 0) 0 else accel * stat_boost_speed / (accel + 0.33);
 
     return speed;
+}
+
+pub fn GetOverheating(t: *Test) bool {
+    return for (t.engineStatus) |status| {
+        if (status.IS_ON_FIRE) break true;
+    } else false;
+}
+
+pub fn GetPlayerOverheating() bool {
+    return GetOverheating(GetPlayerAssertValid());
+}
+
+pub fn GetTimeToOverheat(t: *Test) f32 {
+    return t.temperature / t.stats.HeatRate;
+}
+
+pub fn GetPlayerTimeToOverheat() f32 {
+    return GetTimeToOverheat(GetPlayerAssertValid());
+}
+
+pub fn GetUnderheating(t: *Test) bool {
+    return t.temperature >= 100;
+}
+
+pub fn GetPlayerUnderheating() bool {
+    return GetUnderheating(GetPlayerAssertValid());
+}
+
+pub fn GetTimeToUnderheat(t: *Test) f32 {
+    return (100 - t.temperature) / t.stats.CoolRate;
+}
+
+pub fn GetPlayerTimeToUnderheat() f32 {
+    return GetTimeToUnderheat(GetPlayerAssertValid());
 }

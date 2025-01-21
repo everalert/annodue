@@ -1,6 +1,8 @@
 const std = @import("std");
 const f = @import("File.zig");
 const Stats = @import("Stats.zig").Stats;
+const TEST = @import("Entity/Test.zig").Test;
+const VEHICLE_METADATA = @import("Vehicle.zig").VEHICLE_METADATA;
 
 // GAME FUNCTIONS
 
@@ -8,11 +10,9 @@ const Stats = @import("Stats.zig").Stats;
 
 // GAME CONSTANTS
 
-pub const PLAYER_PTR_ADDR: usize = 0x4D78A4;
-pub const PLAYER_PTR: *usize = @ptrFromInt(PLAYER_PTR_ADDR);
 // TODO: double pointer; original data probably game state struct holding the ptr
-pub const PLAYER: **RaceData = @ptrFromInt(PLAYER_PTR_ADDR);
-pub const PLAYER_SLICE: **[SIZE]u8 = @ptrFromInt(PLAYER_PTR_ADDR);
+pub const pPlayer: *?*RaceData = @ptrFromInt(0x4D78A4);
+pub const pPlayerAsSlice: *?*[SIZE]u8 = @ptrCast(pPlayer);
 
 // TODO: confirm static
 pub const ARRAY_ADDR: usize = 0xE29BC0;
@@ -27,10 +27,10 @@ pub const RaceData = extern struct {
     index: u32,
     control: u32,
     flags: u32, // TODO: enum
-    pFile: *f.Profile, // ptr to profile? file data in memory
+    pFile: ?*f.Profile, // ptr to profile? file data in memory
     unk10: u32,
     unk14: u32,
-    pVehicleMetadata: u32,
+    pVehicleMetadata: ?*VEHICLE_METADATA,
     stats: Stats,
     unk58: u32,
     pos: u32,
@@ -41,7 +41,7 @@ pub const RaceData = extern struct {
     lap: u32,
     unk7C: u32,
     unk80: u32, // post-race part damage factor?
-    pTestEntity: u32, // TODO: test entity struct
+    pTestEntity: ?*TEST, // TODO: test entity struct
 };
 
 pub const RaceDataOffset = enum(u32) {
@@ -70,3 +70,21 @@ pub const RaceDataOffset = enum(u32) {
         return @intFromEnum(self.*);
     }
 };
+
+// HELPERS
+
+pub fn GetPlayerAssertValid() *RaceData {
+    if (pPlayer.* == null) @panic("Pointer to player RaceData struct is null.");
+    return pPlayer.*.?;
+}
+
+pub fn GetUsingUpgrades(rd: *RaceData) bool {
+    std.debug.assert(rd.pFile != null);
+    return for (rd.pFile.?.upgrade_lv, rd.pFile.?.upgrade_hp) |lv, hp| {
+        if (lv > 0 and hp > 0) break true;
+    } else false;
+}
+
+pub fn GetPlayerUsingUpgrades() bool {
+    return GetUsingUpgrades(GetPlayerAssertValid());
+}

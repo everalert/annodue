@@ -13,6 +13,7 @@ const rete = @import("racer").Entity.Test;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 const ModelMesh_GetBehavior = @import("racer").Model.Mesh_GetBehavior;
+const rti = @import("racer").Time;
 
 const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
@@ -152,7 +153,7 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     if (!Overlay.s_enable) return;
 
     if (gf.SInRace().on() and !gf.GHideRaceUIIsOn()) {
-        const p = rete.PLAYER.*;
+        const p = rete.pPlayer.*.?;
 
         if (gf.SInRace() == .JustOn or p.flags1.IS_DEAD) {
             Overlay.fast_state = .Off;
@@ -166,8 +167,8 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
 
         // preprocessing
 
-        const lap: u32 = rrd.PLAYER.*.lap;
-        const lap_times: []const f32 = &rrd.PLAYER.*.time.lap;
+        const lap: u32 = rrd.pPlayer.*.?.lap;
+        const lap_times: []const f32 = &rrd.pPlayer.*.?.time.lap;
 
         const terrain_model = p._unk_0140_terrainModel;
         const behavior = if (terrain_model) |tm| ModelMesh_GetBehavior(tm) else null;
@@ -175,12 +176,12 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
         Overlay.fast_state.update(behavior != null and behavior.?.TerrainFlags.FAST);
         Overlay.slow_state.update(grounded and behavior != null and behavior.?.TerrainFlags.SLOW);
         Overlay.swst_state.update(grounded and behavior != null and behavior.?.TerrainFlags.SWST);
-        Overlay.fast_time = if (Overlay.fast_state.on()) Overlay.fast_time + gf.SDt() else 0;
-        Overlay.slow_time = if (Overlay.slow_state.on()) Overlay.slow_time + gf.SDt() else 0;
-        Overlay.swst_time = if (Overlay.swst_state.on()) Overlay.swst_time + gf.SDt() else 0;
+        Overlay.fast_time = if (Overlay.fast_state.on()) Overlay.fast_time + rti.FRAMETIME.* else 0;
+        Overlay.slow_time = if (Overlay.slow_state.on()) Overlay.slow_time + rti.FRAMETIME.* else 0;
+        Overlay.swst_time = if (Overlay.swst_state.on()) Overlay.swst_time + rti.FRAMETIME.* else 0;
 
         if (p._fall_float_rate > 0.001 and p.nextPosition.x == p.positionPrev.x and p.nextPosition.y == p.positionPrev.y and p.nextPosition.z == p.positionPrev.z) {
-            Overlay.mfg_time = if (!Overlay.mfg_timing) 0 else Overlay.mfg_time + gf.SDt();
+            Overlay.mfg_time = if (!Overlay.mfg_timing) 0 else Overlay.mfg_time + rti.FRAMETIME.*;
             Overlay.mfg_timing = true;
             Overlay.mfg_power = p._fall_float_rate;
         } else {
@@ -188,7 +189,7 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
                 Overlay.mfg_delay = 1.0;
                 Overlay.mfg_timing = false;
             } else {
-                Overlay.mfg_delay -= gf.SDt();
+                Overlay.mfg_delay -= rti.FRAMETIME.*;
             }
             if (Overlay.mfg_delay <= 0) {
                 Overlay.mfg_time = 0;
@@ -202,10 +203,13 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
 
         if (gf.SRaceState() == .Racing or (gf.SRaceStateNew() and gf.SRaceState() == .PostRace)) {
             if (Overlay.s_show_heat_timer) {
-                const heat_s: f32 = gf.SPlayerHeat() / gf.SPlayerHeatRate();
-                const cool_s: f32 = (100 - gf.SPlayerHeat()) / gf.SPlayerCoolRate();
+                // FIXME: remove
+                //const heat_s: f32 = gf.SPlayerHeat() / gf.SPlayerHeatRate();
+                //const cool_s: f32 = (100 - gf.SPlayerHeat()) / gf.SPlayerCoolRate();
+                const heat_s = rete.GetPlayerTimeToOverheat();
+                const cool_s = rete.GetPlayerTimeToUnderheat();
                 const heat_timer: f32 = if (gf.SPlayerBoosting().on()) heat_s else cool_s;
-                const heat_style = if (gf.SPlayerBoosting().on()) style_heat_up else if (gf.SPlayerHeat() < 100) style_heat_dn else style_heat;
+                const heat_style = if (gf.SPlayerBoosting().on()) style_heat_up else if (p.temperature < 100) style_heat_dn else style_heat;
                 _ = gf.GDrawText(
                     .OverlayP,
                     rt.MakeText(256, 170, "{d:0>5.3}", .{heat_timer}, null, heat_style) catch null,
@@ -234,7 +238,7 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
                     }, null, null) catch null);
                 } else {
                     _ = gf.GDrawText(.Overlay, rt.MakeText(624, 464, "~r{d:>2.0}  {d:>5.2}  {d:>5.3}", .{
-                        gf.SFPSAvg(), gf.SFPS(), gf.SDt(),
+                        gf.SFPSAvg(), rti.FPS.*, rti.FRAMETIME.*,
                     }, null, null) catch null);
                 }
             }
@@ -247,7 +251,7 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
             }
 
             if (Overlay.s_show_fall_timer) {
-                const oob_timer = rete.PLAYER.*.fallTimer;
+                const oob_timer = rete.pPlayer.*.?.fallTimer;
                 if (oob_timer > 0)
                     _ = gf.GDrawText(.OverlayP, rt.MakeText(lbx, lby + sty * 1, "~3{d:0>5.3} ~1Fall", .{
                         oob_timer,

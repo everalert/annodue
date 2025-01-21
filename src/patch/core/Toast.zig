@@ -9,6 +9,7 @@ const GlobalFn = app.GLOBAL_FUNCTION;
 
 const r = @import("racer");
 const rt = r.Text;
+const rti = r.Time;
 
 // TODO: post-toast callback functions
 // TODO: decide whether the spawning/scrolling behaviour should be reversed (like DOOM)
@@ -63,7 +64,7 @@ pub fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     for (0..num_vis.*) |i| {
         const item: *ToastItem = &ToastSystem.buffer.items[(r_start + i) % num_items.*];
 
-        item.timer += gf.SDt();
+        item.timer += rti.FRAMETIME.*;
         if (item.timer >= ToastSystem.dur) {
             _ = ToastSystem.buffer.dequeue(null);
             ToastSystem.n_visible -= 1;

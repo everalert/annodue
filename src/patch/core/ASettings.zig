@@ -26,6 +26,7 @@ const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
 const rt = r.Text;
+const rti = r.Time;
 
 // TODO: add global st/fn ptrs to fnOnChange defs?
 // TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
@@ -1047,9 +1048,9 @@ pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
     if (gf.SInRace().new() or (gf.SRaceStateNew() and gf.SRaceState() == .PreRace))
         ASettings.saveAuto() catch {};
 
-    if (gf.STimestamp() > ASettings.last_check + ASettings.check_freq)
+    if (rti.TIMESTAMP.* > ASettings.last_check + ASettings.check_freq)
         _ = ASettings.load();
-    ASettings.last_check = gf.STimestamp();
+    ASettings.last_check = rti.TIMESTAMP.*;
 }
 
 // DEBUGGING & TESTING

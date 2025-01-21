@@ -29,7 +29,7 @@ const TextDef = r.Text.TextDef;
 
 pub const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
-pub const GLOBAL_STATE_VERSION = 6;
+pub const GLOBAL_STATE_VERSION = 7;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -49,35 +49,24 @@ pub const GlobalState = extern struct {
 
     window_in_foreground: bool = true,
 
-    dt_f: f32 = 0,
-    fps: f32 = 0,
+    //dt_f: f32 = 0,
+    //fps: f32 = 0,
     fps_avg: f32 = 0,
-    timestamp: u32 = 0,
-    framecount: u32 = 0,
 
     in_race: ActiveState = .Off,
     race_state: RaceState = .None,
     race_state_prev: RaceState = .None,
     race_state_new: bool = false,
     player: extern struct {
-        upgrades: bool = false,
-        upgrades_lv: [7]u8 = undefined,
-        upgrades_hp: [7]u8 = undefined,
-
-        flags1: TestFlags1 = std.mem.zeroInit(TestFlags1, .{}),
         boosting: ActiveState = .Off,
         underheating: ActiveState = .On,
         overheating: ActiveState = .Off,
         dead: ActiveState = .Off,
         deaths: u32 = 0,
-
-        heat_rate: f32 = 0,
-        cool_rate: f32 = 0,
-        heat: f32 = 0,
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 30;
+pub const GLOBAL_FUNCTION_VERSION = 31;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -148,32 +137,17 @@ pub const GlobalFunction = extern struct {
     RTriggerRelease: *const fn (Handle(u16)) callconv(.C) void,
     RTriggerReleaseAll: *const fn () callconv(.C) void,
     // State;  previously accessed via 'global state'
-    // TODO: revise which of these actually need to exist, i.e. which are not just copying from game state
-    SPatchMemory: *const fn () callconv(.C) [*]u8, // patch_memory
-    SPatchSize: *const fn () callconv(.C) u32, // patch_size
-    SPatchOffset: *const fn () callconv(.C) u32, // patch_offset, WARN: some funcs write to this
     SInitLatePassed: *const fn () callconv(.C) bool, // init_late_passed
     SPracticeMode: *const fn () callconv(.C) bool, // practice_mode, WARN: some funcs write to this
     SWindowInForeground: *const fn () callconv(.C) bool, // window_in_foreground
-    SDt: *const fn () callconv(.C) f32, // dt_f
-    SFPS: *const fn () callconv(.C) f32, // fps
     SFPSAvg: *const fn () callconv(.C) f32, // fps_avg
-    STimestamp: *const fn () callconv(.C) u32, // timestamp
-    SFrameCount: *const fn () callconv(.C) u32, // frame_count
     SInRace: *const fn () callconv(.C) ActiveState, // in_race
     SRaceState: *const fn () callconv(.C) RaceState, // race_state
     SRaceStatePrev: *const fn () callconv(.C) RaceState, // race_state_prev
     SRaceStateNew: *const fn () callconv(.C) bool, // race_state_new
-    SPlayerUpgrades: *const fn () callconv(.C) bool, // player -> upgrades
-    //SPlayerUpgradesLv: *const fn (out: [*]u8) callconv(.C) void, // 7-byte array; player -> upgrades_lv
-    //SPlayerUpgradesHP: *const fn (out: [*]u8) callconv(.C) void, // 7-byte array; player -> upgrades_hp
-    SPlayerFlags1: *const fn () callconv(.C) TestFlags1, // player -> flags1
     SPlayerBoosting: *const fn () callconv(.C) ActiveState, // player -> boosting
     SPlayerUnderheating: *const fn () callconv(.C) ActiveState, // player -> underheating
     SPlayerOverheating: *const fn () callconv(.C) ActiveState, // player -> overheating
     SPlayerDead: *const fn () callconv(.C) ActiveState, // player -> dead
     SPlayerDeaths: *const fn () callconv(.C) u32, // player -> deaths
-    SPlayerHeatRate: *const fn () callconv(.C) f32, // player -> heat_rate
-    SPlayerCoolRate: *const fn () callconv(.C) f32, // player -> cool_rate
-    SPlayerHeat: *const fn () callconv(.C) f32, // player -> heat
 };

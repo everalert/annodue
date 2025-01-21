@@ -52,50 +52,24 @@ pub var GLOBAL_STATE: GlobalState = .{};
 
 fn global_player_reset(self: *GlobalState) void {
     const p = &self.player;
-    p.upgrades_lv = rrd.PLAYER.*.pFile.upgrade_lv; // TODO: remove from gs, now that it's easy?
-    p.upgrades_hp = rrd.PLAYER.*.pFile.upgrade_hp; // TODO: remove from gs, now that it's easy?
-    p.upgrades = for (0..7) |i| {
-        if (p.upgrades_lv[i] > 0 and p.upgrades_hp[i] > 0) break true;
-    } else false;
 
-    p.flags1 = std.mem.zeroInit(re.Test.TEST_FLAGS1, .{});
     p.boosting = .Off;
     p.underheating = .On; // you start the race underheating
     p.overheating = .Off;
     p.dead = .Off;
     p.deaths = 0;
-
-    p.heat_rate = re.Test.PLAYER.*.stats.HeatRate; // TODO: remove from gs, now that it's easy?
-    p.cool_rate = re.Test.PLAYER.*.stats.CoolRate; // TODO: remove from gs, now that it's easy?
-    p.heat = 0;
 }
 
 fn global_player_update(self: *GlobalState) void {
     const p = &self.player;
-    p.flags1 = re.Test.PLAYER.*.flags1; // TODO: remove from gs, now that it's easy?
-    p.heat = re.Test.PLAYER.*.temperature; // TODO: remove from gs, now that it's easy?
-    const engine = re.Test.PLAYER.*.engineStatus; // TODO: remove from gs, now that it's easy?
+    const pt = re.Test.GetPlayerAssertValid();
 
-    p.boosting.update(p.flags1.IS_BOOSTING);
-    p.underheating.update(p.heat >= 100);
-    p.overheating.update(for (0..6) |i| {
-        if (engine[i] & (1 << 3) > 0) break true;
-    } else false);
-    p.dead.update(p.flags1.IS_DEAD);
+    p.boosting.update(pt.flags1.IS_BOOSTING);
+    p.underheating.update(re.Test.GetUnderheating(pt));
+    p.overheating.update(re.Test.GetOverheating(pt));
+    p.dead.update(pt.flags1.IS_DEAD);
     if (p.dead == .JustOn) p.deaths += 1;
 }
-
-fn SPatchMemory() callconv(.C) [*]u8 {
-    return GLOBAL_STATE.patch_memory;
-} // patch_memory
-
-fn SPatchSize() callconv(.C) u32 {
-    return GLOBAL_STATE.patch_size;
-} // patch_size
-
-fn SPatchOffset() callconv(.C) u32 {
-    return GLOBAL_STATE.patch_offset;
-} // patch_offset, WARN: some funcs write to this
 
 fn SInitLatePassed() callconv(.C) bool {
     return GLOBAL_STATE.init_late_passed;
@@ -109,25 +83,9 @@ fn SWindowInForeground() callconv(.C) bool {
     return GLOBAL_STATE.window_in_foreground;
 } // window_in_foreground
 
-fn SDt() callconv(.C) f32 {
-    return GLOBAL_STATE.dt_f;
-} // dt_f
-
-fn SFPS() callconv(.C) f32 {
-    return GLOBAL_STATE.fps;
-} // fps
-
 fn SFPSAvg() callconv(.C) f32 {
     return GLOBAL_STATE.fps_avg;
 } // fps_avg
-
-fn STimestamp() callconv(.C) u32 {
-    return GLOBAL_STATE.timestamp;
-} // timestamp
-
-fn SFrameCount() callconv(.C) u32 {
-    return GLOBAL_STATE.framecount;
-} // frame_count
 
 fn SInRace() callconv(.C) ActiveState {
     return GLOBAL_STATE.in_race;
@@ -144,25 +102,6 @@ fn SRaceStatePrev() callconv(.C) RaceState {
 fn SRaceStateNew() callconv(.C) bool {
     return GLOBAL_STATE.race_state_new;
 } // race_state_new
-
-fn SPlayerUpgrades() callconv(.C) bool {
-    return GLOBAL_STATE.player.upgrades;
-} // player -> upgrades
-
-// FIXME: crashes when included in global fn
-fn SPlayerUpgradesLv(out: [*]u8) callconv(.C) void {
-    _ = out;
-    //@memcpy(@as(*[7]u8, @ptrCast(out)), &GLOBAL_STATE.player.upgrades_lv);
-} // 7-byte array; player -> upgrades_lv
-
-// FIXME: crashes when included in global fn
-fn SPlayerUpgradesHP(out: [*]u8) callconv(.C) void {
-    @memcpy(@as(*[7]u8, @ptrCast(out)), &GLOBAL_STATE.player.upgrades_hp);
-} // 7-byte array; player -> upgrades_hp
-
-fn SPlayerFlags1() callconv(.C) TestFlags1 {
-    return GLOBAL_STATE.player.flags1;
-} // player -> flags1
 
 fn SPlayerBoosting() callconv(.C) ActiveState {
     return GLOBAL_STATE.player.boosting;
@@ -183,18 +122,6 @@ fn SPlayerDead() callconv(.C) ActiveState {
 fn SPlayerDeaths() callconv(.C) u32 {
     return GLOBAL_STATE.player.deaths;
 } // player -> deaths
-
-fn SPlayerHeatRate() callconv(.C) f32 {
-    return GLOBAL_STATE.player.heat_rate;
-} // player -> heat_rate
-
-fn SPlayerCoolRate() callconv(.C) f32 {
-    return GLOBAL_STATE.player.cool_rate;
-} // player -> cool_rate
-
-fn SPlayerHeat() callconv(.C) f32 {
-    return GLOBAL_STATE.player.heat;
-} // player -> heat
 
 // GLOBAL FUNCTIONS
 
@@ -245,33 +172,19 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .RTriggerRelease = &rtrigger.RRelease,
     .RTriggerReleaseAll = &rtrigger.RReleaseAll,
     // State
-    .SPatchMemory = &SPatchMemory,
-    .SPatchSize = &SPatchSize,
-    .SPatchOffset = &SPatchOffset,
     .SInitLatePassed = &SInitLatePassed,
     .SPracticeMode = &SPracticeMode,
     .SWindowInForeground = &SWindowInForeground,
-    .SDt = &SDt,
-    .SFPS = &SFPS,
     .SFPSAvg = &SFPSAvg,
-    .STimestamp = &STimestamp,
-    .SFrameCount = &SFrameCount,
     .SInRace = &SInRace,
     .SRaceState = &SRaceState,
     .SRaceStatePrev = &SRaceStatePrev,
     .SRaceStateNew = &SRaceStateNew,
-    .SPlayerUpgrades = &SPlayerUpgrades,
-    //.SPlayerUpgradesLv = &SPlayerUpgradesLv,
-    //.SPlayerUpgradesHP = &SPlayerUpgradesHP,
-    .SPlayerFlags1 = &SPlayerFlags1,
     .SPlayerBoosting = &SPlayerBoosting,
     .SPlayerUnderheating = &SPlayerUnderheating,
     .SPlayerOverheating = &SPlayerOverheating,
     .SPlayerDead = &SPlayerDead,
     .SPlayerDeaths = &SPlayerDeaths,
-    .SPlayerHeatRate = &SPlayerHeatRate,
-    .SPlayerCoolRate = &SPlayerCoolRate,
-    .SPlayerHeat = &SPlayerHeat,
 };
 
 // UTIL
@@ -320,7 +233,7 @@ pub fn EarlyEngineUpdateB(_: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
-    const player_ready: bool = rrd.PLAYER_PTR.* != 0 and rrd.PLAYER.*.pTestEntity != 0;
+    const player_ready: bool = rrd.pPlayer.* != null and rrd.pPlayer.*.?.pTestEntity != null;
     GLOBAL_STATE.in_race.update(player_ready);
 
     // FIXME: use jdge flags
@@ -329,7 +242,7 @@ pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
         if (!GLOBAL_STATE.in_race.on()) break :blk .None;
         if (rg.IN_RACE.* == 0) break :blk .PreRace; // i.e. in race scene?
         // TODO: figure out how the engine knows to set these and use those instead
-        const flags1 = re.Test.PLAYER.*.flags1;
+        const flags1 = re.Test.pPlayer.*.?.flags1;
         if (flags1.IN_COUNTDOWN) break :blk .Countdown;
         const postrace: bool = !flags1.RACE_NOT_ENDED;
         const show_stats: bool = re.Manager.entity(.Jdge, 0).Flags.RACE_STATE == .PostRace;
@@ -344,12 +257,8 @@ pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn TimerUpdateA(_: *GlobalFunction) callconv(.C) void {
-    GLOBAL_STATE.dt_f = rti.FRAMETIME.*;
-    GLOBAL_STATE.fps = rti.FPS.*;
-    const fps_res: f32 = 1 / GLOBAL_STATE.dt_f * 2;
-    GLOBAL_STATE.fps_avg = (GLOBAL_STATE.fps_avg * (fps_res - 1) + (1 / GLOBAL_STATE.dt_f)) / fps_res;
-    GLOBAL_STATE.timestamp = rti.TIMESTAMP.*;
-    GLOBAL_STATE.framecount = rti.FRAMECOUNT.*;
+    const fps_res: f32 = 1 / rti.FRAMETIME.* * 2;
+    GLOBAL_STATE.fps_avg = (GLOBAL_STATE.fps_avg * (fps_res - 1) + (1 / rti.FRAMETIME.*)) / fps_res;
 }
 
 pub fn MenuTitleScreenB(_: *GlobalFunction) callconv(.C) void {

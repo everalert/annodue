@@ -16,6 +16,7 @@ const rq = @import("racer").Quad;
 const rc = @import("racer").constants;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
+const rti = @import("racer").Time;
 
 // FIXME: refactor and merge with core
 // TODO: allow toggling mode at any time (during race), but only update the visualization
@@ -104,17 +105,17 @@ pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
 
     if (gf.SInRace().on()) {
         mode_vis.update(0, 0, 0, 0);
-        if (f.start == null or f.prac == .JustOn) f.start = gf.STimestamp();
+        if (f.start == null or f.prac == .JustOn) f.start = rti.TIMESTAMP.*;
     } else return;
 
-    f.vis += if (f.prac.on()) gf.SDt() else -gf.SDt();
+    f.vis += if (f.prac.on()) rti.FRAMETIME.* else -rti.FRAMETIME.*;
     f.vis = std.math.clamp(f.vis, 0, f.vis_time);
 
     if (f.vis == 0) return;
 
     if (f.start) |ts| {
         const vis_scalar: f32 = f.vis / f.vis_time;
-        const t = @as(f32, @floatFromInt(gf.STimestamp() - ts)) / 1000;
+        const t = @as(f32, @floatFromInt(rti.TIMESTAMP.* - ts)) / 1000;
         const color: u32 = fl.flash_color(@intFromEnum(rt.ColorRGB.Yellow), t, 3);
         mode_vis.update(vis_scalar, @truncate(color >> 16), @truncate(color >> 8), @truncate(color >> 0));
     }

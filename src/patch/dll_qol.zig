@@ -883,7 +883,7 @@ const race = struct {
 
     fn update_position() void {
         prev_position = this_position;
-        this_position = @as(*spatial.Pos3D, @ptrCast(&re.Test.PLAYER.*.transform.T)).*; // FIXME
+        this_position = @as(*spatial.Pos3D, @ptrCast(&re.Test.pPlayer.*.?.transform.T)).*; // FIXME
     }
 };
 
@@ -1030,8 +1030,8 @@ const QuickRaceMenu = extern struct {
         hang.Mirror = @intCast(values.mirror);
         hang.AISpeed = @intCast(values.ai_speed + 1);
         for (0..7) |i| {
-            rrd.PLAYER.*.pFile.upgrade_lv[i] = @intCast(values.up_lv[i]);
-            rrd.PLAYER.*.pFile.upgrade_hp[i] = @intCast(values.up_hp[i]);
+            rrd.pPlayer.*.?.pFile.?.upgrade_lv[i] = @intCast(values.up_lv[i]);
+            rrd.pPlayer.*.?.pFile.?.upgrade_hp[i] = @intCast(values.up_hp[i]);
         }
 
         RestartRace(false);
@@ -1050,8 +1050,8 @@ const QuickRaceMenu = extern struct {
         values.ai_speed = hang.AISpeed - 1;
         //values.ai_speed = hang.Winnings;
         for (0..7) |i| {
-            values.up_lv[i] = rrd.PLAYER.*.pFile.upgrade_lv[i];
-            values.up_hp[i] = rrd.PLAYER.*.pFile.upgrade_hp[i];
+            values.up_lv[i] = rrd.pPlayer.*.?.pFile.?.upgrade_lv[i];
+            values.up_hp[i] = rrd.pPlayer.*.?.pFile.?.upgrade_hp[i];
         }
 
         initialized = true;
@@ -1464,7 +1464,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
 
         if (QolState.s_default_camera_auto and gf.SRaceState() == .Racing) {
             if (QolState.cam_cman == null or gf.SRaceStateNew())
-                QolState.cam_cman = re.cMan.FindFromPlayerEntity(re.Test.PLAYER.*);
+                QolState.cam_cman = re.cMan.FindFromPlayerEntity(re.Test.pPlayer.*.?);
 
             if (QolState.cam_cman) |cman| {
                 if (cman.mode != QolState.cam_prev and cman.mode != QolState.s_default_camera and
@@ -1474,14 +1474,14 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
             }
         }
 
-        const total_time: f32 = rrd.PLAYER.*.time.total;
+        const total_time: f32 = rrd.pPlayer.*.?.time.total;
 
         if (gf.SRaceState() == .Countdown) {
             race.update_position();
         }
 
         if (gf.SRaceState() == .Racing or (gf.SRaceStateNew() and gf.SRaceState() == .PostRace)) {
-            const p = re.Test.PLAYER.*;
+            const p = re.Test.pPlayer.*.?;
 
             // stats
 
@@ -1517,7 +1517,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                     if (QolState.autoreset_dead == .JustOn)
                         QolState.autoreset_dead_timer = 0;
                     if (QolState.autoreset_dead.on()) {
-                        QolState.autoreset_dead_timer += gf.SDt();
+                        QolState.autoreset_dead_timer += rti.FRAMETIME.*;
                         if (QolState.autoreset_dead_timer >= QolState.s_autoreset_dead_delay)
                             reset_race = true;
                     }
@@ -1527,7 +1527,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                     if (gf.SPlayerOverheating() == .JustOn)
                         QolState.autoreset_fire_timer = 0;
                     if (gf.SPlayerOverheating().on()) {
-                        QolState.autoreset_fire_timer += gf.SDt();
+                        QolState.autoreset_fire_timer += rti.FRAMETIME.*;
                         if (QolState.autoreset_fire_timer >= QolState.s_autoreset_fire_delay)
                             reset_race = true;
                     }
@@ -1544,10 +1544,10 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
 
         if (gf.SRaceState() == .PostRace and !gf.GHideRaceUIIsOn()) {
             // summary readout thing
-            const upg_postfix = if (gf.SPlayerUpgrades()) "" else "  NU";
+            const upg_postfix = if (rrd.GetPlayerUsingUpgrades()) "" else "  NU";
             RenderRaceResultHeader(gf, 0, "{d:>2.0}/{s}{s}", .{
                 gf.SFPSAvg(),
-                rv.PartNamesShort[rrd.PLAYER.*.pFile.upgrade_lv[0]],
+                rv.PartNamesShort[rrd.pPlayer.*.?.pFile.?.upgrade_lv[0]],
                 upg_postfix,
             });
 
@@ -1555,8 +1555,8 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                 gf,
                 2 + @as(u8, @truncate(i)),
                 @as(u8, @truncate(i)),
-                rrd.PLAYER.*.pFile.upgrade_lv[i],
-                rrd.PLAYER.*.pFile.upgrade_hp[i],
+                rrd.pPlayer.*.?.pFile.?.upgrade_lv[i],
+                rrd.pPlayer.*.?.pFile.?.upgrade_hp[i],
             );
 
             RenderRaceResultStatF(gf, 10, "Top Speed", race.top_speed);
@@ -1583,7 +1583,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                 const line_height: i16 = 28;
                 const x: i16 = 50;
                 var y: i16 = 305 + (5 - @as(i16, @intCast(jdge.*.Laps))) * line_height;
-                for (&rrd.PLAYER.*.time.lap) |t| {
+                for (&rrd.pPlayer.*.?.time.lap) |t| {
                     if (t < 0) break;
                     _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
                         @as(u32, @bitCast(t)),
@@ -1591,7 +1591,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                     y += line_height;
                 }
                 _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
-                    @as(u32, @bitCast(rrd.PLAYER.*.time.total)),
+                    @as(u32, @bitCast(rrd.pPlayer.*.?.time.total)),
                 }, color, null) catch null);
             }
         }

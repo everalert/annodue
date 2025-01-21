@@ -31,6 +31,7 @@ const Setting = @import("ASettings.zig").ASettingSent;
 
 const r = @import("racer");
 const reh = r.Entity.Hang;
+const rti = r.Time;
 
 // TODO: switch to Sha256 for perf?
 const Sha512 = std.crypto.hash.sha2.Sha512;
@@ -474,8 +475,8 @@ pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
-    if (PluginState.s_hot_reload and gf.STimestamp() > PluginState.last_check + PluginState.check_freq) {
-        PluginState.last_check = gf.STimestamp();
+    if (PluginState.s_hot_reload and rti.TIMESTAMP.* > PluginState.last_check + PluginState.check_freq) {
+        PluginState.last_check = rti.TIMESTAMP.*;
         PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
         const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];
 

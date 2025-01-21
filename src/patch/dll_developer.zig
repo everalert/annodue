@@ -187,12 +187,12 @@ export fn EngineUpdateStage20A(gf: *GlobalFn) callconv(.C) void {
         if (!gf.SInRace().on() or !Developer.s_visualize_matrices) break :m44vis;
 
         if (gf.SRaceState() == .PreRace and gf.SRaceStateNew()) {
-            MatVisState.targets[0] = &ret.PLAYER.*.EngineXfR;
-            MatVisState.targets[1] = &ret.PLAYER.*.EngineXfL;
-            MatVisState.targets[2] = &ret.PLAYER.*.EngineExhaustXfR;
-            MatVisState.targets[3] = &ret.PLAYER.*.EngineExhaustXfL;
-            //MatVisState.targets[4] = &ret.PLAYER.*._unk_13D0;
-            //MatVisState.targets[5] = &ret.PLAYER.*.EngineExhaustXfR;
+            MatVisState.targets[0] = &ret.pPlayer.*.?.EngineXfR;
+            MatVisState.targets[1] = &ret.pPlayer.*.?.EngineXfL;
+            MatVisState.targets[2] = &ret.pPlayer.*.?.EngineExhaustXfR;
+            MatVisState.targets[3] = &ret.pPlayer.*.?.EngineExhaustXfL;
+            //MatVisState.targets[4] = &ret.pPlayer.*.?._unk_13D0;
+            //MatVisState.targets[5] = &ret.pPlayer.*.?.EngineExhaustXfR;
         }
 
         const jdge = re.Manager.entity(.Jdge, 0);

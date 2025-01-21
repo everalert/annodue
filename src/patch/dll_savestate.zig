@@ -145,8 +145,8 @@ const state = struct {
 
     fn reset() void {
         rec_data.reset();
-        rec_sources[0].data = rrd.PLAYER_SLICE.*;
-        rec_sources[1].data = re.Test.PLAYER_SLICE.*;
+        rec_sources[0].data = rrd.pPlayerAsSlice.*.?;
+        rec_sources[1].data = re.Test.pPlayerAsSlice.*.?;
         rec_sources[2].data = re.Manager.entitySlice(.Hang, 0);
         rec_sources[3].data = re.Manager.entitySlice(.cMan, 0);
         rec_sources[4].data = re.Manager.entitySliceAll(.Smok);
@@ -197,13 +197,13 @@ const state = struct {
 
 fn DoStateRecording(gf: *GlobalFn) LoadState {
     if (state.saveable(gf))
-        state.rec_data.save(gf.SFrameCount());
+        state.rec_data.save(rti.FRAMECOUNT.*);
 
     if (state.save_input_st.gets() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
     if (state.save_input_ld.gets() == .JustOn and state.rec_data.frames > 0) {
-        state.load_time = state.s_load_delay + gf.STimestamp();
+        state.load_time = state.s_load_delay + rti.TIMESTAMP.*;
         return .Loading;
     }
 
@@ -212,7 +212,7 @@ fn DoStateRecording(gf: *GlobalFn) LoadState {
 
 fn DoStateLoading(gf: *GlobalFn) LoadState {
     if (state.saveable(gf))
-        state.rec_data.save(gf.SFrameCount());
+        state.rec_data.save(rti.FRAMECOUNT.*);
 
     if (state.save_input_ld.gets() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.rec_data.frame).? - 1;
@@ -220,7 +220,7 @@ fn DoStateLoading(gf: *GlobalFn) LoadState {
         return .Scrubbing;
     }
 
-    if (gf.STimestamp() >= state.load_time) {
+    if (rti.TIMESTAMP.* >= state.load_time) {
         if (!state.loadable(gf)) return .Recording;
         state.rec_data.restore(state.load_frame);
         state.load_count += 1;
@@ -236,7 +236,7 @@ fn DoStateScrubbing(gf: *GlobalFn) LoadState {
     }
     if (state.save_input_ld.gets() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
-        state.load_time = state.s_load_delay + gf.STimestamp();
+        state.load_time = state.s_load_delay + rti.TIMESTAMP.*;
         state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
         return .ScrubExiting;
     }
@@ -260,7 +260,7 @@ fn DoStateScrubExiting(gf: *GlobalFn) LoadState {
         state.load_frame = state.rec_data.frame - 1;
     }
 
-    if (gf.STimestamp() < state.load_time) return .ScrubExiting;
+    if (rti.TIMESTAMP.* < state.load_time) return .ScrubExiting;
 
     state.load_count += 1;
     return .Recording;

@@ -161,13 +161,26 @@ const CosmeticState = struct {
 
 // SWE1R-PATCHER STUFF
 
-// NOTE: code_begin_offset = part of the arguments to a function call (sprite setup-related fn fn_445EE0)
-// args expected in this range: maxwidth?, maxheight?, width, height (args 3-6)
+// NOTE: the original patcher referred to this as a 'texture' table, but this is
+// actually a vtable pointing to 'sprite'-type pages; this is the same basic format
+// as other sprites, but all of the header data is stripped in the case of the
+// embedded font data, in lieu of hardcoded assumptions about format, dimensions, etc.
+// WARNING: the original dumped font data (see dll_developer) has some offset pixels
+// and wrapping, but the hd fonts don't; not sure if this is handled by this function
+// or if the dumper is just dumping wrong
+// WARNING: also don't really know how the '.data' files this function takes were
+// generated from the png files
+// ---- comments from when originally porting below ----
+// NOTE: code_begin_offset = part of the arguments to a function call (sprite
+// setup-related fn fn_445EE0); args expected in this range: maxwidth?, maxheight?,
+// width, height (args 3-6)
 // NOTE: code_end_offset = the instruction after 4 arguments later
-// NOTE: texture table seems to be 'len' in first field (u32), followed by len ptrs to texture segments
-// FIXME: can probably convert font->sprite conversion to comptime embed then hook up ptrs only in code,
-// then all the allocation bs can be skipped
-// NOTE: probably cannot reverse this, because it patches something that seems to only run once during setup
+// NOTE: texture table seems to be 'len' in first field (u32), followed by len ptrs
+// to texture segments
+// FIXME: can probably convert font->sprite conversion to comptime embed then hook
+// up ptrs only in code, then all the allocation bs can be skipped
+// NOTE: probably cannot reverse this, because it patches something that seems to
+// only run once during setup
 fn PatchTextureTable(
     memory: usize,
     table_offset: usize,
@@ -177,9 +190,6 @@ fn PatchTextureTable(
     height: u32,
     filename: []const u8,
 ) usize {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
-
     var off: usize = memory;
     off = x86.nop_align(off, 16);
 
@@ -197,21 +207,16 @@ fn PatchTextureTable(
     var hack_offset: usize = x86.jmp(code_begin_offset, cave_memory_offset);
     _ = x86.nop_until(hack_offset, code_end_offset);
 
-    // Get number of textures in the table
-    const count: u32 = mem.read(table_offset + 0, u32);
+    const page_num: u32 = mem.read(table_offset + 0, u32);
+    const page_size: u32 = width * height * 4 / 8;
 
-    // Have a buffer for pixeldata
-    const texture_size: u32 = width * height * 4 / 8;
-    var buffer = alloc.alloc(u8, texture_size) catch
-        @panic("failed to allocate memory for texture table patch");
-    defer alloc.free(buffer);
-    const buffer_slice = @as([*]u8, @ptrCast(buffer))[0..texture_size];
-    //const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..texture_size];
-
-    // Loop over all textures
+    // Loop over all pages
     var i: usize = 0;
     var str_buf: [1023:0]u8 = undefined;
-    while (i < count) : (i += 1) {
+    while (i < page_num) : (i += 1) {
+        const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..page_size];
+        @memset(buffer_slice, 0x00);
+
         // Load input texture to buffer
         var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch
             @panic("failed to format path for texture table patch"); // FIXME: error handling
@@ -219,25 +224,19 @@ fn PatchTextureTable(
         const file = std.fs.cwd().openFile(path, .{}) catch
             @panic("failed to open texture table patch file"); // FIXME: error handling
         defer file.close();
-        @memset(buffer_slice, 0x00);
         var j: u32 = 0;
-        while (j < texture_size * 2) : (j += 1) {
+        while (j < page_size * 2) : (j += 1) {
             var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
             _ = file.read(&pixel) catch
                 @panic("failed to read segment of texture table patch file"); // FIXME: error handling
             buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
         }
 
-        // Write pixel data to game
-        const texture_new: usize = off;
-        off = mem.write_bytes(off, buffer.ptr, texture_size);
-
         // Patch the table entry
-        //const texture_old: usize = mem.read(table_offset + 4 + i * 4, u32);
+        const texture_new: usize = off;
         _ = mem.write(table_offset + 4 + i * 4, u32, texture_new);
-        //printf("%d: 0x%X -> 0x%X\n", i, texture_old, texture_new);
 
-        //off += texture_size;
+        off += page_size;
     }
 
     return off;

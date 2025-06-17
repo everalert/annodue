@@ -16,6 +16,9 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
+const ra = @import("racer").Asset;
+const rt = @import("racer").Text;
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -208,37 +211,48 @@ fn PatchTextureTable(
     _ = x86.nop_until(hack_offset, code_end_offset);
 
     const page_num: u32 = mem.read(table_offset + 0, u32);
+
+    for (0..page_num) |i| {
+        _ = mem.write(table_offset + 4 + i * 4, u32, off); // update table entry ptr
+        off = LoadSpritePage(off, width, height, filename, i);
+    }
+
+    return off;
+}
+
+fn LoadSpritePage(
+    write_at: u32,
+    width: u32,
+    height: u32,
+    filename: []const u8,
+    page: u32,
+) u32 {
+    var off = write_at;
+
     const page_size: u32 = width * height * 4 / 8;
 
     // Loop over all pages
-    var i: usize = 0;
     var str_buf: [1023:0]u8 = undefined;
-    while (i < page_num) : (i += 1) {
-        const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..page_size];
-        @memset(buffer_slice, 0x00);
+    const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..page_size];
+    @memset(buffer_slice, 0x00);
 
-        // Load input texture to buffer
-        var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch
-            @panic("failed to format path for texture table patch"); // FIXME: error handling
+    // Load input texture to buffer
+    var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, page }) catch
+        @panic("failed to format path for texture table patch"); // FIXME: error handling
 
-        const file = std.fs.cwd().openFile(path, .{}) catch
-            @panic("failed to open texture table patch file"); // FIXME: error handling
-        defer file.close();
-        var j: u32 = 0;
-        while (j < page_size * 2) : (j += 1) {
-            var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
-            _ = file.read(&pixel) catch
-                @panic("failed to read segment of texture table patch file"); // FIXME: error handling
-            buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
-        }
-
-        // Patch the table entry
-        const texture_new: usize = off;
-        _ = mem.write(table_offset + 4 + i * 4, u32, texture_new);
-
-        off += page_size;
+    const file = std.fs.cwd().openFile(path, .{}) catch
+        @panic("failed to open texture table patch file"); // FIXME: error handling
+    defer file.close();
+    var j: u32 = 0;
+    while (j < page_size * 2) : (j += 1) {
+        var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
+        _ = file.read(&pixel) catch
+            @panic("failed to read segment of texture table patch file"); // FIXME: error handling
+        buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
     }
 
+    off += page_size;
+    off = x86.nop_align(off, 0x10);
     return off;
 }
 
@@ -377,6 +391,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
+// FIXME: move
+const font_table = [_]*anyopaque{ &fonts[3], &fonts[2], &fonts[1], &fonts[2], &fonts[4], &fonts[3], &fonts[0] };
+var fonts: [5]rt.FONT = undefined;
+var fonts_loaded: bool = false;
+var dp: ?*i32 = null;
+var fonts_using: bool = false;
+
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     CosmeticState.settingsInit(gf);
 
@@ -388,11 +409,37 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     //var off = gs.patch_offset;
     if (CosmeticState.s_patch_fonts) {
         var off = @intFromPtr(&CosmeticState.font_buf);
-        off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
-        off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
-        off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
-        off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
-        off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
+        // old
+        //off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
+        //off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
+        //off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
+        //off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
+        //off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
+        // new
+        @memcpy(&fonts, rt.TEXT_FONT_DEFS);
+        fonts[0]._08_page_list[0] = @ptrFromInt(off);
+        off = LoadSpritePage(off, 512, 1024, "font1", 0);
+        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[0]._08_page_list[0]), &dp, 1, 0);
+        fonts[0]._08_page_list[1] = @ptrFromInt(off);
+        off = LoadSpritePage(off, 512, 1024, "font1", 1);
+        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[0]._08_page_list[1]), &dp, 1, 0);
+        fonts[0]._08_page_list[2] = @ptrFromInt(off);
+        off = LoadSpritePage(off, 512, 1024, "font1", 2);
+        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[0]._08_page_list[2]), &dp, 1, 0);
+        fonts[1]._08_page_list[0] = @ptrFromInt(off);
+        off = LoadSpritePage(off, 512, 1024, "font2", 0);
+        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[1]._08_page_list[0]), &dp, 1, 0);
+        fonts[2]._08_page_list[0] = @ptrFromInt(off);
+        off = LoadSpritePage(off, 512, 1024, "font3", 0);
+        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[2]._08_page_list[0]), &dp, 1, 0);
+        fonts[3]._08_page_list[0] = @ptrFromInt(off);
+        off = LoadSpritePage(off, 512, 1024, "font0", 0);
+        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[3]._08_page_list[0]), &dp, 1, 0);
+        fonts[4]._08_page_list[0] = @ptrFromInt(off);
+        off = LoadSpritePage(off, 512, 1024, "font4", 0);
+        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[4]._08_page_list[0]), &dp, 1, 0);
+        fonts_loaded = true;
+        // yep
         std.debug.assert(off - @intFromPtr(&CosmeticState.font_buf) <= CosmeticState.font_buf.len);
     }
     //if (CosmeticState.s_patch_audio) {
@@ -417,11 +464,35 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
     crot.PatchRgbArgs(0x461069, 0xFFFFFF);
     crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
+
+    if (fonts_loaded) {
+        _ = mem.write(0x42D8EE + 3, u32, 0xE99720);
+        ra.Material_Free(@ptrCast(&fonts[0]._08_page_list[0]));
+        ra.Material_Free(@ptrCast(&fonts[1]._08_page_list[0]));
+        ra.Material_Free(@ptrCast(&fonts[1]._08_page_list[1]));
+        ra.Material_Free(@ptrCast(&fonts[1]._08_page_list[2]));
+        ra.Material_Free(@ptrCast(&fonts[2]._08_page_list[0]));
+        ra.Material_Free(@ptrCast(&fonts[3]._08_page_list[0]));
+        ra.Material_Free(@ptrCast(&fonts[4]._08_page_list[0]));
+        fonts_loaded = false;
+    }
 }
 
 // HOOKS
 
-export fn TextRenderB(_: *GlobalFn) callconv(.C) void {
+export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
+    if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
+        if (fonts_using) {
+            fonts_using = false;
+            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.TEXT_FONT_TABLE));
+        } else {
+            fonts_using = true;
+            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table));
+            //const SetCurrentFontSource: *align(1) *anyopaque = @ptrFromInt(0x42D8EE + 3);
+            //SetCurrentFontSource.* = @constCast(@ptrCast(&font_table));
+        }
+    }
+
     if (CosmeticState.s_rb_enable) {
         CosmeticState.PatchHudColRotate(
             CosmeticState.s_rb_value_enable,

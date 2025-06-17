@@ -1,6 +1,8 @@
 const Self = @This();
 
 const std = @import("std");
+const SPRITE_PAGE_INDEX = @import("Asset.zig").SPRITE_PAGE_INDEX;
+const SPRITE_PAGE_REF = @import("Asset.zig").SPRITE_PAGE_REF;
 
 // TODO: merge with Quad
 
@@ -27,6 +29,36 @@ const std = @import("std");
 //
 // 3
 // - an api that lets you do both ways, with overlapping ideas homogenized
+
+// GAME TYPEDEFS
+
+pub const FONT = extern struct {
+    _00: i32,
+    _04_page_num: i32,
+    _08_page_list: [16]?*anyopaque,
+    __pad1: u32, // NOTE: padding, technically length of 0x08 array unknown
+    _4C_line_height: i16,
+    __pad2: i16,
+    __pad3: i32,
+    __pad4: i32,
+    __pad5: i16,
+    _5A_char_min: u8,
+    _5B_char_max: u8,
+    _5C_glyphs: ?[*]FONT_GLYPH,
+    _60_glyphs_ext: ?[*]FONT_GLYPH,
+    __pad6: i32,
+};
+
+pub const FONT_GLYPH = extern struct {
+    _00_page_id: i16,
+    _02_width: i16,
+    _04_offset_x: i16,
+    _06_offset_y: i16,
+    _08_uv_x: i16,
+    _0A_uv_y: i16,
+    _0C_uv_w: i16,
+    _0E_uv_h: i16,
+};
 
 // GAME FUNCTIONS
 
@@ -67,16 +99,13 @@ pub const TEXT_COLOR_PRESET = [10]u32{
     0x985EFF, // (purple)
 };
 
-pub const TEXT_HIRES_FLAG_ADDR: usize = 0x50C0AC;
-pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(TEXT_HIRES_FLAG_ADDR);
+pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(0x50C0AC);
 
 // TODO: font typedef (probably sprite?)
-pub const TEXT_FONT_CURRENT_ADDR: usize = 0x50C0C4;
-pub const TEXT_FONT_CURRENT: **anyopaque = @ptrFromInt(TEXT_FONT_CURRENT_ADDR);
-pub const TEXT_FONT_NUM_ADDR: usize = 0x50C0C0;
-pub const TEXT_FONT_NUM: *u32 = @ptrFromInt(TEXT_FONT_NUM_ADDR);
-pub const TEXT_FONT_TABLE_ADDR: usize = 0xE99720;
-pub const TEXT_FONT_TABLE: *[*]*anyopaque = @ptrFromInt(TEXT_FONT_TABLE_ADDR);
+pub const TEXT_FONT_DEFS: *[5]FONT = @ptrFromInt(0x4BF7E0);
+pub const TEXT_FONT_TABLE_LEN: *i32 = @ptrFromInt(0x50C0C0);
+pub const TEXT_FONT_CURRENT: **FONT = @ptrFromInt(0x50C0C4);
+pub const TEXT_FONT_TABLE: *[7]*FONT = @ptrFromInt(0xE99720);
 
 // HELPERS
 
@@ -243,7 +272,7 @@ pub fn TextGetFontIndex(str: [*:0]const u8) u32 {
     var i: u32 = 0;
     while (str[i] != 0) : (i += 1) {
         if (str[i] == '~' and (str[i + 1] == 'f' or str[i + 1] == 'F'))
-            return std.math.clamp(str[i + 2] - '0', 0, TEXT_FONT_NUM.* - 1);
+            return std.math.clamp(str[i + 2] - '0', 0, TEXT_FONT_TABLE_LEN.* - 1);
     }
     return 0;
 }

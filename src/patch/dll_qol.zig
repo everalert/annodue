@@ -1600,5 +1600,5 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
 
 export fn MapRenderB(_: *GlobalFn) callconv(.C) void {
     // TODO: move to core? since it only matters with running annodue
-    rt.TEXT_HIRES_FLAG.* = 0;
+    rt.bTextHiRes.* = 0;
 }

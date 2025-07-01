@@ -21,6 +21,7 @@ pub const Sound = @import("Sound.zig");
 pub const Video = @import("Video.zig");
 pub const Quad = @import("Quad.zig");
 pub const Text = @import("Text.zig");
+pub const Font = @import("Font.zig");
 pub const Model = @import("Model.zig");
 pub const Asset = @import("Asset.zig");
 

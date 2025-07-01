@@ -18,6 +18,7 @@ const Setting = @import("core/ASettings.zig").ASettingSent;
 
 const ra = @import("racer").Asset;
 const rt = @import("racer").Text;
+const rf = @import("racer").Font;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -220,6 +221,8 @@ fn PatchTextureTable(
     return off;
 }
 
+// loads some GIMP format into Greyscale4 format (0x400) in preparation for game
+// parsing as sprite data
 fn LoadSpritePage(
     write_at: u32,
     width: u32,
@@ -393,7 +396,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 // FIXME: move
 const font_table = [_]*anyopaque{ &fonts[3], &fonts[2], &fonts[1], &fonts[2], &fonts[4], &fonts[3], &fonts[0] };
-var fonts: [5]rt.FONT = undefined;
+var fonts: [5]rf.FONT = undefined;
 var fonts_loaded: bool = false;
 var dp: ?*i32 = null;
 var fonts_using: bool = false;
@@ -416,7 +419,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
         //off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
         //off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
         // new
-        @memcpy(&fonts, rt.TEXT_FONT_DEFS);
+        @memcpy(&fonts, rf.aFontDef);
         fonts[0]._08_page_list[0] = @ptrFromInt(off);
         off = LoadSpritePage(off, 512, 1024, "font1", 0);
         ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[0]._08_page_list[0]), &dp, 1, 0);
@@ -484,7 +487,7 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
         if (fonts_using) {
             fonts_using = false;
-            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.TEXT_FONT_TABLE));
+            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
         } else {
             fonts_using = true;
             _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table));

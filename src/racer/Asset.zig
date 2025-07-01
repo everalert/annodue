@@ -1,9 +1,14 @@
 const std = @import("std");
 
+// FIXME: move sprite-, block-, etc. specific stuff to separate files
+
 // GAME TYPEDEFS
 
 pub const BlockFileType = enum(u32) { Model, Sprite, Spline, Texture };
 
+// FIXME: move to Color.zig
+pub const COLOR_RGB24 = packed struct(u24) { R: u8, G: u8, B: u8 };
+pub const COLOR_RGBA16 = packed struct(u24) { R: u4, G: u4, B: u4, A: u4 };
 pub const COLOR_RGBA32 = packed struct(u32) { R: u8, G: u8, B: u8, A: u8 };
 pub const COLOR_RGBA5551 = packed struct(u16) { R: u5, G: u5, B: u5, A: u1 };
 pub const COLOR_GREY4 = u4;

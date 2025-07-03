@@ -1,6 +1,7 @@
 const Self = @This();
 
 const std = @import("std");
+const assert = std.debug.assert;
 
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
@@ -11,6 +12,7 @@ const debug = @import("core/Debug.zig");
 const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+const PPanic = @import("util/debug.zig").PPanic;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -19,9 +21,13 @@ const Setting = @import("core/ASettings.zig").ASettingSent;
 const ra = @import("racer").Asset;
 const rt = @import("racer").Text;
 const rf = @import("racer").Font;
+const r3 = @import("racer").@"3D";
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
+
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
 
 // FEATURES
 // - High-resolution fonts
@@ -241,22 +247,53 @@ fn LoadSpritePage(
 
     // Load input texture to buffer
     var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, page }) catch
-        @panic("failed to format path for texture table patch"); // FIXME: error handling
+        @panic("LoadSpritePage: formatting texture file path"); // FIXME: error handling
 
     const file = std.fs.cwd().openFile(path, .{}) catch
-        @panic("failed to open texture table patch file"); // FIXME: error handling
+        @panic("LoadSpritePage: opening texture file"); // FIXME: error handling
     defer file.close();
-    var j: u32 = 0;
-    while (j < page_size * 2) : (j += 1) {
-        var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
-        _ = file.read(&pixel) catch
-            @panic("failed to read segment of texture table patch file"); // FIXME: error handling
-        buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
+    const r = file.reader();
+    for (0..page_size * 2) |j| {
+        const px = r.readInt(u16, .Little) catch @panic("LoadSpritePage: pixel read"); // FIXME: error handling
+        buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
     }
 
     off += page_size;
     off = x86.nop_align(off, 0x10);
     return off;
+}
+
+// dumps precomputed RGBA4444 data into buffer
+fn LoadPreComputedSpritePage(
+    buf_o: []u16,
+    width: u32,
+    height: u32,
+    filename: []const u8,
+    page: u32,
+) void {
+    assert(buf_o.len == width * height);
+    var str_buf: [1023:0]u8 = undefined;
+
+    const px_num: u32 = width * height;
+    @memset(buf_o, 0x00);
+
+    // FIXME: error handling
+    var path = std.fmt.bufPrintZ(
+        &str_buf,
+        "annodue/textures/{s}_{d}_test_dumpRGBA4444.data",
+        .{ filename, page },
+    ) catch |e| PPanic("(LoadPreComputedSpritePage) formatting file path: {e}", .{@errorName(e)});
+
+    // FIXME: error handling
+    const file = std.fs.cwd().openFile(path, .{}) catch |e|
+        PPanic("(LoadPreComputedSpritePage) opening file: {s}", .{@errorName(e)});
+    defer file.close();
+    const r = file.reader();
+    for (0..px_num) |i| {
+        // FIXME: error handling
+        buf_o[i] = r.readInt(u16, .Little) catch |e|
+            PPanic("(LoadPreComputedSpritePage) pixel read: {s}", .{@errorName(e)});
+    }
 }
 
 // FIXME: crashes, not sure why because the memory written should be identical
@@ -400,6 +437,7 @@ var fonts: [5]rf.FONT = undefined;
 var fonts_loaded: bool = false;
 var dp: ?*i32 = null;
 var fonts_using: bool = false;
+var page_data: [7][512 * 1024]u16 = std.mem.zeroes([7][512 * 1024]u16);
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     CosmeticState.settingsInit(gf);
@@ -411,39 +449,36 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: original function at fn_42D720
     //var off = gs.patch_offset;
     if (CosmeticState.s_patch_fonts) {
-        var off = @intFromPtr(&CosmeticState.font_buf);
-        // old
-        //off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
-        //off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
-        //off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
-        //off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
-        //off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
+        //var off = @intFromPtr(&CosmeticState.font_buf);
         // new
+        // FIXME: works in rendering but still crashes when unloading, in spite
+        // of the hMaterial_Free call in OnDeinit; maybe need to force text
+        // rendering state to update pointers?
         @memcpy(&fonts, rf.aFontDef);
-        fonts[0]._08_page_list[0] = @ptrFromInt(off);
-        off = LoadSpritePage(off, 512, 1024, "font1", 0);
-        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[0]._08_page_list[0]), &dp, 1, 0);
-        fonts[0]._08_page_list[1] = @ptrFromInt(off);
-        off = LoadSpritePage(off, 512, 1024, "font1", 1);
-        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[0]._08_page_list[1]), &dp, 1, 0);
-        fonts[0]._08_page_list[2] = @ptrFromInt(off);
-        off = LoadSpritePage(off, 512, 1024, "font1", 2);
-        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[0]._08_page_list[2]), &dp, 1, 0);
-        fonts[1]._08_page_list[0] = @ptrFromInt(off);
-        off = LoadSpritePage(off, 512, 1024, "font2", 0);
-        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[1]._08_page_list[0]), &dp, 1, 0);
-        fonts[2]._08_page_list[0] = @ptrFromInt(off);
-        off = LoadSpritePage(off, 512, 1024, "font3", 0);
-        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[2]._08_page_list[0]), &dp, 1, 0);
-        fonts[3]._08_page_list[0] = @ptrFromInt(off);
-        off = LoadSpritePage(off, 512, 1024, "font0", 0);
-        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[3]._08_page_list[0]), &dp, 1, 0);
-        fonts[4]._08_page_list[0] = @ptrFromInt(off);
-        off = LoadSpritePage(off, 512, 1024, "font4", 0);
-        ra.Material_CreateFromSpritePage(3, 0, 512, 1024, 512, 1024, @ptrCast(&fonts[4]._08_page_list[0]), &dp, 1, 0);
-        fonts_loaded = true;
+        LoadPreComputedSpritePage(&page_data[0], 512, 1024, "font1", 0);
+        LoadPreComputedSpritePage(&page_data[1], 512, 1024, "font1", 1);
+        LoadPreComputedSpritePage(&page_data[2], 512, 1024, "font1", 2);
+        LoadPreComputedSpritePage(&page_data[3], 512, 1024, "font2", 0);
+        LoadPreComputedSpritePage(&page_data[4], 512, 1024, "font3", 0);
+        LoadPreComputedSpritePage(&page_data[5], 512, 1024, "font0", 0);
+        LoadPreComputedSpritePage(&page_data[6], 512, 1024, "font4", 0);
+        fonts[0]._08_page_list[0] =
+            r3.hMaterial_CreateFromTextureData(&page_data[0], 512, 1024, 512, 1024, .RGBA4444);
+        fonts[0]._08_page_list[1] =
+            r3.hMaterial_CreateFromTextureData(&page_data[1], 512, 1024, 512, 1024, .RGBA4444);
+        fonts[0]._08_page_list[2] =
+            r3.hMaterial_CreateFromTextureData(&page_data[2], 512, 1024, 512, 1024, .RGBA4444);
+        fonts[1]._08_page_list[0] =
+            r3.hMaterial_CreateFromTextureData(&page_data[3], 512, 1024, 512, 1024, .RGBA4444);
+        fonts[2]._08_page_list[0] =
+            r3.hMaterial_CreateFromTextureData(&page_data[4], 512, 1024, 512, 1024, .RGBA4444);
+        fonts[3]._08_page_list[0] =
+            r3.hMaterial_CreateFromTextureData(&page_data[5], 512, 1024, 512, 1024, .RGBA4444);
+        fonts[4]._08_page_list[0] =
+            r3.hMaterial_CreateFromTextureData(&page_data[6], 512, 1024, 512, 1024, .RGBA4444);
         // yep
-        std.debug.assert(off - @intFromPtr(&CosmeticState.font_buf) <= CosmeticState.font_buf.len);
+        fonts_loaded = true;
+        //std.debug.assert(off - @intFromPtr(&CosmeticState.font_buf) <= CosmeticState.font_buf.len);
     }
     //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
@@ -469,14 +504,16 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
 
     if (fonts_loaded) {
-        _ = mem.write(0x42D8EE + 3, u32, 0xE99720);
-        ra.Material_Free(@ptrCast(&fonts[0]._08_page_list[0]));
-        ra.Material_Free(@ptrCast(&fonts[1]._08_page_list[0]));
-        ra.Material_Free(@ptrCast(&fonts[1]._08_page_list[1]));
-        ra.Material_Free(@ptrCast(&fonts[1]._08_page_list[2]));
-        ra.Material_Free(@ptrCast(&fonts[2]._08_page_list[0]));
-        ra.Material_Free(@ptrCast(&fonts[3]._08_page_list[0]));
-        ra.Material_Free(@ptrCast(&fonts[4]._08_page_list[0]));
+        // new
+        r3.hMaterial_Free(@ptrCast(&fonts[0]._08_page_list[0]));
+        r3.hMaterial_Free(@ptrCast(&fonts[1]._08_page_list[0]));
+        r3.hMaterial_Free(@ptrCast(&fonts[1]._08_page_list[1]));
+        r3.hMaterial_Free(@ptrCast(&fonts[1]._08_page_list[2]));
+        r3.hMaterial_Free(@ptrCast(&fonts[2]._08_page_list[0]));
+        r3.hMaterial_Free(@ptrCast(&fonts[3]._08_page_list[0]));
+        r3.hMaterial_Free(@ptrCast(&fonts[4]._08_page_list[0]));
+        // yep
+        _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
         fonts_loaded = false;
     }
 }

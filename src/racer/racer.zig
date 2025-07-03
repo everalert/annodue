@@ -24,6 +24,7 @@ pub const Text = @import("Text.zig");
 pub const Font = @import("Font.zig");
 pub const Model = @import("Model.zig");
 pub const Asset = @import("Asset.zig");
+pub const @"3D" = @import("3D.zig");
 
 pub const Camera = @import("Camera.zig");
 pub const Vehicle = @import("Vehicle.zig");

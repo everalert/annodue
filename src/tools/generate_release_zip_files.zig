@@ -152,6 +152,7 @@ pub fn main() !void {
     defer archive.deinit();
     try z.write(&archive, null);
 
+    // TODO: buffered writers
     const o_filename = try std.fmt.allocPrint(alloc, "annodue-{s}.zip", .{ver.?});
     const out = try o_dir.createFile(o_filename, .{});
     defer out.close();

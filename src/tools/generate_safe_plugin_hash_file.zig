@@ -44,7 +44,7 @@ pub fn main() !void {
     if (i_path == null) return error.NoInputPath;
     if (o_path == null) return error.NoOutputPath;
 
-    std.fs.makeDirAbsolute(o_path.?) catch |err| switch(err) {
+    std.fs.makeDirAbsolute(o_path.?) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
@@ -54,6 +54,7 @@ pub fn main() !void {
     //std.debug.print("\n", .{});
     //std.debug.print("Generating: plugin_hash.bin... ", .{});
 
+    // TODO: buffered writer
     const hash_filename = try std.fmt.allocPrint(alloc, "{s}/hashfile.bin", .{o_path.?});
     const hash_file = try std.fs.cwd().createFile(hash_filename, .{});
     defer hash_file.close();
@@ -82,13 +83,14 @@ fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
     defer file.close();
 
     var sha512 = Sha512.init(.{});
-    const rdr = file.reader();
+    var file_br = std.io.bufferedReader(file.reader());
+    const file_r = file_br.reader();
 
     var buf: [std.mem.page_size]u8 = undefined;
-    var n = try rdr.read(&buf);
+    var n = try file_r.read(&buf);
     while (n != 0) {
         sha512.update(buf[0..n]);
-        n = try rdr.read(&buf);
+        n = try file_r.read(&buf);
     }
 
     return sha512.finalResult();

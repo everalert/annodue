@@ -19,6 +19,11 @@ pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_
     const file = std.fs.cwd().createFile("annodue/crashlog.txt", .{}) catch
         @panic("failed to create crashlog.txt");
     defer file.close();
+    // TODO: add buffered writer if possible; using below code and changing write
+    // references to use "file_w" causes transitive error during compilation
+    //var file_bw = std.io.bufferedWriter(file.writer());
+    //defer file_bw.flush();
+    //var file_w = file_bw.writer();
 
     const head = std.fmt.allocPrint(alloc, "{s}\n{s: <16}{s}\n{s: <16}{d}\n", .{
         ANNODUE_VER, "MESSAGE:", message, "TIMESTAMP:", std.time.milliTimestamp(),

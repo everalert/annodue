@@ -54,6 +54,7 @@ fn DumpTexture(alloc: std.mem.Allocator, offset: usize, format: u8, alignment: u
 
     var buf: [255:0]u8 = undefined;
 
+    // TODO: buffered writer
     // initial file setup
     const out = std.fs.cwd().createFile(filename, .{}) catch |e|
     // FIXME: switch to exclusive mode and handle FileAlreadyExists

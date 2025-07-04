@@ -682,8 +682,11 @@ pub const ASettings = struct {
     pub fn iniRead(alloc: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
+        //var file_br = std.io.bufferedReader(file.reader());
+        //const file_r = file_br.reader();
+        const file_r = file.reader();
 
-        var parser = ini.parse(alloc, file.reader());
+        var parser = ini.parse(alloc, file_r);
         defer parser.deinit();
 
         var sec_handle: ?Handle = null;
@@ -782,7 +785,10 @@ pub const ASettings = struct {
 
         const file = try std.fs.cwd().createFile(FILENAME_ACTIVE, .{}); // .exclusive=true for no file rewrite
         defer file.close();
-        var file_w = file.writer();
+        var file_bw = std.io.bufferedWriter(file.writer());
+        defer _ = file_bw.flush() catch |e|
+            PPanic("(ASettings) [save] write buffer flush: {s}", .{@errorName(e)});
+        const file_w = file_bw.writer();
 
         try iniWrite(file_w);
         skip_next_load = true;

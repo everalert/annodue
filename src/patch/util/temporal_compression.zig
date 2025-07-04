@@ -388,7 +388,8 @@ pub fn TemporalCompressor(
             var frame: usize = 0;
             var size_orig: usize = 0;
             var size_comp: usize = 0;
-            const file_r = file.reader();
+            var file_br = std.io.bufferedReader(file.reader());
+            const file_r = file_br.reader();
 
             while (true) : (frame += 1) {
                 var depth: usize = opts.layer_depth;
@@ -616,6 +617,7 @@ pub fn TemporalCompressor(
     };
 }
 
+// TODO: buffered io
 //test "dump recorded data" {
 //    if (gf.InputGetKb(.J, .JustOn)) blk: {
 //        const file = std.fs.cwd().createFile("annodue/test_frame_data_dump.bin", .{}) catch break :blk;
@@ -629,6 +631,7 @@ pub fn TemporalCompressor(
 //    }
 //}
 
+// TODO: buffered io
 //test "calculate compression potential" {
 //    if (gf.InputGetKb(.F, .JustOn)) blk: {
 //        const file = std.fs.cwd().createFile("annodue/recording_raw-0x2458-nohead_mgs.bin.txt", .{}) catch

@@ -28,6 +28,7 @@ pub const panic = debug.annodue_panic;
 
 // FIXME: remove, for testing
 const dbg = @import("util/debug.zig");
+const rd = @import("racer").Debug;
 
 // FEATURES
 // - High-resolution fonts
@@ -252,7 +253,8 @@ fn LoadSpritePage(
     const file = std.fs.cwd().openFile(path, .{}) catch
         @panic("LoadSpritePage: opening texture file"); // FIXME: error handling
     defer file.close();
-    const r = file.reader();
+    var br = std.io.bufferedReader(file.reader());
+    const r = br.reader();
     for (0..page_size * 2) |j| {
         const px = r.readInt(u16, .Little) catch @panic("LoadSpritePage: pixel read"); // FIXME: error handling
         buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
@@ -288,7 +290,8 @@ fn LoadPreComputedSpritePage(
     const file = std.fs.cwd().openFile(path, .{}) catch |e|
         PPanic("(LoadPreComputedSpritePage) opening file: {s}", .{@errorName(e)});
     defer file.close();
-    const r = file.reader();
+    var br = std.io.bufferedReader(file.reader());
+    const r = br.reader();
     for (0..px_num) |i| {
         // FIXME: error handling
         buf_o[i] = r.readInt(u16, .Little) catch |e|

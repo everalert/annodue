@@ -260,13 +260,14 @@ fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
     defer file.close();
 
     var sha512 = Sha512.init(.{});
-    const rdr = file.reader();
+    var file_br = std.io.bufferedReader(file.reader());
+    const file_r = file_br.reader();
 
     var buf: [std.mem.page_size]u8 = undefined;
-    var n = try rdr.read(&buf);
+    var n = try file_r.read(&buf);
     while (n != 0) {
         sha512.update(buf[0..n]);
-        n = try rdr.read(&buf);
+        n = try file_r.read(&buf);
     }
 
     return sha512.finalResult();

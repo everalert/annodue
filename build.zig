@@ -252,6 +252,17 @@ pub fn build(b: *std.Build) void {
     );
     hash_step.dependOn(plugin_step);
 
+    var single_plugin_step = b.step(
+        "plugin",
+        "Build individual plugin DLL; use -Dplugin=<name>, see build.zig for list",
+    );
+
+    const single_plugin_option = b.option(
+        []const u8,
+        "plugin",
+        "name of the plugin to compile in the 'plugin' step",
+    ) orelse null;
+
     // STEP - build collision viewer c/c++ part
 
     const collision_viewer = b.addStaticLibrary(.{
@@ -306,6 +317,8 @@ pub fn build(b: *std.Build) void {
         // TODO: investigate options arg
         var dll_install = b.addInstallArtifact(dll, .{});
         plugin_step.dependOn(&dll_install.step);
+        if (single_plugin_option != null and std.mem.eql(u8, plugin.name, single_plugin_option.?))
+            single_plugin_step.dependOn(&dll_install.step);
 
         var bufo = std.fmt.allocPrint(alloc, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
         if (DEV_MODE and copypath != null)

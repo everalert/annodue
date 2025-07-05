@@ -271,7 +271,6 @@ fn LoadPreComputedSpritePage(
     width: u32,
     height: u32,
     filename: []const u8,
-    page: u32,
 ) void {
     assert(buf_o.len == width * height);
     var str_buf: [1023:0]u8 = undefined;
@@ -280,11 +279,8 @@ fn LoadPreComputedSpritePage(
     @memset(buf_o, 0x00);
 
     // FIXME: error handling
-    var path = std.fmt.bufPrintZ(
-        &str_buf,
-        "annodue/textures/{s}_{d}_test_dumpRGBA4444.data",
-        .{ filename, page },
-    ) catch |e| PPanic("(LoadPreComputedSpritePage) formatting file path: {e}", .{@errorName(e)});
+    var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}.data", .{filename}) catch |e|
+        PPanic("(LoadPreComputedSpritePage) formatting file path: {e}", .{@errorName(e)});
 
     // FIXME: error handling
     const file = std.fs.cwd().openFile(path, .{}) catch |e|
@@ -440,7 +436,14 @@ var fonts: [5]rf.FONT = undefined;
 var fonts_loaded: bool = false;
 var dp: ?*i32 = null;
 var fonts_using: bool = false;
-var page_data: [7][512 * 1024]u16 = std.mem.zeroes([7][512 * 1024]u16);
+var fpage_raw = std.mem.zeroes([5][512 * 1024]u16);
+var fpage = [5]struct { r: []u16, m: ?*r3.Material = null }{
+    .{ .r = &fpage_raw[0] },
+    .{ .r = &fpage_raw[1] },
+    .{ .r = &fpage_raw[2] },
+    .{ .r = &fpage_raw[3] },
+    .{ .r = &fpage_raw[4] },
+};
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     CosmeticState.settingsInit(gf);
@@ -454,31 +457,24 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     if (CosmeticState.s_patch_fonts) {
         //var off = @intFromPtr(&CosmeticState.font_buf);
         // new
-        // FIXME: works in rendering but still crashes when unloading, in spite
-        // of the hMaterial_Free call in OnDeinit; maybe need to force text
-        // rendering state to update pointers?
         @memcpy(&fonts, rf.aFontDef);
-        LoadPreComputedSpritePage(&page_data[0], 512, 1024, "font1", 0);
-        LoadPreComputedSpritePage(&page_data[1], 512, 1024, "font1", 1);
-        LoadPreComputedSpritePage(&page_data[2], 512, 1024, "font1", 2);
-        LoadPreComputedSpritePage(&page_data[3], 512, 1024, "font2", 0);
-        LoadPreComputedSpritePage(&page_data[4], 512, 1024, "font3", 0);
-        LoadPreComputedSpritePage(&page_data[5], 512, 1024, "font0", 0);
-        LoadPreComputedSpritePage(&page_data[6], 512, 1024, "font4", 0);
-        fonts[0]._08_page_list[0] =
-            r3.hMaterial_CreateFromTextureData(&page_data[0], 512, 1024, 512, 1024, .RGBA4444);
-        fonts[0]._08_page_list[1] =
-            r3.hMaterial_CreateFromTextureData(&page_data[1], 512, 1024, 512, 1024, .RGBA4444);
-        fonts[0]._08_page_list[2] =
-            r3.hMaterial_CreateFromTextureData(&page_data[2], 512, 1024, 512, 1024, .RGBA4444);
-        fonts[1]._08_page_list[0] =
-            r3.hMaterial_CreateFromTextureData(&page_data[3], 512, 1024, 512, 1024, .RGBA4444);
-        fonts[2]._08_page_list[0] =
-            r3.hMaterial_CreateFromTextureData(&page_data[4], 512, 1024, 512, 1024, .RGBA4444);
-        fonts[3]._08_page_list[0] =
-            r3.hMaterial_CreateFromTextureData(&page_data[5], 512, 1024, 512, 1024, .RGBA4444);
-        fonts[4]._08_page_list[0] =
-            r3.hMaterial_CreateFromTextureData(&page_data[6], 512, 1024, 512, 1024, .RGBA4444);
+        LoadPreComputedSpritePage(fpage[0].r, 512, 1024, "fontraw0_test");
+        LoadPreComputedSpritePage(fpage[1].r, 512, 1024, "fontraw1_test");
+        LoadPreComputedSpritePage(fpage[2].r, 512, 1024, "fontraw2_test");
+        LoadPreComputedSpritePage(fpage[3].r, 512, 1024, "fontraw3_test");
+        LoadPreComputedSpritePage(fpage[4].r, 512, 1024, "fontraw4_test");
+        fpage[0].m = r3.hMaterial_CreateFromTextureData(fpage[0].r, 512, 1024, 512, 1024, .ARGB4444);
+        fpage[1].m = r3.hMaterial_CreateFromTextureData(fpage[1].r, 512, 1024, 512, 1024, .ARGB4444);
+        fpage[2].m = r3.hMaterial_CreateFromTextureData(fpage[2].r, 512, 1024, 512, 1024, .ARGB4444);
+        fpage[3].m = r3.hMaterial_CreateFromTextureData(fpage[3].r, 512, 1024, 512, 1024, .ARGB4444);
+        fpage[4].m = r3.hMaterial_CreateFromTextureData(fpage[4].r, 512, 1024, 512, 1024, .ARGB4444);
+        fonts[0]._08_page_list[0] = fpage[0].m;
+        fonts[0]._08_page_list[1] = fpage[1].m;
+        fonts[0]._08_page_list[2] = fpage[2].m;
+        fonts[1]._08_page_list[0] = fpage[2].m;
+        fonts[2]._08_page_list[0] = fpage[2].m;
+        fonts[3]._08_page_list[0] = fpage[3].m;
+        fonts[4]._08_page_list[0] = fpage[4].m;
         // yep
         fonts_loaded = true;
         //std.debug.assert(off - @intFromPtr(&CosmeticState.font_buf) <= CosmeticState.font_buf.len);
@@ -507,14 +503,30 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
 
     if (fonts_loaded) {
+        // old
+        // FIXME: works in rendering but still crashes when unloading, in spite
+        // of the hMaterial_Free call in OnDeinit; maybe need to force text
+        // rendering state to update pointers?
+        // NOTE: unload crashes at 0x48AA45 (in fn_48AA40) with access violation error
+        // (0xC0000005) according to windows event viewer
+        // NOTE: all these were originally unique allocations, unlike current
+        // scheme that reuses the "base" materials
+        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[0])));
+        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[1])));
+        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[2])));
+        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[1]._08_page_list[0])));
+        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[2]._08_page_list[0])));
+        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[3]._08_page_list[0])));
+        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[4]._08_page_list[0]))); // crash
         // new
-        r3.hMaterial_Free(@ptrCast(&fonts[0]._08_page_list[0]));
-        r3.hMaterial_Free(@ptrCast(&fonts[1]._08_page_list[0]));
-        r3.hMaterial_Free(@ptrCast(&fonts[1]._08_page_list[1]));
-        r3.hMaterial_Free(@ptrCast(&fonts[1]._08_page_list[2]));
-        r3.hMaterial_Free(@ptrCast(&fonts[2]._08_page_list[0]));
-        r3.hMaterial_Free(@ptrCast(&fonts[3]._08_page_list[0]));
-        r3.hMaterial_Free(@ptrCast(&fonts[4]._08_page_list[0]));
+        // NOTE: this one doesn't crash, but almost certainly incidental and likely
+        // just because fewer materials allocated;  the point of changing to this
+        // was just to streamline font loading because some pages were triple loaded
+        r3.hMaterial_Free(fpage[0].m);
+        r3.hMaterial_Free(fpage[1].m);
+        r3.hMaterial_Free(fpage[2].m);
+        r3.hMaterial_Free(fpage[3].m);
+        r3.hMaterial_Free(fpage[4].m);
         // yep
         _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
         fonts_loaded = false;
@@ -534,6 +546,42 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
             //const SetCurrentFontSource: *align(1) *anyopaque = @ptrFromInt(0x42D8EE + 3);
             //SetCurrentFontSource.* = @constCast(@ptrCast(&font_table));
         }
+    }
+    // should crash
+    if (fonts_loaded and gf.InputGetKbRaw(.I) == .JustOn) {
+        // old
+        //// unload only crashes on specific materials?
+        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[0]))); // ok
+        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[1]))); // ok
+        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[2]))); // ok
+        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[1]._08_page_list[0]))); // ok
+        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[2]._08_page_list[0]))); // ok
+        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[3]._08_page_list[0]))); // ok
+        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[4]._08_page_list[0]))); // crash
+        // new
+        r3.hMaterial_Free(fpage[0].m);
+        r3.hMaterial_Free(fpage[1].m);
+        r3.hMaterial_Free(fpage[2].m);
+        r3.hMaterial_Free(fpage[3].m);
+        r3.hMaterial_Free(fpage[4].m);
+        // yep
+        _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
+        fonts_loaded = false;
+    }
+
+    // trying to induce crash by memory access rather than running free function
+    if (fonts_loaded and gf.InputGetKbRaw(.O) == .JustOn) {
+        //const s = struct {
+        //    var p: ?*anyopaque = undefined;
+        //};
+        // s.p = @as(?*r3.Material, @alignCast(@ptrCast(&fonts[0]._08_page_list[0]))).?._90_paTextureAlloc.?[0]._7C_pD3DTextureSrc;
+        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[1])));
+        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[2])));
+        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[1]._08_page_list[0])));
+        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[2]._08_page_list[0])));
+        // s.p = @as(?*r3.Material, @alignCast(@ptrCast(&fonts[3]._08_page_list[0]))).?._90_paTextureAlloc.?[0]._7C_pD3DTextureSrc; // crash
+        //s.p = @as(?*r3.Material, @alignCast(@ptrCast(&fonts[4]._08_page_list[0]))).?._90_paTextureAlloc.?[0]._7C_pD3DTextureSrc; // crash
+        //ashta
     }
 
     if (CosmeticState.s_rb_enable) {

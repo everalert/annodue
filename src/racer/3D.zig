@@ -11,7 +11,7 @@ const assert = std.debug.assert;
 // GAME TYPEDEFS
 
 // FIXME: RGB bits per channel == ?
-pub const ColorFormat = enum(u32) { RGB = 0, RGBA5551 = 1, RGBA4444 = 2 };
+pub const ColorFormat = enum(u32) { RGB = 0, ARGB1555 = 1, ARGB4444 = 2 };
 
 // SWR_MATERIAL
 // sizeof(0x94)
@@ -145,7 +145,7 @@ pub fn hMaterial_CreateFromTextureData(
     h_used: i32,
     fmt: ColorFormat,
 ) ?*Material {
-    assert(fmt == .RGBA4444 or fmt == .RGBA5551);
+    assert(fmt == .ARGB4444 or fmt == .ARGB1555);
     assert(w >= w_used);
     assert(h >= h_used);
     assert(data.len == w * h);
@@ -196,17 +196,17 @@ pub fn hMaterial_CreateFromTextureData(
 // FIXME: uses ingame allocator, convert to user-provided alloc or buffer
 pub fn hMaterial_Free(mat: ?*Material) void {
     assert(mat != null);
-    fn3DTextureClear(mat.?._90_paTextureAlloc);
+    //fn3DTextureClear(mat.?._90_paTextureAlloc);
     _ = fnMaterialFree(mat);
 }
 
 pub fn hMaterial_SetFormat(mat: *Material, fmt: ColorFormat) void {
     assert(fmt != .RGB); // unsupported for now
     switch (fmt) {
-        .RGBA5551 => {
-            mat._7C_ColorFormat = .RGBA5551;
+        .ARGB1555 => {
+            mat._7C_ColorFormat = .ARGB1555;
             mat._44_ColorInfo = .{
-                ._00_ColorFormat = .RGBA5551,
+                ._00_ColorFormat = .ARGB1555,
                 ._04_BPP = 16,
                 ._08_BPPR = 5,
                 ._0C_BPPG = 5,
@@ -222,10 +222,10 @@ pub fn hMaterial_SetFormat(mat: *Material, fmt: ColorFormat) void {
                 ._34_ShrA = 7,
             };
         },
-        .RGBA4444 => {
-            mat._7C_ColorFormat = .RGBA4444;
+        .ARGB4444 => {
+            mat._7C_ColorFormat = .ARGB4444;
             mat._44_ColorInfo = .{
-                ._00_ColorFormat = .RGBA4444,
+                ._00_ColorFormat = .ARGB4444,
                 ._04_BPP = 16,
                 ._08_BPPR = 4,
                 ._0C_BPPG = 4,

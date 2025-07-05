@@ -444,6 +444,19 @@ var fpage = [5]struct { r: []u16, m: ?*r3.Material = null }{
     .{ .r = &fpage_raw[3] },
     .{ .r = &fpage_raw[4] },
 };
+const font_test_strings: [7][4][71:0]u8 = blk: {
+    var buf = std.mem.zeroes([7][4][71:0]u8);
+    var text = std.mem.zeroes([255:0]u8);
+    for (0..255) |i| text[i] = i + 1;
+    for (0..7) |i| {
+        var pre = [5]u8{ '~', 'F', '0' + i, '~', 's' };
+        for (0..4) |j| {
+            @memcpy(buf[i][j][0..5], &pre);
+            @memcpy(buf[i][j][5..69], text[64 * j .. 64 * (j + 1)]);
+        }
+    }
+    break :blk buf;
+};
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     CosmeticState.settingsInit(gf);
@@ -570,7 +583,18 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     }
 
     // trying to induce crash by memory access rather than running free function
-    if (fonts_loaded and gf.InputGetKbRaw(.O) == .JustOn) {
+    if (gf.InputGetKbRaw(.O).on()) {
+        var x: i16 = 12;
+        var y: i16 = 12;
+        for (0..3) |i| {
+            const y_step: i16 = if (i < 2) 18 else 32;
+            for (0..4) |j| {
+                //rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xBE, &font_test_strings[4 + i][j]);
+                rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[4 + i][j]);
+                y += y_step;
+            }
+            y += 12;
+        }
         //const s = struct {
         //    var p: ?*anyopaque = undefined;
         //};

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Developer: Dump font glyph templates in addition to font sheets
 - Overlay: Detailed speed readout, with raw readout option (setting: `show_speed` `show_speed_raw`)
 - Overlay: Terrain speed offsets readout (setting: `show_speed_offsets`)
 - Overlay: Simplified FPS readout option (setting: `show_fps_simple`)

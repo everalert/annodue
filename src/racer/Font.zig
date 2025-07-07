@@ -35,6 +35,7 @@ pub const GLYPH = extern struct {
 // FIXME: move to TextFormat.zig
 // aka GLYPH_SWITCH
 // used to redirect characters to use another character's glyph
+// possibly also related to rendering diacritics
 pub const GLYPH_MAP = extern struct {
     _00_glyph1: u8,
     _01_glyph2: u8,

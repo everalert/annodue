@@ -366,7 +366,7 @@ Configurable under `[gameplay]`
 
 *Disabled in current release*
 
-- Dump font data to file on launch
+- Dump font data to file on launch (font sheets and glyph templates)
 - Visualize matrices via hijacking debug spline markers
 
 ##### Settings

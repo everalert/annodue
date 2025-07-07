@@ -85,7 +85,7 @@ fn PixelColorType(comptime f: PIXEL_FORMAT) type {
     };
 }
 
-inline fn hConvertBPP(n: u32, comptime Tf: type, comptime Tt: type) Tt {
+pub inline fn hConvertBPP(n: u32, comptime Tf: type, comptime Tt: type) Tt {
     comptime {
         const info_f = @typeInfo(Tf);
         const info_t = @typeInfo(Tt);
@@ -130,7 +130,7 @@ pub fn PixelToRGBA(comptime F: PIXEL_FORMAT, pixel: PixelColorType(F)) COLOR_RGB
 }
 
 pub inline fn hExtract4BPP(px: u8, i: usize) u4 {
-    return @truncate(0xF & (px >> (i % 2) * 4));
+    return @truncate(0xF & (px >> ((i + 1) % 2) * 4));
 }
 
 pub inline fn hInsert4BPP(px: u4, i: usize) u8 {

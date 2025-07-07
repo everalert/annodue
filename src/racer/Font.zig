@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const COLOR_GREY4 = @import("Asset.zig").COLOR_GREY4;
+pub const COLOR_GREY4 = @import("Asset.zig").COLOR_GREY4;
 
 // GAME TYPEDEFS
 
@@ -43,7 +43,7 @@ pub const GLYPH_MAP = extern struct {
 // GAME CONSTANTS
 
 // each page = 64x128 Greyscale4 (format 3 alignment 0)
-pub const aFontRawPageData: *[5][0x1000]COLOR_GREY4 = @ptrFromInt(0x4B9620);
+pub const aFontRawPageData: *[5][0x1000]u8 = @ptrFromInt(0x4B9620); // COLOR_GREY4
 
 // NOTE: named for font def correspondence, not old hd font order
 pub const aFontGlyphs0: *[61]GLYPH = @ptrFromInt(0x4BE620);

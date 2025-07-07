@@ -1,6 +1,7 @@
 const Self = @This();
 
 const std = @import("std");
+const assert = std.debug.assert;
 
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
@@ -10,6 +11,7 @@ const debug = @import("core/Debug.zig");
 
 const mem = @import("util/memory.zig");
 const PPanic = @import("util/debug.zig").PPanic;
+const TGA = @import("util/tga.zig");
 
 const r = @import("racer");
 const rt = r.Text;
@@ -21,6 +23,8 @@ const mat = r.Matrix;
 const Mat4x4 = mat.Mat4x4;
 const vec = r.Vector;
 const Vec3 = vec.Vec3;
+const rf = r.Font;
+const ra = r.Asset;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -43,71 +47,43 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 // SWE1R-PATCHER STUFF
 
-// FIXME: not crashing for now, but need to address virtualalloc size
-// NOTE: probably need to investigate the actual data in memory
-//   and use a real img format, without manually building the file.
-//   but, what it outputs now looks right, just not sure if it's the whole data for each file
+// FIXME: crashes if directory doesn't exist
 // FIXME: handle FileAlreadyExists case (not sure best approach yet)
-fn DumpTexture(alloc: std.mem.Allocator, offset: usize, format: u8, alignment: u8, width: u32, height: u32, filename: []const u8) void {
-    std.debug.assert(format == 3);
-    std.debug.assert(alignment == 0);
+fn DumpGrey4toTGA(pixels: []const u8, width: u16, height: u16, filename: []const u8) void {
+    assert(pixels.len == width * height / 2);
+    assert(width > 0);
+    assert(height > 0);
+    assert(filename.len > 4);
+    assert(std.mem.endsWith(u8, filename, ".tga"));
 
-    var buf: [255:0]u8 = undefined;
-
-    // TODO: buffered writer
-    // initial file setup
-    const out = std.fs.cwd().createFile(filename, .{}) catch |e|
+    // setup file
     // FIXME: switch to exclusive mode and handle FileAlreadyExists
-        PPanic("failed to create texture dump output file: {s}", .{@errorName(e)});
-    defer out.close();
-    var out_pos: usize = 0;
-    const out_head = std.fmt.bufPrintZ(&buf, "P3\n{d} {d}\n15\n", .{ width, height }) catch
-        @panic("failed to format texture header for dump"); // FIXME: error handling
-    out_pos += out.pwrite(out_head, out_pos) catch
-        @panic("failed to write texture header to dump output file"); // FIXME: error handling
+    const file = std.fs.cwd().createFile(filename, .{}) catch |e|
+        PPanic("(DumpGrey4toTGA) create file: {s}", .{@errorName(e)});
+    defer file.close();
+    var file_bw = std.io.bufferedWriter(file.writer());
+    const file_w = file_bw.writer();
+    defer _ = file_bw.flush() catch |e|
+        PPanic("(DumpGrey4toTGA) flush: {s}", .{@errorName(e)});
 
-    // Copy the pixel data
-    const texture_size = width * height; // WARNING: w*h*4/8 in original patcher, but crashes here
-    var texture = alloc.alloc(u8, texture_size) catch
-        @panic("failed to allocate texture dump memory");
-    defer alloc.free(texture);
-    const texture_slice = @as([*]u8, @ptrCast(texture))[0..texture_size];
-    mem.read_bytes(offset + 4, &texture[0], texture_size);
-
-    // write rest of file
-    const len: usize = width * height * 2;
-    var i: usize = 0;
-    while (i < len) : (i += 1) {
-        const v: u8 = ((texture_slice[i / 2] << @as(u3, @truncate((i % 2) * 4))) & 0xF0) >> 4;
-        const out_frag = std.fmt.bufPrintZ(&buf, "{d} {d} {d}\n", .{ v, v, v }) catch
-            @panic("failed to format texture segment for dump");
-        out_pos += out.pwrite(out_frag, out_pos) catch
-            @panic("failed to write texture segment to dump output file");
+    // write tga
+    var tga = TGA{
+        .ImageType = .{ .DataType = .Grayscale },
+        .ImageWidth = width,
+        .ImageHeight = height,
+        .ImageBPP = 8,
+    };
+    tga.WriteHeader(file_w) catch |e|
+        PPanic("(DumpGrey4toTGA) tga header: {s}", .{@errorName(e)});
+    for (pixels, 0..) |px, i| {
+        const px_i = i * 2;
+        file_w.writeIntLittle(u8, @as(u8, @intCast(ra.hExtract4BPP(px, 0))) << 4) catch |e|
+            PPanic("(DumpGrey4toTGA) pixel {d}: {s}", .{ px_i + 0, @errorName(e) });
+        file_w.writeIntLittle(u8, @as(u8, @intCast(ra.hExtract4BPP(px, 1))) << 4) catch |e|
+            PPanic("(DumpGrey4toTGA) pixel {d}: {s}", .{ px_i + 1, @errorName(e) });
     }
-}
-
-// FIXME: crashes if directory doesn't exist, maybe also if file already exists
-fn DumpTextureTable(offset: usize, format: u8, alignment: u8, width: u32, height: u32, filename: []const u8) u32 {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
-    var buf: [255:0]u8 = undefined;
-
-    // Get size of the table
-    const count: u32 = mem.read(offset + 0, u32); // NOTE: exe unnecessary, just read ram
-
-    // Loop over elements and dump each
-    var offsets = alloc.alloc(u8, count * 4) catch
-        @panic("failed to allocate memory for texture dump table");
-    defer alloc.free(offsets);
-    const offsets_slice = @as([*]align(1) u32, @ptrCast(offsets))[0..count];
-    mem.read_bytes(offset + 4, &offsets[0], count * 4);
-    var i: usize = 0;
-    while (i < count) : (i += 1) {
-        const filename_i = std.fmt.bufPrintZ(&buf, "annodue/developer/{s}_{d}.ppm", .{ filename, i }) catch
-            @panic("failed to format output path for texture dump table"); // FIXME: error handling
-        DumpTexture(alloc, offsets_slice[i], format, alignment, width, height, filename_i);
-    }
-    return count;
+    tga.WriteFooter(file_w) catch |e|
+        PPanic("(DumpGrey4toTGA) tga footer: {s}", .{@errorName(e)});
 }
 
 // MAT4X4 VISUALIZATION
@@ -144,16 +120,16 @@ const Developer = struct {
             gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .b = false }, &s_visualize_matrices, null);
     }
 
-    // TODO: make sure it only dumps once, even when hot reloading
+    // TODO: dump font mask sheet to tga;  i.e. images showing UV regions of each glyph
+    // TODO: make sure it only dumps once, even when hot reloading; alternatively,
+    // make it dump with a button press in a menu
     fn settingsFontDump(value: Setting.Value) callconv(.C) void {
         if (value.b and !dump_fonts_done) {
-            // This is a debug feature to dump the original font textures
-            // actually it's a general sprite thing, see inverse in dll_cosmetic for details
-            _ = DumpTextureTable(0x4BF91C, 3, 0, 64, 128, "font0");
-            _ = DumpTextureTable(0x4BF7E4, 3, 0, 64, 128, "font1");
-            _ = DumpTextureTable(0x4BF84C, 3, 0, 64, 128, "font2");
-            _ = DumpTextureTable(0x4BF8B4, 3, 0, 64, 128, "font3");
-            _ = DumpTextureTable(0x4BF984, 3, 0, 64, 128, "font4");
+            DumpGrey4toTGA(&rf.aFontRawPageData[0], 64, 128, "annodue/developer/fontraw0.tga");
+            DumpGrey4toTGA(&rf.aFontRawPageData[1], 64, 128, "annodue/developer/fontraw1.tga");
+            DumpGrey4toTGA(&rf.aFontRawPageData[2], 64, 128, "annodue/developer/fontraw2.tga");
+            DumpGrey4toTGA(&rf.aFontRawPageData[3], 64, 128, "annodue/developer/fontraw3.tga");
+            DumpGrey4toTGA(&rf.aFontRawPageData[4], 64, 128, "annodue/developer/fontraw4.tga");
             dump_fonts_done = true;
         }
     }

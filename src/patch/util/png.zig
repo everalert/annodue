@@ -16,7 +16,13 @@ const nativeToBig = std.mem.nativeToBig;
 // NOTE: like tga, minimal implementation just for what we need
 
 const Signature = [8]u8{ 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
-const ColorType = enum(u8) { Greyscale, Truecolor, IndexedColor, GreyscaleAlpha, TruecolorAlpha };
+const ColorType = enum(u8) {
+    Greyscale = 0,
+    Truecolor = 2,
+    IndexedColor = 3,
+    GreyscaleAlpha = 4,
+    TruecolorAlpha = 6,
+};
 
 // IHDR
 Width: u32,
@@ -66,6 +72,10 @@ ColorType: ColorType,
 
 // READING
 
+// TODO: api where we can get the metadata back before actually decoding the image
+// data, to allow the caller to setup for things like extracting the image palette
+// before the data, displaying adam7 progressive images, etc.
+
 pub fn Read(alloc: Allocator, reader: anytype) !void {
     const CT = Chunk(@TypeOf(reader));
 
@@ -74,17 +84,22 @@ pub fn Read(alloc: Allocator, reader: anytype) !void {
     // - renew fifo writer each IDAT block
     // - main point of this is to decouple the IDAT block from the zlib
     //   decompressor so that multiple chunks can be used on it
-    var data_buf: ArrayList(u8) = undefined;
-    var data_buf_initialized = false;
-    defer if (data_buf_initialized) data_buf.deinit();
+    var data_buf = ArrayList(u8).init(alloc);
+    defer data_buf.deinit();
     const data_buf_w = data_buf.writer();
     var data_fifo_buf: []u8 = try alloc.alloc(u8, 256);
     defer alloc.free(data_fifo_buf);
     var data_fifo = LinearFifo(u8, .Slice).init(data_fifo_buf);
     defer data_fifo.deinit();
+    // lazy init this because the backing reader needs to already have the zlib
+    // header in the data stream before init
     var data_zlib_initialized = false;
     var data_zlib: zlib.DecompressStream(@TypeOf(data_fifo.reader())) = undefined;
     defer if (data_zlib_initialized) data_zlib.deinit();
+
+    var filter_buf = ArrayList(u8).init(alloc);
+    defer filter_buf.deinit();
+    const filter_buf_w = filter_buf.writer();
 
     const signature: [8]u8 = sig: {
         var signature: [8]u8 = undefined;
@@ -131,6 +146,8 @@ pub fn Read(alloc: Allocator, reader: anytype) !void {
                     IHDR_filter_method = try chunk_r.readIntBig(u8); // FilterMethod
                     IHDR_interlace_method = try chunk_r.readIntBig(u8); // InterlaceMethod
 
+                    if (IHDR_bit_depth > 8)
+                        return error.UnsupportedBitDepth;
                     if (IHDR_color_type != 0)
                         return error.UnsupportedColorType;
                     if (IHDR_compression_method != 0)
@@ -143,8 +160,6 @@ pub fn Read(alloc: Allocator, reader: anytype) !void {
                     // filter type (1b) + bits needed for pixels in row, padded to next byte
                     data_scanline_bytes = (IHDR_width * IHDR_bit_depth + 7) / 8 + 1;
                     data_image_bytes = data_scanline_bytes * IHDR_height;
-                    data_buf = try ArrayList(u8).initCapacity(alloc, data_image_bytes);
-                    data_buf_initialized = true;
                 },
                 .IDAT => {
                     defer IDAT_seen = true;
@@ -198,21 +213,72 @@ pub fn Read(alloc: Allocator, reader: anytype) !void {
         if (IEND_seen) break;
     }
 
+    if (data_buf.items.len != data_image_bytes)
+        return error.InvalidCompressedData;
+
+    // padding removal for output stream
+    const line_bits: usize = IHDR_width * IHDR_bit_depth;
+    var line_sh_r: u3 = 0;
+    var line_sh_l: u3 = 0;
+    var line_mask: u8 = 0x00;
+    var recon_next: u8 = 0;
+    // line segmenting
+    var i_prev: usize = 0;
+    var i_this: usize = 0;
+    var i_next: usize = 0;
+    // do the thing
+    for (0..IHDR_height) |i| {
+        i_this = i_next;
+        i_next = data_scanline_bytes * (i + 1);
+        defer i_this = i_next;
+        defer i_prev = i_this;
+
+        const row: []const u8 = data_buf.items[i_this..i_next];
+        var row_fbs = std.io.fixedBufferStream(row);
+        const row_fbs_r = row_fbs.reader();
+
+        const filter_type = try row_fbs_r.readByte();
+        var row_bits_left: usize = line_bits;
+        while (row_fbs_r.readByte() catch null) |b| {
+            // more: https://www.w3.org/TR/png-3/#9-table91
+            const recon: u8 = switch (filter_type) {
+                0 => b,
+                else => return error.UnsupportedFilterType,
+            };
+
+            const recon_this: u8 = recon_next | (recon >> line_sh_r);
+            recon_next = (recon << line_sh_l) & line_mask;
+
+            if (row_bits_left < 8) {
+                const total_excess = row_bits_left + line_sh_r;
+                line_sh_r +%= @intCast(row_bits_left);
+                line_sh_l -%= @intCast(row_bits_left);
+                line_mask = ~(@as(u8, 0xFF) >> line_sh_r);
+                if (total_excess >= 8) {
+                    try filter_buf_w.writeByte(recon_this);
+                    recon_next = recon_next & line_mask;
+                } else {
+                    recon_next = recon_this & line_mask;
+                }
+                continue;
+            }
+            row_bits_left -= 8;
+            try filter_buf_w.writeByte(recon_this);
+        }
+    }
+    // some left over
+    if (line_sh_r > 0) try filter_buf_w.writeByte(recon_next);
+
     std.debug.print(
         "\nwidth:      {d}\nheight:     {d}\nbit depth:  {d}\ncolor type: {d}\n",
         .{ IHDR_width, IHDR_height, IHDR_bit_depth, IHDR_color_type },
     );
 
-    std.debug.print("\ndata_buf: {any}\n", .{data_buf.items});
+    std.debug.print(
+        "\ndata_buf:   {any}\nfilter_buf: {any}\n",
+        .{ data_buf.items, filter_buf.items },
+    );
 }
-
-// TODO: ReadIDAT
-// multiple IDATs may exist; keep reading/expecting them until all pixels resolved,
-// and ignore any trailing bytes
-// series of IDATs should be considered as a single deflate encoding unit that
-// should be decoded as concatenated data, not as separate self-contained deflate
-// units; i.e. the main purpose of splitting IDATs is to reduce memory load on
-// encoders/decoders by limiting how big the read buffer needs to be to parse piecemeal
 
 // UTIL
 
@@ -235,6 +301,7 @@ inline fn ChunkValue(bytes: *const [4]u8) u32 {
 }
 
 // more: https://www.w3.org/TR/png-3/#11Chunks
+// more: https://www.w3.org/TR/png-3/#bib-png-extensions
 pub const ChunkType = enum(u32) {
     IHDR = ChunkValue(&[4]u8{ 'I', 'H', 'D', 'R' }),
     IDAT = ChunkValue(&[4]u8{ 'I', 'D', 'A', 'T' }),
@@ -340,21 +407,22 @@ pub fn WriteGrey8(_: *PNG) void {}
 
 // TESTING
 
-// https://evanhahn.com/worlds-smallest-png/
-const TestImage = [_]u8{
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // signature
-    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x01, 0x00, 0x00, 0x00, 0x00, 0x37, 0x6E, 0xF9,
-    0x24,
-    0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, // IDAT
-    0x78, 0x01, 0x63, 0x60, 0x00, 0x00, 0x00, 0x02,
-    0x00, 0x01, 0x73, 0x75, 0x01, 0x18,
-    0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, // IEND
-    0xAE, 0x42, 0x60, 0x82,
+const test_images = [_][]const u8{
+    // https://evanhahn.com/worlds-smallest-png/
+    "test_png/smallest.png",
+
+    // TODO: remaining suite files (see folder/website)
+    // http://www.schaik.com/pngsuite/pngsuite.html
+    "test_png/suite/basn0g01.png",
+    "test_png/suite/basn0g02.png",
+    "test_png/suite/basn0g04.png",
+    //"test_png/suite/basn0g08.png", // TODO: filter type/s
+    //"test_png/suite/basn0g16.png", // TODO: 16-bit
 };
 
 test "read png" {
-    var fbs = std.io.fixedBufferStream(&TestImage);
-    try Read(std.testing.allocator, fbs.reader());
+    inline for (test_images) |ti| {
+        var fbs = std.io.fixedBufferStream(@embedFile(ti));
+        try Read(std.testing.allocator, fbs.reader());
+    }
 }

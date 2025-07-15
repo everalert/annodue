@@ -2,6 +2,8 @@ const PNG = @This();
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
+const LinearFifo = std.fifo.LinearFifo;
 const assert = std.debug.assert;
 const toBytes = std.mem.toBytes;
 const nativeToBig = std.mem.nativeToBig;
@@ -63,63 +65,117 @@ ColorType: ColorType,
 
 // READING
 
-pub fn Read(reader: anytype) !void {
+pub fn Read(alloc: Allocator, reader: anytype) !void {
+    const CT = Chunk(@TypeOf(reader));
+
+    var data_buf: ArrayList(u8) = undefined;
+    var data_buf_set = false;
+    defer if (data_buf_set) data_buf.deinit();
+    const data_buf_w = data_buf.writer();
+
+    // FIXME: this would work better in zig 0.13, because zlib decompress is a reader-writer
+    // CT.Reader -> FIFO -> zlib decompressor -> decompressed output
+    // - renew fifo writer each IDAT block
+    // - main point of this is to decouple the IDAT block from the zlib
+    //   decompressor so that multiple chunks can be used on it
+    var data_fifo_buf: []u8 = try alloc.alloc(u8, 256);
+    defer alloc.free(data_fifo_buf);
+    var data_fifo = LinearFifo(u8, .Slice).init(data_fifo_buf);
+    defer data_fifo.deinit();
+
+    //var data_zlib = std.compress.zlib.DecompressStream(CT.Reader);
+
     const signature: [8]u8 = sig: {
         var signature: [8]u8 = undefined;
         _ = try reader.read(&signature);
         break :sig signature;
     };
-    if (!std.mem.eql(u8, &signature, &Signature)) return error.FileNotPNG;
+    if (!std.mem.eql(u8, &signature, &Signature)) return error.SignatureInvalid;
 
-    var last_chunk = false;
-    const CT = Chunk(@TypeOf(reader));
+    var IHDR_width: u32 = 0;
+    var IHDR_height: u32 = 0;
+    var IHDR_bit_depth: u8 = 0;
+    var IHDR_color_type: u8 = 0;
+    var data_scanline_bytes: u32 = 0;
+    var data_image_bytes: u32 = 0;
+
+    var prev_chunk_type: u32 = 0;
+    var IHDR_seen = false;
+    var IDAT_seen = false;
+    var IEND_seen = false;
     while (true) {
         var chunk: CT = undefined;
         const chunk_r = try chunk.Start(reader);
 
-        const tv = chunk.TypeValue();
-        if (tv) |v| {
+        std.debug.print("\nCHUNK: {s}\n", .{toBytes(nativeToBig(u32, chunk.Type))});
+
+        if (chunk.TypeValue()) |v| {
             switch (v) {
                 .IHDR => {
+                    defer IHDR_seen = true;
+                    if (prev_chunk_type != 0)
+                        return error.IHDRChunkNotFirst;
                     if (chunk.length_remaining != 13)
-                        return error.IHDRChunkInvalid;
-                    _ = try chunk_r.readIntBig(u32); // Width
-                    _ = try chunk_r.readIntBig(u32); // Height
-                    _ = try chunk_r.readIntBig(u8); // BitDepth
-                    _ = try chunk_r.readIntBig(u8); // ColorType
+                        return error.IHDRChunkInvalidLength;
+
+                    IHDR_width = try chunk_r.readIntBig(u32); // Width
+                    IHDR_height = try chunk_r.readIntBig(u32); // Height
+                    IHDR_bit_depth = try chunk_r.readIntBig(u8); // BitDepth
+                    IHDR_color_type = try chunk_r.readIntBig(u8); // ColorType
                     _ = try chunk_r.readIntBig(u8); // CompressionMethod
                     _ = try chunk_r.readIntBig(u8); // FilterMethod
                     _ = try chunk_r.readIntBig(u8); // InterlaceMethod
+
+                    // filter type (1b) + bits needed for pixels in row, padded to next byte
+                    data_scanline_bytes = (IHDR_width * IHDR_bit_depth + 7) / 8 + 1;
+                    data_image_bytes = data_scanline_bytes * IHDR_height;
+                    data_buf = try ArrayList(u8).initCapacity(alloc, data_image_bytes);
+                    data_buf_set = true;
                 },
-                //.IDAT => null,
+                .IDAT => {
+                    defer IDAT_seen = true;
+                    if (IDAT_seen and prev_chunk_type != chunk.Type)
+                        return error.IDATChunkNotConsecutive;
+
+                    while (chunk.length_remaining > 0) {
+                        const count_w = try chunk_r.read(data_fifo.writableSlice(0));
+                        data_fifo.update(count_w);
+
+                        // FIXME: for testing, switch to zlib decompressor
+                        const count_r = try data_buf_w.write(data_fifo.readableSlice(0));
+                        data_fifo.discard(count_r);
+
+                        // FIXME: only do this if end of zlib decompression
+                        // reached, and therefore no more need to process data
+                        if (false) try chunk.ExhaustData();
+                    }
+                },
                 .IEND => {
+                    defer IEND_seen = true;
                     if (chunk.length_remaining != 0)
-                        return error.IENDChunkInvalid;
-                    last_chunk = true;
+                        return error.IENDChunkInvalidLength;
                 },
-                else => {
-                    while (chunk.length_remaining > 0)
-                        _ = try chunk_r.readByte();
-                },
+                //else => chunk.ExhaustData(),
             }
-        } else {
-            while (chunk.length_remaining > 0)
-                _ = try chunk_r.readByte();
-        }
+        } else try chunk.ExhaustData();
 
         try chunk.End();
 
         std.debug.print(
-            "CHUNK: {s}\n\tlen:  {d}\n\tcrc:  {X:0>8}\n\tancl: {}\n\tpriv: {}\n\tresv: {}\n\tcopy: {}\n",
-            .{
-                toBytes(nativeToBig(u32, chunk.Type)), chunk.Length,   chunk.Crc,
-                chunk.bAncillary,                      chunk.bPrivate, chunk.bReserved,
-                chunk.bSafeToCopy,
-            },
+            "\tlen:  {d}\n\tcrc:  {X:0>8}\n\tancl: {}\n\tpriv: {}\n\tresv: {}\n\tcopy: {}\n",
+            .{ chunk.Length, chunk.Crc, chunk.bAncillary, chunk.bPrivate, chunk.bReserved, chunk.bSafeToCopy },
         );
 
-        if (last_chunk) break;
+        prev_chunk_type = chunk.Type;
+        if (IEND_seen) break;
     }
+
+    std.debug.print(
+        "\nwidth:      {d}\nheight:     {d}\nbit depth:  {d}\ncolor type: {d}\n",
+        .{ IHDR_width, IHDR_height, IHDR_bit_depth, IHDR_color_type },
+    );
+
+    std.debug.print("\ndata_buf: {any}\n", .{data_buf.items});
 }
 
 // TODO: ReadIDAT
@@ -146,7 +202,7 @@ const TestImage = [_]u8{
 
 test "read png" {
     var fbs = std.io.fixedBufferStream(&TestImage);
-    try Read(fbs.reader());
+    try Read(std.testing.allocator, fbs.reader());
 }
 
 // UTIL
@@ -222,8 +278,9 @@ pub fn Chunk(comptime ReaderType: type) type {
         }
 
         /// finalizes a chunk by reading and validating the crc bytes. user is
-        /// expected to have initialized the chunk using ChunkStart, and read
-        /// through the chunk data using the Chunk.Reader reader
+        /// expected to have initialized the chunk using Start, and read through
+        /// the chunk data using the provided Reader. if the data needs to be
+        /// skipped for any reason, use ExhaustData
         pub fn End(self: *CT) !void {
             if (self.length_remaining > 0)
                 return error.ChunkDataRemaining;
@@ -235,6 +292,14 @@ pub fn Chunk(comptime ReaderType: type) type {
                 return error.ChunkCrcMismatch;
         }
 
+        /// progress the reader through the data segment bytes without doing
+        /// anything with the data
+        pub fn ExhaustData(self: *CT) !void {
+            const r = self.reader();
+            while (self.length_remaining > 0)
+                _ = try r.readByte();
+        }
+
         pub fn CurrentCrc(self: *CT) u32 {
             return self.crc_data.crc;
         }
@@ -244,9 +309,10 @@ pub fn Chunk(comptime ReaderType: type) type {
         }
 
         fn read(self: *CT, buf: []u8) ReaderError!usize {
-            const amt: u32 = @truncate(try self.src_reader.read(buf));
-            if (self.length_remaining < amt) return error.ChunkDataOverflow;
+            const to_read: u32 = @min(self.length_remaining, buf.len);
+            if (to_read == 0) return 0;
 
+            const amt: u32 = @truncate(try self.src_reader.read(buf[0..to_read]));
             self.crc_data.update(buf[0..amt]);
             self.length_remaining -= amt;
 

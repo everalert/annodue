@@ -437,12 +437,19 @@ var fonts_loaded: bool = false;
 var dp: ?*i32 = null;
 var fonts_using: bool = false;
 var fpage_raw = std.mem.zeroes([5][512 * 1024]u16);
-var fpage = [5]struct { r: []u16, m: ?*r3.Material = null }{
-    .{ .r = &fpage_raw[0] },
-    .{ .r = &fpage_raw[1] },
-    .{ .r = &fpage_raw[2] },
-    .{ .r = &fpage_raw[3] },
-    .{ .r = &fpage_raw[4] },
+var fpage = pages: {
+    var p: [40]struct {
+        r: []u16,
+        m: r3.Material = undefined,
+        t: r3.SystemTexture = undefined,
+    } = undefined;
+    assert(fpage_raw.len == 5);
+    assert(p.len >= 5);
+
+    for (0..p.len) |i|
+        p[i].r = &fpage_raw[i % 5];
+
+    break :pages p;
 };
 const font_test_strings: [7][4][71:0]u8 = blk: {
     var buf = std.mem.zeroes([7][4][71:0]u8);
@@ -458,6 +465,61 @@ const font_test_strings: [7][4][71:0]u8 = blk: {
     break :blk buf;
 };
 
+fn CustomFontsInit() void {
+    @memcpy(&fonts, rf.aFontDef);
+    var filename = [_]u8{ 'f', 'o', 'n', 't', 'r', 'a', 'w', '0', '_', 't', 'e', 's', 't' };
+    for (0..5) |i| {
+        filename[7] = '0' + @as(u8, @truncate(i));
+        LoadPreComputedSpritePage(fpage[i].r, 512, 1024, &filename);
+    }
+}
+
+fn CustomFontsLoad() void {
+    assert(fpage.len >= fonts.len);
+    if (fonts_loaded) return;
+
+    // new
+    for (0..fpage.len) |i| {
+        r3.hMaterial_OwnedNewFromData(fpage[i].r, 512, 1024, 512, 1024, .ARGB4444, &fpage[i].t, &fpage[i].m);
+    }
+    fonts[0]._08_page_list[0] = &fpage[0].m;
+    fonts[0]._08_page_list[1] = &fpage[1].m;
+    fonts[0]._08_page_list[2] = &fpage[2].m;
+    fonts[1]._08_page_list[0] = &fpage[2].m;
+    fonts[2]._08_page_list[0] = &fpage[2].m;
+    fonts[3]._08_page_list[0] = &fpage[3].m;
+    fonts[4]._08_page_list[0] = &fpage[4].m;
+
+    // yep
+    fonts_loaded = true;
+}
+
+fn CustomFontsUnload() void {
+    if (!fonts_loaded) return;
+
+    // OLD NOTES
+    // FIXME: works in rendering but still crashes when unloading, in spite
+    // of the hMaterial_Free call in OnDeinit; maybe need to force text
+    // rendering state to update pointers?
+    // maybe worth noting that the game MaterialFree (which hMaterial_Free
+    // calls) seems to only ever be called on shutdown or when clearing
+    // all sprites when loading Hang menu
+    // NOTE: unload crashes at 0x48AA45 (in fn_48AA40) with access violation error
+    // (0xC0000005) according to windows event viewer
+    // NOTE: all these were originally unique allocations, unlike current
+    // scheme that reuses the "base" materials; crash from unload (not re-load)
+    // may have just been use-after-free on the duplicated stuff
+
+    // this one doesn't crash; current ver only crashes in CustomFontsLoad
+    for (0..fpage_raw.len) |i| {
+        r3.hMaterial_OwnedFree(&fpage[i].m);
+    }
+
+    // yep
+    _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
+    fonts_loaded = false;
+}
+
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     CosmeticState.settingsInit(gf);
 
@@ -465,33 +527,14 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // then we can properly deinit it when the plugin unloads or the user setting changes.
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
-    // NOTE: original function at fn_42D720
     //var off = gs.patch_offset;
+
+    // NOTE: original function at fn_42D720
     if (CosmeticState.s_patch_fonts) {
-        //var off = @intFromPtr(&CosmeticState.font_buf);
-        // new
-        @memcpy(&fonts, rf.aFontDef);
-        LoadPreComputedSpritePage(fpage[0].r, 512, 1024, "fontraw0_test");
-        LoadPreComputedSpritePage(fpage[1].r, 512, 1024, "fontraw1_test");
-        LoadPreComputedSpritePage(fpage[2].r, 512, 1024, "fontraw2_test");
-        LoadPreComputedSpritePage(fpage[3].r, 512, 1024, "fontraw3_test");
-        LoadPreComputedSpritePage(fpage[4].r, 512, 1024, "fontraw4_test");
-        fpage[0].m = r3.hMaterial_CreateFromTextureData(fpage[0].r, 512, 1024, 512, 1024, .ARGB4444);
-        fpage[1].m = r3.hMaterial_CreateFromTextureData(fpage[1].r, 512, 1024, 512, 1024, .ARGB4444);
-        fpage[2].m = r3.hMaterial_CreateFromTextureData(fpage[2].r, 512, 1024, 512, 1024, .ARGB4444);
-        fpage[3].m = r3.hMaterial_CreateFromTextureData(fpage[3].r, 512, 1024, 512, 1024, .ARGB4444);
-        fpage[4].m = r3.hMaterial_CreateFromTextureData(fpage[4].r, 512, 1024, 512, 1024, .ARGB4444);
-        fonts[0]._08_page_list[0] = fpage[0].m;
-        fonts[0]._08_page_list[1] = fpage[1].m;
-        fonts[0]._08_page_list[2] = fpage[2].m;
-        fonts[1]._08_page_list[0] = fpage[2].m;
-        fonts[2]._08_page_list[0] = fpage[2].m;
-        fonts[3]._08_page_list[0] = fpage[3].m;
-        fonts[4]._08_page_list[0] = fpage[4].m;
-        // yep
-        fonts_loaded = true;
-        //std.debug.assert(off - @intFromPtr(&CosmeticState.font_buf) <= CosmeticState.font_buf.len);
+        CustomFontsInit();
+        CustomFontsLoad();
     }
+
     //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
     //    const bits_per_sample: u8 = 16;
@@ -501,6 +544,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     //if (CosmeticState.s_patch_tga_loader) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
+
     //gs.patch_offset = off;
 }
 
@@ -515,35 +559,7 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x461069, 0xFFFFFF);
     crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
 
-    if (fonts_loaded) {
-        // old
-        // FIXME: works in rendering but still crashes when unloading, in spite
-        // of the hMaterial_Free call in OnDeinit; maybe need to force text
-        // rendering state to update pointers?
-        // NOTE: unload crashes at 0x48AA45 (in fn_48AA40) with access violation error
-        // (0xC0000005) according to windows event viewer
-        // NOTE: all these were originally unique allocations, unlike current
-        // scheme that reuses the "base" materials
-        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[0])));
-        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[1])));
-        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[2])));
-        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[1]._08_page_list[0])));
-        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[2]._08_page_list[0])));
-        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[3]._08_page_list[0])));
-        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[4]._08_page_list[0]))); // crash
-        // new
-        // NOTE: this one doesn't crash, but almost certainly incidental and likely
-        // just because fewer materials allocated;  the point of changing to this
-        // was just to streamline font loading because some pages were triple loaded
-        r3.hMaterial_Free(fpage[0].m);
-        r3.hMaterial_Free(fpage[1].m);
-        r3.hMaterial_Free(fpage[2].m);
-        r3.hMaterial_Free(fpage[3].m);
-        r3.hMaterial_Free(fpage[4].m);
-        // yep
-        _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
-        fonts_loaded = false;
-    }
+    CustomFontsUnload();
 }
 
 // HOOKS
@@ -560,26 +576,29 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
             //SetCurrentFontSource.* = @constCast(@ptrCast(&font_table));
         }
     }
-    // should crash
-    if (fonts_loaded and gf.InputGetKbRaw(.I) == .JustOn) {
-        // old
-        //// unload only crashes on specific materials?
-        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[0]))); // ok
-        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[1]))); // ok
-        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[2]))); // ok
-        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[1]._08_page_list[0]))); // ok
-        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[2]._08_page_list[0]))); // ok
-        //// r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[3]._08_page_list[0]))); // ok
-        //r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[4]._08_page_list[0]))); // crash
-        // new
-        r3.hMaterial_Free(fpage[0].m);
-        r3.hMaterial_Free(fpage[1].m);
-        r3.hMaterial_Free(fpage[2].m);
-        r3.hMaterial_Free(fpage[3].m);
-        r3.hMaterial_Free(fpage[4].m);
-        // yep
-        _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
-        fonts_loaded = false;
+    // crashes when too many materials loaded/unloaded
+    // "materials" in this case meaning those with the 512x1024 HD font textures
+    // also there is a memory leak here, with N materials ..
+    //  N=6     ~1MB leak per cycle
+    //  N=10    ~10MB
+    //  N=20    ~15MB
+    //  N=40    ~35MB
+    // seems to only ever free 5MB regardless of material count
+    // not entirely sure this isn't just a dgvoodoo problem, hard to imagine
+    //  such an obvious issue was not caught on original hardware during
+    //  dev, could also just be a regression in modern windows vs old directx
+    if (CosmeticState.s_patch_fonts and gf.InputGetKbRaw(.I) == .JustOn) {
+        if (fonts_loaded) {
+            CustomFontsUnload();
+        } else {
+            // crash at 48A7F4 when 100 textures loaded then unloaded (i.e. 2nd 'I' press)
+            // in AllocTexture__48A5E0 during vbufferlock memcpy
+            // with 20 textures loaded, doesn't crash immediately but does crash
+            // after some number of cycles loading/unloading, and after 3 cycles
+            // for 40 textures; always around 450MB ram usage
+            // i.e. seems to just be the memory leak crash?
+            CustomFontsLoad();
+        }
     }
 
     // trying to induce crash by memory access rather than running free function

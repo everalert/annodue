@@ -31,6 +31,42 @@ pub const panic = debug.annodue_panic;
 const dbg = @import("util/debug.zig");
 const rd = @import("racer").Debug;
 
+// TODO: ROADMAP
+// - texture loader/manager in core, that caches GPU references to loaded textures
+//   instead of freeing them when no longer used; i.e. avoid creating GPU resources
+//   unnecessarily, as a way to avoid the "memory leak crash". one other avenue
+//   to explore here is having an actual texture atlas, to minimize the absolute
+//   number of GPU resources needed. See the Display_VSurfaceLock, etc. family
+//   of functions for a way to do this, example usage and logic flow in VBufferLock,
+//   MaterialLoadEntry, the screenshot function, etc.. Will need to manage own
+//   VBuffers and therefore reimpl the functionality around these (again, see
+//   MaterialLoadEntry)
+// - font loader/manager as a plugin. pixel data stored in the plugin, and copied
+//   to the font texture directly whenever the user swaps font choice (i.e. there
+//   is only one texture used in the font system, use VSurfaceLock etc. for this).
+//   font api should take a 'nice' image of glyphs rather than ones organized like
+//   the game fonts, and therefore needs to also accommodate custom font definitions
+//   that have different glyph coordinates accordingly. Plugin developers should
+//   also have the option to provide their own font definitions, so the system
+//   must be able to translate the font definition coordinates to the font atlas
+//   texture coordinates at runtime. regular users should be able to just place
+//   an image file matching the standard font def in 'annodue/fonts' or somewhere
+//   and have it appear as an option in the game. the standard font def should also
+//   have the glyph coordinates cleaned up so users can actually make fonts that
+//   use the currently busted glyphs (like '!')
+// - remake old HD font with better proportions that actually match the original
+//   font
+// - future: some kind of text rendering system that lets developers draw with
+//   fonts other than the ones the game is using? also could be useful as a
+//   way of dodging the triangle count limitations imposed by the game's normal
+//   rendering system (all text, geo, etc. is dumped into the same queue that
+//   draw calls are made from, which has a limit), and could also open the door
+//   for an imgui down the line
+
+// TODO: all settings hot-reloadable
+// TODO: embed fonts and point to ours, rather than patching the whole thing (for faster loadtimes)
+// TODO: dump fonts as a button on a menu, not a weirdge on-launch only thing
+
 // FIXME: update changelog and manual to reflect new font functionality and stuff
 // inherited from cosmetic/developer plugins, as well as updating old parts of
 // current changelog that talk about font-related features on other plugins in
@@ -42,10 +78,6 @@ const rd = @import("racer").Debug;
 // - SETTINGS:
 //   patch_fonts            bool    * requires game restart to apply
 //   dump_fonts             bool    * requires game restart to apply
-
-// TODO: all settings hot-reloadable
-// TODO: embed fonts and point to ours, rather than patching the whole thing (for faster loadtimes)
-// TODO: dump fonts as a button on a menu, not a weirdge on-launch only thing
 
 const PLUGIN_NAME: [*:0]const u8 = "Font";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -300,7 +332,7 @@ var dp: ?*i32 = null;
 var fonts_using: bool = false;
 var fpage_raw = std.mem.zeroes([5][512 * 1024]u16);
 var fpage = pages: {
-    var p: [40]struct {
+    var p: [5]struct {
         r: []u16,
         m: r3.Material = undefined,
         t: r3.SystemTexture = undefined,

@@ -305,6 +305,20 @@ Configured under `[collisionviewer]`
 |:---|:---|:---|:---|
 |`depth_bias`           |`i32`|`10`|correct misalignment between game and collision visuals
 
+### Font
+
+- High-resolution fonts
+- Visualize matrices via hijacking debug spline markers
+
+##### Settings
+
+Configurable under `[font]`
+
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`patch_fonts` |`bool`|`off`|*Requires game restart to apply*
+|`dump_fonts`  |`bool`|`off`|*Requires game restart to re-dump*
+
 ### Cosmetic
 
 - High-resolution fonts
@@ -367,7 +381,6 @@ Configurable under `[gameplay]`
 *Disabled in current release*
 
 - Dump font data to file on launch (font sheets and glyph templates)
-- Visualize matrices via hijacking debug spline markers
 
 ##### Settings
 
@@ -375,7 +388,6 @@ Configurable under `[developer]`
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
-|`dump_fonts`        |`bool`|`off`|*Requires game restart to re-dump*
 |`visualize_matrices`|`bool`|`off`|&nbsp;
 
 ### RTrigger System

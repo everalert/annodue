@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Font: New dedicated plugin for custom font loading, inheriting all the font-related functionality and settings from the Cosmetic and Developer plugins
-- Developer: Dump font glyph templates in addition to font sheets
+- Font: Dump font glyph templates in addition to font sheets
 - Overlay: Detailed speed readout, with raw readout option (setting: `show_speed` `show_speed_raw`)
 - Overlay: Terrain speed offsets readout (setting: `show_speed_offsets`)
 - Overlay: Simplified FPS readout option (setting: `show_fps_simple`)
@@ -34,9 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Developer: Dump font sheets to TGA instead of PPM
+- Font: Dump font sheets to TGA instead of PPM
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - QOL: More organized formatting of post-race stats
+- Developer: Migrate `dump_fonts` setting to `font` group
+- Cosmetic: Migrate `patch_fonts` setting to `font` group
 - Backend(Core): Global State version `5` to `7`
 - Backend(Core): Global Function version `29` to `31`
 - Backend(Core): Settings now also autosave on race reset

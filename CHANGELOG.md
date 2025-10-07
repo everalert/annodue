@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Font: New dedicated plugin for custom font loading, inheriting all the font-related functionality and settings from the Cosmetic and Developer plugins
 - Developer: Dump font glyph templates in addition to font sheets
 - Overlay: Detailed speed readout, with raw readout option (setting: `show_speed` `show_speed_raw`)
 - Overlay: Terrain speed offsets readout (setting: `show_speed_offsets`)

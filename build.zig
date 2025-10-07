@@ -286,6 +286,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "overlay" },
         .{ .name = "gameplaytweak", .to_hash = false },
         .{ .name = "cosmetic" },
+        .{ .name = "font" },
         .{ .name = "multiplayer" },
         .{ .name = "developer", .to_hash = false },
         .{ .name = "inputdisplay" },

@@ -31,7 +31,6 @@ const dbg = @import("util/debug.zig");
 const rd = @import("racer").Debug;
 
 // FEATURES
-// - High-resolution fonts
 // - Rotating rainbow colors for race UI elements: top values, top labels, speedo
 // - (disabled) High-fidelity audio
 // - (disabled) Load sprites from TGA
@@ -40,7 +39,6 @@ const rd = @import("racer").Debug;
 //   rainbow_value_enable   bool
 //   rainbow_label_enable   bool
 //   rainbow_speed_enable   bool
-//   patch_fonts            bool    * requires game restart to apply
 //   patch_audio            bool    ignored
 //   patch_tga_loader       bool    ignored
 
@@ -51,7 +49,6 @@ const rd = @import("racer").Debug;
 // TODO: convert all allocations to global allocator once part of GlobalFn
 // TODO: all settings hot-reloadable
 // TODO: convert trigger display to our notification system
-// TODO: embed fonts and point to ours, rather than patching the whole thing (for faster loadtimes)
 
 const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -64,7 +61,6 @@ const CosmeticState = struct {
     var h_s_rb_speed_enable: ?SettingHandle = null;
     var h_s_patch_tga_loader: ?SettingHandle = null;
     var h_s_patch_audio: ?SettingHandle = null;
-    var h_s_patch_fonts: ?SettingHandle = null;
     var s_rb_enable: bool = false;
     var s_rb_value_enable: bool = false;
     var s_rb_label_enable: bool = false;
@@ -74,13 +70,6 @@ const CosmeticState = struct {
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
     var s_patch_tga_loader: bool = false;
     var s_patch_audio: bool = false;
-    var s_patch_fonts: bool = false;
-
-    // FIXME: sized specifically for original font patch, will need to be changed for future
-    // FIXME: doing it this way (without annodue alloc) also causes the game to crash whenever
-    // the dll unloads, which for now is fine just to get rid of global state ref, because
-    // reworking the font patch is high priority anyway
-    var font_buf: [0x1D0000]u8 = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", settingsUpdate);
@@ -99,8 +88,6 @@ const CosmeticState = struct {
             gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, &s_patch_tga_loader, null);
         h_s_patch_audio = // FIXME: crashes
             gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, &s_patch_audio, null);
-        h_s_patch_fonts =
-            gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, &s_patch_fonts, null);
     }
 
     fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
@@ -171,129 +158,6 @@ const CosmeticState = struct {
 };
 
 // SWE1R-PATCHER STUFF
-
-// NOTE: the original patcher referred to this as a 'texture' table, but this is
-// actually a vtable pointing to 'sprite'-type pages; this is the same basic format
-// as other sprites, but all of the header data is stripped in the case of the
-// embedded font data, in lieu of hardcoded assumptions about format, dimensions, etc.
-// WARNING: the original dumped font data (see dll_developer) has some offset pixels
-// and wrapping, but the hd fonts don't; not sure if this is handled by this function
-// or if the dumper is just dumping wrong
-// WARNING: also don't really know how the '.data' files this function takes were
-// generated from the png files
-// ---- comments from when originally porting below ----
-// NOTE: code_begin_offset = part of the arguments to a function call (sprite
-// setup-related fn fn_445EE0); args expected in this range: maxwidth?, maxheight?,
-// width, height (args 3-6)
-// NOTE: code_end_offset = the instruction after 4 arguments later
-// NOTE: texture table seems to be 'len' in first field (u32), followed by len ptrs
-// to texture segments
-// FIXME: can probably convert font->sprite conversion to comptime embed then hook
-// up ptrs only in code, then all the allocation bs can be skipped
-// NOTE: probably cannot reverse this, because it patches something that seems to
-// only run once during setup
-fn PatchTextureTable(
-    memory: usize,
-    table_offset: usize,
-    code_begin_offset: usize,
-    code_end_offset: usize,
-    width: u32,
-    height: u32,
-    filename: []const u8,
-) usize {
-    var off: usize = memory;
-    off = x86.nop_align(off, 16);
-
-    // Original code takes u8 dimension args, so we use our own code that takes u32
-    const cave_memory_offset: usize = off;
-
-    // Patches the arguments for the texture loader
-    off = x86.push(off, .{ .imm32 = height });
-    off = x86.push(off, .{ .imm32 = width });
-    off = x86.push(off, .{ .imm32 = height });
-    off = x86.push(off, .{ .imm32 = width });
-    off = x86.jmp(off, code_end_offset);
-
-    // Detour original code to ours
-    var hack_offset: usize = x86.jmp(code_begin_offset, cave_memory_offset);
-    _ = x86.nop_until(hack_offset, code_end_offset);
-
-    const page_num: u32 = mem.read(table_offset + 0, u32);
-
-    for (0..page_num) |i| {
-        _ = mem.write(table_offset + 4 + i * 4, u32, off); // update table entry ptr
-        off = LoadSpritePage(off, width, height, filename, i);
-    }
-
-    return off;
-}
-
-// loads some GIMP format into Greyscale4 format (0x400) in preparation for game
-// parsing as sprite data
-fn LoadSpritePage(
-    write_at: u32,
-    width: u32,
-    height: u32,
-    filename: []const u8,
-    page: u32,
-) u32 {
-    var off = write_at;
-
-    const page_size: u32 = width * height * 4 / 8;
-
-    // Loop over all pages
-    var str_buf: [1023:0]u8 = undefined;
-    const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..page_size];
-    @memset(buffer_slice, 0x00);
-
-    // Load input texture to buffer
-    var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, page }) catch
-        @panic("LoadSpritePage: formatting texture file path"); // FIXME: error handling
-
-    const file = std.fs.cwd().openFile(path, .{}) catch
-        @panic("LoadSpritePage: opening texture file"); // FIXME: error handling
-    defer file.close();
-    var br = std.io.bufferedReader(file.reader());
-    const r = br.reader();
-    for (0..page_size * 2) |j| {
-        const px = r.readInt(u16, .Little) catch @panic("LoadSpritePage: pixel read"); // FIXME: error handling
-        buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
-    }
-
-    off += page_size;
-    off = x86.nop_align(off, 0x10);
-    return off;
-}
-
-// dumps precomputed RGBA4444 data into buffer
-fn LoadPreComputedSpritePage(
-    buf_o: []u16,
-    width: u32,
-    height: u32,
-    filename: []const u8,
-) void {
-    assert(buf_o.len == width * height);
-    var str_buf: [1023:0]u8 = undefined;
-
-    const px_num: u32 = width * height;
-    @memset(buf_o, 0x00);
-
-    // FIXME: error handling
-    var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}.data", .{filename}) catch |e|
-        PPanic("(LoadPreComputedSpritePage) formatting file path: {e}", .{@errorName(e)});
-
-    // FIXME: error handling
-    const file = std.fs.cwd().openFile(path, .{}) catch |e|
-        PPanic("(LoadPreComputedSpritePage) opening file: {s}", .{@errorName(e)});
-    defer file.close();
-    var br = std.io.bufferedReader(file.reader());
-    const r = br.reader();
-    for (0..px_num) |i| {
-        // FIXME: error handling
-        buf_o[i] = r.readInt(u16, .Little) catch |e|
-            PPanic("(LoadPreComputedSpritePage) pixel read: {s}", .{@errorName(e)});
-    }
-}
 
 // FIXME: crashes, not sure why because the memory written should be identical
 // to swe1r-patcher, yet that doesn't crash
@@ -430,96 +294,6 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-// FIXME: move
-const font_table = [_]*anyopaque{ &fonts[3], &fonts[2], &fonts[1], &fonts[2], &fonts[4], &fonts[3], &fonts[0] };
-var fonts: [5]rf.FONT = undefined;
-var fonts_loaded: bool = false;
-var dp: ?*i32 = null;
-var fonts_using: bool = false;
-var fpage_raw = std.mem.zeroes([5][512 * 1024]u16);
-var fpage = pages: {
-    var p: [40]struct {
-        r: []u16,
-        m: r3.Material = undefined,
-        t: r3.SystemTexture = undefined,
-    } = undefined;
-    assert(fpage_raw.len == 5);
-    assert(p.len >= 5);
-
-    for (0..p.len) |i|
-        p[i].r = &fpage_raw[i % 5];
-
-    break :pages p;
-};
-const font_test_strings: [7][4][71:0]u8 = blk: {
-    var buf = std.mem.zeroes([7][4][71:0]u8);
-    var text = std.mem.zeroes([255:0]u8);
-    for (0..255) |i| text[i] = i + 1;
-    for (0..7) |i| {
-        var pre = [5]u8{ '~', 'F', '0' + i, '~', 's' };
-        for (0..4) |j| {
-            @memcpy(buf[i][j][0..5], &pre);
-            @memcpy(buf[i][j][5..69], text[64 * j .. 64 * (j + 1)]);
-        }
-    }
-    break :blk buf;
-};
-
-fn CustomFontsInit() void {
-    @memcpy(&fonts, rf.aFontDef);
-    var filename = [_]u8{ 'f', 'o', 'n', 't', 'r', 'a', 'w', '0', '_', 't', 'e', 's', 't' };
-    for (0..5) |i| {
-        filename[7] = '0' + @as(u8, @truncate(i));
-        LoadPreComputedSpritePage(fpage[i].r, 512, 1024, &filename);
-    }
-}
-
-fn CustomFontsLoad() void {
-    assert(fpage.len >= fonts.len);
-    if (fonts_loaded) return;
-
-    // new
-    for (0..fpage.len) |i| {
-        r3.hMaterial_OwnedNewFromData(fpage[i].r, 512, 1024, 512, 1024, .ARGB4444, &fpage[i].t, &fpage[i].m);
-    }
-    fonts[0]._08_page_list[0] = &fpage[0].m;
-    fonts[0]._08_page_list[1] = &fpage[1].m;
-    fonts[0]._08_page_list[2] = &fpage[2].m;
-    fonts[1]._08_page_list[0] = &fpage[2].m;
-    fonts[2]._08_page_list[0] = &fpage[2].m;
-    fonts[3]._08_page_list[0] = &fpage[3].m;
-    fonts[4]._08_page_list[0] = &fpage[4].m;
-
-    // yep
-    fonts_loaded = true;
-}
-
-fn CustomFontsUnload() void {
-    if (!fonts_loaded) return;
-
-    // OLD NOTES
-    // FIXME: works in rendering but still crashes when unloading, in spite
-    // of the hMaterial_Free call in OnDeinit; maybe need to force text
-    // rendering state to update pointers?
-    // maybe worth noting that the game MaterialFree (which hMaterial_Free
-    // calls) seems to only ever be called on shutdown or when clearing
-    // all sprites when loading Hang menu
-    // NOTE: unload crashes at 0x48AA45 (in fn_48AA40) with access violation error
-    // (0xC0000005) according to windows event viewer
-    // NOTE: all these were originally unique allocations, unlike current
-    // scheme that reuses the "base" materials; crash from unload (not re-load)
-    // may have just been use-after-free on the duplicated stuff
-
-    // this one doesn't crash; current ver only crashes in CustomFontsLoad
-    for (0..fpage_raw.len) |i| {
-        r3.hMaterial_OwnedFree(&fpage[i].m);
-    }
-
-    // yep
-    _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
-    fonts_loaded = false;
-}
-
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     CosmeticState.settingsInit(gf);
 
@@ -528,12 +302,6 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
     //var off = gs.patch_offset;
-
-    // NOTE: original function at fn_42D720
-    if (CosmeticState.s_patch_fonts) {
-        CustomFontsInit();
-        CustomFontsLoad();
-    }
 
     //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
@@ -558,75 +326,11 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
     crot.PatchRgbArgs(0x461069, 0xFFFFFF);
     crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
-
-    CustomFontsUnload();
 }
 
 // HOOKS
 
-export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
-    if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
-        if (fonts_using) {
-            fonts_using = false;
-            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
-        } else {
-            fonts_using = true;
-            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table));
-            //const SetCurrentFontSource: *align(1) *anyopaque = @ptrFromInt(0x42D8EE + 3);
-            //SetCurrentFontSource.* = @constCast(@ptrCast(&font_table));
-        }
-    }
-    // crashes when too many materials loaded/unloaded
-    // "materials" in this case meaning those with the 512x1024 HD font textures
-    // also there is a memory leak here, with N materials ..
-    //  N=6     ~1MB leak per cycle
-    //  N=10    ~10MB
-    //  N=20    ~15MB
-    //  N=40    ~35MB
-    // seems to only ever free 5MB regardless of material count
-    // not entirely sure this isn't just a dgvoodoo problem, hard to imagine
-    //  such an obvious issue was not caught on original hardware during
-    //  dev, could also just be a regression in modern windows vs old directx
-    if (CosmeticState.s_patch_fonts and gf.InputGetKbRaw(.I) == .JustOn) {
-        if (fonts_loaded) {
-            CustomFontsUnload();
-        } else {
-            // crash at 48A7F4 when 100 textures loaded then unloaded (i.e. 2nd 'I' press)
-            // in AllocTexture__48A5E0 during vbufferlock memcpy
-            // with 20 textures loaded, doesn't crash immediately but does crash
-            // after some number of cycles loading/unloading, and after 3 cycles
-            // for 40 textures; always around 450MB ram usage
-            // i.e. seems to just be the memory leak crash?
-            CustomFontsLoad();
-        }
-    }
-
-    // trying to induce crash by memory access rather than running free function
-    if (gf.InputGetKbRaw(.O).on()) {
-        var x: i16 = 12;
-        var y: i16 = 12;
-        for (0..3) |i| {
-            const y_step: i16 = if (i < 2) 18 else 32;
-            for (0..4) |j| {
-                //rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xBE, &font_test_strings[4 + i][j]);
-                rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[4 + i][j]);
-                y += y_step;
-            }
-            y += 12;
-        }
-        //const s = struct {
-        //    var p: ?*anyopaque = undefined;
-        //};
-        // s.p = @as(?*r3.Material, @alignCast(@ptrCast(&fonts[0]._08_page_list[0]))).?._90_paTextureAlloc.?[0]._7C_pD3DTextureSrc;
-        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[1])));
-        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[0]._08_page_list[2])));
-        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[1]._08_page_list[0])));
-        // r3.hMaterial_Free(@alignCast(@ptrCast(&fonts[2]._08_page_list[0])));
-        // s.p = @as(?*r3.Material, @alignCast(@ptrCast(&fonts[3]._08_page_list[0]))).?._90_paTextureAlloc.?[0]._7C_pD3DTextureSrc; // crash
-        //s.p = @as(?*r3.Material, @alignCast(@ptrCast(&fonts[4]._08_page_list[0]))).?._90_paTextureAlloc.?[0]._7C_pD3DTextureSrc; // crash
-        //ashta
-    }
-
+export fn TextRenderB(_: *GlobalFn) callconv(.C) void {
     if (CosmeticState.s_rb_enable) {
         CosmeticState.PatchHudColRotate(
             CosmeticState.s_rb_value_enable,

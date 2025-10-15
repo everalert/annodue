@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`)
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
 - Core: Patch texture buffer size to allow custom tracks with large number of textures (settings: `texbuf_enable` `texbuf_size`, category: `core/GAssetBuffer`)
+- Backend(Core): Plugin Function version (`1`)
+- Backend(Core): Plugin Functions
+	- `RenderSceneBeginB`
+	- `RenderSceneBeginA`
+	- `RenderSceneEndB`
+	- `RenderSceneEndA`
 - Backend(Core): `GlobalState.window_in_foreground`
 - Backend(RacerLib): `Save`, `Asset` utils
 - Backend(RacerLib): `Input` defs

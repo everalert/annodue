@@ -7,6 +7,7 @@ const TRUE = std.os.windows.TRUE;
 const assert = std.debug.assert;
 
 // FIXME: lots of this belongs in different (new) files
+// FIXME: ...including direct3d defs lol
 
 // GAME TYPEDEFS
 
@@ -99,12 +100,49 @@ pub const ColorInfo = extern struct {
     _34_ShrA: i32,
 };
 
+// sizeof(0x20)
+pub const D3DTLVERTEX = extern struct {
+    sx: f32,
+    sy: f32,
+    sz: f32,
+    rhw: f32,
+    color: u32, // 0xAARRGGBB
+    specular: u32,
+    tu: f32,
+    tv: f32,
+};
+
 // GAME CONSTANTS
 
 pub const aMaterialDefaultFilename: [*:0]const u8 = @ptrFromInt(0x4B48CC);
 pub const aRovermatic: [*:0]const u8 = @ptrFromInt(0x4B48C0);
 
 // GAME FUNCTIONS
+
+pub const fn3DSceneBegin: *const fn () callconv(.C) void = @ptrFromInt(0x48A300);
+pub const fn3DSceneEnd: *const fn () callconv(.C) void = @ptrFromInt(0x48A330);
+
+pub const fn3DSetRenderState: *const fn (flags: u32) callconv(.C) void = @ptrFromInt(0x48A450);
+pub const fn3DSetWireframeRenderState: *const fn () callconv(.C) void = @ptrFromInt(0x48A3C0);
+pub const fn3DDrawTriangleList: *const fn (
+    tex: ?*anyopaque, // *IDirect3DTexture2
+    flags: u32,
+    vtx: ?[*]const D3DTLVERTEX,
+    vtx_count: i32,
+    idx: ?[*]const i16,
+    idx_count: i32,
+) callconv(.C) void = @ptrFromInt(0x48A350);
+pub const fn3DDrawLineStrip: *const fn (
+    vtx: ?[*]const D3DTLVERTEX,
+    vtx_count: u32,
+) callconv(.C) void = @ptrFromInt(0x48A3F0);
+pub const fn3DDrawPointList: *const fn (
+    vtx: ?[*]const D3DTLVERTEX,
+    vtx_count: u32,
+) callconv(.C) void = @ptrFromInt(0x48A420);
+
+pub const fn3DSetProjection: *const fn (hfov: f32, aspect: f32, znear: f32, zfar: f32) callconv(.C) void =
+    @ptrFromInt(0x48B260);
 
 pub const fn3DTextureAlloc: *const fn (
     tex: ?[*]SystemTexture,

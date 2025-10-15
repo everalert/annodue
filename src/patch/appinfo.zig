@@ -2,8 +2,10 @@ const std = @import("std");
 const SemVer = std.SemanticVersion;
 
 const shared = @import("core/SharedDef.zig");
+const hook = @import("core/Hook.zig");
 pub const GLOBAL_FUNCTION = shared.GlobalFunction;
 pub const COMPATIBILITY_VERSION =
+    hook.PLUGIN_FUNCTION_VERSION +
     shared.GLOBAL_STATE_VERSION +
     shared.GLOBAL_FUNCTION_VERSION +
     @import("core/GDraw.zig").GDRAW_VERSION;

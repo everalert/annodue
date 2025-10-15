@@ -42,6 +42,16 @@ pub const Mat4x4_Copy4x3: *fn (out: *Mat4x4, in: *Mat4x3) callconv(.C) void =
 pub const Mat4x4_Copy: *fn (out: *Mat4x4, in: *Mat4x4) callconv(.C) void =
     @ptrFromInt(0x44BB10);
 
+pub const Mat4x3_InvertOrthoNorm: *fn (out: *Mat4x3, in: *Mat4x3) callconv(.C) void =
+    @ptrFromInt(0x492680);
+pub const Mat4x3_Mul: *fn (out: *Mat4x3, in1: *Mat4x3, in2: *Mat4x3) callconv(.C) void =
+    @ptrFromInt(0x492B70);
+
+pub const Mat4x3_TransformPoint: *fn (out: *Vec3, in_v: *const Vec3, in_m: *const Mat4x3) callconv(.C) void =
+    @ptrFromInt(0x493200);
+pub const Mat4x3_TransformPointsList: *fn (in_m: *const Mat4x3, in_v: *const Vec3, out_v: *Vec3, count: i32) callconv(.C) void =
+    @ptrFromInt(0x493270);
+
 // GAME CONSTANTS
 
 // ...

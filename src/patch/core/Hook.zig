@@ -48,6 +48,8 @@ const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAs
 
 // OKOKOKOKOK
 
+pub const PLUGIN_FUNCTION_VERSION = 1;
+
 const Plugin = plugin: {
     const stdf = .{
         .{ "Handle", ?w.HINSTANCE },
@@ -166,6 +168,10 @@ const PluginExportFn = enum(u32) {
     TextRenderA, // TODO: deprecate
     MapRenderB,
     MapRenderA,
+    RenderSceneBeginB,
+    RenderSceneBeginA,
+    RenderSceneEndB,
+    RenderSceneEndA,
 };
 
 // TODO: owner range limiting
@@ -460,6 +466,7 @@ pub fn init() void {
     //off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+    off = HookSceneBeginEnd(off);
     //off = HookLoadSprite(off);
     GLOBAL_STATE.patch_offset = off;
 }
@@ -695,5 +702,27 @@ fn HookTextRender(memory: usize) usize {
         PluginFnCallback(.Draw2DB),
         PluginFnCallback(.Draw2DA),
     );
+    return off;
+}
+
+fn HookSceneBeginEnd(memory: usize) usize {
+    var off = memory;
+
+    // 3D_StartScene__48A300 in Render_Flush__48DCE0
+    off = hook.intercept_call(
+        off,
+        0x48DCEC,
+        PluginFnCallback(.RenderSceneBeginB),
+        PluginFnCallback(.RenderSceneBeginA),
+    );
+
+    // 3D_EndScene__48A330 in Render_Flush__48DCE0
+    off = hook.intercept_call(
+        off,
+        0x48DD5A,
+        PluginFnCallback(.RenderSceneEndB),
+        PluginFnCallback(.RenderSceneEndA),
+    );
+
     return off;
 }

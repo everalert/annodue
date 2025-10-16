@@ -54,6 +54,19 @@ const rd = @import("racer").Debug;
 //   and have it appear as an option in the game. the standard font def should also
 //   have the glyph coordinates cleaned up so users can actually make fonts that
 //   use the currently busted glyphs (like '!')
+//      - mod brainstorming:
+//          - user option to not use the added margins on the planned "standard"
+//            fonts; the problem may be that some text is cut off at the screen
+//            extents due to the way racer "fixes" UVs on sprite overdraw, which
+//            could cause some cutoff with margins when it otherwise wouldn't
+//          - two standard fonts (ones where you can just drop an image into a
+//            folder): a "minimal" one that only has the stock font glyphs, and
+//            a "normal" one as originally planned that expands on available
+//            glyphs but keeps the stock ones faithfully sized etc
+//          - custom extended glyph defs (LUT) by overwriting game memory (the
+//            stuff at 4BFA10, 4BFA58)
+//          - feature to dump or otherwise display the font defs, glyph defs,
+//            extended glyph LUT, etc. as text/csv
 // - remake old HD font with better proportions that actually match the original
 //   font
 // - future: some kind of text rendering system that lets developers draw with
@@ -97,7 +110,7 @@ const FontState = struct {
         h_s_patch_fonts =
             gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, &s_patch_fonts, null);
         h_s_dump_fonts = // working?
-            gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, &s_dump_fonts, settingsFontDump);
+            gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, &s_dump_fonts, null);
     }
 
     // FIXME: crashes, but only in OnInit; not on arbitrary keypress in the other
@@ -105,35 +118,160 @@ const FontState = struct {
     // TODO: make sure it only dumps once, even when hot reloading; alternatively,
     // make it dump with a button press in a menu
     fn settingsFontDump(value: Setting.Value) callconv(.C) void {
-        if (value.b and !dump_fonts_done) {
-            dump_fonts_done = true;
-            var font: [5][0x2000]u8 = undefined;
+        if (value.b and !dump_fonts_done)
+            FontDump();
+    }
 
-            ExtractRawFontPagesToGrey8(&font);
-            DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0.tga");
-            DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1.tga");
-            DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2.tga");
-            DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3.tga");
-            DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4.tga");
+    fn FontDump() void {
+        dump_fonts_done = true;
+        var font: [5][0x2000]u8 = undefined;
 
-            // TODO: resolve or filter out garbage glyph defs polluting templates
-            // TODO: draw each glyph as a separate image, to account for overlaps?
-            font = std.mem.zeroes([5][0x2000]u8);
-            DrawFontGlyphRegions(&font[0], &font[1], &font[2], rf.aFontGlyphs0, rf.aFontGlyphs0Ext, 64, 128);
-            DrawFontGlyphRegions(&font[2], null, null, rf.aFontGlyphs1, null, 64, 128);
-            DrawFontGlyphRegions(&font[2], null, null, rf.aFontGlyphs2, null, 64, 128);
-            DrawFontGlyphRegions(&font[3], null, null, rf.aFontGlyphs3, rf.aFontGlyphs3Ext, 64, 128);
-            DrawFontGlyphRegions(&font[4], null, null, rf.aFontGlyphs4, rf.aFontGlyphs4Ext, 64, 128);
-            DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0_mask.tga");
-            DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1_mask.tga");
-            DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2_mask.tga");
-            DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3_mask.tga");
-            DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4_mask.tga");
-        }
+        ExtractRawFontPagesToGrey8(&font);
+        DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0.tga");
+        DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1.tga");
+        DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2.tga");
+        DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3.tga");
+        DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4.tga");
+
+        // TODO: resolve or filter out garbage glyph defs polluting templates
+        // TODO: draw each glyph as a separate image, to account for overlaps?
+        font = std.mem.zeroes([5][0x2000]u8);
+        DrawFontGlyphRegions(&font[0], &font[1], &font[2], rf.aFontGlyphs0, rf.aFontGlyphs0Ext, 64, 128);
+        DrawFontGlyphRegions(&font[2], null, null, rf.aFontGlyphs1, null, 64, 128);
+        DrawFontGlyphRegions(&font[2], null, null, rf.aFontGlyphs2, null, 64, 128);
+        DrawFontGlyphRegions(&font[3], null, null, rf.aFontGlyphs3, rf.aFontGlyphs3Ext, 64, 128);
+        DrawFontGlyphRegions(&font[4], null, null, rf.aFontGlyphs4, rf.aFontGlyphs4Ext, 64, 128);
+        DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0_mask.tga");
+        DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1_mask.tga");
+        DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2_mask.tga");
+        DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3_mask.tga");
+        DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4_mask.tga");
+
+        DumpFontDefToCSV(&rf.aFontDef[0], 61, 15, "annodue/developer/fontdata0");
+        DumpFontDefToCSV(&rf.aFontDef[1], 27, 0, "annodue/developer/fontdata1");
+        DumpFontDefToCSV(&rf.aFontDef[2], 27, 0, "annodue/developer/fontdata2");
+        DumpFontDefToCSV(&rf.aFontDef[3], 62, 15, "annodue/developer/fontdata3");
+        DumpFontDefToCSV(&rf.aFontDef[4], 62, 15, "annodue/developer/fontdata4");
+        DumpFontGlyphMapToCSV("annodue/developer/fontglyphmap");
     }
 };
 
 // SWE1R-PATCHER STUFF
+
+// FIXME: crashes if directory doesn't exist
+// FIXME: handle FileAlreadyExists case (not sure best approach yet)
+// FIXME: using bufferedwriter multiple times in the fn causes crash for some
+// reason, even with defer-closing everything serially in advance??? so we use
+// non-buffered for now; also, same issue with glyph map dump
+fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []const u8) void {
+    //assert(filename.len > 4);
+    //assert(!std.mem.endsWith(u8, filename_stem, ".csv")); // we will add ".csv"
+    var buf: [2048]u8 = undefined;
+
+    { // MAIN FILE
+        const filename = std.fmt.bufPrint(&buf, "{s}.csv", .{filename_stem}) catch unreachable;
+        // FIXME: switch to exclusive mode and handle FileAlreadyExists
+        const file = std.fs.cwd().createFile(filename, .{}) catch |e|
+            PPanic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
+        defer file.close();
+        //var file_bw = std.io.bufferedWriter(file.writer());
+        const file_w = file.writer();
+        //defer _ = file_bw.flush() catch |e|
+        //    PPanic("(DumpFontDefToCSV) flush: {s}", .{@errorName(e)});
+
+        //_ = file_w.write("FONT\n") catch unreachable;
+        file_w.print("\"Field\",\"Value\"\n", .{}) catch unreachable;
+        file_w.print("\"0x00\",{d}\n", .{font._00}) catch unreachable;
+        file_w.print("\"PageCount\",{d}\n", .{font._04_page_num}) catch unreachable;
+        for (0..@intCast(font._04_page_num)) |i| {
+            file_w.print(
+                "\"Page[{d}]\",0x{X:0>6}\n",
+                .{ i, @intFromPtr(font._08_page_list[i]) },
+            ) catch unreachable;
+        }
+        file_w.print("\"LineHeight\",{d}\n", .{font._4C_line_height}) catch unreachable;
+        file_w.print("\"MinChar\",0x{X:0>2}\n", .{font._5A_char_min}) catch unreachable;
+        file_w.print("\"MaxChar\",0x{X:0>2}\n", .{font._5B_char_max}) catch unreachable;
+        file_w.print("\"Glyphs\",0x{?X:0>6}\n", .{@intFromPtr(font._5C_glyphs)}) catch unreachable;
+        file_w.print("\"GlyphsExt\",0x{?X:0>6}\n", .{@intFromPtr(font._60_glyphs_ext)}) catch unreachable;
+    }
+
+    // GLYPHS
+    if (font._5C_glyphs) |glyphs| {
+        const filename = std.fmt.bufPrint(&buf, "{s}_g.csv", .{filename_stem}) catch unreachable;
+        const file = std.fs.cwd().createFile(filename, .{}) catch |e|
+            PPanic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
+        defer file.close();
+        const file_w = file.writer();
+
+        //_ = file_w.write("GLYPHS\n") catch unreachable;
+        _ = file_w.write(
+            "\"ID\",\"PID\",\"Adv\",\"OffX\",\"OffY\",\"X\",\"Y\",\"W\",\"H\",\"Ch\",\"CHex\"\n",
+        ) catch unreachable;
+        for (0..g1_len, font._5A_char_min..) |i, c| {
+            const g = glyphs[i];
+            file_w.print(
+                \\"{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}","{s}{c}","0x{X:0>2}"
+                \\
+            , .{ i, g._00_page_id, g._02_width, g._04_offset_x, g._06_offset_y, g._08_uv_x, g._0A_uv_y, g._0C_uv_w, g._0E_uv_h, if (c == 0x22) "\"" else "", @as(u8, @intCast(c)), c }) catch unreachable;
+        }
+    }
+
+    // EXTENDED GLYPHS
+    if (font._60_glyphs_ext) |glyphs| {
+        const filename = std.fmt.bufPrint(&buf, "{s}_ge.csv", .{filename_stem}) catch unreachable;
+        const file = std.fs.cwd().createFile(filename, .{}) catch |e|
+            PPanic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
+        defer file.close();
+        const file_w = file.writer();
+
+        _ = file_w.write(
+            "\"ID\",\"PID\",\"Adv\",\"OffX\",\"OffY\",\"X\",\"Y\",\"W\",\"H\"\n",
+        ) catch unreachable;
+        for (0..g2_len) |i| {
+            const g = glyphs[i];
+            file_w.print(
+                \\"{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}"
+                \\
+            , .{ i, g._00_page_id, g._02_width, g._04_offset_x, g._06_offset_y, g._08_uv_x, g._0A_uv_y, g._0C_uv_w, g._0E_uv_h }) catch unreachable;
+        }
+    }
+}
+
+fn DumpFontGlyphMapToCSV(filename_stem: []const u8) void {
+    //assert(filename.len > 4);
+    //assert(!std.mem.endsWith(u8, filename_stem, ".csv")); // we will add ".csv"
+    var buf: [2048]u8 = undefined;
+
+    { // KEYS
+        const filename = std.fmt.bufPrint(&buf, "{s}_k.csv", .{filename_stem}) catch unreachable;
+        // FIXME: switch to exclusive mode and handle FileAlreadyExists
+        const file = std.fs.cwd().createFile(filename, .{}) catch |e|
+            PPanic("(DumpFontGlyphMapToCSV) create file: {s}", .{@errorName(e)});
+        defer file.close();
+        const file_w = file.writer();
+
+        file_w.print("\"ValID\",\"Ch\",\"CHex\"\n", .{}) catch unreachable;
+        for (rf.aFontExtGlyphMapKey, 150..) |k, c| {
+            file_w.print("\"{d}\",\"{c}\",\"0x{X:0>2}\"\n", .{ k, @as(u8, @intCast(c)), c }) catch unreachable;
+        }
+    }
+
+    { // VALUES
+        const filename = std.fmt.bufPrint(&buf, "{s}_v.csv", .{filename_stem}) catch unreachable;
+        const file = std.fs.cwd().createFile(filename, .{}) catch |e|
+            PPanic("(DumpFontGlyphMapToCSV) create file: {s}", .{@errorName(e)});
+        defer file.close();
+        const file_w = file.writer();
+
+        file_w.print("\"ExID\",\"Glyph\",\"GCh\",\"GCHex\"\n", .{}) catch unreachable;
+        for (rf.aFontExtGlyphMapVal) |v| {
+            file_w.print("\"{d}\",\"{d}\",\"{c}\",\"0x{X:0>2}\"\n", .{
+                v._00_glyph1, v._01_glyph2, @as(u8, @intCast(v._01_glyph2)), v._01_glyph2,
+            }) catch unreachable;
+        }
+    }
+}
 
 fn ExtractRawFontPagesToGrey8(buf: *[5][0x2000]u8) void {
     for (buf, 0..) |*b, i| {
@@ -496,5 +634,10 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
             }
             y += 12;
         }
+    }
+
+    // testing font data dump
+    if (gf.InputGetKbRaw(.I) == .JustOn and FontState.s_dump_fonts) {
+        FontState.FontDump();
     }
 }

@@ -23,10 +23,10 @@ pub const FONT = extern struct {
 
 pub const GLYPH = extern struct {
     _00_page_id: i16,
-    _02_width: i16,
+    _02_width: i16, // FIXME: naming: "advance", "advance_w" or "advance_width"
     _04_offset_x: i16,
     _06_offset_y: i16,
-    _08_uv_x: i16,
+    _08_uv_x: i16, // FIXME: naming: "tex_x" or "texture_x", and so on
     _0A_uv_y: i16,
     _0C_uv_w: i16,
     _0E_uv_h: i16,
@@ -37,8 +37,8 @@ pub const GLYPH = extern struct {
 // used to redirect characters to use another character's glyph
 // possibly also related to rendering diacritics
 pub const GLYPH_MAP = extern struct {
-    _00_glyph1: u8,
-    _01_glyph2: u8,
+    _00_glyph1: u8, // FIXME: naming: "glyph_extended" or similar
+    _01_glyph2: u8, // FIXME: naming: "glyph"; refers to main glyph set
 };
 
 // GAME CONSTANTS

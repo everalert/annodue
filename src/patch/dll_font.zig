@@ -206,14 +206,14 @@ fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []con
 
         //_ = file_w.write("GLYPHS\n") catch unreachable;
         _ = file_w.write(
-            "\"ID\",\"PID\",\"Adv\",\"OffX\",\"OffY\",\"X\",\"Y\",\"W\",\"H\",\"Ch\",\"CHex\"\n",
+            "\"ID\",\"PID\",\"Adv\",\"OffY\",\"OffX\",\"X\",\"Y\",\"W\",\"H\",\"Ch\",\"CHex\"\n",
         ) catch unreachable;
         for (0..g1_len, font._5A_char_min..) |i, c| {
             const g = glyphs[i];
             file_w.print(
                 \\"{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}","{s}{c}","0x{X:0>2}"
                 \\
-            , .{ i, g._00_page_id, g._02_width, g._04_offset_x, g._06_offset_y, g._08_uv_x, g._0A_uv_y, g._0C_uv_w, g._0E_uv_h, if (c == 0x22) "\"" else "", @as(u8, @intCast(c)), c }) catch unreachable;
+            , .{ i, g.PageID, g.Advance, g.OffY, g.OffX, g.TexX, g.TexY, g.TexW, g.TexH, if (c == 0x22) "\"" else "", @as(u8, @intCast(c)), c }) catch unreachable;
         }
     }
 
@@ -226,14 +226,14 @@ fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []con
         const file_w = file.writer();
 
         _ = file_w.write(
-            "\"ID\",\"PID\",\"Adv\",\"OffX\",\"OffY\",\"X\",\"Y\",\"W\",\"H\"\n",
+            "\"ID\",\"PID\",\"Adv\",\"OffY\",\"OffX\",\"X\",\"Y\",\"W\",\"H\"\n",
         ) catch unreachable;
         for (0..g2_len) |i| {
             const g = glyphs[i];
             file_w.print(
                 \\"{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}","{d}"
                 \\
-            , .{ i, g._00_page_id, g._02_width, g._04_offset_x, g._06_offset_y, g._08_uv_x, g._0A_uv_y, g._0C_uv_w, g._0E_uv_h }) catch unreachable;
+            , .{ i, g.PageID, g.Advance, g.OffY, g.OffX, g.TexX, g.TexY, g.TexW, g.TexH }) catch unreachable;
         }
     }
 }
@@ -298,15 +298,15 @@ fn DrawFontGlyphRegions(
     for (glyph_sets) |gs| {
         if (gs == null) continue;
         for (gs.?) |*g| {
-            if (g._08_uv_x == -1) continue; // not implemented in font data
-            assert(pages[@intCast(g._00_page_id)] != null);
-            assert(pages[@intCast(g._00_page_id)].?.len == page_w * page_h);
-            const page = pages[@intCast(g._00_page_id)].?;
-            var px_i: usize = @intCast(g._08_uv_x + g._0A_uv_y * page_w);
-            for (@intCast(g._0A_uv_y)..@intCast(g._0A_uv_y + g._0E_uv_h)) |y| {
+            if (g.TexX == -1) continue; // not implemented in font data
+            assert(pages[@intCast(g.PageID)] != null);
+            assert(pages[@intCast(g.PageID)].?.len == page_w * page_h);
+            const page = pages[@intCast(g.PageID)].?;
+            var px_i: usize = @intCast(g.TexX + g.TexY * page_w);
+            for (@intCast(g.TexY)..@intCast(g.TexY + g.TexH)) |y| {
                 if (y >= page_h) continue;
                 var px_j = px_i;
-                for (@intCast(g._08_uv_x)..@intCast(g._08_uv_x + g._0C_uv_w)) |x| {
+                for (@intCast(g.TexX)..@intCast(g.TexX + g.TexW)) |x| {
                     if (x >= page_w) continue;
                     page[px_j] = 0xFF;
                     px_j += 1;

@@ -483,15 +483,28 @@ var fpage = pages: {
 
     break :pages p;
 };
-const font_test_strings: [7][4][71:0]u8 = blk: {
-    var buf = std.mem.zeroes([7][4][71:0]u8);
-    var text = std.mem.zeroes([255:0]u8);
-    for (0..255) |i| text[i] = i + 1;
+
+const font_test_strings: [7][4][55:0]u8 = blk: {
+    var test_text = std.mem.zeroes([100]u8);
+    // 62 'normal' characters starting at 0x20
+    for (0..62) |i| test_text[i] = ' ' + i;
+    // 15 'extended' characters accessed from following ascii codes:
+    // 0xEn onwards can be skipped, same as previous -> 33 items
+    const test_chars_ext = [_]u8{
+        0x99, 0xA1, 0xA3, 0xAA, 0xAB, 0xBA, 0xBB, 0xBF, 0xC0, 0xC1, 0xC2, 0xC3,
+        0xC4, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD1, 0xD2,
+        0xD3, 0xD4, 0xD5, 0xD6, 0xD9, 0xDA, 0xDB, 0xDC, 0xDF, 0xE1, 0xE2, 0xE3,
+        0xE4, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF1, 0xF2,
+        0xF3, 0xF4, 0xF5, 0xF6, 0xF9, 0xFA, 0xFB, 0xFC,
+    };
+    @memcpy(test_text[62..95], test_chars_ext[0..33]);
+
+    var buf = std.mem.zeroes([7][4][55:0]u8);
     for (0..7) |i| {
         var pre = [5]u8{ '~', 'F', '0' + i, '~', 's' };
-        for (0..4) |j| {
+        for (0..2) |j| {
             @memcpy(buf[i][j][0..5], &pre);
-            @memcpy(buf[i][j][5..69], text[64 * j .. 64 * (j + 1)]);
+            @memcpy(buf[i][j][5..55], test_text[j * 50 .. (j + 1) * 50]);
         }
     }
     break :blk buf;
@@ -624,15 +637,15 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     // testing display showing all(?) font glyphs
     if (gf.InputGetKbRaw(.O).on()) {
         var x: i16 = 12;
-        var y: i16 = 12;
-        for (0..3) |i| {
-            const y_step: i16 = if (i < 2) 18 else 32;
+        var y: i16 = 192;
+        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
+        y += 24;
+        for (0..4) |i| {
+            const y_step: i16 = if (i < 3) 12 else 32;
             for (0..4) |j| {
-                //rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xBE, &font_test_strings[4 + i][j]);
-                rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[4 + i][j]);
+                rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[i + 3][j]);
                 y += y_step;
             }
-            y += 12;
         }
     }
 

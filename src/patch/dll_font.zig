@@ -156,7 +156,9 @@ const FontState = struct {
     }
 };
 
-// SWE1R-PATCHER STUFF
+// ------------
+// IO/devtools
+// ------------
 
 // FIXME: crashes if directory doesn't exist
 // FIXME: handle FileAlreadyExists case (not sure best approach yet)
@@ -462,7 +464,89 @@ fn LoadPreComputedSpritePage(
     }
 }
 
+// ------------
+// glyph adjustment
+// ------------
+
+const GlyphFieldAdjustment = struct {
+    const T = enum { Set, Add };
+    const F = enum { Pg, Ad, OX, OY, TX, TY, TW, TH };
+    t: T,
+    f: F,
+    v: i16,
+};
+
+const GlyphAdjustment = struct {
+    i: usize,
+    a: GlyphFieldAdjustment,
+};
+
+fn CloneAndAdjustGlyphSet(src: []const rf.GLYPH, dst: []rf.GLYPH, adjustments: []const GlyphAdjustment) void {
+    assert(src.len == dst.len);
+    @memcpy(dst, src);
+    AdjustGlyphSet(dst, adjustments);
+}
+
+fn AdjustGlyphSet(set: []rf.GLYPH, adjustments: []const GlyphAdjustment) void {
+    for (adjustments) |adj| {
+        var value: *i16 = switch (adj.a.f) {
+            .Pg => &set[adj.i].PageID,
+            .Ad => &set[adj.i].Advance,
+            .OX => &set[adj.i].OffX,
+            .OY => &set[adj.i].OffY,
+            .TX => &set[adj.i].TexX,
+            .TY => &set[adj.i].TexY,
+            .TW => &set[adj.i].TexW,
+            .TH => &set[adj.i].TexH,
+        };
+        switch (adj.a.t) {
+            .Set => value.* = adj.a.v,
+            .Add => value.* += adj.a.v,
+        }
+    }
+}
+
+inline fn GFA(
+    t: GlyphFieldAdjustment.T,
+    f: GlyphFieldAdjustment.F,
+    v: i16,
+) GlyphFieldAdjustment {
+    return .{ .t = t, .f = f, .v = v };
+}
+
+// ------------
+// Custom stuff workspace
+// ------------
+
+// NOTE: scratchpad notes
+//
+// - will need to adjust :;-+ dims on title font beyond just margin
+//
+// mod
+// - make 'fixed' base font patch option with the minor adjustments that work with
+//   the original font defs/textures, using some kind of 'adjustment table'
+// - then use that as a base and apply changes from another such adjustment table
+//   for the custom font def
+// - i.e. 'progressively enhance' from the base fonts, to simplify figuring out all
+//   the new numbers
+// - general rule = 'basic custom font' should not introduce any glyphs that do not
+//   already have pixels drawn on the original font, and should not make any changes
+//   that affect the spacing of the output; but adjustments to coords and splitting
+//   overlapping defs into independent mappings OK; this is so that it can serve as
+//   a 'ground truth' baseline representing a user who has no custom fonts enabled
+// - font dll should have the timings adjusted so that the original fonts are fully
+//   loaded before executing any mods; that way the 'copied' versions can use the
+//   prepared resources (i.e. default to late-loading, and only execute on any
+//   features before font loading when that feature really needs it)
+//
+// notes
+// - can't totally fix accent alignment, because differences in base character width
+//   naturally misalign them; can only fix this case in code
+// - can't make inverted exclamation mark in the way '?' is done without changing
+//   code; but could just make another glyph
+
 // FIXME: to organize/streamline; random stuff used to work through feature dev
+var fonts_initialized = false;
 const font_table = [_]*anyopaque{ &fonts[3], &fonts[2], &fonts[1], &fonts[2], &fonts[4], &fonts[3], &fonts[0] };
 var fonts: [5]rf.FONT = undefined;
 var fonts_loaded: bool = false;
@@ -510,7 +594,182 @@ const font_test_strings: [7][4][55:0]u8 = blk: {
     break :blk buf;
 };
 
+const font_table_adj = [_]*anyopaque{
+    &fonts_adj[3], &fonts_adj[2], &fonts_adj[1], &fonts_adj[2],
+    &fonts_adj[4], &fonts_adj[3], &fonts_adj[0],
+};
+var fonts_adj: [5]rf.FONT = undefined;
+var fonts_adj_f0g: [61]rf.GLYPH = undefined;
+var fonts_adj_f0ge: [15]rf.GLYPH = undefined;
+var fonts_adj_f1g: [27]rf.GLYPH = undefined;
+var fonts_adj_f2g: [27]rf.GLYPH = undefined;
+var fonts_adj_f3g: [62]rf.GLYPH = undefined;
+var fonts_adj_f3ge: [15]rf.GLYPH = undefined;
+var fonts_adj_f4g: [62]rf.GLYPH = undefined;
+var fonts_adj_f4ge: [15]rf.GLYPH = undefined;
+
+// FIXME: add as an actual plugin feature with a settings toggle
+const gfa_disable = GFA(.Set, .TX, -1);
+const font0_g_adj = [_]GlyphAdjustment{
+    .{ .i = 1, .a = gfa_disable },
+    .{ .i = 2, .a = GFA(.Add, .OX, 5) },
+    .{ .i = 3, .a = gfa_disable },
+    .{ .i = 4, .a = gfa_disable },
+    .{ .i = 7, .a = GFA(.Add, .OX, 5) },
+    .{ .i = 8, .a = gfa_disable },
+    .{ .i = 9, .a = gfa_disable },
+    .{ .i = 10, .a = gfa_disable },
+    .{ .i = 12, .a = gfa_disable },
+    .{ .i = 14, .a = gfa_disable },
+    .{ .i = 15, .a = GFA(.Add, .OY, -1) },
+    .{ .i = 27, .a = gfa_disable },
+    .{ .i = 28, .a = gfa_disable },
+    .{ .i = 30, .a = gfa_disable },
+    .{ .i = 35, .a = GFA(.Add, .OX, -1) },
+    .{ .i = 51, .a = GFA(.Add, .OX, -1) },
+    .{ .i = 57, .a = GFA(.Add, .OX, -1) },
+};
+const font0_ge_adj = [_]GlyphAdjustment{
+    .{ .i = 1, .a = gfa_disable },
+    .{ .i = 2, .a = gfa_disable },
+    .{ .i = 6, .a = GFA(.Add, .OX, 1) },
+    .{ .i = 7, .a = GFA(.Add, .OX, 1) },
+    .{ .i = 8, .a = GFA(.Add, .OX, 1) },
+    .{ .i = 9, .a = GFA(.Add, .OX, 2) },
+    .{ .i = 10, .a = GFA(.Add, .OX, 1) },
+    .{ .i = 11, .a = GFA(.Add, .OX, 2) },
+    .{ .i = 13, .a = GFA(.Add, .OY, -2) },
+    .{ .i = 14, .a = GFA(.Add, .OY, -2) },
+};
+const font1_g_adj = [_]GlyphAdjustment{
+    .{ .i = 1, .a = gfa_disable },
+    .{ .i = 3, .a = gfa_disable },
+    .{ .i = 4, .a = gfa_disable },
+    .{ .i = 7, .a = gfa_disable },
+    .{ .i = 8, .a = gfa_disable },
+    .{ .i = 9, .a = gfa_disable },
+    .{ .i = 10, .a = gfa_disable },
+    .{ .i = 12, .a = gfa_disable },
+    .{ .i = 13, .a = gfa_disable },
+    .{ .i = 15, .a = gfa_disable },
+};
+const font2_g_adj = [_]GlyphAdjustment{
+    .{ .i = 1, .a = gfa_disable },
+    .{ .i = 3, .a = gfa_disable },
+    .{ .i = 4, .a = gfa_disable },
+    .{ .i = 7, .a = gfa_disable },
+    .{ .i = 8, .a = gfa_disable },
+    .{ .i = 9, .a = gfa_disable },
+    .{ .i = 10, .a = gfa_disable },
+    .{ .i = 12, .a = gfa_disable },
+    .{ .i = 13, .a = gfa_disable },
+};
+const font3_g_adj = [_]GlyphAdjustment{
+    .{ .i = 3, .a = gfa_disable },
+    .{ .i = 4, .a = gfa_disable },
+    .{ .i = 8, .a = gfa_disable },
+    .{ .i = 9, .a = gfa_disable },
+    .{ .i = 11, .a = GFA(.Add, .TY, 1) },
+    .{ .i = 12, .a = GFA(.Add, .OY, -2) },
+    .{ .i = 13, .a = GFA(.Add, .OX, -1) },
+    .{ .i = 17, .a = GFA(.Add, .OX, 1) },
+    .{ .i = 17, .a = GFA(.Add, .TX, -1) },
+    .{ .i = 26, .a = GFA(.Add, .OY, -1) },
+    .{ .i = 28, .a = gfa_disable },
+    .{ .i = 30, .a = gfa_disable },
+};
+const font3_ge_adj = [_]GlyphAdjustment{
+    // pound (currency); this one may be intentional, overlaps 'L'
+    //.{ .i = 2, .a = gfa_disable },
+};
+const font4_g_adj = [_]GlyphAdjustment{
+    .{ .i = 2, .a = GFA(.Add, .OY, 1) },
+    .{ .i = 2, .a = GFA(.Add, .TH, -2) },
+    .{ .i = 7, .a = GFA(.Add, .OY, 1) },
+    .{ .i = 7, .a = GFA(.Add, .TH, -2) },
+    .{ .i = 10, .a = gfa_disable },
+    .{ .i = 12, .a = GFA(.Add, .TH, -2) },
+    .{ .i = 14, .a = GFA(.Set, .TX, 1) },
+    .{ .i = 14, .a = GFA(.Set, .TY, 25) },
+    .{ .i = 14, .a = GFA(.Set, .TW, 3) },
+    .{ .i = 28, .a = gfa_disable },
+    .{ .i = 30, .a = gfa_disable },
+    .{ .i = 61, .a = GFA(.Add, .OX, 1) },
+    .{ .i = 61, .a = GFA(.Add, .TX, -1) },
+    .{ .i = 61, .a = GFA(.Add, .TW, 1) },
+};
+const font4_ge_adj = [_]GlyphAdjustment{
+    .{ .i = 1, .a = GFA(.Set, .TX, 27) },
+    .{ .i = 1, .a = GFA(.Set, .TY, 21) },
+    .{ .i = 2, .a = gfa_disable },
+    .{ .i = 3, .a = GFA(.Add, .OY, 1) },
+    .{ .i = 4, .a = GFA(.Add, .OY, 1) },
+    .{ .i = 9, .a = GFA(.Add, .OX, 2) },
+    .{ .i = 11, .a = GFA(.Add, .OX, 1) },
+    .{ .i = 13, .a = GFA(.Add, .OY, -1) },
+    .{ .i = 14, .a = GFA(.Add, .OY, -1) },
+};
+
+fn FontsInit() void {
+    if (fonts_initialized) return;
+    AdjustmentFontsInit();
+    CustomFontsInit();
+    fonts_initialized = true;
+}
+
+fn FontsLoad() void {
+    if (fonts_loaded) return;
+    AdjustmentFontsLoad();
+    CustomFontsLoad();
+    fonts_loaded = true;
+}
+
+fn FontsUnload() void {
+    if (!fonts_loaded) return;
+    AdjustmentFontsUnload();
+    CustomFontsUnload();
+    _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
+    fonts_loaded = false;
+}
+
+// WARN: do not use directly; use FontsInit
+fn AdjustmentFontsInit() void {
+    if (fonts_initialized) return;
+
+    @memcpy(&fonts_adj, rf.aFontDef);
+    fonts_adj[0]._5C_glyphs = &fonts_adj_f0g;
+    fonts_adj[0]._60_glyphs_ext = &fonts_adj_f0ge;
+    fonts_adj[1]._5C_glyphs = &fonts_adj_f1g;
+    fonts_adj[2]._5C_glyphs = &fonts_adj_f2g;
+    fonts_adj[3]._5C_glyphs = &fonts_adj_f3g;
+    fonts_adj[3]._60_glyphs_ext = &fonts_adj_f3ge;
+    fonts_adj[4]._5C_glyphs = &fonts_adj_f4g;
+    fonts_adj[4]._60_glyphs_ext = &fonts_adj_f4ge;
+
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs0, &fonts_adj_f0g, &font0_g_adj);
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs0Ext, &fonts_adj_f0ge, &font0_ge_adj);
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs1, &fonts_adj_f1g, &font1_g_adj);
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs2, &fonts_adj_f2g, &font2_g_adj);
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs3, &fonts_adj_f3g, &font3_g_adj);
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs3Ext, &fonts_adj_f3ge, &font3_ge_adj);
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs4, &fonts_adj_f4g, &font4_g_adj);
+    CloneAndAdjustGlyphSet(rf.aFontGlyphs4Ext, &fonts_adj_f4ge, &font4_ge_adj);
+}
+
+// WARN: do not use directly; use FontsLoad
+fn AdjustmentFontsLoad() void {
+    if (fonts_loaded) return;
+}
+
+// WARN: do not use directly; use FontsUnload
+fn AdjustmentFontsUnload() void {
+    if (!fonts_loaded) return;
+}
+
+// WARN: do not use directly; use FontsInit
 fn CustomFontsInit() void {
+    if (fonts_initialized) return;
+
     @memcpy(&fonts, rf.aFontDef);
     var filename = [_]u8{ 'f', 'o', 'n', 't', 'r', 'a', 'w', '0', '_', 't', 'e', 's', 't' };
     for (0..5) |i| {
@@ -519,11 +778,11 @@ fn CustomFontsInit() void {
     }
 }
 
+// WARN: do not use directly; use FontsLoad
 fn CustomFontsLoad() void {
     assert(fpage.len >= fonts.len);
     if (fonts_loaded) return;
 
-    // new
     for (0..fpage.len) |i| {
         r3.hMaterial_OwnedNewFromData(fpage[i].r, 512, 1024, 512, 1024, .ARGB4444, &fpage[i].t, &fpage[i].m);
     }
@@ -534,11 +793,9 @@ fn CustomFontsLoad() void {
     fonts[2]._08_page_list[0] = &fpage[2].m;
     fonts[3]._08_page_list[0] = &fpage[3].m;
     fonts[4]._08_page_list[0] = &fpage[4].m;
-
-    // yep
-    fonts_loaded = true;
 }
 
+// WARN: do not use directly; use FontsUnload
 fn CustomFontsUnload() void {
     if (!fonts_loaded) return;
 
@@ -559,10 +816,6 @@ fn CustomFontsUnload() void {
     for (0..fpage_raw.len) |i| {
         r3.hMaterial_OwnedFree(&fpage[i].m);
     }
-
-    // yep
-    _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
-    fonts_loaded = false;
 }
 
 // HOUSEKEEPING
@@ -579,58 +832,37 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
+// NOTE: other fonts init in TextRenderB
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     FontState.settingsInit(gf);
-
-    // NOTE: original function at fn_42D720
-    if (FontState.s_patch_fonts) {
-        CustomFontsInit();
-        CustomFontsLoad();
-    }
 }
 
 export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
 export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
-    CustomFontsUnload();
+    FontsUnload();
 }
 
 // HOOKS
 
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
+    // NOTE: original function at fn_42D720
+    // making sure original fonts are fully loaded before this runs
+    if (!fonts_initialized and FontState.s_patch_fonts) {
+        FontsInit();
+        FontsLoad();
+    }
+
     if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
         if (fonts_using) {
             fonts_using = false;
             _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
         } else {
             fonts_using = true;
-            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table));
+            //_ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table));
+            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table_adj));
             //const SetCurrentFontSource: *align(1) *anyopaque = @ptrFromInt(0x42D8EE + 3);
             //SetCurrentFontSource.* = @constCast(@ptrCast(&font_table));
-        }
-    }
-    // crashes when too many materials loaded/unloaded
-    // "materials" in this case meaning those with the 512x1024 HD font textures
-    // also there is a memory leak here, with N materials ..
-    //  N=6     ~1MB leak per cycle
-    //  N=10    ~10MB
-    //  N=20    ~15MB
-    //  N=40    ~35MB
-    // seems to only ever free 5MB regardless of material count
-    // not entirely sure this isn't just a dgvoodoo problem, hard to imagine
-    //  such an obvious issue was not caught on original hardware during
-    //  dev, could also just be a regression in modern windows vs old directx
-    if (FontState.s_patch_fonts and gf.InputGetKbRaw(.I) == .JustOn) {
-        if (fonts_loaded) {
-            CustomFontsUnload();
-        } else {
-            // crash at 48A7F4 when 100 textures loaded then unloaded (i.e. 2nd 'I' press)
-            // in AllocTexture__48A5E0 during vbufferlock memcpy
-            // with 20 textures loaded, doesn't crash immediately but does crash
-            // after some number of cycles loading/unloading, and after 3 cycles
-            // for 40 textures; always around 450MB ram usage
-            // i.e. seems to just be the memory leak crash?
-            CustomFontsLoad();
         }
     }
 
@@ -653,4 +885,31 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     if (gf.InputGetKbRaw(.I) == .JustOn and FontState.s_dump_fonts) {
         FontState.FontDump();
     }
+
+    // for testing load/unload of resources, does not do the ground truth
+    // toggle logic
+    // - crashes when too many materials loaded/unloaded
+    // - "materials" in this case meaning those with the 512x1024 HD font textures
+    //   also there is a memory leak here, with N materials ..
+    //      N=6     ~1MB leak per cycle
+    //      N=10    ~10MB
+    //      N=20    ~15MB
+    //      N=40    ~35MB
+    // - seems to only ever free 5MB regardless of material count
+    // - not entirely sure this isn't just a dgvoodoo problem, hard to imagine
+    //   such an obvious issue was not caught on original hardware during
+    //   dev, could also just be a regression in modern windows vs old directx
+    //if (FontState.s_patch_fonts and gf.InputGetKbRaw(.I) == .JustOn) {
+    //    if (fonts_loaded) {
+    //        FontsUnload();
+    //    } else {
+    //        // crash at 48A7F4 when 100 textures loaded then unloaded (i.e. 2nd 'I' press)
+    //        // in AllocTexture__48A5E0 during vbufferlock memcpy
+    //        // with 20 textures loaded, doesn't crash immediately but does crash
+    //        // after some number of cycles loading/unloading, and after 3 cycles
+    //        // for 40 textures; always around 450MB ram usage
+    //        // i.e. seems to just be the memory leak crash?
+    //        FontsLoad();
+    //    }
+    //}
 }

@@ -547,11 +547,20 @@ inline fn GFA(
 
 // FIXME: to organize/streamline; random stuff used to work through feature dev
 var fonts_initialized = false;
-const font_table = [_]*anyopaque{ &fonts[3], &fonts[2], &fonts[1], &fonts[2], &fonts[4], &fonts[3], &fonts[0] };
+const custom_fonts = [_]struct { *const [7]*rf.FONT, []const u8 }{
+    .{ &font_table_adj, "base font (fixed)" },
+    .{ &font_table, "HD font" },
+};
+var fonts_using: bool = false;
+var custom_font_active: u32 = 0;
+
+const font_table = [7]*rf.FONT{
+    &fonts[3], &fonts[2], &fonts[1], &fonts[2],
+    &fonts[4], &fonts[3], &fonts[0],
+};
 var fonts: [5]rf.FONT = undefined;
 var fonts_loaded: bool = false;
 var dp: ?*i32 = null;
-var fonts_using: bool = false;
 var fpage_raw = std.mem.zeroes([5][512 * 1024]u16);
 var fpage = pages: {
     var p: [5]struct {
@@ -594,7 +603,7 @@ const font_test_strings: [7][4][55:0]u8 = blk: {
     break :blk buf;
 };
 
-const font_table_adj = [_]*anyopaque{
+const font_table_adj = [7]*rf.FONT{
     &fonts_adj[3], &fonts_adj[2], &fonts_adj[1], &fonts_adj[2],
     &fonts_adj[4], &fonts_adj[3], &fonts_adj[0],
 };
@@ -853,25 +862,38 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
         FontsLoad();
     }
 
+    // toggle custom fonts
     if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
         if (fonts_using) {
             fonts_using = false;
             _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
         } else {
             fonts_using = true;
-            //_ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table));
-            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(&font_table_adj));
-            //const SetCurrentFontSource: *align(1) *anyopaque = @ptrFromInt(0x42D8EE + 3);
+            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(custom_fonts[custom_font_active][0]));
             //SetCurrentFontSource.* = @constCast(@ptrCast(&font_table));
         }
     }
 
+    // cycle displayed custom font
+    if (fonts_loaded and fonts_using and gf.InputGetKbRaw(.L) == .JustOn) {
+        custom_font_active = (custom_font_active + 1) % custom_fonts.len;
+        _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(custom_fonts[custom_font_active][0]));
+    }
+
     // testing display showing all(?) font glyphs
     if (gf.InputGetKbRaw(.O).on()) {
+        var buf: [255:0]u8 = undefined;
         var x: i16 = 12;
         var y: i16 = 192;
+
         rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
+        y += 10;
+        const label: ?[*:0]const u8 = std.fmt.bufPrintZ(&buf, "~F4~3~s{s}", .{
+            if (fonts_using) custom_fonts[custom_font_active][1] else "base font",
+        }) catch null;
+        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, label);
         y += 24;
+
         for (0..4) |i| {
             const y_step: i16 = if (i < 3) 12 else 32;
             for (0..4) |j| {

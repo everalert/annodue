@@ -39,29 +39,29 @@ const FONT = @import("Font.zig").FONT;
 
 // GAME FUNCTIONS
 
-pub const swrText_CreateEntry: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
-pub const swrText_CreateEntry1: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
-pub const swrText_CreateEntry2: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
-pub const swrText_DrawTime2: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
-pub const swrText_DrawTime3: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
+pub const swrText_CreateEntry: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+pub const swrText_CreateEntry1: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+pub const swrText_CreateEntry2: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+pub const swrText_DrawTime2: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
+pub const swrText_DrawTime3: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
 
 // FIXME: move to TextNotification.zig
-pub const swrText_NewNotification: *const fn (str: [*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
+pub const swrText_NewNotification: *const fn (str: ?[*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
 
-pub const swrText_Translate: *const fn ([*:0]const u8) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x421360);
+pub const swrText_Translate: *const fn (?[*:0]const u8) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x421360);
 
 // FIXME: move all to TextFormat.zig
 pub const RenderSetColor: *const fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void =
     @ptrFromInt(0x42D950);
 pub const RenderSetPosition: *const fn (x: i16, y: i16) callconv(.C) void =
     @ptrFromInt(0x42D910);
-pub const RenderString: *const fn (str: [*:0]const u8) callconv(.C) void =
+pub const RenderString: *const fn (str: ?[*:0]const u8) callconv(.C) void =
     @ptrFromInt(0x42EC50);
-pub const GetStringWidthByFontIndex: *const fn (str: [*:0]const u8, font: u32) callconv(.C) i32 =
+pub const GetStringWidthByFontIndex: *const fn (str: ?[*:0]const u8, font: u32) callconv(.C) i32 =
     @ptrFromInt(0x42DE10);
-pub const GetStringWidth: *const fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const GetStringWidth: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DE30);
-pub const GetStringHeight: *const fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const GetStringHeight: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DF70);
 pub const SetCurrentFont: *const fn (index: u32) callconv(.C) void =
     @ptrFromInt(0x42D8D0);

@@ -19,6 +19,7 @@ const Allocator = std.mem.Allocator;
 // https://github.com/lecram/gifdec
 // https://github.com/robert-ancell/pygif
 // https://github.com/zigimg/zigimg/blob/master/src/formats/gif.zig
+// https://github.com/peterdn/gif-test-suite
 // https://medium.com/@alhuslanr/how-lzw-compression-works-explained-in-plain-english-9b8b520dbc53
 // https://patents.google.com/patent/US4558302A/en?oq=4558302 (LZW patent/spec)
 // https://www.loc.gov/preservation/digital/formats/fdd/fdd000135.shtml (LZW)

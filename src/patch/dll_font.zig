@@ -1056,9 +1056,7 @@ fn FontsUnload() void {
     if (!fonts_loaded) return;
     AdjustmentFontsUnload();
     CustomFontsUnload();
-    _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
-    _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, 1 / 64);
-    _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, 1 / 128);
+    UpdateGameFont(null);
     fonts_loaded = false;
 }
 
@@ -1231,6 +1229,22 @@ fn CustomFontsUnload() void {
     r3.hMaterial_OwnedFree(&fpage_new.m);
 }
 
+fn UpdateGameFont(i: ?usize) void {
+    const table: u32 = if (i) |ii| @intFromPtr(custom_fonts[ii][0]) else @intFromPtr(rt.apTextFont);
+    const unit_scale_x: f32 = if (i) |ii| 1 / custom_fonts[ii][2] else 1 / @as(f32, 64);
+    const unit_scale_y: f32 = if (i) |ii| 1 / custom_fonts[ii][3] else 1 / @as(f32, 128);
+
+    // font table reference
+    _ = mem.write(0x42D8EE + 3, u32, table);
+
+    // font atlas unit scale for converting texture coordinates to UVs
+    // because all glyphs use these values regardless of font def, all font pages
+    // of a font must be the same size; if not, this value would need to be updated
+    // every time a font is selected from the font table
+    _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
+    _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
+}
+
 // HOUSEKEEPING
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
@@ -1270,27 +1284,17 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
         if (fonts_using) {
             fonts_using = false;
-            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(rt.apTextFont));
-            _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, 1 / 64);
-            _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, 1 / 128);
+            UpdateGameFont(null);
         } else {
             fonts_using = true;
-            _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(custom_fonts[custom_font_active][0]));
-            _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, 1 / custom_fonts[custom_font_active][2]);
-            _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, 1 / custom_fonts[custom_font_active][3]);
+            UpdateGameFont(custom_font_active);
         }
     }
 
     // cycle displayed custom font
     if (fonts_loaded and fonts_using and gf.InputGetKbRaw(.L) == .JustOn) {
         custom_font_active = (custom_font_active + 1) % custom_fonts.len;
-        _ = mem.write(0x42D8EE + 3, u32, @intFromPtr(custom_fonts[custom_font_active][0]));
-        // factors used to convert texture coordinates to UVs. because all characters
-        // use these values regardless of font def, all font pages of a font must be
-        // the same size; if not, this value would need to be updated every time a
-        // font is selected from the font table, not just when changing the whole table
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, 1 / custom_fonts[custom_font_active][2]);
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, 1 / custom_fonts[custom_font_active][3]);
+        UpdateGameFont(custom_font_active);
     }
 
     // testing display showing all(?) font glyphs

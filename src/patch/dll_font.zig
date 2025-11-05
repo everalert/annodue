@@ -645,18 +645,41 @@ inline fn GFA(
 // - can't make inverted exclamation mark in the way '?' is done without changing
 //   code; but could just make another glyph
 
+// FIXME: relocate, for testing
+const gif = @import("util/gif.zig");
+const cf = @import("util/color_format.zig");
+
 // FIXME: to organize/streamline; random stuff used to work through feature dev
+
 var fonts_initialized = false;
 var fonts_loaded = false;
-const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
-    .{ &new_font.FontTable, "base font (fixed, new atlas, new struct)", 256, 192 },
-    .{ &font_table_adj, "base font (fixed)", 64, 128 },
-    //.{ &font_table, "HD font", 64, 128 },
-};
 var fonts_using: bool = false;
+
+// NOTE: some texture sizes wrong here (HD) because defs not updated with new
+// dimensions, but it works out because the old values map to the same UVs as
+// would be with correct values, since the atlas is similar; this trick likely
+// won't work once the texture size is unified
 var custom_font_active: u32 = 0;
-var font_page_unit_scale_x: f32 = 1 / 64;
-var font_page_unit_scale_y: f32 = 1 / 128;
+const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
+    .{ &remake_font.FontTable, "base font (fixed, new atlas, new struct)", 256, 192 },
+    .{ &adj_font.FontTable, "base font (fixed, new struct)", 64, 128 },
+    .{ &hd_font.FontTable, "HD font (fixed, new struct)", 64, 128 },
+};
+
+// FIXME: with remake font only, left side of the file select text on the file
+// list is chopped off. same happens in the multiplayer lobby text boxes; seems
+// this this particular widget has something about it that sets it off. something
+// to do with the new font layout/texture?? seems to not be edge culling unless
+// it's a clipping box with different behaviour; text behaves fine at screen edge
+// adjusted source font
+var adj_glyphs = std.mem.zeroes([5]CustomGlyphs);
+var adj_font: CustomFont = undefined;
+// old hd font
+var hd_page_bufs = std.mem.zeroes([5][512 * 1024]u16);
+var hd_font: CustomFont = undefined;
+// remake in custom format
+var remake_page_buf = std.mem.zeroes([256 * 192]u16); // TODO: resize for max size custom font
+var remake_font: CustomFont = undefined;
 
 const font_test_strings: [7][4][55:0]u8 = blk: {
     var test_text = std.mem.zeroes([100]u8);
@@ -696,12 +719,11 @@ const CustomFont = struct {
     GlyphAdjustments: [5]AdjustmentSet,
     GlyphCloneSource: ?*const [5]rf.FONT = null,
     Mode: Structure,
-    bLoadGamePages: bool = false, // skip if duping already-loaded pages
+    bLoadPages: bool = false, // skip if duping already-loaded pages
     bPagesLoadedToGame: bool = false,
-    bLoadFilePages: bool = false, // skip if duping already-loaded pages
     bPagesLoadedFromFile: bool = false,
 
-    pub fn Init(font: *CustomFont, mode: Structure, page_w: u16, page_h: u16) void {
+    pub fn Init(font: *CustomFont, mode: Structure, page_w: u16, page_h: u16, b_load_pages: bool) void {
         font.* = std.mem.zeroes(CustomFont);
         font.Mode = mode;
         font.PageSize = .{ .w = page_w, .h = page_h };
@@ -709,14 +731,17 @@ const CustomFont = struct {
             &font.Fonts[3], &font.Fonts[2], &font.Fonts[1], &font.Fonts[2],
             &font.Fonts[4], &font.Fonts[3], &font.Fonts[0],
         };
+        font.bLoadPages = b_load_pages;
         font.bPagesLoadedToGame = false;
         font.bPagesLoadedFromFile = false;
     }
 
     // TODO: fix font page number field; need to think about how to keep it
     // up to date overall
-    pub fn CloneFonts(self: *CustomFont, defs: *const [5]rf.FONT) void {
+    pub fn CloneFonts(self: *CustomFont, defs: *const [5]rf.FONT, b_keep_pages: bool) void {
         @memcpy(&self.Fonts, defs);
+        if (b_keep_pages) return;
+
         for (&self.Fonts) |*f| {
             f._08_page_list = std.mem.zeroes(@TypeOf(f._08_page_list));
         }
@@ -733,9 +758,10 @@ const CustomFont = struct {
     }
 
     pub fn LoadPagesFromFile(self: *CustomFont, allocator: std.mem.Allocator) void {
+        if (!self.bLoadPages) return;
+
         assert(!self.bPagesLoadedFromFile);
         self.bPagesLoadedFromFile = true;
-        if (!self.bLoadFilePages) return;
 
         const w = self.PageSize.w;
         const h = self.PageSize.h;
@@ -750,15 +776,17 @@ const CustomFont = struct {
     }
 
     pub fn UnloadPagesFromFile(self: *CustomFont) void {
+        if (!self.bLoadPages) return;
+
         assert(self.bPagesLoadedFromFile);
         self.bPagesLoadedFromFile = false;
-        if (!self.bLoadFilePages) return;
     }
 
     pub fn LoadPagesToGame(self: *CustomFont) void {
+        if (!self.bLoadPages) return;
+
         assert(!self.bPagesLoadedToGame);
         self.bPagesLoadedToGame = true;
-        if (!self.bLoadGamePages) return;
 
         const w = self.PageSize.w;
         const h = self.PageSize.h;
@@ -790,9 +818,10 @@ const CustomFont = struct {
     }
 
     pub fn UnloadPagesFromGame(self: *CustomFont) void {
+        if (!self.bLoadPages) return;
+
         assert(self.bPagesLoadedToGame);
         self.bPagesLoadedToGame = false;
-        if (!self.bLoadGamePages) return;
 
         switch (self.Mode) {
             .Source => for (&self.Pages) |*p| r3.hMaterial_OwnedFree(&p.m),
@@ -822,101 +851,18 @@ const CustomGlyphs = struct {
 
 // TODO: rename: CustomPage or CustomFontPage or smth
 const FontPage = struct {
-    filename: [1023:0]u8 = std.mem.zeroes([1023:0]u8),
+    filename: [63:0]u8 = std.mem.zeroes([63:0]u8),
     r: []u16,
     m: r3.Material = undefined,
     t: r3.SystemTexture = undefined,
 };
 
-// page size: 512*1024
-const font_table = [7]*rf.FONT{
-    &fonts[3], &fonts[2], &fonts[1], &fonts[2],
-    &fonts[4], &fonts[3], &fonts[0],
-};
-var fonts: [5]rf.FONT = undefined;
-var fpage_raw = std.mem.zeroes([5][512 * 1024]u16);
-var fpage = pages: {
-    var p = std.mem.zeroes([5]FontPage);
-    assert(fpage_raw.len == 5);
-    assert(p.len >= 5);
-
-    for (0..p.len) |i| {
-        p[i].r = &fpage_raw[i % 5];
-        _ = std.fmt.bufPrintZ(&p[i].filename, "fontraw{d}_test", .{i % 5}) catch unreachable;
-    }
-
-    break :pages p;
-};
-
-// remake in custom format
-var new_page_buf = std.mem.zeroes([256 * 192]u16); // TODO: resize for max size custom font
-var new_font: CustomFont = undefined;
-
+// FIXME: this and FontsLoad seems to cause noticeable lag at title screen on
+// game load now, must fix this before moving on; probably just because fonts
+// are loading there instead of during the loading bar now
 fn FontsInit() void {
     if (fonts_initialized) return;
-    AdjustmentFontsInit();
-    CustomFontsInit();
     fonts_initialized = true;
-}
-
-fn FontsLoad() void {
-    if (fonts_loaded) return;
-    AdjustmentFontsLoad();
-    CustomFontsLoad();
-    fonts_loaded = true;
-}
-
-fn FontsUnload() void {
-    if (!fonts_loaded) return;
-    AdjustmentFontsUnload();
-    CustomFontsUnload();
-    UpdateGameFont(null);
-    fonts_loaded = false;
-}
-
-// WARN: do not use directly; use FontsInit
-fn AdjustmentFontsInit() void {
-    if (fonts_initialized) return;
-
-    @memcpy(&fonts_adj, rf.aFontDef);
-    fonts_adj[0]._5C_glyphs = &fonts_adj_f0g;
-    fonts_adj[0]._60_glyphs_ext = &fonts_adj_f0ge;
-    fonts_adj[1]._5C_glyphs = &fonts_adj_f1g;
-    fonts_adj[2]._5C_glyphs = &fonts_adj_f2g;
-    fonts_adj[3]._5C_glyphs = &fonts_adj_f3g;
-    fonts_adj[3]._60_glyphs_ext = &fonts_adj_f3ge;
-    fonts_adj[4]._5C_glyphs = &fonts_adj_f4g;
-    fonts_adj[4]._60_glyphs_ext = &fonts_adj_f4ge;
-
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs0, &fonts_adj_f0g, &font0_g_adj);
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs0Ext, &fonts_adj_f0ge, &font0_ge_adj);
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs1, &fonts_adj_f1g, &font1_g_adj);
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs2, &fonts_adj_f2g, &font2_g_adj);
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs3, &fonts_adj_f3g, &font3_g_adj);
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs3Ext, &fonts_adj_f3ge, &font3_ge_adj);
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs4, &fonts_adj_f4g, &font4_g_adj);
-    CloneAndAdjustGlyphSet(rf.aFontGlyphs4Ext, &fonts_adj_f4ge, &font4_ge_adj);
-}
-
-// WARN: do not use directly; use FontsLoad
-fn AdjustmentFontsLoad() void {
-    if (fonts_loaded) return;
-}
-
-// WARN: do not use directly; use FontsUnload
-fn AdjustmentFontsUnload() void {
-    if (!fonts_loaded) return;
-}
-
-// FIXME: relocate, for testing
-const gif = @import("util/gif.zig");
-const cf = @import("util/color_format.zig");
-
-// FIXME: this and CustomFontsLoad seems to cause noticeable lag at title screen
-// on game load now, must fix this before moving on
-// WARN: do not use directly; use FontsInit
-fn CustomFontsInit() void {
-    if (fonts_initialized) return;
 
     // FIXME: rethink where the allocator comes from
     // FIXME: also, need to handle cases where the gif is the wrong size; can cause
@@ -924,90 +870,71 @@ fn CustomFontsInit() void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    // old hd font
-
-    @memcpy(&fonts, rf.aFontDef);
-    for (0..5) |i| {
-        const fn_len = std.mem.len(@as([*:0]const u8, @ptrCast(&fpage[i].filename)));
-        LoadSpritePageFromGIFAndCache(allocator, fpage[i].r, 512, 1024, fpage[i].filename[0..fn_len]);
-    }
-
-    // new custom font framework proof of concept
-
-    // TODO: remove temp, need to convert all custom fonts to struct first
-    var temp_glyphs = std.mem.zeroes([5]CustomGlyphs);
-    temp_glyphs[0].Clone(&fonts_adj_f0g, &fonts_adj_f0ge);
-    temp_glyphs[1].Clone(&fonts_adj_f1g, &[0]rf.GLYPH{});
-    temp_glyphs[2].Clone(&fonts_adj_f2g, &[0]rf.GLYPH{});
-    temp_glyphs[3].Clone(&fonts_adj_f3g, &fonts_adj_f3ge);
-    temp_glyphs[4].Clone(&fonts_adj_f4g, &fonts_adj_f4ge);
-    // TODO: see how much of this can be comptime; main issue it's not is that
+    // TODO: see how much of font init can be comptime; main issue it's not is that
     // initializing during comptime seems to give invalid internally-facing pointers
-    new_font.Init(.Custom, 256, 192);
-    new_font.GlyphAdjustments = .{
+
+    // adjusted source font
+    adj_glyphs[0].Clone(rf.aFontGlyphs0, rf.aFontGlyphs0Ext);
+    adj_glyphs[1].Clone(rf.aFontGlyphs1, &[0]rf.GLYPH{});
+    adj_glyphs[2].Clone(rf.aFontGlyphs2, &[0]rf.GLYPH{});
+    adj_glyphs[3].Clone(rf.aFontGlyphs3, rf.aFontGlyphs3Ext);
+    adj_glyphs[4].Clone(rf.aFontGlyphs4, rf.aFontGlyphs4Ext);
+    adj_font.Init(.Source, 64, 128, false);
+    adj_font.GlyphAdjustments = .{
+        .{ &font0_g_adj, &font0_ge_adj },
+        .{ &font1_g_adj, &[0]GlyphAdjustment{} },
+        .{ &font2_g_adj, &[0]GlyphAdjustment{} },
+        .{ &font3_g_adj, &font3_ge_adj },
+        .{ &font4_g_adj, &font4_ge_adj },
+    };
+    adj_font.CloneFonts(rf.aFontDef, true);
+    adj_font.CloneGlyphs(&adj_glyphs);
+    adj_font.LoadPagesFromFile(allocator);
+
+    // old hd font
+    hd_font.Init(.Source, 512, 1024, true);
+    for (&hd_font.Pages, 0..) |*p, i| {
+        p.r = &hd_page_bufs[i];
+        _ = std.fmt.bufPrintZ(&p.filename, "fontraw{d}_test", .{i}) catch unreachable;
+    }
+    hd_font.CloneFonts(rf.aFontDef, false);
+    hd_font.CloneGlyphs(&adj_font.Glyphs);
+    hd_font.LoadPagesFromFile(allocator);
+
+    // remade source font
+    remake_font.Init(.Custom, 256, 192, true);
+    remake_font.GlyphAdjustments = .{
         .{ &font0_new_g_adj, &font0_new_ge_adj },
         .{ &font1_new_g_adj, &[0]GlyphAdjustment{} },
         .{ &font2_new_g_adj, &[0]GlyphAdjustment{} },
         .{ &font3_new_g_adj, &font3_new_ge_adj },
         .{ &font4_new_g_adj, &font4_new_ge_adj },
     };
-    new_font.Pages[0].r = &new_page_buf;
-    _ = std.fmt.bufPrintZ(&new_font.Pages[0].filename, "font-basic-original", .{}) catch unreachable;
-    new_font.bLoadFilePages = true;
-    new_font.bLoadGamePages = true;
-    new_font.CloneFonts(rf.aFontDef);
-    new_font.CloneGlyphs(&temp_glyphs);
-    new_font.LoadPagesFromFile(allocator);
+    remake_font.Pages[0].r = &remake_page_buf;
+    _ = std.fmt.bufPrintZ(&remake_font.Pages[0].filename, "font-basic-original", .{}) catch unreachable;
+    remake_font.CloneFonts(rf.aFontDef, false);
+    remake_font.CloneGlyphs(&adj_font.Glyphs);
+    remake_font.LoadPagesFromFile(allocator);
 }
 
-// WARN: do not use directly; use FontsLoad
-fn CustomFontsLoad() void {
-    assert(fpage.len >= fonts.len);
+fn FontsLoad() void {
     if (fonts_loaded) return;
+    fonts_loaded = true;
 
-    // old hd fonts
-
-    for (0..fpage.len) |i| {
-        r3.hMaterial_OwnedNewFromData(fpage[i].r, 512, 1024, 512, 1024, .ARGB4444, &fpage[i].t, &fpage[i].m);
-    }
-    fonts[0]._08_page_list[0] = &fpage[0].m;
-    fonts[0]._08_page_list[1] = &fpage[1].m;
-    fonts[0]._08_page_list[2] = &fpage[2].m;
-    fonts[1]._08_page_list[0] = &fpage[2].m;
-    fonts[2]._08_page_list[0] = &fpage[2].m;
-    fonts[3]._08_page_list[0] = &fpage[3].m;
-    fonts[4]._08_page_list[0] = &fpage[4].m;
-
-    // new custom font framework proof of concept
-
-    new_font.LoadPagesToGame();
+    adj_font.LoadPagesToGame();
+    hd_font.LoadPagesToGame();
+    remake_font.LoadPagesToGame();
 }
 
-// WARN: do not use directly; use FontsUnload
-fn CustomFontsUnload() void {
+fn FontsUnload() void {
     if (!fonts_loaded) return;
+    fonts_loaded = false;
 
-    // OLD NOTES
-    // FIXME: works in rendering but still crashes when unloading, in spite
-    // of the hMaterial_Free call in OnDeinit; maybe need to force text
-    // rendering state to update pointers?
-    // maybe worth noting that the game MaterialFree (which hMaterial_Free
-    // calls) seems to only ever be called on shutdown or when clearing
-    // all sprites when loading Hang menu
-    // NOTE: unload crashes at 0x48AA45 (in fn_48AA40) with access violation error
-    // (0xC0000005) according to windows event viewer
-    // NOTE: all these were originally unique allocations, unlike current
-    // scheme that reuses the "base" materials; crash from unload (not re-load)
-    // may have just been use-after-free on the duplicated stuff
+    adj_font.UnloadPagesFromGame();
+    hd_font.UnloadPagesFromGame();
+    remake_font.UnloadPagesFromGame();
 
-    // old hd font
-    // this one doesn't crash; current ver only crashes in CustomFontsLoad
-    for (0..fpage_raw.len) |i| {
-        r3.hMaterial_OwnedFree(&fpage[i].m);
-    }
-
-    // new custom fonts proof of concept
-    new_font.UnloadPagesFromGame();
+    UpdateGameFont(null);
 }
 
 fn UpdateGameFont(i: ?usize) void {
@@ -1133,20 +1060,6 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     //    }
     //}
 }
-
-const font_table_adj = [7]*rf.FONT{
-    &fonts_adj[3], &fonts_adj[2], &fonts_adj[1], &fonts_adj[2],
-    &fonts_adj[4], &fonts_adj[3], &fonts_adj[0],
-};
-var fonts_adj: [5]rf.FONT = undefined;
-var fonts_adj_f0g: [62]rf.GLYPH = undefined;
-var fonts_adj_f0ge: [15]rf.GLYPH = undefined;
-var fonts_adj_f1g: [27]rf.GLYPH = undefined;
-var fonts_adj_f2g: [27]rf.GLYPH = undefined;
-var fonts_adj_f3g: [62]rf.GLYPH = undefined;
-var fonts_adj_f3ge: [15]rf.GLYPH = undefined;
-var fonts_adj_f4g: [62]rf.GLYPH = undefined;
-var fonts_adj_f4ge: [15]rf.GLYPH = undefined;
 
 // FIXME: add as an actual plugin feature with a settings toggle
 const gfa_disable = GFA(.Set, .TX, -1);

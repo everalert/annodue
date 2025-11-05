@@ -301,9 +301,8 @@ fn ExtractRawFontPagesToGrey8(buf: *[5][0x2000]u8) void {
         const page = &rf.aFontRawPageData[i];
         for (page, 0..) |px, j| {
             const px_i = j * 2;
-            // FIXME: this maps to the wrong grey shade; e.g. full white becomes 240
-            b[px_i + 0] = @as(u8, @intCast(ra.hExtract4BPP(px, 0))) << 4;
-            b[px_i + 1] = @as(u8, @intCast(ra.hExtract4BPP(px, 1))) << 4;
+            b[px_i + 0] = cf.ConvertMonoRGB(cf.G4, cf.G8, ra.hExtract4BPP(px, 0));
+            b[px_i + 1] = cf.ConvertMonoRGB(cf.G4, cf.G8, ra.hExtract4BPP(px, 1));
         }
     }
 }
@@ -547,7 +546,16 @@ fn LoadSpritePageFromGIF(
     for (0..px_num) |i| {
         // FIXME: error handling?
         const color = out_r.readInt(u32, .Little) catch break; // no more colors
-        buf_o[i] = cf.ConvertMonoRGB(cf.RGBA8888, cf.ARGB4444, color);
+        // NOTE: output: shade goes into alpha, RGB must be 0xFFF
+        // FIXME: this may be achievable without casting if cf behaviour is
+        // changed, see note on ConvertMonoRGB A4->GA44 test case
+        buf_o[i] = (@as(u16, @intCast(cf.ConvertMonoRGB(cf.RGBA8888, cf.G4, color))) << 12) | 0xFFF;
+        // FIXME: with the following, grey value ends up in all four channels;
+        // gif tests seem to confirm that alpha will be white with my decoder,
+        // and similarly tests in color_format seem to indicate this will output
+        // AGGG if given RGBA. there appears to be no other place the color is
+        // transformed, so not sure why this drops the alpha
+        //buf_o[i] = cf.ConvertMonoRGB(cf.RGBA8888, cf.ARGB4444, color);
     }
 }
 

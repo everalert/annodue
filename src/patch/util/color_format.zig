@@ -12,6 +12,9 @@ pub const RGBA5551 = RGBModel(u5, u5, u5, u1, 11, 6, 1, 0);
 pub const ARGB1555 = RGBModel(u5, u5, u5, u1, 10, 5, 0, 15);
 pub const GA44 = RGBModel(u0, u4, u0, u4, 0, 4, 0, 0);
 pub const A4 = RGBModel(u0, u0, u0, u4, 0, 0, 0, 0);
+pub const A8 = RGBModel(u0, u0, u0, u8, 0, 0, 0, 0);
+pub const G4 = RGBModel(u0, u4, u0, u0, 0, 0, 0, 0);
+pub const G8 = RGBModel(u0, u8, u0, u0, 0, 0, 0, 0);
 
 /// @Xp     position of starting bit
 pub fn RGBModel(
@@ -114,6 +117,8 @@ test "ConvertMonoRGB" {
         .{ GA44, A4, 0x88, 0x8 },
         .{ RGB888, A4, 0x4488CC, 0x8 },
         .{ RGBA8888, A4, 0x4488CCFF, 0x8 },
+        // FIXME: should this output 0xF8 instead? i.e. if going wide, 'grey' value
+        // prioritizes the channel that originally held the value
         .{ A4, GA44, 0x8, 0x8F },
         .{ RGB888, GA44, 0x4488CC, 0x8F },
         .{ RGBA8888, GA44, 0x4488CCFF, 0x8F },
@@ -121,6 +126,7 @@ test "ConvertMonoRGB" {
         .{ GA44, RGBA4444, 0x88, 0x8888 },
         .{ A4, RGB888, 0x8, 0x888888 },
         .{ GA44, RGB888, 0x88, 0x888888 },
+        .{ RGBA8888, ARGB4444, 0x448844FF, 0xF888 },
     };
 
     errdefer std.debug.print("\n", .{});

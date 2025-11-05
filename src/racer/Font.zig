@@ -47,7 +47,8 @@ pub const GLYPH_MAP = extern struct {
 pub const aFontRawPageData: *[5][0x1000]u8 = @ptrFromInt(0x4B9620); // COLOR_GREY4
 
 // NOTE: named for font def correspondence, not old hd font order
-pub const aFontGlyphs0: *[61]GLYPH = @ptrFromInt(0x4BE620);
+// aFontGlyphs0 overlaps aFontGlyphs0Ext, but length correct according to defs
+pub const aFontGlyphs0: *[62]GLYPH = @ptrFromInt(0x4BE620);
 pub const aFontGlyphs0Ext: *[15]GLYPH = @ptrFromInt(0x4BE9F0);
 pub const aFontGlyphs1: *[27]GLYPH = @ptrFromInt(0x4BEAE0);
 pub const aFontGlyphs2: *[27]GLYPH = @ptrFromInt(0x4BEC90);

@@ -365,6 +365,156 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
     }
 }
 
+// FIXME: maybe strip all logic from this, and turn the decoding setup into a gif
+// helper function, to keep the test as "pure" as possible? i.e. remove the in/out
+// streams and make something like `ReadStream`, similar to my QOI api
+test "Read GIF" {
+    //std.testing.log_level = .debug;
+    std.debug.print(" \n", .{});
+
+    const w = [_]u8{ 0xFF, 0xFF, 0xFF, 0xFF }; // white
+    const r = [_]u8{ 0xFF, 0x00, 0x00, 0xFF }; // red
+    const b = [_]u8{ 0x00, 0x00, 0xFF, 0xFF }; // blue
+    const giflib_expected = (r ** 5 ++ b ** 5) ** 3 ++
+        (r ** 3 ++ w ** 4 ++ b ** 3) ** 2 ++
+        (b ** 3 ++ w ** 4 ++ r ** 3) ** 2 ++
+        (b ** 5 ++ r ** 5) ** 3;
+
+    const p1 = "test_gif/";
+    const p2 = p1 ++ "test-pygif/";
+    //                              log?  input       expected
+    const test_images = [_]struct { bool, []const u8, anyerror![]const u8 }{
+        // zig fmt: off
+        // https://giflib.sourceforge.net/whatsinagif/bits_and_bytes.html
+        .{ false, p1 ++ "giflib-sample.gif",         &giflib_expected },
+        // TODO: get through whole test suite
+        // pygif test suite
+        .{ false, p2 ++ "depth1.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "depth2.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "depth3.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "depth4.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "depth5.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "depth6.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "depth7.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "depth8.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "four-colors.gif",           @embedFile(p2 ++ "four-colors.rgba") },
+        .{ false, p2 ++ "local-color-table.gif",     @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "no-global-color-table.gif", @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "no-data.gif",               @embedFile(p2 ++ "transparent-dot.rgba") },
+        .{ false, p2 ++ "zero-width.gif",            error.InvalidCanvasDimensions },
+        .{ false, p2 ++ "zero-height.gif",           error.InvalidCanvasDimensions },
+        .{ false, p2 ++ "zero-size.gif",             error.InvalidCanvasDimensions },
+        // FIXME: image-zero-**: impl error on imagewriter, and recover in gif reader?
+        .{ false, p2 ++ "image-zero-width.gif",      @embedFile(p2 ++ "transparent-dot.rgba") },
+        .{ false, p2 ++ "image-zero-height.gif",     @embedFile(p2 ++ "transparent-dot.rgba") },
+        .{ false, p2 ++ "image-zero-size.gif",       @embedFile(p2 ++ "transparent-dot.rgba") },
+        .{ false, p2 ++ "invalid-background.gif",    @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "all-reds.gif",              @embedFile(p2 ++ "all-reds.rgba") },
+        .{ false, p2 ++ "all-greens.gif",            @embedFile(p2 ++ "all-greens.rgba") },
+        .{ false, p2 ++ "all-blues.gif",             @embedFile(p2 ++ "all-blues.rgba") },
+        .{ false, p2 ++ "interlace.gif",             @embedFile(p2 ++ "all-reds.rgba") },
+        .{ false, p2 ++ "image-inside-bg.gif",       @embedFile(p2 ++ "image-inside-bg.rgba") },
+        .{ false, p2 ++ "image-overlap-bg.gif",      @embedFile(p2 ++ "image-overlap-bg.rgba") },
+        .{ false, p2 ++ "image-outside-bg.gif",      @embedFile(p2 ++ "image-outside-bg.rgba") },
+        .{ false, p2 ++ "images-combine.gif",        @embedFile(p2 ++ "four-colors.rgba") },
+        .{ false, p2 ++ "images-overlap.gif",        @embedFile(p2 ++ "white-dot.rgba") }, 
+        .{ false, p2 ++ "high-color.gif",            @embedFile(p2 ++ "high-color.rgba") }, 
+        .{ false, p2 ++ "missing-pixels.gif",        @embedFile(p2 ++ "missing-pixels.rgba") },
+        .{ false, p2 ++ "extra-pixels.gif",          @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "extra-data.gif",            @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "no-clear.gif",              @embedFile(p2 ++ "white-dot.rgba") },
+        // FIXME: no-eoi: impl error on lzw decoder, and recover in gif reader?
+        .{ false, p2 ++ "no-eoi.gif",                @embedFile(p2 ++ "white-dot.rgba") },
+        .{ false, p2 ++ "no-clear-and-eoi.gif",      @embedFile(p2 ++ "white-hline2.rgba") },
+        .{ false, p2 ++ "many-clears.gif",           @embedFile(p2 ++ "checkerboard.rgba") },
+        .{ false, p2 ++ "double-clears.gif",         @embedFile(p2 ++ "checkerboard.rgba") },
+        .{ false, p2 ++ "invalid-code.gif",          error.InvalidCode }, 
+        .{ false, p2 ++ "invalid-colors.gif",        error.InvalidColorIndex }, 
+        .{ false, p2 ++ "max-width.gif",             @embedFile(p2 ++ "max-width.rgba") },
+        .{ false, p2 ++ "max-height.gif",            @embedFile(p2 ++ "max-height.rgba") },
+        // NOTE: unclear what max size is if not 0xFFFF*0xFFFF, or why it should 
+        // error; gif spec seems to imply that it's up to the decoder to decide 
+        // supported resolution. maybe add max pixels as user option to decoder?
+        //.{ true,  pre2 ++ "max-size.gif",              error.Placeholder }, 
+        .{ false, p2 ++ "4095-codes-clear.gif",      @embedFile(p2 ++ "random-image.rgba") },
+        .{ false, p2 ++ "4095-codes.gif",            @embedFile(p2 ++ "random-image.rgba") },
+        .{ false, p2 ++ "255-codes.gif",             @embedFile(p2 ++ "random-image.rgba") },
+        .{ false, p2 ++ "large-codes.gif",           @embedFile(p2 ++ "random-image.rgba") },
+        // NOTE: max/overflow-codes**: not sure what the purpose of this is. they 
+        // all have starting codes that are above the max color table size; this 
+        // case should at least cause another error as a matter of course
+        //.{ true,  p2 ++ "max-codes.gif",          @embedFile(p2 ++ "random-image.rgba") },
+        //.{ true,  p2 ++ "overflow-codes.gif",     error.Placeholder }, 
+        //.{ true,  p2 ++ "overflow-codes-max.gif", error.Placeholder }, 
+        // NOTE: might skip following for now, seems irrelevant for current 
+        // usecase as long as the features are ignored without crashing
+        //transparent
+        //invalid-transparent
+        //disabled-transparent
+        //unset-transparent
+        //loop-infinite
+        //loop-once
+        //loop-max
+        //loop-buffer
+        //loop-buffer_max
+        //loop-animexts
+        //animation
+        //animation-speed
+        //animation-no-delays
+        //animation-zero-delays
+        //dispose-none
+        //dispose-keep
+        //dispose-restore-background
+        //dispose-restore-previous
+        //animation-multi-image
+        //animation-multi-image-explicit-zero-delay
+        //comment
+        //large-comment
+        //nul-comment
+        //invalid-ascii-comment
+        //invalid-utf8-comment
+        //plain-text
+        //xmp-data
+        //xmp-data-empty
+        //icc-color-profile
+        //icc-color-profile-empty
+        //unknown-extension
+        //unknown-application-extension
+        //nul-application-extension
+        //gif87a
+        //gif87a-animation
+        // zig fmt: on
+    };
+
+    inline for (test_images) |ti| {
+        const log = ti[0];
+        const log_old = std.testing.log_level;
+        defer std.testing.log_level = log_old;
+        if (log) std.testing.log_level = .debug;
+
+        const file = ti[1];
+        const expected = ti[2];
+        std.log.debug("Reading: {s}", .{file});
+
+        var in = std.io.fixedBufferStream(@embedFile(file));
+        const in_r = in.reader();
+
+        var out = std.ArrayList(u8).init(std.testing.allocator);
+        defer out.deinit();
+        const out_w = out.writer();
+
+        var width: u16 = undefined;
+        var height: u16 = undefined;
+        const err = Read(std.testing.allocator, in_r, out_w, &width, &height);
+
+        if (expected) |expected_slice| {
+            try std.testing.expectEqualSlices(u8, expected_slice, out.items);
+        } else |expected_err| {
+            try std.testing.expectError(expected_err, err);
+        }
+    }
+}
+
 // FIXME: what is supposed to happen with the background color when no global color
 // table is present?  fill black?  fill with color from a sub-image?
 // -- according to the spec, if the global color table flag is not set (i.e. there
@@ -619,6 +769,46 @@ pub fn MakeSubBlockReader(BackingReader: anytype) SubBlockReader(@TypeOf(Backing
     return SubBlockReader(@TypeOf(BackingReader)).init(BackingReader);
 }
 
+// FIXME: add test cases for malformed input data
+//  - EOF reached in the middle of a sub-block
+//  - EOF reached when expecting a block size or block terminator byte
+// FIXME: add test case for checking the backing reader does not advance past
+// the byte after the block terminator when over-reading the sub-block reader,
+// preferably something more discrete than the existing indirect test
+
+test "SubBlockReader" {
+    //std.testing.log_level = .debug;
+    std.debug.print(" \n", .{});
+
+    const data = [_]u8{
+        0x04, 0x01, 0x02, 0x03, 0x04, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00,
+        0x04, 0x09, 0x0A, 0x0B, 0x0C, 0x04, 0x0D, 0x0E, 0x0F, 0x10, 0x00,
+    };
+    const data_expected1 = [_]u8{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+    const data_expected3 = [_]u8{ 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
+
+    var data_fbs = std.io.fixedBufferStream(&data);
+    var sbr = MakeSubBlockReader(data_fbs.reader());
+    const sbr_r = sbr.reader();
+    var buf: [8]u8 = undefined;
+
+    // data correctness across multiple blocks
+    const read_cnt1 = try sbr_r.readAll(&buf);
+    try std.testing.expect(read_cnt1 == 8);
+    try std.testing.expectEqualSlices(u8, &buf, &data_expected1);
+
+    // already terminated returns/does nothing
+    const read_cnt2 = try sbr_r.readAll(&buf);
+    try std.testing.expect(read_cnt2 == 0);
+
+    // reset allows the second sub-block series to be read, indirectly confirming
+    // that the backing reader did not advance during the "already terminated" test
+    sbr.reset();
+    const read_cnt3 = try sbr_r.readAll(&buf);
+    try std.testing.expect(read_cnt3 == 8);
+    try std.testing.expectEqualSlices(u8, &buf, &data_expected3);
+}
+
 // WARN: implementation specific to GIF-style lzw encoding, meaning it has some
 // codes with special meaning and uses a variable-length bit size for codes, as
 // well as settings specific for GIF. this stuff would need to be removed or
@@ -820,222 +1010,6 @@ pub fn MakeDecodeLZW(
     return DecodeLZW(@TypeOf(reader), @TypeOf(writer)).Init(allocator, reader, writer);
 }
 
-// FIXME: move to other file or delete; pure util not directly related to gif
-pub const LoggingWriter = struct {
-    const Error = error{};
-    pub const Writer = std.io.Writer(*LoggingWriter, Error, write);
-
-    level: std.log.Level,
-
-    pub fn write(self: *LoggingWriter, bytes: []const u8) Error!usize {
-        switch (self.level) {
-            .debug => std.log.debug("{any}", .{bytes}),
-            else => @panic("not implemented"),
-        }
-        return bytes.len;
-    }
-
-    pub fn writer(self: *LoggingWriter) LoggingWriter.Writer {
-        return .{ .context = self };
-    }
-};
-
-pub fn loggingWriter(level: std.log.Level) LoggingWriter {
-    return .{ .level = level };
-}
-
-// TESTING
-
-// FIXME: maybe strip all logic from this, and turn the decoding setup into a gif
-// helper function, to keep the test as "pure" as possible? i.e. remove the in/out
-// streams and make something like `ReadStream`, similar to my QOI api
-test "Read GIF" {
-    //std.testing.log_level = .debug;
-    std.debug.print(" \n", .{});
-
-    const w = [_]u8{ 0xFF, 0xFF, 0xFF, 0xFF }; // white
-    const r = [_]u8{ 0xFF, 0x00, 0x00, 0xFF }; // red
-    const b = [_]u8{ 0x00, 0x00, 0xFF, 0xFF }; // blue
-    const giflib_expected = (r ** 5 ++ b ** 5) ** 3 ++
-        (r ** 3 ++ w ** 4 ++ b ** 3) ** 2 ++
-        (b ** 3 ++ w ** 4 ++ r ** 3) ** 2 ++
-        (b ** 5 ++ r ** 5) ** 3;
-
-    const p1 = "test_gif/";
-    const p2 = p1 ++ "test-pygif/";
-    //                              log?  input       expected
-    const test_images = [_]struct { bool, []const u8, anyerror![]const u8 }{
-        // zig fmt: off
-        // https://giflib.sourceforge.net/whatsinagif/bits_and_bytes.html
-        .{ false, p1 ++ "giflib-sample.gif",         &giflib_expected },
-        // TODO: get through whole test suite
-        // pygif test suite
-        .{ false, p2 ++ "depth1.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "depth2.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "depth3.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "depth4.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "depth5.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "depth6.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "depth7.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "depth8.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "four-colors.gif",           @embedFile(p2 ++ "four-colors.rgba") },
-        .{ false, p2 ++ "local-color-table.gif",     @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "no-global-color-table.gif", @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "no-data.gif",               @embedFile(p2 ++ "transparent-dot.rgba") },
-        .{ false, p2 ++ "zero-width.gif",            error.InvalidCanvasDimensions },
-        .{ false, p2 ++ "zero-height.gif",           error.InvalidCanvasDimensions },
-        .{ false, p2 ++ "zero-size.gif",             error.InvalidCanvasDimensions },
-        // FIXME: image-zero-**: impl error on imagewriter, and recover in gif reader?
-        .{ false, p2 ++ "image-zero-width.gif",      @embedFile(p2 ++ "transparent-dot.rgba") },
-        .{ false, p2 ++ "image-zero-height.gif",     @embedFile(p2 ++ "transparent-dot.rgba") },
-        .{ false, p2 ++ "image-zero-size.gif",       @embedFile(p2 ++ "transparent-dot.rgba") },
-        .{ false, p2 ++ "invalid-background.gif",    @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "all-reds.gif",              @embedFile(p2 ++ "all-reds.rgba") },
-        .{ false, p2 ++ "all-greens.gif",            @embedFile(p2 ++ "all-greens.rgba") },
-        .{ false, p2 ++ "all-blues.gif",             @embedFile(p2 ++ "all-blues.rgba") },
-        .{ false, p2 ++ "interlace.gif",             @embedFile(p2 ++ "all-reds.rgba") },
-        .{ false, p2 ++ "image-inside-bg.gif",       @embedFile(p2 ++ "image-inside-bg.rgba") },
-        .{ false, p2 ++ "image-overlap-bg.gif",      @embedFile(p2 ++ "image-overlap-bg.rgba") },
-        .{ false, p2 ++ "image-outside-bg.gif",      @embedFile(p2 ++ "image-outside-bg.rgba") },
-        .{ false, p2 ++ "images-combine.gif",        @embedFile(p2 ++ "four-colors.rgba") },
-        .{ false, p2 ++ "images-overlap.gif",        @embedFile(p2 ++ "white-dot.rgba") }, 
-        .{ false, p2 ++ "high-color.gif",            @embedFile(p2 ++ "high-color.rgba") }, 
-        .{ false, p2 ++ "missing-pixels.gif",        @embedFile(p2 ++ "missing-pixels.rgba") },
-        .{ false, p2 ++ "extra-pixels.gif",          @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "extra-data.gif",            @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "no-clear.gif",              @embedFile(p2 ++ "white-dot.rgba") },
-        // FIXME: no-eoi: impl error on lzw decoder, and recover in gif reader?
-        .{ false, p2 ++ "no-eoi.gif",                @embedFile(p2 ++ "white-dot.rgba") },
-        .{ false, p2 ++ "no-clear-and-eoi.gif",      @embedFile(p2 ++ "white-hline2.rgba") },
-        .{ false, p2 ++ "many-clears.gif",           @embedFile(p2 ++ "checkerboard.rgba") },
-        .{ false, p2 ++ "double-clears.gif",         @embedFile(p2 ++ "checkerboard.rgba") },
-        .{ false, p2 ++ "invalid-code.gif",          error.InvalidCode }, 
-        .{ false, p2 ++ "invalid-colors.gif",        error.InvalidColorIndex }, 
-        .{ false, p2 ++ "max-width.gif",             @embedFile(p2 ++ "max-width.rgba") },
-        .{ false, p2 ++ "max-height.gif",            @embedFile(p2 ++ "max-height.rgba") },
-        // NOTE: unclear what max size is if not 0xFFFF*0xFFFF, or why it should 
-        // error; gif spec seems to imply that it's up to the decoder to decide 
-        // supported resolution. maybe add max pixels as user option to decoder?
-        //.{ true,  pre2 ++ "max-size.gif",              error.Placeholder }, 
-        .{ false, p2 ++ "4095-codes-clear.gif",      @embedFile(p2 ++ "random-image.rgba") },
-        .{ false, p2 ++ "4095-codes.gif",            @embedFile(p2 ++ "random-image.rgba") },
-        .{ false, p2 ++ "255-codes.gif",             @embedFile(p2 ++ "random-image.rgba") },
-        .{ false, p2 ++ "large-codes.gif",           @embedFile(p2 ++ "random-image.rgba") },
-        // NOTE: max/overflow-codes**: not sure what the purpose of this is. they 
-        // all have starting codes that are above the max color table size; this 
-        // case should at least cause another error as a matter of course
-        //.{ true,  p2 ++ "max-codes.gif",          @embedFile(p2 ++ "random-image.rgba") },
-        //.{ true,  p2 ++ "overflow-codes.gif",     error.Placeholder }, 
-        //.{ true,  p2 ++ "overflow-codes-max.gif", error.Placeholder }, 
-        // NOTE: might skip following for now, seems irrelevant for current 
-        // usecase as long as the features are ignored without crashing
-        //transparent
-        //invalid-transparent
-        //disabled-transparent
-        //unset-transparent
-        //loop-infinite
-        //loop-once
-        //loop-max
-        //loop-buffer
-        //loop-buffer_max
-        //loop-animexts
-        //animation
-        //animation-speed
-        //animation-no-delays
-        //animation-zero-delays
-        //dispose-none
-        //dispose-keep
-        //dispose-restore-background
-        //dispose-restore-previous
-        //animation-multi-image
-        //animation-multi-image-explicit-zero-delay
-        //comment
-        //large-comment
-        //nul-comment
-        //invalid-ascii-comment
-        //invalid-utf8-comment
-        //plain-text
-        //xmp-data
-        //xmp-data-empty
-        //icc-color-profile
-        //icc-color-profile-empty
-        //unknown-extension
-        //unknown-application-extension
-        //nul-application-extension
-        //gif87a
-        //gif87a-animation
-        // zig fmt: on
-    };
-
-    inline for (test_images) |ti| {
-        const log = ti[0];
-        const log_old = std.testing.log_level;
-        defer std.testing.log_level = log_old;
-        if (log) std.testing.log_level = .debug;
-
-        const file = ti[1];
-        const expected = ti[2];
-        std.log.debug("Reading: {s}", .{file});
-
-        var in = std.io.fixedBufferStream(@embedFile(file));
-        const in_r = in.reader();
-
-        var out = std.ArrayList(u8).init(std.testing.allocator);
-        defer out.deinit();
-        const out_w = out.writer();
-
-        var width: u16 = undefined;
-        var height: u16 = undefined;
-        const err = Read(std.testing.allocator, in_r, out_w, &width, &height);
-
-        if (expected) |expected_slice| {
-            try std.testing.expectEqualSlices(u8, expected_slice, out.items);
-        } else |expected_err| {
-            try std.testing.expectError(expected_err, err);
-        }
-    }
-}
-
-// FIXME: add test cases for malformed input data
-//  - EOF reached in the middle of a sub-block
-//  - EOF reached when expecting a block size or block terminator byte
-// FIXME: add test case for checking the backing reader does not advance past
-// the byte after the block terminator when over-reading the sub-block reader,
-// preferably something more discrete than the existing indirect test
-
-test "SubBlockReader" {
-    //std.testing.log_level = .debug;
-    std.debug.print(" \n", .{});
-
-    const data = [_]u8{
-        0x04, 0x01, 0x02, 0x03, 0x04, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00,
-        0x04, 0x09, 0x0A, 0x0B, 0x0C, 0x04, 0x0D, 0x0E, 0x0F, 0x10, 0x00,
-    };
-    const data_expected1 = [_]u8{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
-    const data_expected3 = [_]u8{ 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
-
-    var data_fbs = std.io.fixedBufferStream(&data);
-    var sbr = MakeSubBlockReader(data_fbs.reader());
-    const sbr_r = sbr.reader();
-    var buf: [8]u8 = undefined;
-
-    // data correctness across multiple blocks
-    const read_cnt1 = try sbr_r.readAll(&buf);
-    try std.testing.expect(read_cnt1 == 8);
-    try std.testing.expectEqualSlices(u8, &buf, &data_expected1);
-
-    // already terminated returns/does nothing
-    const read_cnt2 = try sbr_r.readAll(&buf);
-    try std.testing.expect(read_cnt2 == 0);
-
-    // reset allows the second sub-block series to be read, indirectly confirming
-    // that the backing reader did not advance during the "already terminated" test
-    sbr.reset();
-    const read_cnt3 = try sbr_r.readAll(&buf);
-    try std.testing.expect(read_cnt3 == 8);
-    try std.testing.expectEqualSlices(u8, &buf, &data_expected3);
-}
-
 // FIXME: add test cases for InvalidCodeSize, StopCodeNotFound, MaxCodeSizeExceeded
 // FIXME: add test case for images that fill the whole code table
 
@@ -1068,3 +1042,29 @@ test "LZW Decompress" {
 
     try std.testing.expectEqualSlices(u8, &expected, &output);
 }
+
+// FIXME: move to other file or delete; pure util not directly related to gif
+pub const LoggingWriter = struct {
+    const Error = error{};
+    pub const Writer = std.io.Writer(*LoggingWriter, Error, write);
+
+    level: std.log.Level,
+
+    pub fn write(self: *LoggingWriter, bytes: []const u8) Error!usize {
+        switch (self.level) {
+            .debug => std.log.debug("{any}", .{bytes}),
+            else => @panic("not implemented"),
+        }
+        return bytes.len;
+    }
+
+    pub fn writer(self: *LoggingWriter) LoggingWriter.Writer {
+        return .{ .context = self };
+    }
+};
+
+pub fn loggingWriter(level: std.log.Level) LoggingWriter {
+    return .{ .level = level };
+}
+
+// TESTING

@@ -62,6 +62,13 @@ pub const aFontDef: *[5]FONT = @ptrFromInt(0x4BF7E0);
 pub const aFontExtGlyphMapVal: *[36]GLYPH_MAP = @ptrFromInt(0x4BFA10);
 pub const aFontExtGlyphMapKey: *[106]u8 = @ptrFromInt(0x4BFA58); // index 0 = ascii 150
 
+// texture coordinates get scaled by these values to convert font page texture
+// coordinates to UVs (remap texture size to 0..1) in fn_42D990 @ 0x42DBEE
+// instruction locations: 42DBEE, 42DBF6
+pub const gFontPageUnitScaleX: *f32 = @ptrFromInt(0x4AC644); // default 0x0000803C (1/64)
+// instruction locations: 42DBFE, 42DC06
+pub const gFontPageUnitScaleY: *f32 = @ptrFromInt(0x4AC648); // default 0x0000003C (1/128)
+
 // GAME FUNCTIONS
 
 // FIXME: re-evaluate which of these needs to move; proximity in binary suggests

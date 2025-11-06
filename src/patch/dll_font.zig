@@ -59,9 +59,8 @@ const rd = @import("racer").Debug;
 //   use the currently busted glyphs (like '!')
 //      - mod brainstorming:
 //          - user option to not use the added margins on the planned "standard"
-//            fonts; the problem may be that some text is cut off at the screen
-//            extents due to the way racer "fixes" UVs on sprite overdraw, which
-//            could cause some cutoff with margins when it otherwise wouldn't
+//            fonts; changes the look of the glyphs a little because the cutoff
+//            on the original font makes some parts look more solid/blocky
 //          - two standard fonts (ones where you can just drop an image into a
 //            folder): a "minimal" one that only has the stock font glyphs, and
 //            a "normal" one as originally planned that expands on available
@@ -90,17 +89,8 @@ const rd = @import("racer").Debug;
 // ratio and is subjectively good-looking), but ~6x base size would be needed for
 // no/minimal scaling in all cases; 8x is actually justified for pow2.
 
-// FIXME: re-dump original font data to tga, and remake the base template font;
-// ExtractRawFontPagesToGrey8 was implemented incorrectly and generates the wrong
-// color values, and these images were used to make the current font. any images
-// made through these functions should be re-generated
-// fontsheet to remake: (basic-original.gif)
-// other things to update
-// - do final check on it for random white pixels that are meant to be bg
-// - swap order of superscript a and o in body fonts to match title font, and
-//   update the font adjustment defs accordingly
-// - make sure apostrophes on body fonts use comma glyph (check against updated
-//   template, not old output sheet)
+// FIXME: change user of custom fonts to something like "annodue/custom/fonts";
+// i.e. part of a unified location for custom content
 // FIXME: update changelog and manual to reflect new font functionality and stuff
 // inherited from cosmetic/developer plugins, as well as updating old parts of
 // current changelog that talk about font-related features on other plugins in
@@ -385,6 +375,8 @@ fn DumpCache(pixels: []const u16, width: u16, height: u16, filename: []const u8)
     }
 }
 
+// FIXME: not sure this or similarly old fns are even relevant anymore; review
+// and delete as appropriate
 // NOTE: the original patcher referred to this as a 'texture' table, but this is
 // actually a vtable pointing to 'sprite'-type pages; this is the same basic format
 // as other sprites, but all of the header data is stripped in the case of the
@@ -679,6 +671,7 @@ const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
 // this this particular widget has something about it that sets it off. something
 // to do with the new font layout/texture?? seems to not be edge culling unless
 // it's a clipping box with different behaviour; text behaves fine at screen edge
+
 // adjusted source font
 var adj_glyphs = std.mem.zeroes([5]CustomGlyphs);
 var adj_font: CustomFont = undefined;
@@ -1307,11 +1300,11 @@ const font2_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
 });
 
 const font3_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
-    .{ 2, 65, 149, 9, 8, 2, 2 }, // " // FIXME: adjust offset after fixing atlas
-    .{ 7, 74, 149, 9, 8, 2, 2 }, // ' // FIXME: adjust offset after fixing atlas
+    .{ 2, 65, 149, 9, 8, 3, 3 }, // "
+    .{ 7, 74, 149, 9, 8, 3, 3 }, // '
     .{ 10, 226, 133, 13, 15, 2, 2 }, // +
     .{ 11, 241, 133, 15, 15, 2, 2 }, // *
-    .{ 13, 97, 143, 7, 9, 1, 4 }, // - // FIXME: adjust offset after fixing atlas
+    .{ 13, 97, 143, 7, 9, 1, 4 }, // -
     .{ 15, 202, 133, 12, 15, 2, 2 }, // /
     .{ 60, 214, 133, 12, 15, 2, 2 }, // \
     .{ 14, 69, 143, 7, 6, 3, 2 }, // .
@@ -1363,8 +1356,8 @@ const font3_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
 const font3_new_ge_adj = CGA(&[_]usize{}, &[_]CGAP{
     .{ 1, 111, 143, 7, 11, 2, 2 }, // inverted !
     .{ 2, 144, 144, 10, 11, 2, 2 }, // pound (currency)
-    .{ 3, 166, 144, 12, 11, 2, 2 }, // superscript a
-    .{ 4, 154, 144, 11, 11, 2, 2 }, // superscript o
+    .{ 3, 154, 144, 11, 11, 2, 2 }, // superscript a
+    .{ 4, 166, 144, 12, 11, 1, 2 }, // superscript o
     .{ 5, 118, 143, 10, 11, 2, 2 }, // inverted ?
     .{ 6, 21, 144, 9, 8, 2, 2 }, // grave
     .{ 7, 30, 144, 9, 8, 2, 2 }, // acute
@@ -1378,8 +1371,8 @@ const font3_new_ge_adj = CGA(&[_]usize{}, &[_]CGAP{
 });
 
 const font4_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
-    .{ 2, 74, 180, 9, 7, 2, 2 }, // " // FIXME: adjust offset after fixing atlas
-    .{ 7, 83, 180, 9, 7, 2, 2 }, // ' // FIXME: adjust offset after fixing atlas
+    .{ 2, 74, 180, 9, 7, 3, 3 }, // "
+    .{ 7, 83, 180, 9, 7, 3, 3 }, // '
     .{ 13, 106, 179, 7, 9, 2, 2 }, // -
     .{ 15, 151, 179, 9, 11, 3, 3 }, // /
     .{ 14, 92, 172, 7, 7, 2, 3 }, // .
@@ -1435,8 +1428,8 @@ const font4_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
 
 const font4_new_ge_adj = CGA(&[_]usize{}, &[_]CGAP{
     .{ 1, 120, 179, 7, 11, 3, 3 }, // inverted !
-    .{ 3, 189, 179, 12, 11, 2, 2 }, // superscript a
-    .{ 4, 177, 179, 12, 11, 2, 2 }, // superscript o
+    .{ 3, 177, 179, 12, 11, 2, 2 }, // superscript a
+    .{ 4, 189, 179, 12, 11, 2, 2 }, // superscript o
     .{ 5, 127, 179, 8, 11, 2, 2 }, // inverted ?
     .{ 6, 20, 180, 10, 8, 2, 2 }, // grave
     .{ 7, 30, 180, 10, 8, 2, 2 }, // acute

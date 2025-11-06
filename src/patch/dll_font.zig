@@ -78,23 +78,70 @@ const rd = @import("racer").Debug;
 //   draw calls are made from, which has a limit), and could also open the door
 //   for an imgui down the line
 
+// NOTE: scratchpad notes
+//
+// mod
+// - make 'fixed' base font patch option with the minor adjustments that work with
+//   the original font defs/textures, using some kind of 'adjustment table'
+// - then use that as a base and apply changes from another such adjustment table
+//   for the custom font def
+// - i.e. 'progressively enhance' from the base fonts, to simplify figuring out all
+//   the new numbers
+// - general rule = 'basic custom font' should not introduce any glyphs that do not
+//   already have pixels drawn on the original font, and should not make any changes
+//   that affect the spacing of the output; but adjustments to coords and splitting
+//   overlapping defs into independent mappings OK; this is so that it can serve as
+//   a 'ground truth' baseline representing a user who has no custom fonts enabled
+// - font dll should have the timings adjusted so that the original fonts are fully
+//   loaded before executing any mods; that way the 'copied' versions can use the
+//   prepared resources (i.e. default to late-loading, and only execute on any
+//   features before font loading when that feature really needs it)
+//
+// notes
+// - can't totally fix accent alignment, because differences in base character width
+//   naturally misalign them; can only fix this case in code
+// - can't make inverted exclamation mark in the way '?' is done without changing
+//   code; but could just make another glyph
+// - loading textures into gpu seems to be the cause of the "memory leak" crash?
+//   so the plan is to just reuse a single texture and rewrite the pixels whenever
+//   a font is changed/loaded. not sure if this is a dgvoodoo problem or just a
+//   windows regression. still need to completely rule out game allocations because
+//   there is one place during material generation that temp allocates
+
 // TODO: all settings hot-reloadable
 // TODO: embed fonts and point to ours, rather than patching the whole thing (for faster loadtimes)
 // TODO: dump fonts as a button on a menu, not a weirdge on-launch only thing
 // TODO: option to show double-size fonts on font test visualization
-// NOTE: consider halving old hd font, as this would enable the max texture size
-// of custom fonts to be 4x less. in this case, glyphs will still be oversized for
-// normal text, but undersized for "large" text (~75% @ 1440p, ~85-90% @ 1080p).
-// possibly acceptable (unscaled non-large normal body text @ 960p has similar
-// ratio and is subjectively good-looking), but ~6x base size would be needed for
-// no/minimal scaling in all cases; 8x is actually justified for pow2.
-
+// TODO: ingame menu (not necessarily adding the menu itself during this pass, but
+// some of these features should still be implemented now as settings file stuff)
+// - buttons for the dumping ("developer") features
+// - font selector
+// - button to clear cached fonts (including or excluding ones without a paired gif)
+// - button to reload fonts
+// - button to add/remove glyph margins
+// - exotic stuff (e.g. font designer/importer)
+// - show test strings for previewing fonts
+// - opt to show font textures directly?
 // FIXME: change user of custom fonts to something like "annodue/custom/fonts";
 // i.e. part of a unified location for custom content
 // FIXME: update changelog and manual to reflect new font functionality and stuff
 // inherited from cosmetic/developer plugins, as well as updating old parts of
 // current changelog that talk about font-related features on other plugins in
 // this release round
+
+// NOTE: consider halving old hd font, as this would enable the max texture size
+// of custom fonts to be 4x less. in this case, glyphs will still be oversized for
+// normal text, but undersized for "large" text (~75% @ 1440p, ~85-90% @ 1080p).
+// possibly acceptable (unscaled non-large normal body text @ 960p has similar
+// ratio and is subjectively good-looking), but ~6x base size would be needed for
+// no/minimal scaling in all cases; 8x is actually justified for pow2.
+// NOTE: technically, fonts probably don't need to be in the pixel format the
+// game uses; might be possible to just accept any format, including colored, and
+// just translate to ARGB4444/ARGB1555 in our loader. unsure if this is a good
+// idea, for now just mimicking the game format closely.
+// NOTE: sample old code lines showing the old .data files were GA88-format pixels
+//var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, page }) catch
+//buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
 
 // FEATURES
 // - High-resolution fonts
@@ -375,101 +422,6 @@ fn DumpCache(pixels: []const u16, width: u16, height: u16, filename: []const u8)
     }
 }
 
-// FIXME: not sure this or similarly old fns are even relevant anymore; review
-// and delete as appropriate
-// NOTE: the original patcher referred to this as a 'texture' table, but this is
-// actually a vtable pointing to 'sprite'-type pages; this is the same basic format
-// as other sprites, but all of the header data is stripped in the case of the
-// embedded font data, in lieu of hardcoded assumptions about format, dimensions, etc.
-// WARNING: the original dumped font data (see dll_developer) has some offset pixels
-// and wrapping, but the hd fonts don't; not sure if this is handled by this function
-// or if the dumper is just dumping wrong
-// WARNING: also don't really know how the '.data' files this function takes were
-// generated from the png files
-// ---- comments from when originally porting below ----
-// NOTE: code_begin_offset = part of the arguments to a function call (sprite
-// setup-related fn fn_445EE0); args expected in this range: maxwidth?, maxheight?,
-// width, height (args 3-6)
-// NOTE: code_end_offset = the instruction after 4 arguments later
-// NOTE: texture table seems to be 'len' in first field (u32), followed by len ptrs
-// to texture segments
-// FIXME: can probably convert font->sprite conversion to comptime embed then hook
-// up ptrs only in code, then all the allocation bs can be skipped
-// NOTE: probably cannot reverse this, because it patches something that seems to
-// only run once during setup
-fn PatchTextureTable(
-    memory: usize,
-    table_offset: usize,
-    code_begin_offset: usize,
-    code_end_offset: usize,
-    width: u32,
-    height: u32,
-    filename: []const u8,
-) usize {
-    var off: usize = memory;
-    off = x86.nop_align(off, 16);
-
-    // Original code takes u8 dimension args, so we use our own code that takes u32
-    const cave_memory_offset: usize = off;
-
-    // Patches the arguments for the texture loader
-    off = x86.push(off, .{ .imm32 = height });
-    off = x86.push(off, .{ .imm32 = width });
-    off = x86.push(off, .{ .imm32 = height });
-    off = x86.push(off, .{ .imm32 = width });
-    off = x86.jmp(off, code_end_offset);
-
-    // Detour original code to ours
-    var hack_offset: usize = x86.jmp(code_begin_offset, cave_memory_offset);
-    _ = x86.nop_until(hack_offset, code_end_offset);
-
-    const page_num: u32 = mem.read(table_offset + 0, u32);
-
-    for (0..page_num) |i| {
-        _ = mem.write(table_offset + 4 + i * 4, u32, off); // update table entry ptr
-        off = LoadSpritePage(off, width, height, filename, i);
-    }
-
-    return off;
-}
-
-// loads some GIMP format into Greyscale4 format (0x400) in preparation for game
-// parsing as sprite data
-fn LoadSpritePage(
-    write_at: u32,
-    width: u32,
-    height: u32,
-    filename: []const u8,
-    page: u32,
-) u32 {
-    var off = write_at;
-
-    const page_size: u32 = width * height * 4 / 8;
-
-    // Loop over all pages
-    var str_buf: [1023:0]u8 = undefined;
-    const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..page_size];
-    @memset(buffer_slice, 0x00);
-
-    // Load input texture to buffer
-    var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, page }) catch
-        @panic("LoadSpritePage: formatting texture file path"); // FIXME: error handling
-
-    const file = std.fs.cwd().openFile(path, .{}) catch
-        @panic("LoadSpritePage: opening texture file"); // FIXME: error handling
-    defer file.close();
-    var br = std.io.bufferedReader(file.reader());
-    const r = br.reader();
-    for (0..page_size * 2) |j| {
-        const px = r.readInt(u16, .Little) catch @panic("LoadSpritePage: pixel read"); // FIXME: error handling
-        buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
-    }
-
-    off += page_size;
-    off = x86.nop_align(off, 0x10);
-    return off;
-}
-
 // dumps precomputed little-endian ARGB4444 data into buffer
 fn LoadSpritePageFromCache(
     buf_o: []u16,
@@ -618,38 +570,11 @@ inline fn GFA(
 // Custom stuff workspace
 // ------------
 
-// NOTE: scratchpad notes
-//
-// - will need to adjust :;-+ dims on title font beyond just margin
-//
-// mod
-// - make 'fixed' base font patch option with the minor adjustments that work with
-//   the original font defs/textures, using some kind of 'adjustment table'
-// - then use that as a base and apply changes from another such adjustment table
-//   for the custom font def
-// - i.e. 'progressively enhance' from the base fonts, to simplify figuring out all
-//   the new numbers
-// - general rule = 'basic custom font' should not introduce any glyphs that do not
-//   already have pixels drawn on the original font, and should not make any changes
-//   that affect the spacing of the output; but adjustments to coords and splitting
-//   overlapping defs into independent mappings OK; this is so that it can serve as
-//   a 'ground truth' baseline representing a user who has no custom fonts enabled
-// - font dll should have the timings adjusted so that the original fonts are fully
-//   loaded before executing any mods; that way the 'copied' versions can use the
-//   prepared resources (i.e. default to late-loading, and only execute on any
-//   features before font loading when that feature really needs it)
-//
-// notes
-// - can't totally fix accent alignment, because differences in base character width
-//   naturally misalign them; can only fix this case in code
-// - can't make inverted exclamation mark in the way '?' is done without changing
-//   code; but could just make another glyph
+// FIXME: to organize/streamline; random stuff used to work through feature dev
 
 // FIXME: relocate, for testing
 const gif = @import("util/gif.zig");
 const cf = @import("util/color_format.zig");
-
-// FIXME: to organize/streamline; random stuff used to work through feature dev
 
 var fonts_initialized = false;
 var fonts_loaded = false;
@@ -1033,33 +958,6 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     if (gf.InputGetKbRaw(.I) == .JustOn and FontState.s_dump_fonts) {
         FontState.FontDump();
     }
-
-    // for testing load/unload of resources, does not do the ground truth
-    // toggle logic
-    // - crashes when too many materials loaded/unloaded
-    // - "materials" in this case meaning those with the 512x1024 HD font textures
-    //   also there is a memory leak here, with N materials ..
-    //      N=6     ~1MB leak per cycle
-    //      N=10    ~10MB
-    //      N=20    ~15MB
-    //      N=40    ~35MB
-    // - seems to only ever free 5MB regardless of material count
-    // - not entirely sure this isn't just a dgvoodoo problem, hard to imagine
-    //   such an obvious issue was not caught on original hardware during
-    //   dev, could also just be a regression in modern windows vs old directx
-    //if (FontState.s_patch_fonts and gf.InputGetKbRaw(.I) == .JustOn) {
-    //    if (fonts_loaded) {
-    //        FontsUnload();
-    //    } else {
-    //        // crash at 48A7F4 when 100 textures loaded then unloaded (i.e. 2nd 'I' press)
-    //        // in AllocTexture__48A5E0 during vbufferlock memcpy
-    //        // with 20 textures loaded, doesn't crash immediately but does crash
-    //        // after some number of cycles loading/unloading, and after 3 cycles
-    //        // for 40 textures; always around 450MB ram usage
-    //        // i.e. seems to just be the memory leak crash?
-    //        FontsLoad();
-    //    }
-    //}
 }
 
 // FIXME: add as an actual plugin feature with a settings toggle

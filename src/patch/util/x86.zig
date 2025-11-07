@@ -2,6 +2,8 @@ pub const Self = @This();
 
 const std = @import("std");
 const mem = @import("memory.zig");
+const assert = std.debug.assert;
+const bytesToHex = std.fmt.bytesToHex;
 
 // NOTE: supporting x86 only, not x86_64
 
@@ -27,10 +29,18 @@ inline fn parseMod(comptime mod: EffAdd) u8 {
 
 inline fn parseModRM(
     comptime mod: EffAdd,
-    comptime rm: GenReg32, // dest
-    comptime reg: GenReg32, // src
+    comptime dst: GenReg32, // rm
+    comptime src: GenReg32, // reg
 ) u8 {
-    return @intFromEnum(mod) * 0x40 + @intFromEnum(reg) + @intFromEnum(rm) * 0x08;
+    return parseMod(mod) + @intFromEnum(src) + parseRM(dst);
+}
+
+inline fn parseModMR(
+    comptime mod: EffAdd,
+    comptime dst: GenReg32, // rm
+    comptime src: GenReg32, // reg
+) u8 {
+    return parseMod(mod) + @intFromEnum(dst) + parseRM(src);
 }
 
 // TODO: op_r16, op_r32 reg and base+reg should be comptime, not sure why zig
@@ -38,216 +48,246 @@ inline fn parseModRM(
 // they should not be called in that case anyway
 
 pub inline fn op_r16(
-    offset: usize,
+    write_at: usize,
     comptime base: u8,
     reg: GenReg16,
 ) usize {
-    return mem.write_bytes(offset, &[2]u8{ 0x66, base + @intFromEnum(reg) }, 2);
+    return mem.write_bytes(write_at, &[2]u8{ 0x66, base + @intFromEnum(reg) }, 2);
 }
 
 pub inline fn op_r32(
-    offset: usize,
+    write_at: usize,
     comptime base: u8,
     reg: GenReg32,
 ) usize {
-    return mem.write(offset, u8, base + @intFromEnum(reg));
+    return mem.write(write_at, u8, base + @intFromEnum(reg));
 }
 
 pub inline fn op_imm8(
-    offset: usize,
+    write_at: usize,
     comptime op: u8,
     value: u8,
 ) usize {
-    return mem.write_bytes(offset, &[2]u8{ op, value }, 2);
+    return mem.write_bytes(write_at, &[2]u8{ op, value }, 2);
 }
 
 pub inline fn op_imm32(
-    offset: usize,
+    write_at: usize,
     comptime op: u8,
     value: u32,
 ) usize {
-    var addr = mem.write(offset, u8, op);
+    var addr = mem.write(write_at, u8, op);
     return mem.write(addr, u32, value);
 }
 
 pub inline fn op_modRM(
-    offset: usize,
+    write_at: usize,
     op: u8,
     comptime mod: EffAdd,
     comptime dest: GenReg32,
     comptime src: GenReg32,
 ) usize {
-    var addr = mem.write(offset, u8, op);
-    return mem.write(addr, u32, comptime parseModRM(mod, dest, src));
+    var addr = mem.write(write_at, u8, op);
+    return mem.write(addr, u8, comptime parseModRM(mod, dest, src));
+}
+
+pub inline fn op_modMR(
+    write_at: usize,
+    op: u8,
+    comptime mod: EffAdd,
+    comptime dest: GenReg32,
+    comptime src: GenReg32,
+) usize {
+    var addr = mem.write(write_at, u8, op);
+    return mem.write(addr, u8, comptime parseModMR(mod, dest, src));
 }
 
 // stuff
 
-pub fn add_rm32_imm8(memory_offset: usize, rm32: u8, imm8: u8) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x83);
-    offset = mem.write(offset, u8, rm32);
-    offset = mem.write(offset, u8, imm8);
-    return offset;
+pub fn add_rm32_imm8(write_at: usize, rm32: u8, imm8: u8) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x83);
+    addr = mem.write(addr, u8, rm32);
+    addr = mem.write(addr, u8, imm8);
+    return addr;
 }
 
-pub fn sub_rm32_imm8(memory_offset: usize, rm32: u8, imm8: i8) usize {
+pub fn sub_rm32_imm8(write_at: usize, rm32: u8, imm8: i8) usize {
     const imm8_u8: u8 = @bitCast(imm8);
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x83);
-    offset = mem.write(offset, u8, rm32);
-    offset = mem.write(offset, u8, imm8_u8);
-    return offset;
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x83);
+    addr = mem.write(addr, u8, rm32);
+    addr = mem.write(addr, u8, imm8_u8);
+    return addr;
 }
 
-pub fn add_esp8(memory_offset: usize, value: u8) usize {
-    return add_rm32_imm8(memory_offset, 0xC4, value);
+pub fn add_esp8(write_at: usize, value: u8) usize {
+    return add_rm32_imm8(write_at, 0xC4, value);
 }
 
-pub fn add_rm32_imm32(memory_offset: usize, rm32: u8, imm32: u32) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x81);
-    offset = mem.write(offset, u8, rm32);
-    offset = mem.write(offset, u32, imm32);
-    return offset;
+pub fn add_rm32_imm32(write_at: usize, rm32: u8, imm32: u32) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x81);
+    addr = mem.write(addr, u8, rm32);
+    addr = mem.write(addr, u32, imm32);
+    return addr;
 }
 
-pub fn add_esp32(memory_offset: usize, value: u32) usize {
-    return add_rm32_imm32(memory_offset, 0xC4, value);
+pub fn add_esp32(write_at: usize, value: u32) usize {
+    return add_rm32_imm32(write_at, 0xC4, value);
 }
 
-pub fn test_rm32_r32(memory_offset: usize, r32: u8) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x85);
-    offset = mem.write(offset, u8, r32);
-    return offset;
+pub fn test_rm32_r32(write_at: usize, r32: u8) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x85);
+    addr = mem.write(addr, u8, r32);
+    return addr;
 }
 
-pub fn test_eax_eax(memory_offset: usize) usize {
-    return test_rm32_r32(memory_offset, 0xC0);
+pub fn test_eax_eax(write_at: usize) usize {
+    return test_rm32_r32(write_at, 0xC0);
 }
 
-pub fn test_edx_edx(memory_offset: usize) usize {
-    return test_rm32_r32(memory_offset, 0xD2);
+pub fn test_edx_edx(write_at: usize) usize {
+    return test_rm32_r32(write_at, 0xD2);
 }
 
-pub fn mov_ecx_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
-    std.debug.assert(T == u8 or T == u32);
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0xB9); // EDX=BA, EBX=BB
-    offset = mem.write(offset, T, imm32);
-    return offset;
+pub fn mov_ecx_imm32(write_at: usize, comptime T: type, imm32: T) usize {
+    assert(T == u8 or T == u32);
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xB9); // EDX=BA, EBX=BB
+    addr = mem.write(addr, T, imm32);
+    return addr;
 }
 
-pub fn mov_eax_imm32(memory_offset: usize, comptime T: type, imm32: T) usize {
-    std.debug.assert(T == u8 or T == u32);
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0xB8);
-    offset = mem.write(offset, T, imm32);
-    return offset;
+pub fn mov_eax_imm32(write_at: usize, comptime T: type, imm32: T) usize {
+    assert(T == u8 or T == u32);
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xB8);
+    addr = mem.write(addr, T, imm32);
+    return addr;
 }
 
-pub fn mov_esi_imm32(memory: usize, comptime T: type, imm32: T) usize {
-    std.debug.assert(T == u8 or T == u32);
-    var offset = memory;
-    offset = mem.write(offset, u8, 0xBE);
-    offset = mem.write(offset, T, imm32);
-    return offset;
+pub fn mov_esi_imm32(write_at: usize, comptime T: type, imm32: T) usize {
+    assert(T == u8 or T == u32);
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xBE);
+    addr = mem.write(addr, T, imm32);
+    return addr;
 }
 
-pub fn mov_eax_moffs32(memory_offset: usize, moffs32: usize) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0xA1);
-    offset = mem.write(offset, usize, moffs32);
-    return offset;
-}
-
-pub fn mov_r32_rm32(memory_offset: usize, r32: u8, comptime T: type, rm32: T) usize {
-    std.debug.assert(T == u8 or T == u32);
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x8B);
-    offset = mem.write(offset, u8, r32);
-    offset = mem.write(offset, T, rm32);
-    return offset;
-}
-
-pub fn mov_eax_esp(memory_offset: usize) usize {
-    return mov_rm32_r32(memory_offset, 0xC4);
-}
-
-// actually, register + u32 offset
-pub fn mov_ecx_u32(memory: usize, u: u32) usize {
-    return mov_r32_rm32(memory, 0x8E, u32, u);
-}
-
-// actually, register + u8 offset
-pub fn mov_ecx_b(memory: usize, b: u8) usize {
-    return mov_r32_rm32(memory, 0x4E, u8, b);
-}
-
-pub fn mov_edx(memory_offset: usize, value: u32) usize {
-    return mov_r32_rm32(memory_offset, 0x15, u32, value);
+pub fn mov_eax_moffs32(write_at: usize, moffs32: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xA1);
+    addr = mem.write(addr, usize, moffs32);
+    return addr;
 }
 
 // mov r32, [esp+<delta>]
-pub fn mov_r32_esp_add(memory_offset: usize, r32: u8, delta: i8) usize {
+pub fn mov_r32_esp_add(write_at: usize, r32: u8, delta: i8) usize {
     // values less than zero have the upper bit set
     var delta_u8: u8 = @bitCast(delta);
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x8B);
-    offset = mem.write(offset, u8, r32);
-    offset = mem.write(offset, u8, 0x24);
-    offset = mem.write(offset, u8, delta_u8);
-    return offset;
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x8B);
+    addr = mem.write(addr, u8, r32);
+    addr = mem.write(addr, u8, 0x24);
+    addr = mem.write(addr, u8, delta_u8);
+    return addr;
 }
 
-pub fn mov_eax_esp_add(memory_offset: usize, delta: i8) usize {
-    return mov_r32_esp_add(memory_offset, 0x44, delta);
+pub fn mov_eax_esp_add(write_at: usize, delta: i8) usize {
+    return mov_r32_esp_add(write_at, 0x44, delta);
 }
 
-pub fn mov_ebx_esp_add(memory_offset: usize, delta: i8) usize {
-    return mov_r32_esp_add(memory_offset, 0x5C, delta);
+pub fn mov_ebx_esp_add(write_at: usize, delta: i8) usize {
+    return mov_r32_esp_add(write_at, 0x5C, delta);
 }
 
-pub fn mov_ecx_esp_add(memory_offset: usize, delta: i8) usize {
-    return mov_r32_esp_add(memory_offset, 0x4C, delta);
+pub fn mov_ecx_esp_add(write_at: usize, delta: i8) usize {
+    return mov_r32_esp_add(write_at, 0x4C, delta);
 }
 
-pub fn mov_edx_esp_add(memory_offset: usize, delta: i8) usize {
-    return mov_r32_esp_add(memory_offset, 0x54, delta);
+pub fn mov_edx_esp_add(write_at: usize, delta: i8) usize {
+    return mov_r32_esp_add(write_at, 0x54, delta);
 }
 
 // mov r/m32 imm32
-pub fn mov_espoff_imm32(memory_offset: usize, off8: u8, imm32: u32) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0xC7);
-    offset = mem.write(offset, u8, 0x44);
-    offset = mem.write(offset, u8, 0x24);
-    offset = mem.write(offset, u8, off8);
-    offset = mem.write(offset, u32, imm32);
-    return offset;
+pub fn mov_espoff_imm32(write_at: usize, off8: u8, imm32: u32) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xC7);
+    addr = mem.write(addr, u8, 0x44);
+    addr = mem.write(addr, u8, 0x24);
+    addr = mem.write(addr, u8, off8);
+    addr = mem.write(addr, u32, imm32);
+    return addr;
 }
 
-pub fn mov_rm32_r32(memory_offset: usize, r32: u8) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x89);
-    offset = mem.write(offset, u8, r32);
-    return offset;
+// TODO: impl different offset sizes (not just .reg)?? afaik should be same as
+// `mov_rm32_r32` but modRM instead of modMR; both are incomplete (other is newer)?
+/// mov r32(@dst), r/m32(@src)
+pub fn mov_r32_rm32(write_at: usize, r32: u8, comptime T: type, rm32: T) usize {
+    assert(T == u8 or T == u32);
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x8B);
+    addr = mem.write(addr, u8, r32);
+    addr = mem.write(addr, T, rm32);
+    return addr;
 }
 
-pub fn mov_edx_esp(memory_offset: usize) usize {
-    return mov_rm32_r32(memory_offset, 0xE2);
+pub fn mov_eax_esp(write_at: usize) usize {
+    return mov_rm32_r32(write_at, .eax, .esp);
+}
+
+// actually, register + u32 offset
+pub fn mov_ecx_u32(write_at: usize, u: u32) usize {
+    return mov_r32_rm32(write_at, 0x8E, u32, u);
+}
+
+// actually, register + u8 offset
+pub fn mov_ecx_b(write_at: usize, b: u8) usize {
+    return mov_r32_rm32(write_at, 0x4E, u8, b);
+}
+
+pub fn mov_edx(write_at: usize, value: u32) usize {
+    return mov_r32_rm32(write_at, 0x15, u32, value);
+}
+
+// TODO: impl different offset sizes? (not just .reg)
+/// mov r/m32(@dst), r32(@src)
+pub fn mov_rm32_r32(write_at: usize, comptime dst: GenReg32, comptime src: GenReg32) usize {
+    return op_modMR(write_at, 0x89, .reg, dst, src);
+}
+
+test "mov_rm32_r32" {
+    const test_cases = [_]struct { GenReg32, GenReg32, [2]u8 }{
+        .{ .edx, .esp, [2]u8{ 0x89, 0xE2 } },
+        .{ .ebp, .esp, [2]u8{ 0x89, 0xE5 } },
+        .{ .esp, .ebp, [2]u8{ 0x89, 0xEC } },
+        .{ .ebp, .eax, [2]u8{ 0x89, 0xC5 } },
+        .{ .eax, .ebp, [2]u8{ 0x89, 0xE8 } },
+    };
+
+    var output: [2]u8 = undefined;
+    errdefer std.debug.print("\n", .{});
+    inline for (test_cases, 0..) |t, i| {
+        const expected = t[2];
+        errdefer std.debug.print("FAILED {d:0>2} :: i: mov {s}, {s}  o: {s}  e: {s}\n", .{
+            i, @tagName(t[0]), @tagName(t[1]), bytesToHex(&output, .upper), bytesToHex(&expected, .upper),
+        });
+        _ = mov_rm32_r32(@intFromPtr(&output), t[0], t[1]);
+        try std.testing.expectEqualSlices(u8, &expected, &output);
+    }
 }
 
 // FIXME: not functional, in progress
 //pub inline fn mov(
-//    memory: usize,
+//    write_at: usize,
 //    tgt: union(enum) { r16: GenReg16, r32: GenReg32 },
 //    src: union(enum) { rm16: GenReg16, rm32: GenReg32, imm32: u32 },
 //    reg_offset: ?i32,
 //) usize {
 //    _ = reg_offset;
-//    var off = memory;
+//    var off = write_at;
 //    off = switch (tgt) {
 //        .r32 => |dest| switch (src) {
 //            .rm16 => @panic("mov: r32->rm16 not impl"),
@@ -259,22 +299,50 @@ pub fn mov_edx_esp(memory_offset: usize) usize {
 //    return off;
 //}
 
+// https://www.felixcloutier.com/x86/lea
+// TODO: figure out if anything different needs to happen for GenReg16
+// TODO: impl different offset sizes?
+/// lea dst, [src+off]
+pub inline fn lea(write_at: usize, dst: GenReg32, src: GenReg32, off: i8) usize {
+    var addr = write_at;
+    addr = op_modRM(addr, 0x8D, .mem8, dst, src);
+    addr = mem.write(addr, i8, off);
+    return addr;
+}
+
+test "lea" {
+    const test_cases = [_]struct { GenReg32, GenReg32, i8, [3]u8 }{
+        .{ .eax, .ebp, -4, [3]u8{ 0x8D, 0x45, 0xFC } },
+    };
+
+    var output: [3]u8 = undefined;
+    errdefer std.debug.print("\n", .{});
+    inline for (test_cases, 0..) |t, i| {
+        const expected = t[3];
+        errdefer std.debug.print("FAILED {d:0>2} :: i: lea {s}, [{s} + {d}]  o: {s}  e: {s}\n", .{
+            i, @tagName(t[0]), @tagName(t[1]), t[2], bytesToHex(&output, .upper), bytesToHex(&expected, .upper),
+        });
+        _ = lea(@intFromPtr(&output), t[0], t[1], t[2]);
+        try std.testing.expectEqualSlices(u8, &expected, &output);
+    }
+}
+
 pub const PushSrc = union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 };
 
 // TODO: r/m16, r/m32 (FF /6)
-pub inline fn push(offset: usize, src: PushSrc) usize {
+pub inline fn push(write_at: usize, src: PushSrc) usize {
     switch (src) {
-        .r16 => |reg| return op_r16(offset, 0x50, reg),
-        .r32 => |reg| return op_r32(offset, 0x50, reg),
-        .imm8 => |imm| return op_imm8(offset, 0x6A, imm),
-        .imm16, .imm32 => |imm| return op_imm32(offset, 0x68, imm),
+        .r16 => |reg| return op_r16(write_at, 0x50, reg),
+        .r32 => |reg| return op_r32(write_at, 0x50, reg),
+        .imm8 => |imm| return op_imm8(write_at, 0x6A, imm),
+        .imm16, .imm32 => |imm| return op_imm32(write_at, 0x68, imm),
         .seg => |seg| return switch (seg) {
-            .cs => mem.write(offset, u8, 0x0E),
-            .ss => mem.write(offset, u8, 0x16),
-            .ds => mem.write(offset, u8, 0x1E),
-            .es => mem.write(offset, u8, 0x06),
-            .fs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA0 }, 2),
-            .gs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA8 }, 2),
+            .cs => mem.write(write_at, u8, 0x0E),
+            .ss => mem.write(write_at, u8, 0x16),
+            .ds => mem.write(write_at, u8, 0x1E),
+            .es => mem.write(write_at, u8, 0x06),
+            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA0 }, 2),
+            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA8 }, 2),
         },
     }
 }
@@ -282,52 +350,38 @@ pub inline fn push(offset: usize, src: PushSrc) usize {
 pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
 
 // TODO: r/m16, r/m32 (8F /0)
-pub inline fn pop(offset: usize, dest: PopDest) usize {
+pub inline fn pop(write_at: usize, dest: PopDest) usize {
     switch (dest) {
-        .r16 => |reg| return op_r16(offset, 0x58, reg),
-        .r32 => |reg| return op_r32(offset, 0x58, reg),
+        .r16 => |reg| return op_r16(write_at, 0x58, reg),
+        .r32 => |reg| return op_r32(write_at, 0x58, reg),
         .seg => |seg| return switch (seg) {
-            .ds => mem.write(offset, u8, 0x1F),
-            .es => mem.write(offset, u8, 0x07),
-            .ss => mem.write(offset, u8, 0x17),
-            .fs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA1 }, 2),
-            .gs => mem.write_bytes(offset, &[2]u8{ 0x0F, 0xA9 }, 2),
+            .ds => mem.write(write_at, u8, 0x1F),
+            .es => mem.write(write_at, u8, 0x07),
+            .ss => mem.write(write_at, u8, 0x17),
+            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA1 }, 2),
+            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA9 }, 2),
             else => @panic("pop(): invalid segment register"),
         },
     }
 }
 
-// --------
-// old callconv stuff
-// TODO: remove, migrate use cases to callconv functions
-// --------
+// helpers to move register values around
 
-pub fn save_esp(memory_offset: usize) usize {
-    var offset: usize = memory_offset;
-    offset = push(offset, .{ .r32 = .ebp }); // ; push ebp
-    offset = mov_rm32_r32(offset, 0xE5); // ; mov ebp, esp
-    return offset;
+/// save value at register @reg in register @into, preserving @into on the stack
+/// in the meantime. pair with `reg_restore`.
+pub fn reg_save(write_at: usize, comptime reg: GenReg32, comptime into: GenReg32) usize {
+    var addr: usize = write_at;
+    addr = push(addr, .{ .r32 = into });
+    addr = mov_rm32_r32(addr, into, reg);
+    return addr;
 }
 
-pub fn restore_esp(memory_offset: usize) usize {
-    var offset: usize = memory_offset;
-    offset = mov_rm32_r32(offset, 0xEC); // ; mov esp, ebp
-    offset = pop(offset, .{ .r32 = .ebp }); // ; pop ebp
-    return offset;
-}
-
-pub fn save_eax(memory_offset: usize) usize {
-    var offset: usize = memory_offset;
-    offset = push(offset, .{ .r32 = .ebp }); // ; push ebp
-    offset = mov_rm32_r32(offset, 0xC5); // ; mov ebp, eax
-    return offset;
-}
-
-pub fn restore_eax(memory_offset: usize) usize {
-    var offset: usize = memory_offset;
-    offset = mov_rm32_r32(offset, 0xE8); // ; mov eax, ebp
-    offset = pop(offset, .{ .r32 = .ebp }); // ; pop ebp
-    return offset;
+/// counterpart to `reg_save` used to clean up stack and registers.
+pub fn reg_restore(write_at: usize, comptime reg: GenReg32, comptime from: GenReg32) usize {
+    var addr: usize = write_at;
+    addr = mov_rm32_r32(addr, reg, from);
+    addr = pop(addr, .{ .r32 = from });
+    return addr;
 }
 
 // --------
@@ -336,27 +390,27 @@ pub fn restore_eax(memory_offset: usize) usize {
 
 // WARN: could underflow, but not likely for our use case i guess
 // call_rel32
-pub fn call(memory_offset: usize, address: usize) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0xE8);
-    offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    return offset;
+pub fn call(write_at: usize, fn_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xE8);
+    addr = mem.write(addr, i32, @as(i32, @bitCast(fn_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    return addr;
 }
-pub fn call_rm32(memory_offset: usize, address: usize) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0xFF);
-    offset = mem.write(offset, u32, address);
-    return offset;
+pub fn call_rm32(write_at: usize, fn_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xFF);
+    addr = mem.write(addr, u32, fn_addr);
+    return addr;
 }
 
-pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
-    var offset = memory_offset;
-    offset = save_esp(offset);
-    offset = mov_eax_esp_add(offset, 0x08);
-    offset = push(offset, .{ .r32 = .eax });
-    offset = call(offset, address);
-    offset = restore_esp(offset);
-    return offset;
+pub fn call_one_u32_param(write_at: usize, fn_addr: usize) usize {
+    var addr = write_at;
+    addr = reg_save(addr, .esp, .ebp);
+    addr = mov_eax_esp_add(addr, 0x08);
+    addr = push(addr, .{ .r32 = .eax });
+    addr = call(addr, fn_addr);
+    addr = reg_restore(addr, .esp, .ebp);
+    return addr;
 }
 
 // --------
@@ -367,55 +421,55 @@ pub fn call_one_u32_param(memory_offset: usize, address: usize) usize {
 // TODO: same for all jcc stuff
 // WARN: could underflow, but not likely for our use case i guess
 // jmp_rel32
-pub fn jmp(memory_offset: usize, address: usize) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0xE9);
-    offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    return offset;
+pub fn jmp(write_at: usize, jmp_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xE9);
+    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    return addr;
 }
 
 // WARN: could underflow, but not likely for our use case i guess
 // jcc jnz_rel32
-pub fn jnz(memory_offset: usize, address: usize) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x0F);
-    offset = mem.write(offset, u8, 0x85);
-    offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    return offset;
+pub fn jnz(write_at: usize, jmp_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x0F);
+    addr = mem.write(addr, u8, 0x85);
+    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    return addr;
 }
 
 // TODO: auto-calculate offset like the other jcc fns
-pub fn jz_rel8(memory: usize, value: i8) usize {
-    var offset = memory;
-    offset = mem.write(offset, u8, 0x74);
-    offset = mem.write(offset, i8, value);
-    return offset;
+pub fn jz_rel8(write_at: usize, value: i8) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x74);
+    addr = mem.write(addr, i8, value);
+    return addr;
 }
 
 // TODO: auto-calculate offset like the other jcc fns
-pub fn jnz_rel8(memory: usize, value: i8) usize {
-    var offset = memory;
-    offset = mem.write(offset, u8, 0x75);
-    offset = mem.write(offset, i8, value);
-    return offset;
+pub fn jnz_rel8(write_at: usize, value: i8) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x75);
+    addr = mem.write(addr, i8, value);
+    return addr;
 }
 
 // WARN: could underflow, but not likely for our use case i guess
 // jcc jz_rel32
-pub fn jz(memory_offset: usize, address: usize) usize {
-    var offset = memory_offset;
-    offset = mem.write(offset, u8, 0x0F);
-    offset = mem.write(offset, u8, 0x84);
-    offset = mem.write(offset, i32, @as(i32, @bitCast(address)) - (@as(i32, @bitCast(offset)) + 4));
-    return offset;
+pub fn jz(write_at: usize, jmp_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0x0F);
+    addr = mem.write(addr, u8, 0x84);
+    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    return addr;
 }
 
 // --------
 // return
 // --------
 
-pub fn retn(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0xC3);
+pub fn retn(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xC3);
 }
 
 pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
@@ -429,24 +483,24 @@ pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
 // no-op
 // --------
 
-pub fn nop(memory_offset: usize) usize {
-    return mem.write(memory_offset, u8, 0x90);
+pub fn nop(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x90);
 }
 
-pub fn nop_align(memory_offset: usize, increment: usize) usize {
-    var offset: usize = memory_offset;
-    while (offset % increment > 0) {
-        offset = nop(offset);
+pub fn nop_align(write_at: usize, increment: usize) usize {
+    var addr: usize = write_at;
+    while (addr % increment > 0) {
+        addr = nop(addr);
     }
-    return offset;
+    return addr;
 }
 
-pub fn nop_until(memory_offset: usize, end: usize) usize {
-    var offset: usize = memory_offset;
-    while (offset < end) {
-        offset = nop(offset);
+pub fn nop_until(write_at: usize, end: usize) usize {
+    var addr: usize = write_at;
+    while (addr < end) {
+        addr = nop(addr);
     }
-    return offset;
+    return addr;
 }
 
 // --------
@@ -456,18 +510,12 @@ pub fn nop_until(memory_offset: usize, end: usize) usize {
 // --------
 
 pub fn stackframe_start(write_at: u32) u32 {
-    var addr = write_at;
-    addr = push(addr, .{ .r32 = .ebp });
-    addr = mov_rm32_r32(addr, 0xE5); // mov ebp, esp
-    return addr;
+    return reg_save(write_at, .esp, .ebp);
 }
 
 // NOTE: not sure if 'mov esp, ebp' needed, seems always skipped in practice?
 pub fn stackframe_end(write_at: u32) u32 {
-    var addr = write_at;
-    //addr = mov_rm32_r32(addr, 0xEC); // mov esp, ebp
-    addr = pop(addr, .{ .r32 = .ebp });
-    return addr;
+    return reg_restore(write_at, .esp, .ebp);
 }
 
 // cdecl: _FunctionName
@@ -475,8 +523,8 @@ pub fn stackframe_end(write_at: u32) u32 {
 pub fn cdecl_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
     var addr = write_at;
     if (arguments) |args| {
-        std.debug.assert(args.len > 0);
-        std.debug.assert(args.len < 32);
+        assert(args.len > 0);
+        assert(args.len < 32);
         for (args, 0..) |_, i|
             addr = push(addr, args[args.len - i - 1]);
     }
@@ -504,8 +552,8 @@ pub fn cdecl_body_exit(write_at: u32) u32 {
 pub fn stdcall_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
     var addr = write_at;
     if (arguments) |args| {
-        std.debug.assert(args.len > 0);
-        std.debug.assert(args.len < 32);
+        assert(args.len > 0);
+        assert(args.len < 32);
         for (args, 0..) |_, i|
             addr = push(addr, args[args.len - i - 1]);
     }
@@ -518,7 +566,7 @@ pub fn stdcall_body_entry(write_at: u32) u32 {
 }
 
 pub fn stdcall_body_exit(write_at: u32, num_args: u16) u32 {
-    std.debug.assert(num_args < 32);
+    assert(num_args < 32);
     var addr = write_at;
     // TODO: return value; 4b=eax, 8b=eax/edx
     addr = stackframe_end(addr);
@@ -540,6 +588,8 @@ pub fn stdcall_body_exit(write_at: u32, num_args: u16) u32 {
 // --------
 
 pub const Detour = struct {
+    const AlignSize: u32 = 16;
+
     entry_addr: u32,
     return_addr: u32,
     buf: []u8,
@@ -549,8 +599,9 @@ pub const Detour = struct {
 // TODO: optional nop_until
 // TODO: option to auto copy overwritten bytes to detour buffer
 pub fn detour_start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) void {
-    std.debug.assert(return_to > write_at);
-    std.debug.assert(return_to - write_at >= 5); // jmp long instruction size
+    assert(buf.len % Detour.AlignSize == 0);
+    assert(return_to > write_at);
+    assert(return_to - write_at >= 5); // jmp long instruction size
     data.entry_addr = write_at;
     data.return_addr = return_to;
     data.buf = buf;
@@ -563,10 +614,11 @@ pub fn detour_start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) voi
 // between these two functions, write to buf the usual way using Detour.addr
 // example: my_detour.addr = jmp(my_detour.addr, 0xDEADBEEF);
 
+// TODO: optional nop_align
 pub fn detour_end(data: *Detour) void {
     data.addr = jmp(data.addr, data.return_addr);
-    data.addr = nop_align(data.addr, 0x10);
-    std.debug.assert(data.addr - @intFromPtr(data.buf.ptr) <= data.buf.len);
+    data.addr = nop_align(data.addr, Detour.AlignSize);
+    assert(data.addr - @intFromPtr(data.buf.ptr) <= data.buf.len);
 }
 
 pub fn detour_unused_space(data: *Detour) u32 {

@@ -232,9 +232,9 @@ const CustomTrigger = struct {
 
         // update
         x86.detour_start(&d, 0x47C51B, 0x47C520, &buf.update);
-        d.addr = x86.save_eax(d.addr); // TODO: is this detour meant to replace a function body?
+        d.addr = x86.reg_save(d.addr, .eax, .ebp); // TODO: is this detour meant to replace a function body?
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
-        d.addr = x86.restore_eax(d.addr);
+        d.addr = x86.reg_restore(d.addr, .eax, .ebp);
         d.addr = mem.write_bytes(d.addr, &buf.u_ins, 5);
         x86.detour_end(&d);
     }

@@ -250,7 +250,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
 
     // Make room for sprintf buffer and keep the pointer in edx
     off = x86.add_esp32(off, @bitCast(@as(i32, -0x400)));
-    off = x86.mov_edx_esp(off);
+    off = x86.mov_rm32_r32(off, .edx, .esp); // mov edx, esp
 
     // Generate the path, keep sprite_index on stack as we'll keep using it
     off = x86.push(off, .{ .r32 = .eax }); // (sprite_index)

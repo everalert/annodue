@@ -591,12 +591,6 @@ const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
     .{ &hd_font.FontTable, "HD font (fixed, new struct)", 64, 128 },
 };
 
-// FIXME: with remake font only, left side of the file select text on the file
-// list is chopped off. same happens in the multiplayer lobby text boxes; seems
-// this this particular widget has something about it that sets it off. something
-// to do with the new font layout/texture?? seems to not be edge culling unless
-// it's a clipping box with different behaviour; text behaves fine at screen edge
-
 // adjusted source font
 var adj_glyphs = std.mem.zeroes([5]CustomGlyphs);
 var adj_font: CustomFont = undefined;
@@ -696,8 +690,7 @@ const CustomFont = struct {
             .Custom => 1,
         };
         for (self.Pages[0..len]) |*p| {
-            const fn_len = std.mem.len(@as([*:0]const u8, @ptrCast(&p.filename)));
-            LoadSpritePageFromGIFAndCache(allocator, p.r, w, h, p.filename[0..fn_len]);
+            LoadSpritePageFromGIFAndCache(allocator, p.r, w, h, std.mem.sliceTo(&p.filename, 0));
         }
     }
 
@@ -847,6 +840,8 @@ fn FontsLoad() void {
     if (fonts_loaded) return;
     fonts_loaded = true;
 
+    PatchTextClippingBug(true);
+
     adj_font.LoadPagesToGame();
     hd_font.LoadPagesToGame();
     remake_font.LoadPagesToGame();
@@ -855,6 +850,8 @@ fn FontsLoad() void {
 fn FontsUnload() void {
     if (!fonts_loaded) return;
     fonts_loaded = false;
+
+    PatchTextClippingBug(false);
 
     adj_font.UnloadPagesFromGame();
     hd_font.UnloadPagesFromGame();
@@ -877,6 +874,131 @@ fn UpdateGameFont(i: ?usize) void {
     // every time a font is selected from the font table
     _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
     _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
+}
+
+// TODO: impl as settings toggle? to api-match other "bugfix toggles"
+// TODO: document the bug somewhere; also may be an idea to document all the
+// other bugs found in the game in a consolidated place
+// NOTE: fix for following bug, which doesn't come up with stock fonts, but can
+// cause rendering errors with custom fonts (e.g. profile select windowbox) due
+// to larger glyph offsets
+// - summary of bug
+//   - after determining the current rendering character needs to clip (it partially
+//     overlaps the clipping region boundary), the UV mapping of the texture is
+//     adjusted with whole pixel values instead of UV-sized values
+//   - affected region starts from instruction at 0x42DD08 (ebx set at 0x42DCC2)
+//     and ends at 0x42DD8A
+//   - let CurrentClipRegion be the Vec4i32 @ 0xE99750 containing the clip region at
+//     screen-sized values (the size of the vbuffer, not the 640x480 virtual screen)
+//   - let GlyphRegion be the local variables forming the Vec4i32 defining the
+//     coordinates of the currently rendering glyph in the same screen-sized values
+//   - let GlyphUVs be the local variables forming the Vec4f32 defining the UV
+//     mapping of the currently rendering glyph, in range 0..1 of the whole texture
+//   - bug: if edge E is clipping
+//          EdgeDifference = CurrentClipRegion[E] - GlyphRegion[E]
+//          new GlyphUVs[E] += EdgeDifference
+//          (if case of x2/y2 edges, EdgeDifference terms reversed and output -=)
+//   - fix: map EdgeDifference to UV range
+//          ScreenToVirtualFactor = ScreenWidth/640 OR ScreenHeight/480
+//              - precalculated @ esp+0x28+0x14, esp+0x28+0x18
+//          VirtualPixelToUVFactor = 1/TextureW OR 1/TextureH (precalculated @ 0x4AC644, 0x4AC648)
+//          EdgeDifference *= VirtualPixelToUVFactor*EdgeDifference/ScreenToVirtualFactorX
+//   - other note: crude fix by skipping clipping entirely
+//          at 0x42DCBC: jz 0042DD8A -> jmp 0042DD8A (+ nop leftover byte)
+//   - relevant functions during research
+//     - Text_DrawCharacter__42D990; see clipping codepaths
+//     - Text_SetCurrentEntry1ClippingRegion__450310
+//     - Text_FlushQueue1__450100
+var text_clip_fix_buf = std.mem.zeroes([128]u8);
+fn PatchTextClippingBug(apply: bool) void {
+    if (apply) {
+        var d: x86.Detour = undefined;
+        x86.detour_start(&d, 0x42DD08, 0x42DD8A, &text_clip_fix_buf);
+        defer x86.detour_end(&d);
+
+        // get stable reference to esp, while storing ebp on the stack.
+        // ebp contained pos_y2 (see instruction at 0x42DCB3), so the modified
+        // stack copy will be propagated back to ebp during `reg_restore`.
+        d.addr = x86.reg_save(d.addr, .esp, .ebp);
+        defer d.addr = x86.reg_restore(d.addr, .esp, .ebp);
+
+        // TODO: impl x86.PushSrc pointer types (r/m16, r/m32 (FF /6)) and use
+        // in cdecl_call instead of manually managing args
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x48); // uv_y2
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x40); // uv_x2
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x3C); // uv_y1
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x18); // uv_x1
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x00); // pos_y2
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x2C); // pos_x2
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x34); // pos_y1
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x14); // pos_x1
+        d.addr = x86.push(d.addr, .{ .r32 = .eax });
+        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&ClipText), null);
+        d.addr = x86.add_esp8(d.addr, 0x20);
+    } else {
+        // the original assembly bytes from the replaced code section
+        _ = mem.write_bytes(0x42DD08, &[_]u8{
+            0x3B, 0xD9, 0x7D, 0x1C, 0x2B, 0xCB, 0x8B, 0x5C, 0x24, 0x14, 0x89, 0x4C,
+            0x24, 0x44, 0x03, 0xD9, 0xDB, 0x44, 0x24, 0x44, 0x89, 0x5C, 0x24, 0x14,
+            0xD8, 0x44, 0x24, 0x18, 0xD9, 0x5C, 0x24, 0x18, 0x3B, 0xC2, 0x7D, 0x1C,
+            0x2B, 0xD0, 0x8B, 0x44, 0x24, 0x34, 0x89, 0x54, 0x24, 0x44, 0x03, 0xC2,
+            0xDB, 0x44, 0x24, 0x44, 0x89, 0x44, 0x24, 0x34, 0xD8, 0x44, 0x24, 0x40,
+            0xD9, 0x5C, 0x24, 0x40, 0xA1, 0x58, 0x97, 0xE9, 0x00, 0x3B, 0xF0, 0x7E,
+            0x1C, 0x2B, 0xF0, 0x8B, 0x44, 0x24, 0x2C, 0x89, 0x74, 0x24, 0x44, 0x2B,
+            0xC6, 0xDB, 0x44, 0x24, 0x44, 0x89, 0x44, 0x24, 0x2C, 0xD8, 0x6C, 0x24,
+            0x3C, 0xD9, 0x5C, 0x24, 0x3C, 0xA1, 0x5C, 0x97, 0xE9, 0x00, 0x3B, 0xF8,
+            0x7E, 0x14, 0x2B, 0xF8, 0x89, 0x7C, 0x24, 0x44, 0x2B, 0xEF, 0xDB, 0x44,
+            0x24, 0x44, 0xD8, 0x6C, 0x24, 0x48, 0xD9, 0x5C, 0x24, 0x48,
+        }, 0x42DD8A - 0x42DD08);
+    }
+}
+
+/// logic replacing the buggy clipping (fn_42D990). at the point this runs, the
+/// game has already determined that the glyph is within the clipping region, and
+/// just needs to check for partial overlap and update the quad pos and UVs
+fn ClipText(
+    pos_x1: *i32,
+    pos_y1: *i32,
+    pos_x2: *i32,
+    pos_y2: *i32,
+    uv_x1: *f32,
+    uv_y1: *f32,
+    uv_x2: *f32,
+    uv_y2: *f32,
+) callconv(.C) void {
+    const hires_factor: f32 = if (rf.gbCurrentHiRes.* != 0) 0.5 else 1.0;
+    const screen_w: f32 = @floatFromInt(rf.gScreenW.*);
+    const screen_h: f32 = @floatFromInt(rf.gScreenH.*);
+    const screen_scale_x = screen_w * @as(f32, @floatCast(rf.gScreenUnitScaleX.* * hires_factor));
+    const screen_scale_y = screen_h * @as(f32, @floatCast(rf.gScreenUnitScaleY.* * hires_factor));
+
+    if (pos_x1.* < rf.gCurrentClipRegion[0]) {
+        const dif = rf.gCurrentClipRegion[0] - pos_x1.*;
+        pos_x1.* = rf.gCurrentClipRegion[0];
+        uv_x1.* += @as(f32, @floatFromInt(dif)) * rf.gFontPageUnitScaleX.* / screen_scale_x;
+    }
+    if (pos_y1.* < rf.gCurrentClipRegion[1]) {
+        const dif = rf.gCurrentClipRegion[1] - pos_y1.*;
+        pos_y1.* = rf.gCurrentClipRegion[1];
+        uv_y1.* += @as(f32, @floatFromInt(dif)) * rf.gFontPageUnitScaleY.* / screen_scale_y;
+    }
+    if (pos_x2.* > rf.gCurrentClipRegion[2]) {
+        const dif = pos_x2.* - rf.gCurrentClipRegion[2];
+        pos_x2.* = rf.gCurrentClipRegion[2];
+        uv_x2.* -= @as(f32, @floatFromInt(dif)) * rf.gFontPageUnitScaleX.* / screen_scale_x;
+    }
+    if (pos_y2.* > rf.gCurrentClipRegion[3]) {
+        const dif = pos_y2.* - rf.gCurrentClipRegion[3];
+        pos_y2.* = rf.gCurrentClipRegion[3];
+        uv_y2.* -= @as(f32, @floatFromInt(dif)) * rf.gFontPageUnitScaleY.* / screen_scale_y;
+    }
 }
 
 // HOUSEKEEPING
@@ -907,6 +1029,7 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 // HOOKS
 
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
+
     // NOTE: original function at fn_42D720
     // making sure original fonts are fully loaded before this runs
     if (!fonts_initialized and FontState.s_patch_fonts) {

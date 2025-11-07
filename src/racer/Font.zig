@@ -66,9 +66,23 @@ pub const aFontExtGlyphMapKey: *[106]u8 = @ptrFromInt(0x4BFA58); // index 0 = as
 // texture coordinates get scaled by these values to convert font page texture
 // coordinates to UVs (remap texture size to 0..1) in fn_42D990 @ 0x42DBEE
 // instruction locations: 42DBEE, 42DBF6
-pub const gFontPageUnitScaleX: *f32 = @ptrFromInt(0x4AC644); // default 0x0000803C (1/64)
+pub const gFontPageUnitScaleX: *const f32 = @ptrFromInt(0x4AC644); // default 0x0000803C (1/64)
 // instruction locations: 42DBFE, 42DC06
-pub const gFontPageUnitScaleY: *f32 = @ptrFromInt(0x4AC648); // default 0x0000003C (1/128)
+pub const gFontPageUnitScaleY: *const f32 = @ptrFromInt(0x4AC648); // default 0x0000003C (1/128)
+
+// factors to get screen multiple of 320x240, used only in fn_42D990
+pub const gScreenUnitScaleX: *const f64 = @ptrFromInt(0x4AC628); // default 0x9A9999999999693F (1/320)
+pub const gScreenUnitScaleY: *const f64 = @ptrFromInt(0x4AC630); // default 0x111111111111713F (1/240)
+
+// FIXME: move to rendering-related file, just here for convenience during font work
+// actual window canvas size
+pub const gScreenW: *i32 = @ptrFromInt(0xEC86C4);
+pub const gScreenH: *i32 = @ptrFromInt(0xEC85E8);
+
+// TODO: use vec4i32 type
+// clip region in screen coordinates in order: x1, y1, x2, y2
+pub const gCurrentClipRegion: *[4]i32 = @ptrFromInt(0xE99750);
+pub const gbCurrentHiRes: *i32 = @ptrFromInt(0x50C0AC); // TODO: confirm type; probably BOOL(32), but i8 in ida
 
 // GAME FUNCTIONS
 

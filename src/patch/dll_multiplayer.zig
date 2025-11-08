@@ -163,7 +163,7 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
 
     // Inject new code
     offset = x86.push(offset, .{ .r32 = .edx });
-    offset = x86.mov_edx(offset, 0x4D5E00); // _dword_4D5E00_is_multiplayer
+    offset = x86.mov_r32_disp(offset, .edx, 0x4D5E00); // _dword_4D5E00_is_multiplayer
     offset = x86.test_edx_edx(offset);
     offset = x86.pop(offset, .{ .r32 = .edx });
     offset = x86.jz(offset, 0x47B0C0);

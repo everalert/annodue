@@ -21,6 +21,7 @@ const win = std.os.windows;
 // https://www.cs.uaf.edu/2016/fall/cs301/lecture/09_28_machinecode.html
 
 pub fn write(offset: usize, comptime T: type, value: T) usize {
+    if (@bitSizeOf(T) == 0) return offset;
     const addr: [*]align(1) T = @ptrFromInt(offset);
     const data: [1]T = [1]T{value};
     var protect: win.DWORD = undefined;

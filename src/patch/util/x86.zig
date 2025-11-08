@@ -4,27 +4,77 @@ const std = @import("std");
 const mem = @import("memory.zig");
 const assert = std.debug.assert;
 const bytesToHex = std.fmt.bytesToHex;
+const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
 
 // NOTE: supporting x86 only, not x86_64
+// FIXME: cut down on comptime requirements as much as possible (to reduce
+// function coloring)
+
+// https://wiki.osdev.org/X86-64_Instruction_Encoding
+// https://sandpile.org/x86/opc_rm.htm
+// https://www.c-jump.com/CIS77/CPU/x86/X77_0100_sib_byte_layout.htm
 
 const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
 const OpEn = enum { mem, reg, imm, zo }; // operator encoding
-const EffAdd = enum(u8) { mem, mem8, mem32, reg }; // effective address
+const EffAdd = enum(u2) { mem, mem8, mem32, reg }; // effective address
 
 // general registers
 // TODO: separate index/pointer registers from 16/32-bit register enum
-const GenReg8 = enum(u8) { al, cl, dl, bl, ah, ch, dh, bh };
-const GenReg16 = enum(u8) { ax, cx, dx, bx, sp, bp, si, di };
-const GenReg32 = enum(u8) { eax, ecx, edx, ebx, esp, ebp, esi, edi };
+const GenReg8 = enum(u3) { al, cl, dl, bl, ah, ch, dh, bh };
+const GenReg16 = enum(u3) { ax, cx, dx, bx, sp, bp, si, di };
+const GenReg32 = enum(u3) { eax, ecx, edx, ebx, esp, ebp, esi, edi };
+
+// NOTE: meaning of r1/r2 reversed in MR-encoded operands
+const ModRM = packed struct(u8) {
+    mod: EffAdd,
+    r1: GenReg32, // r
+    r2: GenReg32, // r/m
+};
+
+const SIB = packed struct(u8) {
+    s: u2, // scale (1<<s)
+    i: GenReg32, // index
+    b: GenReg32, // base
+};
 
 // helpers
 
+// FIXME: .mem could have a displacement value, if SIB base == 0b101
+inline fn parseEffAddFromDispType(comptime T: type) EffAdd {
+    return switch (T) {
+        i0 => .mem, // not null (still need SIB), but no displacement value
+        i8 => .mem8,
+        i32 => .mem32,
+        @TypeOf(null) => .reg,
+        else => @panic("invalid type"),
+    };
+}
+
+// FIXME: .mem could have a displacement value, if SIB base == 0b101
+inline fn parseEffAddFromDispSize(size: ?u3) EffAdd {
+    return if (size) |s| switch (s) {
+        0 => .mem, // not null (still need SIB), but no displacement value
+        1 => .mem8,
+        2, 3, 4 => .mem32,
+        else => @panic("invalid byte length"),
+    } else .reg;
+}
+
+inline fn parseDispTypeFromEffAdd(comptime ea: EffAdd) type {
+    return switch (ea) {
+        .mem => i0,
+        .mem8 => i8,
+        .mem32 => i32,
+        .reg => null,
+    };
+}
+
 inline fn parseRM(comptime reg: GenReg32) u8 {
-    return @intFromEnum(reg) * 0x08;
+    return @as(u8, @intCast(@intFromEnum(reg))) * 0x08;
 }
 
 inline fn parseMod(comptime mod: EffAdd) u8 {
-    return @intFromEnum(mod) * 0x40;
+    return @as(u8, @intCast(@intFromEnum(mod))) * 0x40;
 }
 
 inline fn parseModRM(
@@ -183,7 +233,141 @@ pub fn mov_eax_moffs32(write_at: usize, moffs32: usize) usize {
     return addr;
 }
 
-// mov r32, [esp+<delta>]
+// mov r/m32 imm32
+pub fn mov_espoff_imm32(write_at: usize, off8: u8, imm32: u32) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xC7);
+    addr = mem.write(addr, u8, 0x44);
+    addr = mem.write(addr, u8, 0x24);
+    addr = mem.write(addr, u8, off8);
+    addr = mem.write(addr, u32, imm32);
+    return addr;
+}
+
+/// mov r32(@dst), r/m32(@src)
+/// mov reg, reg
+pub fn mov_r32_rm32(write_at: usize, comptime dst: GenReg32, comptime src: GenReg32) usize {
+    return op_modRM(write_at, 0x8B, .reg, dst, src);
+}
+
+// TODO: handle mod 00 + r/m ebp case, where addressing becomes eip-relative and
+// a 4-byte displacement value is used (normally 0 bytes for mod 00)
+/// mov r32, r/m32 (with offset)
+/// mov reg, [reg + offset]
+pub fn mov_r32_rm32o(
+    write_at: usize,
+    comptime dst: GenReg32,
+    comptime src: GenReg32,
+    comptime T: type,
+    disp: T,
+) usize {
+    if (src == .esp) @compileError("use mov_r32_rm32so for esp src (uses SIB)");
+    const ea = comptime parseEffAddFromDispType(T);
+    var addr = write_at;
+    addr = op_modRM(addr, 0x8B, ea, dst, src);
+    addr = mem.write(addr, T, disp);
+    return addr;
+}
+
+test "mov_r32_rm32o" {
+    const test_cases = [_]struct { GenReg32, GenReg32, type, i32, []const u8 }{
+        .{ .ebp, .ebp, i8, 4, &[_]u8{ 0x8B, 0x6D, 0x04 } },
+        .{ .esp, .eax, i32, 400, &[_]u8{ 0x8B, 0xA0, 0x90, 0x01, 0x00, 0x00 } },
+        .{ .ebx, .ecx, i32, 400000, &[_]u8{ 0x8B, 0x99, 0x80, 0x1A, 0x06, 0x00 } },
+        .{ .ecx, .esi, i32, 0x2D8, &[_]u8{ 0x8B, 0x8E, 0xD8, 0x02, 0x00, 0x00 } },
+        .{ .ecx, .esi, i8, 0x0F, &[_]u8{ 0x8B, 0x4E, 0x0F } },
+    };
+
+    var output: [8]u8 = undefined;
+    errdefer std.debug.print("\n", .{});
+    inline for (test_cases, 0..) |t, i| {
+        const expected = t[4];
+        const output_s = output[0..expected.len];
+        errdefer std.debug.print("FAILED {d:0>2} :: i: mov {s}, [{s} + {d}]  o: {s}  e: {s}\n", .{
+            i, @tagName(t[0]), @tagName(t[1]), t[3], fmtSliceHexUpper(output_s), fmtSliceHexUpper(expected),
+        });
+        _ = mov_r32_rm32o(@intFromPtr(&output), t[0], t[1], t[2], t[3]);
+        try std.testing.expectEqualSlices(u8, expected, output_s);
+    }
+}
+
+// FIXME: remove once `mov_r32_rm32o` fixed
+// NOTE: normally, MOD 00 means the displacement is 0 bytes; when R/M part is
+// ebp (101), addressing becomes EIP-relative with 4-byte displacement value
+// WARN: depends on incomplete behaviour of `mov_r32_rm32o` (see test)
+/// mov @dst, [disp]
+pub fn mov_r32_disp(write_at: usize, comptime dst: GenReg32, disp: i32) usize {
+    var addr = write_at;
+    addr = mov_r32_rm32o(addr, dst, .ebp, i0, 0);
+    addr = mem.write(addr, i32, disp);
+    return addr;
+}
+
+// should fail once `mov_r32_rm32o` behaviour fixed
+test "mov_r32_disp" {
+    var output: [6]u8 = undefined;
+    const expected: []const u8 = &[_]u8{ 0x8B, 0x15, 0xDD, 0xCC, 0xBB, 0xAA };
+    _ = mov_r32_disp(@intFromPtr(&output), .edx, @bitCast(@as(u32, 0xAABBCCDD)));
+    try std.testing.expectEqualSlices(u8, expected, &output);
+}
+
+// FIXME: match structure with non-so version, this one is lagging behind
+// TODO: figure out how to represent SIB; so far, value seems to be determined
+// by the CPU state, so it seems like you can't just generate it without the
+// user basically specifying the whole thing manually?
+// SIB
+// - output = [[BASE] + [INDEX]*SCALAR + DISP]
+// - if BASE==ebp and MOD==00, DISP byte size is 4, else MOD determines size
+//      00->0,  01->1,  10->4
+// - if BASE==ebp and MOD==00, BASE part is removed (becomes 0)
+// - if INDEX==esp, SCALAR is 0 (index removed), else [INDEX]*scalar
+/// mov r32, r/m32 (with offset)
+/// mov reg, [esp + offset]
+/// version for ESP with SIB-related options
+pub fn mov_r32_rm32so(
+    write_at: usize,
+    comptime dst: GenReg32,
+    comptime src: GenReg32,
+    disp: i32,
+) usize {
+    assert(false); // implementation not complete
+    if (src != .esp) @compileError("use mov_r32_rm32o for non-esp src");
+    const disp_bytes: u3 = @intCast((32 - @clz(disp) + 7) % 8);
+    const ea = parseEffAddFromDispSize(disp_bytes);
+    var addr = write_at;
+    addr = op_modRM(addr, 0x8B, ea, dst, src);
+    addr = mem.write(addr, u8, 0x00); // TODO: SIB generation
+    addr = switch (ea) {
+        .mem8 => mem.write(addr, i8, @intCast(disp)),
+        .mem32 => mem.write(addr, i32, @intCast(disp)),
+        else => null,
+    };
+    return addr;
+}
+
+// FIXME: impl alongside function
+//test "mov_r32_rm32so" {
+//    const test_cases = [_]struct { GenReg32, GenReg32, type, i32, []const u8 }{
+//        .{ .ebx, .esp, i32, 400000, &[_]u8{ 0x8B, 0x9C, 0x24, 0x80, 0x1A, 0x06, 0x00 } },
+//        .{ .ebx, .ecx, i32, 0x400000, &[_]u8{ 0x8B, 0x99, 0x00, 0x00, 0x00, 0x40, 0x00 } },
+//    };
+//
+//    var output: [8]u8 = undefined;
+//    errdefer std.debug.print("\n", .{});
+//    inline for (test_cases, 0..) |t, i| {
+//        const expected = t[4];
+//        const output_s = output[0..expected.len];
+//        errdefer std.debug.print("FAILED {d:0>2} :: i: mov {s}, [{s} + {d}]  o: {s}  e: {s}\n", .{
+//            i, @tagName(t[0]), @tagName(t[1]), t[3], fmtSliceHexUpper(output_s), fmtSliceHexUpper(expected),
+//        });
+//        _ = mov_r32_rm32so(@intFromPtr(&output), t[0], t[1], t[2], t[3]);
+//        try std.testing.expectEqualSlices(u8, expected, output_s);
+//    }
+//}
+
+// FIXME: this does part of the (planned) functionality of `mov_r32_rm32so`, should
+// remove once that's sorted
+/// mov r32, [esp+<delta>]
 pub fn mov_r32_esp_add(write_at: usize, r32: u8, delta: i8) usize {
     // values less than zero have the upper bit set
     var delta_u8: u8 = @bitCast(delta);
@@ -209,47 +393,6 @@ pub fn mov_ecx_esp_add(write_at: usize, delta: i8) usize {
 
 pub fn mov_edx_esp_add(write_at: usize, delta: i8) usize {
     return mov_r32_esp_add(write_at, 0x54, delta);
-}
-
-// mov r/m32 imm32
-pub fn mov_espoff_imm32(write_at: usize, off8: u8, imm32: u32) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0xC7);
-    addr = mem.write(addr, u8, 0x44);
-    addr = mem.write(addr, u8, 0x24);
-    addr = mem.write(addr, u8, off8);
-    addr = mem.write(addr, u32, imm32);
-    return addr;
-}
-
-// TODO: impl different offset sizes (not just .reg)?? afaik should be same as
-// `mov_rm32_r32` but modRM instead of modMR; both are incomplete (other is newer)?
-/// mov r32(@dst), r/m32(@src)
-pub fn mov_r32_rm32(write_at: usize, r32: u8, comptime T: type, rm32: T) usize {
-    assert(T == u8 or T == u32);
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0x8B);
-    addr = mem.write(addr, u8, r32);
-    addr = mem.write(addr, T, rm32);
-    return addr;
-}
-
-pub fn mov_eax_esp(write_at: usize) usize {
-    return mov_rm32_r32(write_at, .eax, .esp);
-}
-
-// actually, register + u32 offset
-pub fn mov_ecx_u32(write_at: usize, u: u32) usize {
-    return mov_r32_rm32(write_at, 0x8E, u32, u);
-}
-
-// actually, register + u8 offset
-pub fn mov_ecx_b(write_at: usize, b: u8) usize {
-    return mov_r32_rm32(write_at, 0x4E, u8, b);
-}
-
-pub fn mov_edx(write_at: usize, value: u32) usize {
-    return mov_r32_rm32(write_at, 0x15, u32, value);
 }
 
 // TODO: impl different offset sizes? (not just .reg)

@@ -21,6 +21,8 @@ const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
 // https://www.c-jump.com/CIS77/CPU/x86/lecture.html
 // http://ref.x86asm.net/coder32.html
 // https://pnx.tf/files/x86_opcode_structure_and_instruction_overview.pdf
+// https://disasm.pro/
+// https://godbolt.org/
 
 const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
 const OpEn = enum { mem, reg, imm, zo }; // operator encoding
@@ -211,32 +213,18 @@ pub inline fn op_modMR(
 
 // stuff
 
-fn parseAddOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bit: bool) u8 {
+fn parseAddSubOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bit: bool) u8 {
     const op_size = parseOperandSize(n, b_use_16bit);
     if (b_ptr or (base == 0x83 and op_size == 1)) return op_size;
     return @as(u8, 1) << dst.RegTypeIndex();
 }
 
-// TODO: determine if BYTE PTRs actually have to use the low byte as the base in
-// valid assembly, and remove the limitation if not
-/// https://www.felixcloutier.com/x86/add
-/// add instruction
-/// - register widths must match (e.g. @dst==.ah, @src==.bx)
-/// - if adding immediate value, will be truncated to @dst register width
-/// @dst    op1 reg
-/// @v1     op1 offset when dereferencing op1 as r/m, else null
-/// @src    op2 reg
-/// @v2     op2 offset when dereferencing op2 as r/m, or immediate value when op2 is imm, else null
-/// examples:
-/// ADD EAX, EBX                    add(<addr>, .eax, null, .ebx, null) // (r, r/m)
-/// ADD EAX, [EBX]                  add(<addr>, .eax, null, .ebx, 0)    // (r, r/m) with deref
-/// ADD [EAX], EBX                  add(<addr>, .eax,    0, .ebx, null) // (r/m, r)
-/// ADD EAX, [EBX+4]                add(<addr>, .eax, null, .ebx, 4)    // (r, r/m) with deref and offset
-/// ADD EAX, 4                      add(<addr>, .eax, null, .imm, 4)    // (r/m, imm)
-/// ADD [EAX+4], 4                  add(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
-/// ADD AL, BYTE PTR [EBX+4]        add(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
-/// ADD WORD PTR [EBX+0xF0], 0xFF   add(<addr>, .bx, 0xF0, .imm, 0xFF)
-pub fn add(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+// TODO: look into accepting register width mismatch; doesn't always result in
+// different output, need to decide if i want registers promoted implicitly
+//   see disasm.pro:   add [ebx+5], cl   VS   add [bx+5], cl   VS   add [bl+5], cl
+// FIXME: impl SIB byte output, needed for non-low BYTE PTR output; see [ah] case
+// in add tests (commented), likely also need tests for [sp], [esp]
+pub fn AddSub(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, comptime V_BASE: u8, comptime V_EXT: u3) usize {
     const dst_t = dst.RegType();
     const src_t = src.RegType();
     const dst_ri = dst.RegIndex();
@@ -254,24 +242,25 @@ pub fn add(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize 
     const b_mod_ext = (src_t == .imm and !b_a_reg);
     const b_ptr = (v1 != null or (src_t != .imm and v2 != null));
 
-    var base: u8 = 0;
-    if (src_t == .imm)
-        base |= if (b_a_reg) 0b00000100 else 0b10000000; // 0b100 if dst == reg AL/AX/EAX
+    var base: u8 = if (src_t == .imm) base: {
+        if (b_a_reg) break :base V_BASE | 0b00000100;
+        break :base 0b10000000;
+    } else V_BASE;
     if (!b_8bit)
         base |= 0b00000001;
     if (b_r_rm or (base == 0x81 and v2.? >= -127 and v2.? <= 128))
         base |= 0b00000010;
 
-    const v1_s: u8 = if (v1) |v| parseAddOperandSize(v, base, dst, b_ptr, b_16bit and src_t != .imm) else 0;
+    const v1_s: u8 = if (v1) |v| parseAddSubOperandSize(v, base, dst, b_ptr, b_16bit and src_t != .imm) else 0;
     const v1_b: ?[]const u8 = if (v1) |*v| @as([*]const u8, @ptrCast(v))[0..4] else null;
-    const v2_s: u8 = if (v2) |v| parseAddOperandSize(v, base, dst, b_ptr, b_16bit) else 0;
+    const v2_s: u8 = if (v2) |v| parseAddSubOperandSize(v, base, dst, b_ptr, b_16bit) else 0;
     const v2_b: ?[]const u8 = if (v2) |*v| @as([*]const u8, @ptrCast(v))[0..4] else null;
 
     const mod_rm: ?ModRM = if (base & 0b100 == 0) mod_rm: {
         var mod: ModRM = undefined;
         if (b_r_rm) mod = ModRM.Make(Addressing.FromLength(if (v2) |_| v2_s else null), dst, src);
         if (!b_r_rm) mod = ModRM.Make(Addressing.FromLength(if (v1) |_| v1_s else null), src, dst);
-        if (b_mod_ext) mod.reg = 0;
+        if (b_mod_ext) mod.reg = V_EXT;
         break :mod_rm mod;
     } else null;
 
@@ -284,6 +273,27 @@ pub fn add(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize 
     return addr;
 }
 
+/// https://www.felixcloutier.com/x86/add
+/// add instruction
+/// - register widths must match (e.g. @dst==.ah, @src==.bx)
+/// - immediate value will be truncated to @dst register width
+/// @dst    op1 reg
+/// @v1     op1 offset when dereferencing op1 as r/m, else null
+/// @src    op2 reg
+/// @v2     op2 offset when dereferencing op2 as r/m, or immediate value when op2 is imm, else null
+/// examples:
+/// ADD EAX, EBX                    add(<addr>, .eax, null, .ebx, null) // (r, r/m)
+/// ADD EAX, [EBX]                  add(<addr>, .eax, null, .ebx, 0)    // (r, r/m) with deref
+/// ADD [EAX], EBX                  add(<addr>, .eax,    0, .ebx, null) // (r/m, r)
+/// ADD EAX, [EBX+4]                add(<addr>, .eax, null, .ebx, 4)    // (r, r/m) with deref and offset
+/// ADD EAX, 4                      add(<addr>, .eax, null, .imm, 4)    // (r/m, imm)
+/// ADD [EAX+4], 4                  add(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
+/// ADD AL, BYTE PTR [EBX+4]        add(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
+/// ADD WORD PTR [EBX+0xF0], 0xFF   add(<addr>, .bx, 0xF0, .imm, 0xFF)
+pub inline fn add(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return AddSub(write_at, dst, v1, src, v2, 0x00, 0b000);
+}
+
 test "add" {
     const test_cases = [_]struct { GenReg, ?i32, GenReg, ?i32, []const u8 }{
         // zig fmt: off
@@ -293,6 +303,8 @@ test "add" {
         .{  .al, null,  .ah, null, &[_]u8{       0x00, 0xE0,                                                } },
         .{  .al, 0x0F,  .cl, null, &[_]u8{       0x00, 0x48, 0x0F                                           } },
         .{  .al, 0xFF,  .cl, null, &[_]u8{       0x00, 0x88, 0xFF, 0x00, 0x00, 0x00                         } },
+        //.{  .ah, 0x0F,  .cl, null, &[_]u8{       0x00, 0x4C, 0x24, 0x0F                                     } },
+        //.{  .bh, 0x0F,  .cl, null, &[_]u8{       0x00, 0x4F, 0x0F                                           } },
         .{  .bl, null,  .ch, null, &[_]u8{       0x00, 0xEB,                                                } },
         .{  .bl, 0xF0, .imm, 0x0F, &[_]u8{       0x80, 0x83, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
         .{  .ax, null, .imm, 0xF0, &[_]u8{ 0x66, 0x05,       0xF0, 0x00,                                    } },
@@ -333,13 +345,67 @@ test "add" {
     }
 }
 
-pub fn sub_rm32_imm8(write_at: usize, rm32: u8, imm8: i8) usize {
-    const imm8_u8: u8 = @bitCast(imm8);
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0x83);
-    addr = mem.write(addr, u8, rm32);
-    addr = mem.write(addr, u8, imm8_u8);
-    return addr;
+/// https://www.felixcloutier.com/x86/sub
+/// sub instruction
+/// - register widths must match (e.g. @dst==.ah, @src==.bx)
+/// - immediate value will be truncated to @dst register width
+/// @dst    op1 reg
+/// @v1     op1 offset when dereferencing op1 as r/m, else null
+/// @src    op2 reg
+/// @v2     op2 offset when dereferencing op2 as r/m, or immediate value when op2 is imm, else null
+/// examples:
+/// SUB EAX, EBX                    sub(<addr>, .eax, null, .ebx, null) // (r, r/m)
+/// SUB EAX, [EBX]                  sub(<addr>, .eax, null, .ebx, 0)    // (r, r/m) with deref
+/// SUB [EAX], EBX                  sub(<addr>, .eax,    0, .ebx, null) // (r/m, r)
+/// SUB EAX, [EBX+4]                sub(<addr>, .eax, null, .ebx, 4)    // (r, r/m) with deref and offset
+/// SUB EAX, 4                      sub(<addr>, .eax, null, .imm, 4)    // (r/m, imm)
+/// SUB [EAX+4], 4                  sub(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
+/// SUB AL, BYTE PTR [EBX+4]        sub(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
+/// SUB WORD PTR [EBX+0xF0], 0xFF   sub(<addr>, .bx, 0xF0, .imm, 0xFF)
+pub inline fn sub(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return AddSub(write_at, dst, v1, src, v2, 0x28, 0b101);
+}
+
+test "sub" {
+    const test_cases = [_]struct { GenReg, ?i32, GenReg, ?i32, []const u8 }{
+        // zig fmt: off
+        .{  .al, null, .imm, 0xF0, &[_]u8{       0x2C,       0xF0,                                          } },
+        .{  .ah, null, .imm, 0xF0, &[_]u8{       0x80, 0xEC, 0xF0,                                          } },
+        .{  .al, null,  .ah, null, &[_]u8{       0x28, 0xE0,                                                } },
+        .{  .al, 0x0F,  .cl, null, &[_]u8{       0x28, 0x48, 0x0F                                           } },
+        .{  .al, 0xFF,  .cl, null, &[_]u8{       0x28, 0x88, 0xFF, 0x00, 0x00, 0x00                         } },
+        .{  .bl, null,  .ch, null, &[_]u8{       0x28, 0xEB,                                                } },
+        .{  .bl, 0xF0, .imm, 0x0F, &[_]u8{       0x80, 0xAB, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
+        .{  .ax, null, .imm, 0xF0, &[_]u8{ 0x66, 0x2D,       0xF0, 0x00,                                    } },
+        .{  .bx, null, .imm, 0xF0, &[_]u8{ 0x66, 0x81, 0xEB, 0xF0, 0x00,                                    } },
+        .{  .ax, null,  .bx, null, &[_]u8{ 0x66, 0x29, 0xD8                                                 } },
+        .{  .bx, 0xF0, .imm, 0x0F, &[_]u8{ 0x66, 0x83, 0xAB, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
+        .{  .bx, 0xF0, .imm, 0xFF, &[_]u8{ 0x66, 0x81, 0xAB, 0xF0, 0x00, 0x00, 0x00, 0xFF, 0x00             } },
+        .{ .eax, null, .imm, 0xF0, &[_]u8{       0x2D,       0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .ebx, null, .imm, 0xF0, &[_]u8{       0x81, 0xEB, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .ebp, null, .ebp, 0xF0, &[_]u8{       0x2B, 0xAD, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .eax, null, .ebp, 0xF0, &[_]u8{       0x2B, 0x85, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .eax, 0xF0, .ebp, null, &[_]u8{       0x29, 0xA8, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .eax, 0xF0, .imm, 0xFF, &[_]u8{       0x81, 0xA8, 0xF0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00 } },
+        .{ .eax, 0xF0, .imm, 0x0F, &[_]u8{       0x83, 0xA8, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
+        .{ .ebx, null, .eax, null, &[_]u8{       0x29, 0xC3                                                 } },
+        .{ .ebx, null, .imm, 0x7F, &[_]u8{       0x83, 0xEB, 0x7F                                           } },
+        .{ .ebx, 0xF0, .ebx, null, &[_]u8{       0x29, 0x9B, 0xF0, 0x00, 0x00, 0x00                         } },
+        // zig fmt: on
+    };
+
+    var output: [12]u8 = undefined;
+    const output_a = @intFromPtr(&output);
+    inline for (test_cases, 0..) |t, i| {
+        errdefer std.debug.print("FAILED {d:0>2} :: sub(<addr>, .{s}, {?d}, .{s}, {?d})\n\n", .{
+            i, @tagName(t[0]), t[1], @tagName(t[2]), t[3], 
+        });
+        const expected = t[4];
+        const output_len = sub(@intFromPtr(&output), t[0], t[1], t[2], t[3]) - output_a;
+        const output_s = output[0..output_len];
+        try std.testing.expectEqualSlices(u8, expected, output_s);
+        try std.testing.expectEqual(expected.len, output_len);
+    }
 }
 
 pub fn test_rm32_r32(write_at: usize, r32: u8) usize {

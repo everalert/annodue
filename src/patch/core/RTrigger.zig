@@ -202,9 +202,9 @@ const CustomTrigger = struct {
     const buf = struct {
         var init: [32]u8 = undefined;
         var destroy: [32]u8 = undefined;
-        const d_ins = [_]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 }; // cmp dword ptr [esi+08], 0x1F5 (501)
+        const d_ins = [7]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 }; // cmp dword ptr [esi+08], 0x1F5 (501)
         var update: [48]u8 = undefined;
-        const u_ins = [_]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 }; // cmp eax, 0x134 (308)
+        const u_ins = [5]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 }; // cmp eax, 0x134 (308)
     };
 
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
@@ -227,7 +227,7 @@ const CustomTrigger = struct {
         // destroy
         x86.detour_start(&d, 0x47C4D9, 0x47C4E0, &buf.destroy);
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookDestroy), &[_]x86.PushSrc{.{ .r32 = .esi }});
-        d.addr = mem.write_bytes(d.addr, &buf.d_ins, 7);
+        d.addr = mem.write_bytes(d.addr, &buf.d_ins);
         x86.detour_end(&d);
 
         // update
@@ -235,7 +235,7 @@ const CustomTrigger = struct {
         d.addr = x86.reg_save(d.addr, .eax, .ebp); // TODO: is this detour meant to replace a function body?
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.reg_restore(d.addr, .eax, .ebp);
-        d.addr = mem.write_bytes(d.addr, &buf.u_ins, 5);
+        d.addr = mem.write_bytes(d.addr, &buf.u_ins);
         x86.detour_end(&d);
     }
 
@@ -254,10 +254,10 @@ const CustomTrigger = struct {
         _ = x86.cdecl_call(0x47D397, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
 
         // destroy
-        _ = mem.write_bytes(0x47C4D9, &buf.d_ins, 7);
+        _ = mem.write_bytes(0x47C4D9, &buf.d_ins);
 
         // update
-        _ = mem.write_bytes(0x47C51B, &buf.u_ins, 5);
+        _ = mem.write_bytes(0x47C51B, &buf.u_ins);
     }
 
     fn settingsInit(gf: *GlobalFn) void {

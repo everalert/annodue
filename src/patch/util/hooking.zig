@@ -38,9 +38,9 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
     _ = x86.nop_until(off_hook, addr_detour + len);
 
     if (dest_before) |dest| off = x86.call(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, &scratch[0], off_call);
+    off = mem.write_bytes(off, scratch[0..off_call]);
     off = x86.call(off, call_target);
-    off = mem.write_bytes(off, &scratch[off_call + 5], len - off_call - 5);
+    off = mem.write_bytes(off, scratch[off_call + 5 .. len]);
     if (dest_after) |dest| off = x86.call(off, @intFromPtr(dest));
     off = x86.jmp(off, addr_detour + len);
     off = x86.nop_align(off, ALIGN_SIZE);
@@ -63,7 +63,7 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
     _ = x86.nop_until(off_hook, addr + len);
 
     if (dest_before) |dest| off = x86.jmp(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, &scratch, len);
+    off = mem.write_bytes(off, scratch[0..len]);
     if (dest_after) |dest| off = x86.jmp(off, @intFromPtr(dest));
     off = x86.retn(off);
     off = x86.nop_align(off, ALIGN_SIZE);

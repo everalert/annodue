@@ -3,6 +3,8 @@ pub const Self = @This();
 const std = @import("std");
 const win = std.os.windows;
 
+// TODO: write page protection for reading functions too? for api symmetry
+
 // TODO: experiment with unprotected/raw memory access without the bullshit
 // - switching to PAGE_EXECUTE_READWRITE is required
 // - maybe add fns: write_unsafe, write_unsafe_enable, write_unsafe_disable ?
@@ -22,28 +24,25 @@ const win = std.os.windows;
 
 pub fn write(offset: usize, comptime T: type, value: T) usize {
     if (@bitSizeOf(T) == 0) return offset;
-    const addr: [*]align(1) T = @ptrFromInt(offset);
-    const data: [1]T = [1]T{value};
-    var protect: win.DWORD = undefined;
-    _ = win.VirtualProtect(addr, @sizeOf(T), win.PAGE_EXECUTE_READWRITE, &protect) catch
-        @panic("failed to set PAGE_EXECUTE_READWRITE for memory write operation");
-    @memcpy(addr, &data);
-    _ = win.VirtualProtect(addr, @sizeOf(T), protect, &protect) catch
-        @panic("failed to restore previous protection after memory write operation");
+    const addr: [*]align(1) u8 = @ptrFromInt(offset);
+    const data: []const u8 = @as([*]const u8, @ptrCast(&value))[0..@sizeOf(T)];
+    write_unprotected(addr, data);
     return offset + @sizeOf(T);
 }
 
-// FIXME: convert to slice input
-pub fn write_bytes(offset: usize, ptr_in: ?*const anyopaque, len: usize) usize {
+pub fn write_bytes(offset: usize, data: []const u8) usize {
     const addr: [*]align(1) u8 = @ptrFromInt(offset);
-    const data: []const u8 = @as([*]const u8, @ptrCast(ptr_in))[0..len];
+    write_unprotected(addr, data);
+    return offset + data.len;
+}
+
+fn write_unprotected(dst: [*]u8, src: []const u8) void {
     var protect: win.DWORD = undefined;
-    _ = win.VirtualProtect(addr, len, win.PAGE_EXECUTE_READWRITE, &protect) catch
-        @panic("failed to set PAGE_EXECUTE_READWRITE for memory write_bytes operation");
-    @memcpy(addr, data);
-    _ = win.VirtualProtect(addr, len, protect, &protect) catch
-        @panic("failed to restore previous protection after memory write_bytes operation");
-    return offset + len;
+    _ = win.VirtualProtect(dst, src.len, win.PAGE_EXECUTE_READWRITE, &protect) catch
+        @panic("failed to set PAGE_EXECUTE_READWRITE for memory write operation");
+    defer _ = win.VirtualProtect(dst, src.len, protect, &protect) catch
+        @panic("failed to restore previous protection after memory write operation");
+    @memcpy(dst, src);
 }
 
 pub fn read(offset: usize, comptime T: type) T {

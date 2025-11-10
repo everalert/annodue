@@ -159,7 +159,7 @@ pub inline fn op_r16(
     comptime base: u8,
     reg: GenReg16,
 ) usize {
-    return mem.write_bytes(write_at, &[2]u8{ 0x66, base + @intFromEnum(reg) }, 2);
+    return mem.write_bytes(write_at, &[2]u8{ 0x66, base + @intFromEnum(reg) });
 }
 
 pub inline fn op_r32(
@@ -175,7 +175,7 @@ pub inline fn op_imm8(
     comptime op: u8,
     value: u8,
 ) usize {
-    return mem.write_bytes(write_at, &[2]u8{ op, value }, 2);
+    return mem.write_bytes(write_at, &[2]u8{ op, value });
 }
 
 pub inline fn op_imm32(
@@ -279,8 +279,8 @@ pub fn add(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize 
     addr = if (b_16bit) mem.write(addr, u8, 0x66) else addr;
     addr = mem.write(addr, u8, base);
     addr = if (mod_rm) |m| mem.write(addr, u8, @as(u8, @bitCast(m))) else addr;
-    addr = if (v1_b) |b| mem.write_bytes(addr, b.ptr, v1_s) else addr;
-    addr = if (v2_b) |b| mem.write_bytes(addr, b.ptr, v2_s) else addr;
+    addr = if (v1_b) |b| mem.write_bytes(addr, b[0..v1_s]) else addr;
+    addr = if (v2_b) |b| mem.write_bytes(addr, b[0..v2_s]) else addr;
     return addr;
 }
 
@@ -639,8 +639,8 @@ pub inline fn push(write_at: usize, src: PushSrc) usize {
             .ss => mem.write(write_at, u8, 0x16),
             .ds => mem.write(write_at, u8, 0x1E),
             .es => mem.write(write_at, u8, 0x06),
-            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA0 }, 2),
-            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA8 }, 2),
+            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA0 }),
+            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA8 }),
         },
     }
 }
@@ -656,8 +656,8 @@ pub inline fn pop(write_at: usize, dest: PopDest) usize {
             .ds => mem.write(write_at, u8, 0x1F),
             .es => mem.write(write_at, u8, 0x07),
             .ss => mem.write(write_at, u8, 0x17),
-            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA1 }, 2),
-            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA9 }, 2),
+            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA1 }),
+            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA9 }),
             else => @panic("pop(): invalid segment register"),
         },
     }

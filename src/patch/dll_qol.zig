@@ -633,7 +633,7 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         }, 10); // set timer to how it would be at the end of running normally
         off = x86.nop_until(off, 0x435B87); // skip everything until part where state is changed
     } else {
-        _ = mem.write_bytes(0x435B6D, &[_]u8{ // original logic decrementing and checking timer
+        _ = mem.write_bytes(0x435B6D, &[26]u8{ // original logic decrementing and checking timer
             0x68, 0x33, 0x33, 0x53, 0xC0, 0xE8, 0x19, 0x40, 0x03, 0x00, 0xD8, 0x1D,
             0x78, 0xC7, 0x4A, 0x00, 0x83, 0xC4, 0x04, 0xDF, 0xE0, 0xF6, 0xC4, 0x40,
             0x74, 0x0A,

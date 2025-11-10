@@ -33,6 +33,7 @@ pub fn write(offset: usize, comptime T: type, value: T) usize {
     return offset + @sizeOf(T);
 }
 
+// FIXME: convert to slice input
 pub fn write_bytes(offset: usize, ptr_in: ?*const anyopaque, len: usize) usize {
     const addr: [*]align(1) u8 = @ptrFromInt(offset);
     const data: []const u8 = @as([*]const u8, @ptrCast(ptr_in))[0..len];

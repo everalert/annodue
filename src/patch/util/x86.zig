@@ -9,10 +9,18 @@ const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
 // NOTE: supporting x86 only, not x86_64
 // FIXME: cut down on comptime requirements as much as possible (to reduce
 // function coloring)
+// FIXME: values are "type-less" because two's complement makes signed/unsigned
+// the same at bit-level; what convention should be used to allow user to use
+// both iN/uN types? or is it ok to just let them spam `@bitCast`?
+// - for now, defaulting to signed types because pointer offsets are signed
 
+// references
 // https://wiki.osdev.org/X86-64_Instruction_Encoding
 // https://sandpile.org/x86/opc_rm.htm
-// https://www.c-jump.com/CIS77/CPU/x86/X77_0100_sib_byte_layout.htm
+// https://sandpile.org/x86/opc_enc.htm
+// https://www.c-jump.com/CIS77/CPU/x86/lecture.html
+// http://ref.x86asm.net/coder32.html
+// https://pnx.tf/files/x86_opcode_structure_and_instruction_overview.pdf
 
 const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
 const OpEn = enum { mem, reg, imm, zo }; // operator encoding
@@ -24,17 +32,60 @@ const GenReg8 = enum(u3) { al, cl, dl, bl, ah, ch, dh, bh };
 const GenReg16 = enum(u3) { ax, cx, dx, bx, sp, bp, si, di };
 const GenReg32 = enum(u3) { eax, ecx, edx, ebx, esp, ebp, esi, edi };
 
-// NOTE: meaning of r1/r2 reversed in MR-encoded operands
-const ModRM = packed struct(u8) {
-    mod: EffAdd,
-    r1: GenReg32, // r
-    r2: GenReg32, // r/m
+const GenReg = enum(u5) {
+    const Type = enum(u2) { r8, r16, r32, imm };
+
+    // zig fmt: off
+     al = 0o00,  cl = 0o01,  dl = 0o02,  bl = 0o03,  ah = 0o04,  ch = 0o05,  dh = 0o06,  bh = 0o07,
+     ax = 0o10,  cx = 0o11,  dx = 0o12,  bx = 0o13,  sp = 0o14,  bp = 0o15,  si = 0o16,  di = 0o17,
+    eax = 0o20, ecx = 0o21, edx = 0o22, ebx = 0o23, esp = 0o24, ebp = 0o25, esi = 0o26, edi = 0o27,
+    imm = 0o30,
+    // zig fmt: on
+
+    pub fn RegType(r: GenReg) Type {
+        return @enumFromInt(r.RegTypeIndex());
+    }
+
+    pub fn RegTypeIndex(r: GenReg) u2 {
+        return @truncate(@as(u5, @intFromEnum(r)) >> 3);
+    }
+
+    pub fn RegIndex(r: GenReg) u3 {
+        return @truncate(@as(u5, @intFromEnum(r)));
+    }
+};
+
+// FIXME: merge with EffAdd; this is the same thing, but with better tag names
+const Addressing = enum(u2) {
+    disp0 = 0,
+    disp8 = 1,
+    disp32 = 2,
+    reg = 3,
+
+    pub fn FromLength(length: ?u8) Addressing {
+        return if (length) |l| switch (l) {
+            0 => .disp0,
+            1 => .disp8,
+            2, 4 => .disp32,
+            else => @panic("invalid value"),
+        } else .reg;
+    }
+};
+
+pub const ModRM = packed struct(u8) {
+    rm: u3,
+    reg: u3,
+    mod: u2,
+
+    pub fn Make(mod: Addressing, reg: GenReg, rm: GenReg) ModRM {
+        return ModRM{ .mod = @intFromEnum(mod), .reg = reg.RegIndex(), .rm = rm.RegIndex() };
+    }
 };
 
 const SIB = packed struct(u8) {
     s: u2, // scale (1<<s)
-    i: GenReg32, // index
-    b: GenReg32, // base
+    i: u3, // index register
+    b: u3, // base register
 };
 
 // helpers
@@ -67,6 +118,12 @@ inline fn parseDispTypeFromEffAdd(comptime ea: EffAdd) type {
         .mem32 => i32,
         .reg => null,
     };
+}
+
+fn parseOperandSize(n: i32, use_16bit: bool) u8 {
+    if (n >= std.math.minInt(i8) and n <= std.math.maxInt(i8)) return 1;
+    if (n >= std.math.minInt(i16) and n <= std.math.maxInt(i16) and use_16bit) return 2;
+    return 4;
 }
 
 inline fn parseRM(comptime reg: GenReg32) u8 {
@@ -154,12 +211,126 @@ pub inline fn op_modMR(
 
 // stuff
 
-pub fn add_rm32_imm8(write_at: usize, rm32: u8, imm8: u8) usize {
+fn parseAddOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bit: bool) u8 {
+    const op_size = parseOperandSize(n, b_use_16bit);
+    if (b_ptr or (base == 0x83 and op_size == 1)) return op_size;
+    return @as(u8, 1) << dst.RegTypeIndex();
+}
+
+// TODO: determine if BYTE PTRs actually have to use the low byte as the base in
+// valid assembly, and remove the limitation if not
+/// https://www.felixcloutier.com/x86/add
+/// add instruction
+/// - register widths must match (e.g. @dst==.ah, @src==.bx)
+/// - if adding immediate value, will be truncated to @dst register width
+/// @dst    op1 reg
+/// @v1     op1 offset when dereferencing op1 as r/m, else null
+/// @src    op2 reg
+/// @v2     op2 offset when dereferencing op2 as r/m, or immediate value when op2 is imm, else null
+/// examples:
+/// ADD EAX, EBX                    add(<addr>, .eax, null, .ebx, null) // (r, r/m)
+/// ADD EAX, [EBX]                  add(<addr>, .eax, null, .ebx, 0)    // (r, r/m) with deref
+/// ADD [EAX], EBX                  add(<addr>, .eax,    0, .ebx, null) // (r/m, r)
+/// ADD EAX, [EBX+4]                add(<addr>, .eax, null, .ebx, 4)    // (r, r/m) with deref and offset
+/// ADD EAX, 4                      add(<addr>, .eax, null, .imm, 4)    // (r/m, imm)
+/// ADD [EAX+4], 4                  add(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
+/// ADD AL, BYTE PTR [EBX+4]        add(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
+/// ADD WORD PTR [EBX+0xF0], 0xFF   add(<addr>, .bx, 0xF0, .imm, 0xFF)
+pub fn add(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    const dst_t = dst.RegType();
+    const src_t = src.RegType();
+    const dst_ri = dst.RegIndex();
+    const src_ri = src.RegIndex();
+    assert(dst_t != .imm);
+    assert(src_t == .imm or !(v1 != null and v2 != null)); // only one reg can deref
+    assert(src_t == .imm or dst_t == src_t); // register widths must match
+    assert(v1 == null or dst_t != .r8 or dst_ri < 4); // BYTE derefs must be low byte
+    assert(v2 == null or src_t != .r8 or src_ri < 4);
+
+    const b_8bit = (dst_t == .r8 or src_t == .r8);
+    const b_16bit = (dst_t == .r16 or src_t == .r16);
+    const b_r_rm = (src_t != .imm and v2 != null);
+    const b_a_reg = (dst_ri == 0 and v1 == null);
+    const b_mod_ext = (src_t == .imm and !b_a_reg);
+    const b_ptr = (v1 != null or (src_t != .imm and v2 != null));
+
+    var base: u8 = 0;
+    if (src_t == .imm)
+        base |= if (b_a_reg) 0b00000100 else 0b10000000; // 0b100 if dst == reg AL/AX/EAX
+    if (!b_8bit)
+        base |= 0b00000001;
+    if (b_r_rm or (base == 0x81 and v2.? >= -127 and v2.? <= 128))
+        base |= 0b00000010;
+
+    const v1_s: u8 = if (v1) |v| parseAddOperandSize(v, base, dst, b_ptr, b_16bit and src_t != .imm) else 0;
+    const v1_b: ?[]const u8 = if (v1) |*v| @as([*]const u8, @ptrCast(v))[0..4] else null;
+    const v2_s: u8 = if (v2) |v| parseAddOperandSize(v, base, dst, b_ptr, b_16bit) else 0;
+    const v2_b: ?[]const u8 = if (v2) |*v| @as([*]const u8, @ptrCast(v))[0..4] else null;
+
+    const mod_rm: ?ModRM = if (base & 0b100 == 0) mod_rm: {
+        var mod: ModRM = undefined;
+        if (b_r_rm) mod = ModRM.Make(Addressing.FromLength(if (v2) |_| v2_s else null), dst, src);
+        if (!b_r_rm) mod = ModRM.Make(Addressing.FromLength(if (v1) |_| v1_s else null), src, dst);
+        if (b_mod_ext) mod.reg = 0;
+        break :mod_rm mod;
+    } else null;
+
     var addr = write_at;
-    addr = mem.write(addr, u8, 0x83);
-    addr = mem.write(addr, u8, rm32);
-    addr = mem.write(addr, u8, imm8);
+    addr = if (b_16bit) mem.write(addr, u8, 0x66) else addr;
+    addr = mem.write(addr, u8, base);
+    addr = if (mod_rm) |m| mem.write(addr, u8, @as(u8, @bitCast(m))) else addr;
+    addr = if (v1_b) |b| mem.write_bytes(addr, b.ptr, v1_s) else addr;
+    addr = if (v2_b) |b| mem.write_bytes(addr, b.ptr, v2_s) else addr;
     return addr;
+}
+
+test "add" {
+    const test_cases = [_]struct { GenReg, ?i32, GenReg, ?i32, []const u8 }{
+        // zig fmt: off
+        // standard tests
+        .{  .al, null, .imm, 0xF0, &[_]u8{       0x04,       0xF0,                                          } },
+        .{  .ah, null, .imm, 0xF0, &[_]u8{       0x80, 0xC4, 0xF0,                                          } },
+        .{  .al, null,  .ah, null, &[_]u8{       0x00, 0xE0,                                                } },
+        .{  .al, 0x0F,  .cl, null, &[_]u8{       0x00, 0x48, 0x0F                                           } },
+        .{  .al, 0xFF,  .cl, null, &[_]u8{       0x00, 0x88, 0xFF, 0x00, 0x00, 0x00                         } },
+        .{  .bl, null,  .ch, null, &[_]u8{       0x00, 0xEB,                                                } },
+        .{  .bl, 0xF0, .imm, 0x0F, &[_]u8{       0x80, 0x83, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
+        .{  .ax, null, .imm, 0xF0, &[_]u8{ 0x66, 0x05,       0xF0, 0x00,                                    } },
+        .{  .bx, null, .imm, 0xF0, &[_]u8{ 0x66, 0x81, 0xC3, 0xF0, 0x00,                                    } },
+        .{  .ax, null,  .bx, null, &[_]u8{ 0x66, 0x01, 0xD8                                                 } },
+        .{  .bx, 0xF0, .imm, 0x0F, &[_]u8{ 0x66, 0x83, 0x83, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
+        .{  .bx, 0xF0, .imm, 0xFF, &[_]u8{ 0x66, 0x81, 0x83, 0xF0, 0x00, 0x00, 0x00, 0xFF, 0x00             } },
+        .{ .eax, null, .imm, 0xF0, &[_]u8{       0x05,       0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .ebx, null, .imm, 0xF0, &[_]u8{       0x81, 0xC3, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .ebp, null, .ebp, 0xF0, &[_]u8{       0x03, 0xAD, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .eax, null, .ebp, 0xF0, &[_]u8{       0x03, 0x85, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .eax, 0xF0, .ebp, null, &[_]u8{       0x01, 0xA8, 0xF0, 0x00, 0x00, 0x00                         } },
+        .{ .eax, 0xF0, .imm, 0xFF, &[_]u8{       0x81, 0x80, 0xF0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00 } },
+        .{ .eax, 0xF0, .imm, 0x0F, &[_]u8{       0x83, 0x80, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
+        .{ .ebx, null, .eax, null, &[_]u8{       0x01, 0xC3                                                 } },
+        .{ .ebx, null, .imm, 0x7F, &[_]u8{       0x83, 0xC3, 0x7F                                           } },
+        .{ .ebx, 0xF0, .ebx, null, &[_]u8{       0x01, 0x9B, 0xF0, 0x00, 0x00, 0x00                         } },
+        // migration cases
+        .{ .esp, null, .imm, 0x10,   &[_]u8{ 0x83, 0xC4, 0x10                   } },
+        .{ .esp, null, .imm, 0x20,   &[_]u8{ 0x83, 0xC4, 0x20                   } },
+        .{ .esp, null, .imm, 0x404,  &[_]u8{ 0x81, 0xC4, 0x04, 0x04, 0x00, 0x00 } },
+        .{ .esp, null, .imm, -0x400, &[_]u8{ 0x81, 0xC4, 0x00, 0xFC, 0xFF, 0xFF } },
+        .{ .esp, null, .imm, 0x4,    &[_]u8{ 0x83, 0xC4, 0x04                   } },
+        // zig fmt: on
+    };
+
+    var output: [12]u8 = undefined;
+    const output_a = @intFromPtr(&output);
+    inline for (test_cases, 0..) |t, i| {
+        errdefer std.debug.print("FAILED {d:0>2} :: add(<addr>, .{s}, {?d}, .{s}, {?d})\n\n", .{
+            i, @tagName(t[0]), t[1], @tagName(t[2]), t[3], 
+        });
+        const expected = t[4];
+        const output_len = add(@intFromPtr(&output), t[0], t[1], t[2], t[3]) - output_a;
+        const output_s = output[0..output_len];
+        try std.testing.expectEqualSlices(u8, expected, output_s);
+        try std.testing.expectEqual(expected.len, output_len);
+    }
 }
 
 pub fn sub_rm32_imm8(write_at: usize, rm32: u8, imm8: i8) usize {
@@ -169,22 +340,6 @@ pub fn sub_rm32_imm8(write_at: usize, rm32: u8, imm8: i8) usize {
     addr = mem.write(addr, u8, rm32);
     addr = mem.write(addr, u8, imm8_u8);
     return addr;
-}
-
-pub fn add_esp8(write_at: usize, value: u8) usize {
-    return add_rm32_imm8(write_at, 0xC4, value);
-}
-
-pub fn add_rm32_imm32(write_at: usize, rm32: u8, imm32: u32) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0x81);
-    addr = mem.write(addr, u8, rm32);
-    addr = mem.write(addr, u32, imm32);
-    return addr;
-}
-
-pub fn add_esp32(write_at: usize, value: u32) usize {
-    return add_rm32_imm32(write_at, 0xC4, value);
 }
 
 pub fn test_rm32_r32(write_at: usize, r32: u8) usize {
@@ -672,8 +827,9 @@ pub fn cdecl_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
             addr = push(addr, args[args.len - i - 1]);
     }
     addr = call(addr, fn_ptr);
-    if (arguments) |args|
-        addr = add_esp8(addr, @intCast(4 * args.len));
+    if (arguments) |args| 
+        addr = add(addr, .esp, null, .imm, @intCast(4 * args.len));
+    
     return addr;
 }
 

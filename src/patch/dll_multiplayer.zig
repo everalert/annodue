@@ -137,7 +137,7 @@ fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_he
     offset = x86.push(offset, .{ .r32 = .esi });
     offset = x86.push(offset, .{ .r32 = .edi });
     offset = x86.call(offset, 0x449D00); // ???
-    offset = x86.add_esp8(offset, 0x10);
+    offset = x86.add(offset, .esp, null, .imm, 0x10);
     offset = x86.pop(offset, .{ .r32 = .eax });
     offset = x86.pop(offset, .{ .r32 = .edx });
     offset = x86.retn(offset);

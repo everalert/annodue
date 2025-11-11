@@ -570,7 +570,7 @@ fn PatchTrugutsCheat(enable: bool) void {
     if (enable) {
         _ = mem.write(amount_addr, u32, 10000);
         var off: u32 = uses_addr;
-        off = mem.write_bytes(off, &[2]u8{ 0xEB, 0x26 }); // jmp short 0x410FB4; skip limit check
+        off = x86.jmp_rel(off, 0x410FB4); // skip limit check
         off = x86.nop_until(off, 0x410F90);
     } else {
         _ = mem.write(amount_addr, u32, 1000);

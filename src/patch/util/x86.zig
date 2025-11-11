@@ -5,6 +5,8 @@ const mem = @import("memory.zig");
 const assert = std.debug.assert;
 const bytesToHex = std.fmt.bytesToHex;
 const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
+const minInt = std.math.minInt;
+const maxInt = std.math.maxInt;
 
 // NOTE: supporting x86 only, not x86_64
 // TODO: change all usize to u32; ensures correct size of address-related params
@@ -492,7 +494,9 @@ inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE:
 // pub const xNG = xLE;
 // pub const xNLE = xG;
 
-inline fn Jcc(write_at: usize, jump_to: u32, cond: Condition) usize {
+/// Jcc - Jump if Condition Is Met
+/// Used via mnemonic-specific helpers JNZ, JE, etc.
+inline fn JccInstruction(write_at: usize, jump_to: u32, cond: Condition) usize {
     var offset: i32 = calcRelativeOffset(write_at, jump_to);
     // -2 forces size 4 if offset==-127 (adjustment is 2 bytes if short jump); forces size 1 if +129
     const offset_w: u8 = parseOperandSize(offset - 2, false);
@@ -517,13 +521,13 @@ test "Jcc" {
     const sl_6_o = buf_o[0..6];
 
     // behaviour (offsets)
-    _ = Jcc(addr_o, addr_max_o, .e); // jcc short positive
+    _ = JccInstruction(addr_o, addr_max_o, .e); // jcc short positive
     try std.testing.expectEqualSlices(u8, &[2]u8{0x74, 0x7F}, sl_2_o);
-    _ = Jcc(addr_o, addr_min_o, .e); // jcc short negative
+    _ = JccInstruction(addr_o, addr_min_o, .e); // jcc short negative
     try std.testing.expectEqualSlices(u8, &[2]u8{0x74, 0x80}, sl_2_o);
-    _ = Jcc(addr_o, addr_max_o + 1, .e); // jcc positive
+    _ = JccInstruction(addr_o, addr_max_o + 1, .e); // jcc positive
     try std.testing.expectEqualSlices(u8, &[6]u8{0x0F, 0x84, 0x7C, 0x00, 0x00, 0x00}, sl_6_o);
-    _ = Jcc(addr_o, addr_min_o - 1, .e); // jcc negative
+    _ = JccInstruction(addr_o, addr_min_o - 1, .e); // jcc negative
     try std.testing.expectEqualSlices(u8, &[6]u8{0x0F, 0x84, 0x7B, 0xFF, 0xFF, 0xFF}, sl_6_o);
     // behaviour (bases)
     _ = JO(addr_o, addr_max_o);
@@ -576,78 +580,128 @@ pub const JNG = JLE;
 pub const JNLE = JG;
 
 pub fn JO(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .o);
+    return JccInstruction(write_at, jump_to, .o);
 }
 
 pub fn JNO(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .no);
+    return JccInstruction(write_at, jump_to, .no);
 }
 
 pub fn JB(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .b);
+    return JccInstruction(write_at, jump_to, .b);
 }
 
 pub fn JNB(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .nb);
+    return JccInstruction(write_at, jump_to, .nb);
 }
 
 pub fn JE(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .e);
+    return JccInstruction(write_at, jump_to, .e);
 }
 
 pub fn JNE(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .ne);
+    return JccInstruction(write_at, jump_to, .ne);
 }
 
 pub fn JBE(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .be);
+    return JccInstruction(write_at, jump_to, .be);
 }
 
 pub fn JA(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .a);
+    return JccInstruction(write_at, jump_to, .a);
 }
 
 pub fn JS(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .s);
+    return JccInstruction(write_at, jump_to, .s);
 }
 
 pub fn JNS(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .ns);
+    return JccInstruction(write_at, jump_to, .ns);
 }
 
 pub fn JPE(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .pe);
+    return JccInstruction(write_at, jump_to, .pe);
 }
 
 pub fn JPO(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .po);
+    return JccInstruction(write_at, jump_to, .po);
 }
 
 pub fn JL(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .l);
+    return JccInstruction(write_at, jump_to, .l);
 }
 
 pub fn JGE(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .ge);
+    return JccInstruction(write_at, jump_to, .ge);
 }
 
 pub fn JLE(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .le);
+    return JccInstruction(write_at, jump_to, .le);
 }
 
 pub fn JG(write_at: usize, jump_to: usize) usize {
-    return Jcc(write_at, jump_to, .g);
+    return JccInstruction(write_at, jump_to, .g);
 }
 
-// TODO: generalized fn that automatically checks for short jumps, etc.
-// TODO: same for all jcc stuff
-// WARN: could underflow, but not likely for our use case i guess
-// jmp_rel32
-pub fn jmp(write_at: usize, jmp_addr: usize) usize {
+// TODO: generalized JMP; missing rm16/32 (FF /4), m16/32 (FF /5), ptr16/32
+// TODO: rename to JMP when above done
+/// JMP with D op/en only
+pub fn jmp_rel(write_at: usize, jump_to: usize) usize {
+    var offset: i32 = calcRelativeOffset(write_at, jump_to);
+    const offset_w: u8 = o: {
+        if (offset-2 >= minInt(i8) and offset-2 <= maxInt(i8)) break :o 1;
+        if (offset-4 >= minInt(i16) and offset-4 <= maxInt(i16)) break :o 2;
+        break :o 4;
+    };
+    const base: u8 = if (offset_w == 1) 0xEB else 0xE9;
+    const b_16bit: bool = offset_w == 2;
+
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xE9);
-    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    addr = if (b_16bit) mem.write(addr, u8, 0x66) else addr;
+    addr = mem.write(addr, u8, base);
+    offset -= @bitCast(addr - write_at + offset_w); // offset is from EIP, so we adjust it
+    addr = mem.write_bytes(addr, @as([*]const u8, @ptrCast(&offset))[0..offset_w]);
     return addr;
+}
+
+// TODO: more thorough testing
+// TODO: impl generalized JMP tests once complete JMP implemented
+test "JMP" {
+    var buf_o: [6]u8 = undefined;
+    const addr_o: usize = @intFromPtr(&buf_o[0]);
+    const addr_min8_o: usize = addr_o - 128 + 2;
+    const addr_max8_o: usize = addr_o + 127 + 2;
+    const addr_min16_o: usize = addr_o - 32768 + 4;
+    const addr_max16_o: usize = addr_o + 32767 + 4;
+    const sl_2_o = buf_o[0..2];
+    const sl_4_o = buf_o[0..4];
+    const sl_5_o = buf_o[0..5];
+
+    // behaviour (offsets)
+    // jmp short pos
+    try std.testing.expectEqual(addr_o+2, jmp_rel(addr_o, addr_max8_o));
+    try std.testing.expectEqualSlices(u8, &[2]u8{0xEB, 0x7F}, sl_2_o);
+    // jmp short neg
+    try std.testing.expectEqual(addr_o+2, jmp_rel(addr_o, addr_min8_o));
+    try std.testing.expectEqualSlices(u8, &[2]u8{0xEB, 0x80}, sl_2_o);
+    // jmp near pos (16bit override)
+    try std.testing.expectEqual(addr_o+4, jmp_rel(addr_o, addr_max8_o+1));
+    try std.testing.expectEqualSlices(u8, &[4]u8{0x66, 0xE9, 0x7E, 0x00}, sl_4_o);
+    // jmp near neg (16bit override)
+    try std.testing.expectEqual(addr_o+4, jmp_rel(addr_o, addr_min8_o-1));
+    try std.testing.expectEqualSlices(u8, &[4]u8{0x66, 0xE9, 0x7D, 0xFF}, sl_4_o);
+    // jmp near pos (16bit override)
+    try std.testing.expectEqual(addr_o+4, jmp_rel(addr_o, addr_max16_o));
+    try std.testing.expectEqualSlices(u8, &[4]u8{0x66, 0xE9, 0xFF, 0x7F}, sl_4_o);
+    // jmp near neg (16bit override)
+    try std.testing.expectEqual(addr_o+4, jmp_rel(addr_o, addr_min16_o));
+    try std.testing.expectEqualSlices(u8, &[4]u8{0x66, 0xE9, 0x00, 0x80}, sl_4_o);
+    // jmp near pos
+    try std.testing.expectEqual(addr_o+5, jmp_rel(addr_o, addr_max16_o+1));
+    try std.testing.expectEqualSlices(u8, &[5]u8{0xE9, 0xFF, 0x7F, 0x00, 0x00}, sl_5_o);
+    // jmp near neg
+    try std.testing.expectEqual(addr_o+5, jmp_rel(addr_o, addr_min16_o-1));
+    try std.testing.expectEqualSlices(u8, &[5]u8{0xE9, 0xFE, 0x7F, 0xFF, 0xFF}, sl_5_o);
 }
 
 // stuff
@@ -1165,16 +1219,16 @@ pub fn detour_start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) voi
     data.buf = buf;
     data.addr = @intFromPtr(buf.ptr);
     var addr = write_at;
-    addr = jmp(write_at, data.addr);
+    addr = jmp_rel(write_at, data.addr);
     addr = nop_until(addr, return_to);
 }
 
 // between these two functions, write to buf the usual way using Detour.addr
-// example: my_detour.addr = jmp(my_detour.addr, 0xDEADBEEF);
+// example: my_detour.addr = jmp_rel(my_detour.addr, 0xDEADBEEF);
 
 // TODO: optional nop_align
 pub fn detour_end(data: *Detour) void {
-    data.addr = jmp(data.addr, data.return_addr);
+    data.addr = jmp_rel(data.addr, data.return_addr);
     data.addr = nop_align(data.addr, Detour.AlignSize);
     assert(data.addr - @intFromPtr(data.buf.ptr) <= data.buf.len);
 }

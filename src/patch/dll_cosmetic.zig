@@ -272,10 +272,10 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     // Load failed, so load the original sprite (sprite-index still on stack)
     off = x86.call(off, 0x446CA0); // load_sprite_internal
 
-    off = x86.jmp(off, offset_finish);
+    off = x86.jmp_rel(off, offset_finish);
 
     // Install it by jumping from 0x446FB0 (and we'll return directly)
-    _ = x86.jmp(0x446FB0, offset_tga_loader_code);
+    _ = x86.jmp_rel(0x446FB0, offset_tga_loader_code);
 
     return off;
 }

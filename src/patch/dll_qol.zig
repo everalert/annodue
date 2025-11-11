@@ -429,15 +429,17 @@ fn PatchPlanetCutscenes(enable: bool) void {
 // force game to use in-built debug feature to fast scroll through podium cutscene
 fn PatchPodiumCutscene(enable: bool) void {
     // see end of fn_43CEB0
-    var buf: [2]u8 = undefined;
-    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x75, 0x09 };
-    _ = mem.write_bytes(0x43D48C, &buf); // jnz+09
-    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x29 };
-    _ = mem.write_bytes(0x43D495, &buf); // jz+29
-    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x7E, 0x20 };
-    _ = mem.write_bytes(0x43D49E, &buf); // jle+20
-    buf = if (enable) .{ 0x90, 0x90 } else .{ 0x74, 0x0A };
-    _ = mem.write_bytes(0x43D4B4, &buf); // jz+0A
+    if (enable) {
+        _ = x86.nop_until(0x43D48C, 0x43D48C + 2);
+        _ = x86.nop_until(0x43D495, 0x43D495 + 2);
+        _ = x86.nop_until(0x43D49E, 0x43D49E + 2);
+        _ = x86.nop_until(0x43D4B4, 0x43D4B4 + 2);
+    } else {
+        _ = x86.JNZ(0x43D48C, 0x43D48C + 0x09 + 2);
+        _ = x86.JZ(0x43D495, 0x43D495 + 0x29 + 2);
+        _ = x86.JLE(0x43D49E, 0x43D49E + 0x20 + 2);
+        _ = x86.JZ(0x43D4B4, 0x43D4B4 + 0x0A + 2);
+    }
 }
 
 // VIEWPORT
@@ -594,8 +596,8 @@ fn PatchTrackSelectEntry(enable: bool) void {
         var o = x86.call(off2, @intFromPtr(&TrackSelectEntryCallback));
         _ = x86.nop_until(o, end2);
     } else {
-        _ = mem.write_bytes(off1, &[3]u8{ 0x88, 0x5E, 0x5E });
-        _ = mem.write_bytes(off2, &[6]u8{ 0x89, 0x1D, 0xD0, 0x95, 0xE2, 0x00 });
+        _ = mem.write_bytes(off1, &[3]u8{ 0x88, 0x5E, 0x5E }); // mov r/m8, r8
+        _ = mem.write_bytes(off2, &[6]u8{ 0x89, 0x1D, 0xD0, 0x95, 0xE2, 0x00 }); // mov r/m32, r32
     }
 }
 

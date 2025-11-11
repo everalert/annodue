@@ -23,6 +23,7 @@ const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
 // https://www.c-jump.com/CIS77/CPU/x86/lecture.html
 // http://ref.x86asm.net/coder32.html
 // https://pnx.tf/files/x86_opcode_structure_and_instruction_overview.pdf
+// https://shell-storm.org/online/Online-Assembler-and-Disassembler/
 // https://disasm.pro/
 // https://godbolt.org/
 

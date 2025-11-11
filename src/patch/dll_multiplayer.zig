@@ -137,7 +137,7 @@ fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_he
     offset = x86.push(offset, .{ .r32 = .esi });
     offset = x86.push(offset, .{ .r32 = .edi });
     offset = x86.call(offset, 0x449D00); // ???
-    offset = x86.add(offset, .esp, null, .imm, 0x10);
+    offset = x86.ADD(offset, .esp, null, .imm, 0x10);
     offset = x86.pop(offset, .{ .r32 = .eax });
     offset = x86.pop(offset, .{ .r32 = .edx });
     offset = x86.retn(offset);
@@ -166,7 +166,7 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     offset = x86.mov_r32_disp(offset, .edx, 0x4D5E00); // _dword_4D5E00_is_multiplayer
     offset = x86.test_edx_edx(offset);
     offset = x86.pop(offset, .{ .r32 = .edx });
-    offset = x86.jz(offset, 0x47B0C0);
+    offset = x86.JZ(offset, 0x47B0C0);
     offset = x86.retn(offset);
 
     // Install it by patching call at 0x47B5AF

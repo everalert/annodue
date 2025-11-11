@@ -235,7 +235,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
 
     // finish: Clear stack and return
     const offset_finish: usize = off;
-    off = x86.add(off, .esp, null, .imm, 0x4 + 0x400);
+    off = x86.ADD(off, .esp, null, .imm, 0x4 + 0x400);
     off = x86.retn(off);
 
     // Start of actual code
@@ -249,7 +249,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = mem.write(off, u8, 0x04);
 
     // Make room for sprintf buffer and keep the pointer in edx
-    off = x86.add(off, .esp, null, .imm, -0x400);
+    off = x86.ADD(off, .esp, null, .imm, -0x400);
     off = x86.mov_rm32_r32(off, .edx, .esp); // mov edx, esp
 
     // Generate the path, keep sprite_index on stack as we'll keep using it
@@ -258,16 +258,16 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
     off = x86.pop(off, .{ .r32 = .edx }); // (buffer)
-    off = x86.add(off, .esp, null, .imm, 0x4);
+    off = x86.ADD(off, .esp, null, .imm, 0x4);
 
     // Attempt to load the TGA, then remove path from stack
     off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x4114D0); // load_sprite_from_tga_and_add_loaded_sprite
-    off = x86.add(off, .esp, null, .imm, 0x4);
+    off = x86.ADD(off, .esp, null, .imm, 0x4);
 
     // Check if the load failed
     off = x86.test_eax_eax(off);
-    off = x86.jnz(off, offset_load_success);
+    off = x86.JNZ(off, offset_load_success);
 
     // Load failed, so load the original sprite (sprite-index still on stack)
     off = x86.call(off, 0x446CA0); // load_sprite_internal

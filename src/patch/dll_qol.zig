@@ -620,8 +620,8 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         _ = x86.nop_until(0x435E23, 0x435E23 + 2); // skip scroll timer check (cancel)
         _ = x86.nop_until(0x435E43, 0x435E43 + 2); // skip scroll timer check (select)
     } else {
-        _ = x86.jnz_rel8(0x435E23, 0x0D); // jnz short 0x435E32
-        _ = x86.jnz_rel8(0x435E43, 0x1D); // jnz short 0x435E62
+        _ = x86.JNZ(0x435E23, 0x435E32);
+        _ = x86.JNZ(0x435E43, 0x435E62);
     }
 
     // pod select: wait time before advancing after selecting pod
@@ -644,14 +644,14 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     if (enable) {
         _ = x86.nop_until(0x43B6F4, 0x43B6F4 + 2); // skip waiting for circuit to transition
     } else {
-        _ = x86.jnz_rel8(0x43B6F4, 0x70); // jnz short 0x43B766
+        _ = x86.JNZ(0x43B6F4, 0x43B766);
     }
 
     // track detail: input ignored during transition into
     if (enable) {
         _ = x86.nop_until(0x43B8E6, 0x43B8E6 + 2); // skip wait time
     } else {
-        _ = x86.jnz_rel8(0x43B8E6, 0x0A); // jnz short 0x43B8F2
+        _ = x86.JNZ(0x43B8E6, 0x43B8F2);
     }
 
     // inspect vehicle: camera angle change speed (input lockout)
@@ -665,8 +665,8 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     } else {
         _ = mem.write(0x43921E + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x10
         _ = mem.write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x20
-        _ = x86.jz(0x439233, 0x4392E4);
-        _ = x86.jz(0x4392F9, 0x4393A2);
+        _ = x86.JZ(0x439233, 0x4392E4);
+        _ = x86.JZ(0x4392F9, 0x4393A2);
     }
 
     // junkyard: item change speed (input lockout)
@@ -678,23 +678,23 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
         x86.detour_start(&d, 0x43AFAE, 0x43AFB9, nav_asm[0..48]);
         d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }); // cmp cx, 1
-        d.addr = x86.jz(d.addr, 0x43AFB9);
+        d.addr = x86.JZ(d.addr, 0x43AFB9);
         d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }); // cmp cx, 5
-        d.addr = x86.jz(d.addr, 0x43AFB9);
+        d.addr = x86.JZ(d.addr, 0x43AFB9);
         d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }); // cmp cx, di; check for 0
-        d.addr = x86.jnz(d.addr, 0x43AFBE);
+        d.addr = x86.JNZ(d.addr, 0x43AFBE);
         x86.detour_end(&d);
         x86.detour_start(&d, 0x43AFCB, 0x43AFD6, nav_asm[48..96]);
         d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }); // cmp cx, 1
-        d.addr = x86.jz(d.addr, 0x43AFD6);
+        d.addr = x86.JZ(d.addr, 0x43AFD6);
         d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }); // cmp cx, 5
-        d.addr = x86.jz(d.addr, 0x43AFD6);
+        d.addr = x86.JZ(d.addr, 0x43AFD6);
         d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }); // cmp cx, di; check for 0
-        d.addr = x86.jnz(d.addr, 0x43AFDA);
+        d.addr = x86.JNZ(d.addr, 0x43AFDA);
         x86.detour_end(&d);
     } else {
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
-        _ = x86.jnz_rel8(0x43AF93, 0x4B); // jnz short 0x43AFE0
+        _ = x86.JNZ(0x43AF93, 0x43AFE0);
         _ = mem.write_bytes(0x43AFAE, &[11]u8{ // camera anim state checks (left scroll)
             0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
             0x66, 0x3B, 0xCF, 0x75, 0x05,

@@ -941,7 +941,7 @@ fn PatchTextClippingBug(apply: bool) void {
         d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x14); // pos_x1
         d.addr = x86.push(d.addr, .{ .r32 = .eax });
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&ClipText), null);
-        d.addr = x86.add(d.addr, .esp, null, .imm, 0x20);
+        d.addr = x86.ADD(d.addr, .esp, null, .imm, 0x20);
     } else {
         // the original assembly bytes from the replaced code section
         _ = mem.write_bytes(0x42DD08, &[0x42DD8A - 0x42DD08]u8{

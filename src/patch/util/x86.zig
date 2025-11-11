@@ -7,6 +7,8 @@ const bytesToHex = std.fmt.bytesToHex;
 const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
 
 // NOTE: supporting x86 only, not x86_64
+// TODO: change all usize to u32; ensures correct size of address-related params
+// when not compiling for x86 target
 // FIXME: cut down on comptime requirements as much as possible (to reduce
 // function coloring)
 // FIXME: values are "type-less" because two's complement makes signed/unsigned
@@ -211,20 +213,40 @@ pub inline fn op_modMR(
     return mem.write(addr, u8, comptime parseModMR(mod, dest, src));
 }
 
-// stuff
-
 fn parseAddSubOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bit: bool) u8 {
     const op_size = parseOperandSize(n, b_use_16bit);
     if (b_ptr or (base == 0x83 and op_size == 1)) return op_size;
     return @as(u8, 1) << dst.RegTypeIndex();
 }
 
+// ----------
+// arithmetic
+// ----------
+
+// FIXME: add tests: OR, ADC, SBB, AND, XOR, CMP
+// FIXME: impl SIB byte output, needed for non-low BYTE PTR output; see [ah] case
+// in add tests (commented), likely also need tests for [sp], [esp]
 // TODO: look into accepting register width mismatch; doesn't always result in
 // different output, need to decide if i want registers promoted implicitly
 //   see disasm.pro:   add [ebx+5], cl   VS   add [bx+5], cl   VS   add [bl+5], cl
-// FIXME: impl SIB byte output, needed for non-low BYTE PTR output; see [ah] case
-// in add tests (commented), likely also need tests for [sp], [esp]
-pub fn AddSub(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, comptime V_BASE: u8, comptime V_EXT: u3) usize {
+/// generic instruction logic shared between most arithmetic instructions. use
+/// the dedicated helper functions for specific instructions.
+/// - register widths must match (e.g. @dst==.ah, @src==.bx)
+/// - immediate value will be truncated to @dst register width
+/// @dst    op1 reg
+/// @v1     op1 offset when dereferencing op1 as r/m, else null
+/// @src    op2 reg
+/// @v2     op2 offset when dereferencing op2 as r/m, or immediate value when op2 is imm, else null
+/// examples:
+/// ADD EAX, EBX                    ADD(<addr>, .eax, null, .ebx, null) // (r, r/m)
+/// ADD EAX, [EBX]                  ADD(<addr>, .eax, null, .ebx, 0)    // (r, r/m) with deref
+/// ADD [EAX], EBX                  ADD(<addr>, .eax,    0, .ebx, null) // (r/m, r)
+/// ADD EAX, [EBX+4]                ADD(<addr>, .eax, null, .ebx, 4)    // (r, r/m) with deref and offset
+/// ADD EAX, 4                      ADD(<addr>, .eax, null, .imm, 4)    // (r/m, imm)
+/// ADD [EAX+4], 4                  ADD(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
+/// ADD AL, BYTE PTR [EBX+4]        ADD(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
+/// ADD WORD PTR [EBX+0xF0], 0xFF   ADD(<addr>, .bx, 0xF0, .imm, 0xFF)
+pub fn GenericArithmeticInstruction(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, comptime V_BASE: u8, comptime V_EXT: u3) usize {
     const dst_t = dst.RegType();
     const src_t = src.RegType();
     const dst_ri = dst.RegIndex();
@@ -273,29 +295,40 @@ pub fn AddSub(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, com
     return addr;
 }
 
-/// https://www.felixcloutier.com/x86/add
-/// add instruction
-/// - register widths must match (e.g. @dst==.ah, @src==.bx)
-/// - immediate value will be truncated to @dst register width
-/// @dst    op1 reg
-/// @v1     op1 offset when dereferencing op1 as r/m, else null
-/// @src    op2 reg
-/// @v2     op2 offset when dereferencing op2 as r/m, or immediate value when op2 is imm, else null
-/// examples:
-/// ADD EAX, EBX                    add(<addr>, .eax, null, .ebx, null) // (r, r/m)
-/// ADD EAX, [EBX]                  add(<addr>, .eax, null, .ebx, 0)    // (r, r/m) with deref
-/// ADD [EAX], EBX                  add(<addr>, .eax,    0, .ebx, null) // (r/m, r)
-/// ADD EAX, [EBX+4]                add(<addr>, .eax, null, .ebx, 4)    // (r, r/m) with deref and offset
-/// ADD EAX, 4                      add(<addr>, .eax, null, .imm, 4)    // (r/m, imm)
-/// ADD [EAX+4], 4                  add(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
-/// ADD AL, BYTE PTR [EBX+4]        add(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
-/// ADD WORD PTR [EBX+0xF0], 0xFF   add(<addr>, .bx, 0xF0, .imm, 0xFF)
-pub inline fn add(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
-    return AddSub(write_at, dst, v1, src, v2, 0x00, 0b000);
+const GenericArithmeticInstructionTestCase = struct { GenReg, ?i32, GenReg, ?i32, []const u8 };
+
+fn GenericArithmeticInstructionTest(
+    comptime label: []const u8,
+    comptime test_fn: *const fn (usize, GenReg, ?i32, GenReg, ?i32) callconv(.Inline) usize,
+    comptime test_cases: []const GenericArithmeticInstructionTestCase,
+) !void {
+    var output: [12]u8 = undefined;
+    const output_a = @intFromPtr(&output);
+    inline for (test_cases, 0..) |t, i| {
+        errdefer std.debug.print("FAILED {d:0>2} :: {s}(<addr>, .{s}, {?d}, .{s}, {?d})\n\n", .{
+            i, label, @tagName(t[0]), t[1], @tagName(t[2]), t[3],
+        });
+        const expected = t[4];
+        const output_len = test_fn(@intFromPtr(&output), t[0], t[1], t[2], t[3]) - output_a;
+        const output_s = output[0..output_len];
+        try std.testing.expectEqualSlices(u8, expected, output_s);
+        try std.testing.expectEqual(expected.len, output_len);
+    }
 }
 
-test "add" {
-    const test_cases = [_]struct { GenReg, ?i32, GenReg, ?i32, []const u8 }{
+/// ADD - Add
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn ADD(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x00, 0);
+}
+
+// FIXME: something about this test makes zls stop autoformatting the remainder
+// of the file, even though "zig fmt: on" is there
+// - autoformatting works on the file up until this point
+// - commenting between the zig fmt directives (exclusive) makes it work after fmt:on
+// - removing the normal comments between the directives does not make it work
+test "ADD" {
+    try GenericArithmeticInstructionTest("ADD", &ADD, &[_]GenericArithmeticInstructionTestCase{
         // zig fmt: off
         // standard tests
         .{  .al, null, .imm, 0xF0, &[_]u8{       0x04,       0xF0,                                          } },
@@ -303,8 +336,8 @@ test "add" {
         .{  .al, null,  .ah, null, &[_]u8{       0x00, 0xE0,                                                } },
         .{  .al, 0x0F,  .cl, null, &[_]u8{       0x00, 0x48, 0x0F                                           } },
         .{  .al, 0xFF,  .cl, null, &[_]u8{       0x00, 0x88, 0xFF, 0x00, 0x00, 0x00                         } },
-        //.{  .ah, 0x0F,  .cl, null, &[_]u8{       0x00, 0x4C, 0x24, 0x0F                                     } },
-        //.{  .bh, 0x0F,  .cl, null, &[_]u8{       0x00, 0x4F, 0x0F                                           } },
+      //.{  .ah, 0x0F,  .cl, null, &[_]u8{       0x00, 0x4C, 0x24, 0x0F                                     } },
+      //.{  .bh, 0x0F,  .cl, null, &[_]u8{       0x00, 0x4F, 0x0F                                           } },
         .{  .bl, null,  .ch, null, &[_]u8{       0x00, 0xEB,                                                } },
         .{  .bl, 0xF0, .imm, 0x0F, &[_]u8{       0x80, 0x83, 0xF0, 0x00, 0x00, 0x00, 0x0F                   } },
         .{  .ax, null, .imm, 0xF0, &[_]u8{ 0x66, 0x05,       0xF0, 0x00,                                    } },
@@ -329,45 +362,42 @@ test "add" {
         .{ .esp, null, .imm, -0x400, &[_]u8{ 0x81, 0xC4, 0x00, 0xFC, 0xFF, 0xFF } },
         .{ .esp, null, .imm, 0x4,    &[_]u8{ 0x83, 0xC4, 0x04                   } },
         // zig fmt: on
-    };
-
-    var output: [12]u8 = undefined;
-    const output_a = @intFromPtr(&output);
-    inline for (test_cases, 0..) |t, i| {
-        errdefer std.debug.print("FAILED {d:0>2} :: add(<addr>, .{s}, {?d}, .{s}, {?d})\n\n", .{
-            i, @tagName(t[0]), t[1], @tagName(t[2]), t[3], 
-        });
-        const expected = t[4];
-        const output_len = add(@intFromPtr(&output), t[0], t[1], t[2], t[3]) - output_a;
-        const output_s = output[0..output_len];
-        try std.testing.expectEqualSlices(u8, expected, output_s);
-        try std.testing.expectEqual(expected.len, output_len);
-    }
+    });
 }
 
-/// https://www.felixcloutier.com/x86/sub
-/// sub instruction
-/// - register widths must match (e.g. @dst==.ah, @src==.bx)
-/// - immediate value will be truncated to @dst register width
-/// @dst    op1 reg
-/// @v1     op1 offset when dereferencing op1 as r/m, else null
-/// @src    op2 reg
-/// @v2     op2 offset when dereferencing op2 as r/m, or immediate value when op2 is imm, else null
-/// examples:
-/// SUB EAX, EBX                    sub(<addr>, .eax, null, .ebx, null) // (r, r/m)
-/// SUB EAX, [EBX]                  sub(<addr>, .eax, null, .ebx, 0)    // (r, r/m) with deref
-/// SUB [EAX], EBX                  sub(<addr>, .eax,    0, .ebx, null) // (r/m, r)
-/// SUB EAX, [EBX+4]                sub(<addr>, .eax, null, .ebx, 4)    // (r, r/m) with deref and offset
-/// SUB EAX, 4                      sub(<addr>, .eax, null, .imm, 4)    // (r/m, imm)
-/// SUB [EAX+4], 4                  sub(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
-/// SUB AL, BYTE PTR [EBX+4]        sub(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
-/// SUB WORD PTR [EBX+0xF0], 0xFF   sub(<addr>, .bx, 0xF0, .imm, 0xFF)
-pub inline fn sub(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
-    return AddSub(write_at, dst, v1, src, v2, 0x28, 0b101);
+
+/// OR - Logical Inclusive OR
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn OR(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x08, 1);
 }
 
-test "sub" {
-    const test_cases = [_]struct { GenReg, ?i32, GenReg, ?i32, []const u8 }{
+/// ADC - Add With Carry
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn ADC(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x10, 2);
+}
+
+/// SBB - Integer Subtraction With Borrow
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn SBB(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x18, 3);
+}
+
+/// AND - Logical AND
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn AND(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x20, 4);
+}
+
+/// SUB - Subtract
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn SUB(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x28, 5);
+}
+
+test "SUB" {
+    try GenericArithmeticInstructionTest("SUB", &SUB, &[_]GenericArithmeticInstructionTestCase{
         // zig fmt: off
         .{  .al, null, .imm, 0xF0, &[_]u8{       0x2C,       0xF0,                                          } },
         .{  .ah, null, .imm, 0xF0, &[_]u8{       0x80, 0xEC, 0xF0,                                          } },
@@ -392,21 +422,216 @@ test "sub" {
         .{ .ebx, null, .imm, 0x7F, &[_]u8{       0x83, 0xEB, 0x7F                                           } },
         .{ .ebx, 0xF0, .ebx, null, &[_]u8{       0x29, 0x9B, 0xF0, 0x00, 0x00, 0x00                         } },
         // zig fmt: on
-    };
-
-    var output: [12]u8 = undefined;
-    const output_a = @intFromPtr(&output);
-    inline for (test_cases, 0..) |t, i| {
-        errdefer std.debug.print("FAILED {d:0>2} :: sub(<addr>, .{s}, {?d}, .{s}, {?d})\n\n", .{
-            i, @tagName(t[0]), t[1], @tagName(t[2]), t[3], 
-        });
-        const expected = t[4];
-        const output_len = sub(@intFromPtr(&output), t[0], t[1], t[2], t[3]) - output_a;
-        const output_s = output[0..output_len];
-        try std.testing.expectEqualSlices(u8, expected, output_s);
-        try std.testing.expectEqual(expected.len, output_len);
-    }
+    });
 }
+
+/// XOR - Logical Exclusive OR
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn XOR(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x30, 6);
+}
+
+// NOTE: technically not in the "arithmetic" category, but shares same logic
+/// CMP - Compare Two Operands
+/// Refer to `GenericArithmeticInstruction` for usage
+pub inline fn CMP(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+    return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x38, 7);
+}
+
+// -----------
+// conditional
+// -----------
+
+// WARN: could underflow, but not likely for our use case i guess
+inline fn calcRelativeOffset(write_at: usize, target: usize) i32 {
+    return @as(i32, @bitCast(target -% write_at));
+}
+
+const Condition = enum(u4) { o, no, b, nb, e, ne, be, a, s, ns, pe, po, l, ge, le, g };
+
+// NOTE: cc instructions: CMOVcc, FCMOVcc, Jcc, LOOPcc, SETcc
+inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE: bool, I_BASE: u8) usize {
+    var addr = write_at;
+    addr = if (B_TWOBYTE) mem.write(addr, u8, 0x0F) else addr;
+    addr = mem.write(addr, u8, I_BASE + @intFromEnum(cond));
+    return addr;
+}
+
+// NOTE: alt. mnemonic template
+// pub const xC = xB;
+// pub const xNAE = xB;
+// pub const xAE = xNB;
+// pub const xNC = xNB;
+// pub const xZ = xE;
+// pub const xNZ = xNE;
+// pub const xNA = xBE;
+// pub const xNBE = xA;
+// pub const xP = xPE;
+// pub const xNP = xPO;
+// pub const xNGE = xL;
+// pub const xNL = xGE;
+// pub const xNG = xLE;
+// pub const xNLE = xG;
+
+inline fn Jcc(write_at: usize, jump_to: u32, cond: Condition) usize {
+    var offset: i32 = calcRelativeOffset(write_at, jump_to);
+    // -2 forces size 4 if offset==-127 (adjustment is 2 bytes if short jump); forces size 1 if +129
+    const offset_w: u8 = parseOperandSize(offset - 2, false);
+    const b_twobyte = offset_w > 1;
+    const base: u8 = if (b_twobyte) 0x80 else 0x70;
+
+    var addr = write_at;
+    addr = ConditionalInstructionBase(addr, cond, b_twobyte, base);
+    offset -= if (b_twobyte) 6 else 2; // offset is from EIP, so we adjust it
+    addr = mem.write_bytes(addr, @as([*]const u8, @ptrCast(&offset))[0..offset_w]);
+    return addr;
+}
+
+// TODO: test calcRelativeOffset and ConditionalInstructionBase separately instead 
+// of indirectly here
+test "Jcc" {
+    var buf_o: [6]u8 = undefined;
+    const addr_o: usize = @intFromPtr(&buf_o[0]);
+    const addr_min_o: usize = addr_o - 126;
+    const addr_max_o: usize = addr_o + 129;
+    const sl_2_o = buf_o[0..2];
+    const sl_6_o = buf_o[0..6];
+
+    // behaviour (offsets)
+    _ = Jcc(addr_o, addr_max_o, .e); // jcc short positive
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x74, 0x7F}, sl_2_o);
+    _ = Jcc(addr_o, addr_min_o, .e); // jcc short negative
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x74, 0x80}, sl_2_o);
+    _ = Jcc(addr_o, addr_max_o + 1, .e); // jcc positive
+    try std.testing.expectEqualSlices(u8, &[6]u8{0x0F, 0x84, 0x7C, 0x00, 0x00, 0x00}, sl_6_o);
+    _ = Jcc(addr_o, addr_min_o - 1, .e); // jcc negative
+    try std.testing.expectEqualSlices(u8, &[6]u8{0x0F, 0x84, 0x7B, 0xFF, 0xFF, 0xFF}, sl_6_o);
+    // behaviour (bases)
+    _ = JO(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x70, 0x7F}, sl_2_o);
+    _ = JNO(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x71, 0x7F}, sl_2_o);
+    _ = JB(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x72, 0x7F}, sl_2_o);
+    _ = JNB(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x73, 0x7F}, sl_2_o);
+    _ = JE(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x74, 0x7F}, sl_2_o);
+    _ = JNE(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x75, 0x7F}, sl_2_o);
+    _ = JBE(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x76, 0x7F}, sl_2_o);
+    _ = JA(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x77, 0x7F}, sl_2_o);
+    _ = JS(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x78, 0x7F}, sl_2_o);
+    _ = JNS(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x79, 0x7F}, sl_2_o);
+    _ = JPE(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x7A, 0x7F}, sl_2_o);
+    _ = JPO(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x7B, 0x7F}, sl_2_o);
+    _ = JL(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x7C, 0x7F}, sl_2_o);
+    _ = JGE(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x7D, 0x7F}, sl_2_o);
+    _ = JLE(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x7E, 0x7F}, sl_2_o);
+    _ = JG(addr_o, addr_max_o);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x7F, 0x7F}, sl_2_o);
+}
+
+pub const JC = JB;
+pub const JNAE = JB;
+pub const JAE = JNB;
+pub const JNC = JNB;
+pub const JZ = JE;
+pub const JNZ = JNE;
+pub const JNA = JBE;
+pub const JNBE = JA;
+pub const JP = JPE;
+pub const JNP = JPO;
+pub const JNGE = JL;
+pub const JNL = JGE;
+pub const JNG = JLE;
+pub const JNLE = JG;
+
+pub fn JO(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .o);
+}
+
+pub fn JNO(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .no);
+}
+
+pub fn JB(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .b);
+}
+
+pub fn JNB(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .nb);
+}
+
+pub fn JE(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .e);
+}
+
+pub fn JNE(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .ne);
+}
+
+pub fn JBE(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .be);
+}
+
+pub fn JA(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .a);
+}
+
+pub fn JS(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .s);
+}
+
+pub fn JNS(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .ns);
+}
+
+pub fn JPE(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .pe);
+}
+
+pub fn JPO(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .po);
+}
+
+pub fn JL(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .l);
+}
+
+pub fn JGE(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .ge);
+}
+
+pub fn JLE(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .le);
+}
+
+pub fn JG(write_at: usize, jump_to: usize) usize {
+    return Jcc(write_at, jump_to, .g);
+}
+
+// TODO: generalized fn that automatically checks for short jumps, etc.
+// TODO: same for all jcc stuff
+// WARN: could underflow, but not likely for our use case i guess
+// jmp_rel32
+pub fn jmp(write_at: usize, jmp_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xE9);
+    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    return addr;
+}
+
+// stuff
 
 pub fn test_rm32_r32(write_at: usize, r32: u8) usize {
     var addr = write_at;
@@ -778,57 +1003,6 @@ pub fn call_one_u32_param(write_at: usize, fn_addr: usize) usize {
 }
 
 // --------
-// jump/jcc
-// --------
-
-// TODO: generalized fn that automatically checks for short jumps, etc.
-// TODO: same for all jcc stuff
-// WARN: could underflow, but not likely for our use case i guess
-// jmp_rel32
-pub fn jmp(write_at: usize, jmp_addr: usize) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0xE9);
-    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
-    return addr;
-}
-
-// WARN: could underflow, but not likely for our use case i guess
-// jcc jnz_rel32
-pub fn jnz(write_at: usize, jmp_addr: usize) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0x0F);
-    addr = mem.write(addr, u8, 0x85);
-    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
-    return addr;
-}
-
-// TODO: auto-calculate offset like the other jcc fns
-pub fn jz_rel8(write_at: usize, value: i8) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0x74);
-    addr = mem.write(addr, i8, value);
-    return addr;
-}
-
-// TODO: auto-calculate offset like the other jcc fns
-pub fn jnz_rel8(write_at: usize, value: i8) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0x75);
-    addr = mem.write(addr, i8, value);
-    return addr;
-}
-
-// WARN: could underflow, but not likely for our use case i guess
-// jcc jz_rel32
-pub fn jz(write_at: usize, jmp_addr: usize) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0x0F);
-    addr = mem.write(addr, u8, 0x84);
-    addr = mem.write(addr, i32, @as(i32, @bitCast(jmp_addr)) - (@as(i32, @bitCast(addr)) + 4));
-    return addr;
-}
-
-// --------
 // return
 // --------
 
@@ -894,7 +1068,7 @@ pub fn cdecl_call(write_at: u32, fn_ptr: u32, arguments: ?[]const PushSrc) u32 {
     }
     addr = call(addr, fn_ptr);
     if (arguments) |args| 
-        addr = add(addr, .esp, null, .imm, @intCast(4 * args.len));
+        addr = ADD(addr, .esp, null, .imm, @intCast(4 * args.len));
     
     return addr;
 }

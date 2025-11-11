@@ -438,6 +438,24 @@ pub inline fn CMP(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32)
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x38, 7);
 }
 
+test "CMP" {
+    try GenericArithmeticInstructionTest("CMP", &CMP, &[_]GenericArithmeticInstructionTestCase{
+        // zig fmt: off
+        // migration
+        .{ .esi, 0x08, .imm, 0x1F5, &[7]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 } },
+        .{ .eax, null, .imm, 0x134, &[5]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 } },
+        .{  .cx, null, .imm,  0x01, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 } },
+        .{  .cx, null, .imm,  0x05, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 } },
+        .{  .cx, null,  .di,  null, &[3]u8{ 0x66, 0x39, 0xF9 } }, 
+        // FIXME: this is also valid, however the generator can't tell that you
+        // intend for an RM output instead of an MR output, because the shape
+        // of the parameters is the same between RM/MR when no deref; expected
+        // output here is RM, codegen gives us MR (as above)
+        //.{  .cx, null,  .di,  null, &[3]u8{ 0x66, 0x3B, 0xCF } }, 
+        // zig fmt: on
+    });
+}
+
 // -----------
 // conditional
 // -----------

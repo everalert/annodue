@@ -677,19 +677,19 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
         x86.detour_start(&d, 0x43AFAE, 0x43AFB9, nav_asm[0..48]);
-        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }); // cmp cx, 1
+        d.addr = x86.CMP(d.addr, .cx, null, .imm, 1);
         d.addr = x86.JZ(d.addr, 0x43AFB9);
-        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }); // cmp cx, 5
+        d.addr = x86.CMP(d.addr, .cx, null, .imm, 5);
         d.addr = x86.JZ(d.addr, 0x43AFB9);
-        d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }); // cmp cx, di; check for 0
+        d.addr = x86.CMP(d.addr, .cx, null, .di, null);
         d.addr = x86.JNZ(d.addr, 0x43AFBE);
         x86.detour_end(&d);
         x86.detour_start(&d, 0x43AFCB, 0x43AFD6, nav_asm[48..96]);
-        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x01 }); // cmp cx, 1
+        d.addr = x86.CMP(d.addr, .cx, null, .imm, 1);
         d.addr = x86.JZ(d.addr, 0x43AFD6);
-        d.addr = mem.write_bytes(d.addr, &[4]u8{ 0x66, 0x83, 0xF9, 0x05 }); // cmp cx, 5
+        d.addr = x86.CMP(d.addr, .cx, null, .imm, 5);
         d.addr = x86.JZ(d.addr, 0x43AFD6);
-        d.addr = mem.write_bytes(d.addr, &[3]u8{ 0x66, 0x3B, 0xCF }); // cmp cx, di; check for 0
+        d.addr = x86.CMP(d.addr, .cx, null, .di, null);
         d.addr = x86.JNZ(d.addr, 0x43AFDA);
         x86.detour_end(&d);
     } else {

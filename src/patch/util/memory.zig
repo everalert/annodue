@@ -31,6 +31,7 @@ pub fn write(offset: usize, comptime T: type, value: T) usize {
 }
 
 pub fn write_bytes(offset: usize, data: []const u8) usize {
+    if (data.len == 0) return offset;
     const addr: [*]align(1) u8 = @ptrFromInt(offset);
     write_unprotected(addr, data);
     return offset + data.len;

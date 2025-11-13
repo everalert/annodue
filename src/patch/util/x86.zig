@@ -27,6 +27,7 @@ const maxInt = std.math.maxInt;
 // https://sandpile.org/x86/opc_rm.htm
 // https://sandpile.org/x86/opc_enc.htm
 // https://www.c-jump.com/CIS77/CPU/x86/lecture.html
+// https://www.c-jump.com/CIS77/reference/Instructions_by_Opcode.html
 // http://ref.x86asm.net/coder32.html
 // https://pnx.tf/files/x86_opcode_structure_and_instruction_overview.pdf
 // https://shell-storm.org/online/Online-Assembler-and-Disassembler/
@@ -740,8 +741,6 @@ inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE:
 
 // jumping
 
-// TODO: JECXZ, JCXZ (see Jcc docs)
-
 // NOTE: alt. mnemonic template
 // pub const xC = xB;
 // pub const xNAE = xB;
@@ -760,7 +759,7 @@ inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE:
 
 /// Jcc - Jump if Condition Is Met
 /// Used via mnemonic-specific helpers JNZ, JE, etc.
-inline fn JccInstruction(write_at: usize, jump_to: u32, cond: Condition) usize {
+fn JccInstruction(write_at: usize, jump_to: u32, cond: Condition) usize {
     var offset: i32 = calcRelativeOffset(write_at, jump_to);
     // -2 forces size 4 if offset==-127 (adjustment is 2 bytes if short jump); forces size 1 if +129
     const offset_w: u8 = parseOperandSize(offset - 2, false);
@@ -843,68 +842,113 @@ pub const JNL = JGE;
 pub const JNG = JLE;
 pub const JNLE = JG;
 
-pub fn JO(write_at: usize, jump_to: usize) usize {
+pub inline fn JO(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .o);
 }
 
-pub fn JNO(write_at: usize, jump_to: usize) usize {
+pub inline fn JNO(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .no);
 }
 
-pub fn JB(write_at: usize, jump_to: usize) usize {
+pub inline fn JB(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .b);
 }
 
-pub fn JNB(write_at: usize, jump_to: usize) usize {
+pub inline fn JNB(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .nb);
 }
 
-pub fn JE(write_at: usize, jump_to: usize) usize {
+pub inline fn JE(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .e);
 }
 
-pub fn JNE(write_at: usize, jump_to: usize) usize {
+pub inline fn JNE(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .ne);
 }
 
-pub fn JBE(write_at: usize, jump_to: usize) usize {
+pub inline fn JBE(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .be);
 }
 
-pub fn JA(write_at: usize, jump_to: usize) usize {
+pub inline fn JA(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .a);
 }
 
-pub fn JS(write_at: usize, jump_to: usize) usize {
+pub inline fn JS(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .s);
 }
 
-pub fn JNS(write_at: usize, jump_to: usize) usize {
+pub inline fn JNS(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .ns);
 }
 
-pub fn JPE(write_at: usize, jump_to: usize) usize {
+pub inline fn JPE(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .pe);
 }
 
-pub fn JPO(write_at: usize, jump_to: usize) usize {
+pub inline fn JPO(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .po);
 }
 
-pub fn JL(write_at: usize, jump_to: usize) usize {
+pub inline fn JL(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .l);
 }
 
-pub fn JGE(write_at: usize, jump_to: usize) usize {
+pub inline fn JGE(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .ge);
 }
 
-pub fn JLE(write_at: usize, jump_to: usize) usize {
+pub inline fn JLE(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .le);
 }
 
-pub fn JG(write_at: usize, jump_to: usize) usize {
+pub inline fn JG(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .g);
+}
+
+/// Jcc - Jump if Condition Is Met
+/// Special case for JCXZ/JECXZ
+fn JccCXInstruction(write_at: usize, jump_to: u32, reg: GenReg) usize {
+    const b_16bit = reg == .cx;
+    const inst_s: u8 = if (b_16bit) 3 else 2;
+    var offset: i32 = calcRelativeOffset(write_at + inst_s, jump_to);
+    const offset_w: u8 = parseOperandSize(offset, false);
+    assert(reg == .cx or reg == .ecx);
+    assert(offset_w == 1);
+
+    var addr = write_at;
+    addr = if (b_16bit) OverrideAddressSizePf(addr) else addr;
+    addr = mem.write(addr, u8, 0xE3);
+    addr = mem.write(addr, i8, @as(i8, @truncate(offset)));
+    return addr;
+}
+
+test "Jcc CX" {
+    var buf_o: [3]u8 = undefined;
+    const addr_o: usize = @intFromPtr(&buf_o[0]);
+    const addr_min_o: usize = addr_o - 126;
+    const addr_max_o: usize = addr_o + 129;
+    const sl_2_o = buf_o[0..2];
+    const sl_3_o = buf_o[0..3];
+
+    // behaviour (offsets)
+    try std.testing.expectEqual(addr_o + 2, JccCXInstruction(addr_o, addr_max_o, .ecx));
+    try std.testing.expectEqualSlices(u8, &[2]u8{0xE3, 0x7F}, sl_2_o);
+    try std.testing.expectEqual(addr_o + 2, JccCXInstruction(addr_o, addr_min_o, .ecx));
+    try std.testing.expectEqualSlices(u8, &[2]u8{0xE3, 0x80}, sl_2_o);
+    // behaviour (bases)
+    try std.testing.expectEqual(addr_o + 3, JCXZ(addr_o, addr_min_o + 1));
+    try std.testing.expectEqualSlices(u8, &[3]u8{0x67, 0xE3, 0x80}, sl_3_o);
+    try std.testing.expectEqual(addr_o + 2, JECXZ(addr_o, addr_min_o));
+    try std.testing.expectEqualSlices(u8, &[2]u8{0xE3, 0x80}, sl_2_o);
+}
+
+pub inline fn JCXZ(write_at: usize, jump_to: usize) usize {
+    return JccCXInstruction(write_at, jump_to, .cx);
+}
+
+pub inline fn JECXZ(write_at: usize, jump_to: usize) usize {
+    return JccCXInstruction(write_at, jump_to, .ecx);
 }
 
 // FIXME: check if address size override prefix (0x67) required for 2-byte

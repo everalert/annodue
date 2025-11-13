@@ -9,6 +9,7 @@ const minInt = std.math.minInt;
 const maxInt = std.math.maxInt;
 
 // NOTE: supporting x86 only, not x86_64
+// NOTE: instructions roughly organized according to pnx.tf reference
 
 // TODO: some kind of documentation at the top summarizing the overall themes
 // with the api design
@@ -51,6 +52,8 @@ const maxInt = std.math.maxInt;
 //        ->  67 83 47 11 22  // 47 in 16bit mode, 43 otherwise (e.g. for ebx)
 //       note that none of the migration cases are affected by this either way,
 //        so it should be safe to change the output of the relevant cases
+// TODO: look into implementing operator encodings (RM, MI, II, ZO, etc.) as a
+// way to simplify the logic
 /// helper struct for simplifying codegen in instruction mnemonic implementations
 /// and reducing code bloat.
 /// some notes/goals of the api:
@@ -144,8 +147,7 @@ pub fn Instruction(comptime TD: type) type {
             addr = if (self.bForceAddressPf or b_16bit_addr) OverrideAddressSizePf(addr) else addr;
             addr = if (self.bForceOperandPf or b_16bit_open) OverrideOperandSizePf(addr) else addr;
 
-            addr = if (self.bTwoByteOpcode) mem.write(addr, u8, 0x0F) else addr;
-            addr = mem.write(addr, u8, self.Opcode);
+            addr = EmitOpcode(addr, self.Opcode, self.bTwoByteOpcode);
 
             addr = if (mod_rm_byte) |mod| mem.write(addr, u8, @as(u8, @bitCast(mod))) else addr;
             // TODO: sib
@@ -157,6 +159,12 @@ pub fn Instruction(comptime TD: type) type {
             return addr;
         }
     };
+}
+
+/// helper to write simple opcode with optional two-byte prefix
+pub inline fn EmitOpcode(write_at: usize, opcode: u8, b_two_byte: bool) usize {
+    var addr = if (b_two_byte) mem.write(write_at, u8, 0x0F) else write_at;
+    return mem.write(addr, u8, opcode);
 }
 
 const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
@@ -693,6 +701,26 @@ test "SHR" {
     });
 }
 
+/// AAA — ASCII Adjust After Addition
+pub fn AAA(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x37);
+}
+
+/// AAS — ASCII Adjust AL After Subtraction
+pub fn AAS(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x3F);
+}
+
+/// DAA — Decimal Adjust AL After Addition
+pub fn DAA(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x27);
+}
+
+/// DAS — Decimal Adjust AL After Subtraction
+pub fn DAS(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x2F);
+}
+
 // --------------------------
 // control flow & conditional
 // --------------------------
@@ -707,11 +735,12 @@ const Condition = enum(u4) { o, no, b, nb, e, ne, be, a, s, ns, pe, po, l, ge, l
 
 // NOTE: cc instructions: CMOVcc, FCMOVcc, Jcc, LOOPcc, SETcc
 inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE: bool, I_BASE: u8) usize {
-    var addr = write_at;
-    addr = if (B_TWOBYTE) mem.write(addr, u8, 0x0F) else addr;
-    addr = mem.write(addr, u8, I_BASE + @intFromEnum(cond));
-    return addr;
+    return EmitOpcode(write_at, I_BASE + @intFromEnum(cond), B_TWOBYTE);
 }
+
+// jumping
+
+// TODO: JECXZ, JCXZ (see Jcc docs)
 
 // NOTE: alt. mnemonic template
 // pub const xC = xB;
@@ -998,13 +1027,66 @@ pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
     return addr;
 }
 
+/// IRET — Interrupt Return
+pub inline fn IRET(write_at: usize) usize {
+    var addr = OverrideOperandSizePf(write_at);
+    return IRETD(addr);
+}
+
+/// IRETD — Interrupt Return
+pub inline fn IRETD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xCF);
+}
+
+// clearing
+
+/// CMC — Complement Carry Flag
+pub fn CMC(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xF5);
+}
+
+/// CLC — Clear Carry Flag
+pub fn CLC(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xF8);
+}
+
+/// STC — Set Carry Flag
+pub fn STC(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xF9);
+}
+
+/// CLI — Clear Interrupt Flag
+pub fn CLI(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xFA);
+}
+
+/// STI — Set Interrupt Flag
+pub fn STI(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xFB);
+}
+
+/// CLD — Clear Direction Flag
+pub fn CLD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xFC);
+}
+
+/// STD — Set Direction Flag
+pub fn STD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xFD);
+}
+
 // -----
 // stack
 // -----
 
+// TODO: ENTER — Make Stack Frame for Procedure Parameters
+// TODO: LEAVE — High Level Procedure Exit
+// TODO: rework push/pop for nicer api and adding missing options
+
 pub const PushSrc = union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 };
 
 // TODO: r/m16, r/m32 (FF /6)
+/// PUSH — Push Word or Doubleword Onto the Stack
 pub inline fn push(write_at: usize, src: PushSrc) usize {
     switch (src) {
         .r16 => |reg| return op_r16(write_at, 0x50, reg),
@@ -1016,15 +1098,38 @@ pub inline fn push(write_at: usize, src: PushSrc) usize {
             .ss => mem.write(write_at, u8, 0x16),
             .ds => mem.write(write_at, u8, 0x1E),
             .es => mem.write(write_at, u8, 0x06),
-            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA0 }),
-            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA8 }),
+            .fs => EmitOpcode(write_at, 0xA0, true),
+            .gs => EmitOpcode(write_at, 0xA8, true),
         },
     }
+}
+
+/// PUSHA/PUSHAD – Pop All General Registers
+pub inline fn PUSHA(write_at: usize) usize {
+    var addr = OverrideOperandSizePf(write_at);
+    return PUSHAD(addr);
+}
+
+/// PUSHA/PUSHAD – Pop All General Registers
+pub inline fn PUSHAD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x60);
+}
+
+/// PUSHF/PUSHFD – Pop Stack into FLAGS or EFLAGS Register
+pub inline fn PUSHF(write_at: usize) usize {
+    var addr = OverrideOperandSizePf(write_at);
+    return PUSHFD(addr);
+}
+
+/// PUSHF/PUSHFD – Pop Stack into FLAGS or EFLAGS Register
+pub inline fn PUSHFD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x9C);
 }
 
 pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
 
 // TODO: r/m16, r/m32 (8F /0)
+/// POP — Pop a Value From the Stack
 pub inline fn pop(write_at: usize, dest: PopDest) usize {
     switch (dest) {
         .r16 => |reg| return op_r16(write_at, 0x58, reg),
@@ -1033,16 +1138,73 @@ pub inline fn pop(write_at: usize, dest: PopDest) usize {
             .ds => mem.write(write_at, u8, 0x1F),
             .es => mem.write(write_at, u8, 0x07),
             .ss => mem.write(write_at, u8, 0x17),
-            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA1 }),
-            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA9 }),
+            .fs => EmitOpcode(write_at, 0xA1, true),
+            .gs => EmitOpcode(write_at, 0xA9, true),
             else => @panic("pop(): invalid segment register"),
         },
     }
 }
 
+/// POPA/POPAD – Pop All General Registers
+pub inline fn POPA(write_at: usize) usize {
+    var addr = OverrideOperandSizePf(write_at);
+    return POPAD(addr);
+}
+
+/// POPA/POPAD – Pop All General Registers
+pub inline fn POPAD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x61);
+}
+
+/// POPF/POPFD – Pop Stack into FLAGS or EFLAGS Register
+pub inline fn POPF(write_at: usize) usize {
+    var addr = OverrideOperandSizePf(write_at);
+    return POPFD(addr);
+}
+
+/// POPF/POPFD – Pop Stack into FLAGS or EFLAGS Register
+pub inline fn POPFD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x9D);
+}
+
 // ------
 // memory
 // ------
+
+
+/// SAHF — Store AH Into Flags
+pub fn SAHF(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x9E);
+}
+
+/// LAHF — Load Status Flags Into AH Register
+pub fn LAHF(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x9F);
+}
+
+/// CBW — Convert Byte to Word
+pub inline fn CBW(write_at: usize) usize {
+    var addr = OverrideOperandSizePf(write_at);
+    return CWDE(addr);
+}
+
+/// CWDE — Convert Word to Doubleword
+pub inline fn CWDE(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x98);
+}
+
+/// CDQ — Convert Doubleword to Quadword
+pub inline fn CDQ(write_at: usize) usize {
+    var addr = OverrideOperandSizePf(write_at);
+    return CWD(addr);
+}
+
+/// CWD — Convert Word to Doubleword
+pub inline fn CWD(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x99);
+}
+
+// mov
 
 pub fn mov_ecx_imm32(write_at: usize, comptime T: type, imm32: T) usize {
     assert(T == u8 or T == u32);
@@ -1316,9 +1478,125 @@ test "lea" {
 // system & i/o
 // ------------
 
+// TODO: INS/INSB/INSW/INSD — Input from Port to String
+// TODO: OUTS/OUTSB/OUTSW/OUTSD — Output String to Port
+// TODO: IN — Input From Port
+// TODO: OUT — Output to Port
+// TODO: ICEBP (undocumented)
+// TODO: UD, UD2
+// TODO: *FENCE
+// TODO: {L,S}LDT etc., {L,S}GDT etc.
+
+/// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
+pub inline fn INT3(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xCC);
+}
+
+// TODO: INT n (CD ib)
+/// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
+
+/// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
+pub inline fn INTO(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xCE);
+}
+
+/// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
+pub inline fn INT1(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xF1);
+}
+
+/// HLT — Halt
+pub inline fn HLT(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xF4);
+}
+
+pub const FWAIT = WAIT;
+/// WAIT/FWAIT — Wait
+pub inline fn WAIT(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x9B);
+}
+
+/// CLTS — Clear Task-Switched Flag in CR0
+pub inline fn CLTS(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x06, true);
+}
+
+/// INVD — Invalidate Internal Caches
+pub inline fn INVD(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x08, true);
+}
+
+/// WBINVD — Write Back and Invalidate Cache
+pub inline fn WBINVD(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x09, true);
+}
+
+/// RDTSC – Read Time-Stamp Counter
+pub inline fn RDTSC(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x31, true);
+}
+
+/// WRMSR — Write to Model Specific Register
+pub inline fn WRMSR(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x30, true);
+}
+
+/// RDMSR — Read From Model Specific Register
+pub inline fn RDMSR(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x32, true);
+}
+
+/// RDPMC – Read Performance Monitoring Counters
+pub inline fn RDPMC(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x33, true);
+}
+
+/// SYSENTER — Fast System Call
+pub inline fn SYSENTER(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x34, true);
+}
+
+/// SYSEXIT — Fast Return from Fast System Call
+pub inline fn SYSEXIT(write_at: usize) usize {
+    return EmitOpcode(write_at, 0x35, true);
+}
+
+/// CPUID — CPU Identification
+pub inline fn CPUID(write_at: usize) usize {
+    return EmitOpcode(write_at, 0xA2, true);
+}
+
+/// RSM — Resume From System Management Mode
+pub inline fn RSM(write_at: usize) usize {
+    return EmitOpcode(write_at, 0xAA, true);
+}
+
 // ------
 // prefix
 // ------
+
+//pub inline fn LockPf(write_at: usize) usize {
+//    return mem.write(write_at, u8, 0xF0);
+//}
+
+//pub inline fn RepnPf(write_at: usize) usize {
+//    return mem.write(write_at, u8, 0xF2);
+//}
+
+//pub inline fn RepPf(write_at: usize) usize {
+//    return mem.write(write_at, u8, 0xF3);
+//}
+
+//pub inline fn SegmentOverridePf(write_at: usize, comptime s: SegReg) usize {
+//    return switch (s) {
+//        .cs => mem.write(write_at, u8, 0x2E),
+//        .ds => mem.write(write_at, u8, 0x3E),
+//        .es => mem.write(write_at, u8, 0x26),
+//        .fs => mem.write(write_at, u8, 0x64),
+//        .gs => mem.write(write_at, u8, 0x65),
+//        .ss => mem.write(write_at, u8, 0x36),
+//    };
+//}
 
 pub inline fn OverrideOperandSizePf(write_at: usize) usize {
     return mem.write(write_at, u8, 0x66);

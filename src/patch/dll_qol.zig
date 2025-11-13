@@ -385,10 +385,10 @@ const fcam_src_asm = [7]u8{
 fn PatchCameraFKeys(enable: bool) void {
     if (enable) {
         var d: x86.Detour = undefined;
-        x86.detour_start(&d, 0x451D64, 0x451D6B, &QolState.fcam_buf);
+        d.Start(0x451D64, 0x451D6B, &QolState.fcam_buf);
         d.addr = mem.write_bytes(d.addr, &fcam_src_asm);
         d.addr = mem.write_bytes(d.addr, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }); // mov [eax+80], ecx
-        x86.detour_end(&d);
+        d.End();
     } else {
         _ = mem.write_bytes(0x451D64, &fcam_src_asm);
     }
@@ -678,22 +678,22 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         var d: x86.Detour = undefined;
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
-        x86.detour_start(&d, 0x43AFAE, 0x43AFB9, nav_asm[0..48]);
+        d.Start(0x43AFAE, 0x43AFB9, nav_asm[0..48]);
         d.addr = x86.CMP(d.addr, .cx, null, .imm, 1);
         d.addr = x86.JZ(d.addr, 0x43AFB9);
         d.addr = x86.CMP(d.addr, .cx, null, .imm, 5);
         d.addr = x86.JZ(d.addr, 0x43AFB9);
         d.addr = x86.CMP(d.addr, .cx, null, .di, null);
         d.addr = x86.JNZ(d.addr, 0x43AFBE);
-        x86.detour_end(&d);
-        x86.detour_start(&d, 0x43AFCB, 0x43AFD6, nav_asm[48..96]);
+        d.End();
+        d.Start(0x43AFCB, 0x43AFD6, nav_asm[48..96]);
         d.addr = x86.CMP(d.addr, .cx, null, .imm, 1);
         d.addr = x86.JZ(d.addr, 0x43AFD6);
         d.addr = x86.CMP(d.addr, .cx, null, .imm, 5);
         d.addr = x86.JZ(d.addr, 0x43AFD6);
         d.addr = x86.CMP(d.addr, .cx, null, .di, null);
         d.addr = x86.JNZ(d.addr, 0x43AFDA);
-        x86.detour_end(&d);
+        d.End();
     } else {
         _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
         _ = x86.JNZ(0x43AF93, 0x43AFE0);

@@ -9,6 +9,9 @@ const minInt = std.math.minInt;
 const maxInt = std.math.maxInt;
 
 // NOTE: supporting x86 only, not x86_64
+
+// TODO: some kind of documentation at the top summarizing the overall themes
+// with the api design
 // TODO: change all usize to u32; ensures correct size of address-related params
 // when not compiling for x86 target
 // FIXME: cut down on comptime requirements as much as possible (to reduce
@@ -29,11 +32,139 @@ const maxInt = std.math.maxInt;
 // https://disasm.pro/
 // https://godbolt.org/
 
+// --------------------------------------
+// instruction encoding & metaprogramming
+// --------------------------------------
+
+// FIXME: move to top, just here for proximity during initial experimentation
+// FIXME: impl 16bit addressing mapping for MODRM
+// NOTE: 16bit addressing uses a different register mapping for MODRM.rm field,
+//        see https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
+//       also yes, this means GenericArithmeticInstruction produces incorrect
+//        output currently for 16bit registers (sort of - currently it doesn't
+//        attempt to enforce address size at all, and therefore never emits an
+//        instruction with invalid 16bit addressing; if it emitted a 0x67 prefix
+//        when given a 16bit register, like NASM, then they would be invalid)
+//       example correct output of 16bit dst == 16bit addressing:
+//        ->  add dword ptr [bx+0x11], 0x22
+//        ->  add(<addr>, .bx, 0x11, .imm, 0x22)
+//        ->  67 83 47 11 22  // 47 in 16bit mode, 43 otherwise (e.g. for ebx)
+//       note that none of the migration cases are affected by this either way,
+//        so it should be safe to change the output of the relevant cases
+/// helper struct for simplifying codegen in instruction mnemonic implementations
+/// and reducing code bloat.
+/// some notes/goals of the api:
+/// - dst and src registers must be of equivalent width, if not using immediate value
+/// - operand size inferred from displacement type, or dst type when displacement is null
+///   -> equivalent to <SIZE> part of:  <INST> <SIZE> ptr [<REG>+N], M
+///   -> equivalent to <REG> part of:   <INST> <REG>, N
+///   -> operand size override depends on: disp_t==i16 OR disp_t==null and dst_t==r16
+/// - address size inferred from displacement size, or 0 when displacement is null
+///   -> equivalent to <REG> part of:  <INST> <SIZE> ptr [<REG>+N], M
+///   -> address size override depends on: dst_t==r16 AND presence of displacement
+/// - 16bit addressing mode (presence of address size override byte, according to
+///   above conditions) changes MODRM mapping.
+///   see: https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
+/// - truncation of displacement/immediate values according to width of target
+///   register (inferred address size, as explained above)
+pub fn Instruction(comptime TD: type) type {
+    const DisplacementT = if (TD == @TypeOf(null)) i32 else TD; // FIXME: should we actually default to i32?
+    assert(std.meta.trait.isSignedInt(DisplacementT));
+    assert(std.math.isPowerOfTwo(@bitSizeOf(DisplacementT)));
+    assert(@bitSizeOf(DisplacementT) >= 8);
+    assert(@bitSizeOf(DisplacementT) <= 32);
+
+    return struct {
+        const Inst = @This();
+        const BehaviorPrefix = enum(u8) { LOCK = 0xF0, REPN = 0xF2, REP = 0xF3, _ };
+        const SegmentPrefix = enum(u8) { CS = 0x2E, SS = 0x36, DS = 0x3E, ES = 0x26, FS = 0x64, GS = 0x65, _ };
+        const DestinationMode = enum(u2) { none, op, mod };
+        const b16BitDisp: bool = @bitSizeOf(DisplacementT) == 16;
+
+        BehaviorPf: ?BehaviorPrefix = null,
+        SegmentPf: ?SegmentPrefix = null,
+        bForceAddressPf: bool = false, // are these two necessary if the whole point is to automate?
+        bForceOperandPf: bool = false,
+
+        Opcode: u8,
+        OpcodeExtension: ?u3 = null, // override for MODRM.Reg
+        bTwoByteOpcode: bool = false,
+
+        TargetReg: ?GenReg = null, // MODRM.RM if mode==.mod
+        TargetMode: ?DestinationMode = null,
+
+        SourceReg: ?GenReg = null, // MODRM.Reg
+
+        ForceMod: ?Addressing = null, // override for MODRM.Mod
+        //SIB: SIB,
+
+        Displacement: ?i32 = null,
+        Immediate: ?i32 = null,
+
+        fn OperandSize(n: i32, max: u4, use_16bit: bool) u8 {
+            var s: u8 = s: {
+                if (n >= minInt(i8) and n <= maxInt(i8)) break :s 1;
+                if (n >= minInt(i16) and n <= maxInt(i16) and use_16bit) break :s 2;
+                break :s 4;
+            };
+            return @min(max, s);
+        }
+
+        // FIXME: add assertions that guarantee values won't be null in the wrong places
+        pub fn Emit(self: *const Inst, write_at: usize) usize {
+            assert(self.TargetReg == null or self.TargetReg.? != .imm);
+
+            const dst_t = self.TargetReg.?.RegType();
+            const dst_ti = self.TargetReg.?.RegTypeIndex();
+            const reg_sz: u4 = if (self.TargetReg) |_| @as(u4, 1) << dst_ti else 0;
+            const b_mod = (self.Displacement != null or self.OpcodeExtension != null);
+            const b_16bit = (dst_t == .r16);
+            const b_16bit_addr = (b_16bit and self.Displacement != null);
+            const b_16bit_open = (b_16bit and self.Displacement == null) or b16BitDisp;
+
+            const dsp_sz: ?u8 = if (self.Displacement) |d| OperandSize(d, reg_sz, b_16bit) else null;
+            const dsp_sl = @as([*]const u8, @ptrCast(&self.Displacement))[0 .. dsp_sz orelse 0];
+            const imm_sz: ?u8 = if (self.Immediate) |i| OperandSize(i, reg_sz, b_16bit) else null;
+            const imm_sl = @as([*]const u8, @ptrCast(&self.Immediate))[0 .. imm_sz orelse 0];
+
+            // TODO: cleanup/actually implement something non-adhoc
+            const mod_rm_byte: ?MODRM = if (b_mod) modrm: {
+                const mod_mod = self.ForceMod orelse Addressing.FromLength(dsp_sz);
+                const mod_reg: GenReg = if (self.OpcodeExtension) |ext| @enumFromInt(ext) else self.TargetReg.?;
+                const mod_rm: GenReg = if (self.OpcodeExtension) |_| self.TargetReg.? else self.SourceReg.?;
+                break :modrm MODRM.Make(mod_mod, mod_reg, mod_rm);
+            } else null;
+
+            var addr = write_at;
+
+            // prefixes
+            // WARN: apparently the prefix order doesn't matter, but if it crashes try swapping these
+            addr = if (self.BehaviorPf) |b| mem.write(addr, u8, @intFromEnum(b)) else addr;
+            addr = if (self.SegmentPf) |s| mem.write(addr, u8, @intFromEnum(s)) else addr;
+            addr = if (self.bForceAddressPf or b_16bit_addr) OverrideAddressSizePf(addr) else addr;
+            addr = if (self.bForceOperandPf or b_16bit_open) OverrideOperandSizePf(addr) else addr;
+
+            addr = if (self.bTwoByteOpcode) mem.write(addr, u8, 0x0F) else addr;
+            addr = mem.write(addr, u8, self.Opcode);
+
+            addr = if (mod_rm_byte) |mod| mem.write(addr, u8, @as(u8, @bitCast(mod))) else addr;
+            // TODO: sib
+
+            addr = mem.write_bytes(addr, dsp_sl);
+            addr = mem.write_bytes(addr, imm_sl);
+
+            assert(addr - write_at <= 15); // max x86 instruction size
+            return addr;
+        }
+    };
+}
+
 const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
 const OpEn = enum { mem, reg, imm, zo }; // operator encoding
 const EffAdd = enum(u2) { mem, mem8, mem32, reg }; // effective address
 
 // general registers
+// FIXME: probably remove these 3
 // TODO: separate index/pointer registers from 16/32-bit register enum
 const GenReg8 = enum(u3) { al, cl, dl, bl, ah, ch, dh, bh };
 const GenReg16 = enum(u3) { ax, cx, dx, bx, sp, bp, si, di };
@@ -95,7 +226,8 @@ const SIB = packed struct(u8) {
     b: u3, // base register
 };
 
-// helpers
+// instruction helpers
+// FIXME: can probably remove a lot of this once Instruction gets more fleshed out
 
 // FIXME: .mem could have a displacement value, if SIB base == 0b101
 inline fn parseEffAddFromDispType(comptime T: type) EffAdd {
@@ -222,9 +354,9 @@ fn parseAddSubOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bi
     return @as(u8, 1) << dst.RegTypeIndex();
 }
 
-// ----------
-// arithmetic
-// ----------
+// ------------------
+// arithmetic & logic
+// ------------------
 
 // FIXME: add tests: OR, ADC, SBB, AND, XOR, CMP
 // FIXME: impl SIB byte output, needed for non-low BYTE PTR output; see [ah] case
@@ -249,7 +381,7 @@ fn parseAddSubOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bi
 /// ADD [EAX+4], 4                  ADD(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
 /// ADD AL, BYTE PTR [EBX+4]        ADD(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
 /// ADD WORD PTR [EBX+0xF0], 0xFF   ADD(<addr>, .bx, 0xF0, .imm, 0xFF)
-pub fn GenericArithmeticInstruction(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, comptime V_BASE: u8, comptime V_EXT: u3) usize {
+fn GenericArithmeticInstruction(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, comptime V_BASE: u8, comptime V_EXT: u3) usize {
     const dst_t = dst.RegType();
     const src_t = src.RegType();
     const dst_ri = dst.RegIndex();
@@ -290,7 +422,7 @@ pub fn GenericArithmeticInstruction(write_at: usize, dst: GenReg, v1: ?i32, src:
     } else null;
 
     var addr = write_at;
-    addr = if (b_16bit) mem.write(addr, u8, 0x66) else addr;
+    addr = if (b_16bit) OverrideOperandSizePf(addr) else addr;
     addr = mem.write(addr, u8, base);
     addr = if (mod_rm) |m| mem.write(addr, u8, @as(u8, @bitCast(m))) else addr;
     addr = if (v1_b) |b| mem.write_bytes(addr, b[0..v1_s]) else addr;
@@ -367,7 +499,6 @@ test "ADD" {
         // zig fmt: on
     });
 }
-
 
 /// OR - Logical Inclusive OR
 /// Refer to `GenericArithmeticInstruction` for usage
@@ -459,129 +590,6 @@ test "CMP" {
     });
 }
 
-// FIXME: move to top, just here for proximity during initial experimentation
-// FIXME: impl 16bit addressing mapping for MODRM
-// NOTE: 16bit addressing uses a different register mapping for MODRM.rm field,
-//        see https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
-//       also yes, this means GenericArithmeticInstruction produces incorrect
-//        output currently for 16bit registers (sort of - currently it doesn't 
-//        attempt to enforce address size at all, and therefore never emits an
-//        instruction with invalid 16bit addressing; if it emitted a 0x67 prefix
-//        when given a 16bit register, like NASM, then they would be invalid)
-//       example correct output of 16bit dst == 16bit addressing:
-//        ->  add dword ptr [bx+0x11], 0x22
-//        ->  add(<addr>, .bx, 0x11, .imm, 0x22)
-//        ->  67 83 47 11 22  // 47 in 16bit mode, 43 otherwise (e.g. for ebx)
-//       note that none of the migration cases are affected by this either way,
-//        so it should be safe to change the output of the relevant cases
-/// helper struct for simplifying codegen in instruction mnemonic implementations 
-/// and reducing code bloat.
-/// some notes/goals of the api:
-/// - dst and src registers must be of equivalent width, if not using immediate value
-/// - operand size inferred from displacement type, or dst type when displacement is null
-///   -> equivalent to <SIZE> part of:  <INST> <SIZE> ptr [<REG>+N], M
-///   -> equivalent to <REG> part of:   <INST> <REG>, N
-///   -> operand size override depends on: disp_t==i16 OR disp_t==null and dst_t==r16
-/// - address size inferred from displacement size, or 0 when displacement is null
-///   -> equivalent to <REG> part of:  <INST> <SIZE> ptr [<REG>+N], M
-///   -> address size override depends on: dst_t==r16 AND presence of displacement
-/// - 16bit addressing mode (presence of address size override byte, according to
-///   above conditions) changes MODRM mapping.
-///   see: https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
-/// - truncation of displacement/immediate values according to width of target 
-///   register (inferred address size, as explained above)
-pub fn Instruction(comptime TD: type) type {
-    const DisplacementT = if (TD == @TypeOf(null)) i32 else TD; // FIXME: should we actually default to i32?
-    assert(std.meta.trait.isSignedInt(DisplacementT));
-    assert(std.math.isPowerOfTwo(@bitSizeOf(DisplacementT)));
-    assert(@bitSizeOf(DisplacementT) >= 8);
-    assert(@bitSizeOf(DisplacementT) <= 32);
-
-    return struct {
-        const Inst = @This();
-        const BehaviorPrefix = enum(u8) { LOCK=0xF0, REPN=0xF2, REP=0xF3, _ };
-        const SegmentPrefix = enum(u8) { CS=0x2E, SS=0x36, DS=0x3E, ES=0x26, FS=0x64, GS=0x65, _ };
-        const DestinationMode = enum(u2) { none, op, mod };
-        const b16BitDisp: bool = @bitSizeOf(DisplacementT) == 16;
-
-        BehaviorPf: ?BehaviorPrefix = null,
-        SegmentPf: ?SegmentPrefix = null,
-        bForceAddressPf: bool = false, // are these two necessary if the whole point is to automate?
-        bForceOperandPf: bool = false,
-
-        Opcode: u8,
-        OpcodeExtension: ?u3 = null, // override for MODRM.Reg
-        bTwoByteOpcode: bool = false,
-
-        TargetReg: ?GenReg = null, // MODRM.RM if mode==.mod
-        TargetMode: ?DestinationMode = null,
-
-        SourceReg: ?GenReg = null, // MODRM.Reg
-
-        ForceMod: ?Addressing = null, // override for MODRM.Mod
-        //SIB: SIB,
-
-        Displacement: ?i32 = null,
-        Immediate: ?i32 = null,
-
-        fn OperandSize(n: i32, max: u4, use_16bit: bool) u8 {
-            var s: u8 = s: {
-                if (n >= minInt(i8) and n <= maxInt(i8)) break :s 1;
-                if (n >= minInt(i16) and n <= maxInt(i16) and use_16bit) break :s 2;
-                break :s 4;
-            };
-            return @min(max, s);
-        }
-
-        // FIXME: add assertions that guarantee values won't be null in the wrong places
-        pub fn Emit(self: *const Inst , write_at: usize) usize {
-            assert(self.TargetReg == null or self.TargetReg.? != .imm);
-
-            const dst_t = self.TargetReg.?.RegType();
-            const dst_ti = self.TargetReg.?.RegTypeIndex();
-            const reg_sz: u4 = if (self.TargetReg) |_| @as(u4, 1) << dst_ti else 0; 
-            const b_mod = (self.Displacement != null or self.OpcodeExtension != null);
-            const b_16bit = (dst_t == .r16);
-            const b_16bit_addr = (b_16bit and self.Displacement != null);
-            const b_16bit_open = (b_16bit and self.Displacement == null) or b16BitDisp;
-
-            const dsp_sz: ?u8 = if (self.Displacement) |d| OperandSize(d, reg_sz, b_16bit) else null;
-            const dsp_sl = @as([*]const u8, @ptrCast(&self.Displacement))[0..dsp_sz orelse 0];
-            const imm_sz: ?u8 = if (self.Immediate) |i| OperandSize(i, reg_sz, b_16bit) else null;
-            const imm_sl = @as([*]const u8, @ptrCast(&self.Immediate))[0..imm_sz orelse 0];
-
-            // TODO: cleanup/actually implement something non-adhoc
-            const mod_rm_byte: ?MODRM = if (b_mod) modrm: {
-                const mod_mod = self.ForceMod orelse Addressing.FromLength(dsp_sz);
-                const mod_reg: GenReg = if (self.OpcodeExtension) |ext| @enumFromInt(ext) else self.TargetReg.?;
-                const mod_rm: GenReg = if (self.OpcodeExtension) |_| self.TargetReg.? else self.SourceReg.?;
-                break :modrm MODRM.Make(mod_mod, mod_reg, mod_rm);
-            } else null;
-
-            var addr = write_at;
-
-            // prefixes
-            // WARN: apparently the prefix order doesn't matter, but if it crashes try swapping these
-            addr = if (self.BehaviorPf) |b| mem.write(addr, u8, @intFromEnum(b)) else addr;
-            addr = if (self.SegmentPf) |s| mem.write(addr, u8, @intFromEnum(s)) else addr;
-            addr = if (self.bForceAddressPf or b_16bit_addr) mem.write(addr, u8, 0x67) else addr;
-            addr = if (self.bForceOperandPf or b_16bit_open) mem.write(addr, u8, 0x66) else addr;
-
-            addr = if (self.bTwoByteOpcode) mem.write(addr, u8, 0x0F) else addr;
-            addr = mem.write(addr, u8, self.Opcode);
-
-            addr = if (mod_rm_byte) |mod| mem.write(addr, u8, @as(u8, @bitCast(mod))) else addr;
-            // TODO: sib
-
-            addr = mem.write_bytes(addr, dsp_sl);
-            addr = mem.write_bytes(addr, imm_sl);
-
-            assert(addr - write_at <= 15); // max x86 instruction size
-            return addr;
-        }
-    };
-}
-
 // FIXME: add more thorough tests
 /// SAL/SAR/SHL/SHR — Shift
 fn ShiftArithmeticInstruction(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8, comptime V_EXT: u3) usize {
@@ -644,7 +652,6 @@ fn ShiftArithmeticInstructionTest(
 }
 
 pub const SHL = SAL;
-
 pub inline fn SAL(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) usize {
     return ShiftArithmeticInstruction(write_at, dst, v1, src, v2, 4);
 }
@@ -686,11 +693,12 @@ test "SHR" {
     });
 }
 
-// -----------
-// conditional
-// -----------
+// --------------------------
+// control flow & conditional
+// --------------------------
 
 // WARN: could underflow, but not likely for our use case i guess
+// NOTE: probably more useful on Instruction and paired with a "calcInstructionSize"
 inline fn calcRelativeOffset(write_at: usize, target: usize) i32 {
     return @as(i32, @bitCast(target -% write_at));
 }
@@ -886,7 +894,7 @@ pub fn jmp_rel(write_at: usize, jump_to: usize) usize {
     const b_16bit: bool = offset_w == 2;
 
     var addr = write_at;
-    addr = if (b_16bit) mem.write(addr, u8, 0x66) else addr;
+    addr = if (b_16bit) OverrideOperandSizePf(addr) else addr;
     addr = mem.write(addr, u8, base);
     offset -= @bitCast(addr - write_at + offset_w); // offset is from EIP, so we adjust it
     addr = mem.write_bytes(addr, @as([*]const u8, @ptrCast(&offset))[0..offset_w]);
@@ -933,7 +941,7 @@ test "JMP" {
     try std.testing.expectEqualSlices(u8, &[5]u8{0xE9, 0xFE, 0x7F, 0xFF, 0xFF}, sl_5_o);
 }
 
-// stuff
+// test
 
 pub fn test_rm32_r32(write_at: usize, r32: u8) usize {
     var addr = write_at;
@@ -949,6 +957,92 @@ pub fn test_eax_eax(write_at: usize) usize {
 pub fn test_edx_edx(write_at: usize) usize {
     return test_rm32_r32(write_at, 0xD2);
 }
+
+// call
+
+// WARN: could underflow, but not likely for our use case i guess
+// call_rel32
+pub fn call(write_at: usize, fn_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xE8);
+    addr = mem.write(addr, i32, @as(i32, @bitCast(fn_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    return addr;
+}
+pub fn call_rm32(write_at: usize, fn_addr: usize) usize {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xFF);
+    addr = mem.write(addr, u32, fn_addr);
+    return addr;
+}
+
+pub fn call_one_u32_param(write_at: usize, fn_addr: usize) usize {
+    var addr = write_at;
+    addr = reg_save(addr, .esp, .ebp);
+    addr = mov_eax_esp_add(addr, 0x08);
+    addr = push(addr, .{ .r32 = .eax });
+    addr = call(addr, fn_addr);
+    addr = reg_restore(addr, .esp, .ebp);
+    return addr;
+}
+
+// return
+
+pub fn retn(write_at: usize) usize {
+    return mem.write(write_at, u8, 0xC3);
+}
+
+pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
+    var addr = write_at;
+    addr = mem.write(addr, u8, 0xC2);
+    addr = mem.write(addr, u16, bytes);
+    return addr;
+}
+
+// -----
+// stack
+// -----
+
+pub const PushSrc = union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 };
+
+// TODO: r/m16, r/m32 (FF /6)
+pub inline fn push(write_at: usize, src: PushSrc) usize {
+    switch (src) {
+        .r16 => |reg| return op_r16(write_at, 0x50, reg),
+        .r32 => |reg| return op_r32(write_at, 0x50, reg),
+        .imm8 => |imm| return op_imm8(write_at, 0x6A, imm),
+        .imm16, .imm32 => |imm| return op_imm32(write_at, 0x68, imm),
+        .seg => |seg| return switch (seg) {
+            .cs => mem.write(write_at, u8, 0x0E),
+            .ss => mem.write(write_at, u8, 0x16),
+            .ds => mem.write(write_at, u8, 0x1E),
+            .es => mem.write(write_at, u8, 0x06),
+            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA0 }),
+            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA8 }),
+        },
+    }
+}
+
+pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
+
+// TODO: r/m16, r/m32 (8F /0)
+pub inline fn pop(write_at: usize, dest: PopDest) usize {
+    switch (dest) {
+        .r16 => |reg| return op_r16(write_at, 0x58, reg),
+        .r32 => |reg| return op_r32(write_at, 0x58, reg),
+        .seg => |seg| return switch (seg) {
+            .ds => mem.write(write_at, u8, 0x1F),
+            .es => mem.write(write_at, u8, 0x07),
+            .ss => mem.write(write_at, u8, 0x17),
+            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA1 }),
+            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA9 }),
+            else => @panic("pop(): invalid segment register"),
+        },
+    }
+}
+
+// ------
+// memory
+// ------
 
 pub fn mov_ecx_imm32(write_at: usize, comptime T: type, imm32: T) usize {
     assert(T == u8 or T == u32);
@@ -1218,43 +1312,52 @@ test "lea" {
     }
 }
 
-pub const PushSrc = union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg, r16: GenReg16, r32: GenReg32 };
+// ------------
+// system & i/o
+// ------------
 
-// TODO: r/m16, r/m32 (FF /6)
-pub inline fn push(write_at: usize, src: PushSrc) usize {
-    switch (src) {
-        .r16 => |reg| return op_r16(write_at, 0x50, reg),
-        .r32 => |reg| return op_r32(write_at, 0x50, reg),
-        .imm8 => |imm| return op_imm8(write_at, 0x6A, imm),
-        .imm16, .imm32 => |imm| return op_imm32(write_at, 0x68, imm),
-        .seg => |seg| return switch (seg) {
-            .cs => mem.write(write_at, u8, 0x0E),
-            .ss => mem.write(write_at, u8, 0x16),
-            .ds => mem.write(write_at, u8, 0x1E),
-            .es => mem.write(write_at, u8, 0x06),
-            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA0 }),
-            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA8 }),
-        },
-    }
+// ------
+// prefix
+// ------
+
+pub inline fn OverrideOperandSizePf(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x66);
 }
 
-pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
-
-// TODO: r/m16, r/m32 (8F /0)
-pub inline fn pop(write_at: usize, dest: PopDest) usize {
-    switch (dest) {
-        .r16 => |reg| return op_r16(write_at, 0x58, reg),
-        .r32 => |reg| return op_r32(write_at, 0x58, reg),
-        .seg => |seg| return switch (seg) {
-            .ds => mem.write(write_at, u8, 0x1F),
-            .es => mem.write(write_at, u8, 0x07),
-            .ss => mem.write(write_at, u8, 0x17),
-            .fs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA1 }),
-            .gs => mem.write_bytes(write_at, &[2]u8{ 0x0F, 0xA9 }),
-            else => @panic("pop(): invalid segment register"),
-        },
-    }
+pub inline fn OverrideAddressSizePf(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x67);
 }
+
+// ----------------
+// other/extensions
+// ----------------
+
+// no-op
+
+pub fn nop(write_at: usize) usize {
+    return mem.write(write_at, u8, 0x90);
+}
+
+pub fn nop_align(write_at: usize, increment: usize) usize {
+    var addr: usize = write_at;
+    while (addr % increment > 0) {
+        addr = nop(addr);
+    }
+    return addr;
+}
+
+pub fn nop_until(write_at: usize, end: usize) usize {
+    assert(end <= write_at);
+    var addr: usize = write_at;
+    while (addr < end) {
+        addr = nop(addr);
+    }
+    return addr;
+}
+
+// --------------------
+// non-specific helpers
+// --------------------
 
 // helpers to move register values around
 
@@ -1275,79 +1378,9 @@ pub fn reg_restore(write_at: usize, comptime reg: GenReg32, comptime from: GenRe
     return addr;
 }
 
-// --------
-// call
-// --------
-
-// WARN: could underflow, but not likely for our use case i guess
-// call_rel32
-pub fn call(write_at: usize, fn_addr: usize) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0xE8);
-    addr = mem.write(addr, i32, @as(i32, @bitCast(fn_addr)) - (@as(i32, @bitCast(addr)) + 4));
-    return addr;
-}
-pub fn call_rm32(write_at: usize, fn_addr: usize) usize {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0xFF);
-    addr = mem.write(addr, u32, fn_addr);
-    return addr;
-}
-
-pub fn call_one_u32_param(write_at: usize, fn_addr: usize) usize {
-    var addr = write_at;
-    addr = reg_save(addr, .esp, .ebp);
-    addr = mov_eax_esp_add(addr, 0x08);
-    addr = push(addr, .{ .r32 = .eax });
-    addr = call(addr, fn_addr);
-    addr = reg_restore(addr, .esp, .ebp);
-    return addr;
-}
-
-// --------
-// return
-// --------
-
-pub fn retn(write_at: usize) usize {
-    return mem.write(write_at, u8, 0xC3);
-}
-
-pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
-    var addr = write_at;
-    addr = mem.write(addr, u8, 0xC2);
-    addr = mem.write(addr, u16, bytes);
-    return addr;
-}
-
-// --------
-// no-op
-// --------
-
-pub fn nop(write_at: usize) usize {
-    return mem.write(write_at, u8, 0x90);
-}
-
-pub fn nop_align(write_at: usize, increment: usize) usize {
-    var addr: usize = write_at;
-    while (addr % increment > 0) {
-        addr = nop(addr);
-    }
-    return addr;
-}
-
-pub fn nop_until(write_at: usize, end: usize) usize {
-    var addr: usize = write_at;
-    while (addr < end) {
-        addr = nop(addr);
-    }
-    return addr;
-}
-
-// --------
 // function calls
 // https://en.wikibooks.org/wiki/X86_Disassembly/Calling_Conventions
 // https://blog.aaronballman.com/2012/02/describing-the-msvc-abi-for-structure-return-types/
-// --------
 
 pub fn stackframe_start(write_at: u32) u32 {
     return reg_save(write_at, .esp, .ebp);
@@ -1424,10 +1457,9 @@ pub fn stdcall_body_exit(write_at: u32, num_args: u16) u32 {
 // pub fn fastcall_body_entry(write_at: u32)
 // pub fn fastcall_body_exit(write_at: u32, arguments: u16)
 
-// --------
 // detour
-// --------
 
+/// helper for managing a "jump-and-replace"-style detour
 pub const Detour = struct {
     const AlignSize: u32 = 16;
 
@@ -1435,33 +1467,34 @@ pub const Detour = struct {
     return_addr: u32,
     buf: []u8,
     addr: u32,
+
+    // TODO: optional nop_until
+    // TODO: option to auto copy overwritten bytes to detour buffer
+    pub fn Start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) void {
+        assert(buf.len % Detour.AlignSize == 0);
+        assert(return_to > write_at);
+        assert(return_to - write_at >= 5); // jmp long instruction size
+        data.entry_addr = write_at;
+        data.return_addr = return_to;
+        data.buf = buf;
+        data.addr = @intFromPtr(buf.ptr);
+        var addr = write_at;
+        addr = jmp_rel(write_at, data.addr);
+        addr = nop_until(addr, return_to);
+    }
+
+    // between these two functions, write to buf the usual way using Detour.addr
+    // example: my_detour.addr = jmp_rel(my_detour.addr, 0xDEADBEEF);
+
+    // TODO: optional nop_align
+    pub fn End(data: *Detour) void {
+        data.addr = jmp_rel(data.addr, data.return_addr);
+        data.addr = nop_align(data.addr, Detour.AlignSize);
+        assert(data.addr - @intFromPtr(data.buf.ptr) <= data.buf.len);
+    }
+
+    pub fn UnusedSpace(data: *const Detour) u32 {
+        return data.buf.len - (data.addr - @intFromPtr(data.buf.ptr));
+    }
 };
 
-// TODO: optional nop_until
-// TODO: option to auto copy overwritten bytes to detour buffer
-pub fn detour_start(data: *Detour, write_at: u32, return_to: u32, buf: []u8) void {
-    assert(buf.len % Detour.AlignSize == 0);
-    assert(return_to > write_at);
-    assert(return_to - write_at >= 5); // jmp long instruction size
-    data.entry_addr = write_at;
-    data.return_addr = return_to;
-    data.buf = buf;
-    data.addr = @intFromPtr(buf.ptr);
-    var addr = write_at;
-    addr = jmp_rel(write_at, data.addr);
-    addr = nop_until(addr, return_to);
-}
-
-// between these two functions, write to buf the usual way using Detour.addr
-// example: my_detour.addr = jmp_rel(my_detour.addr, 0xDEADBEEF);
-
-// TODO: optional nop_align
-pub fn detour_end(data: *Detour) void {
-    data.addr = jmp_rel(data.addr, data.return_addr);
-    data.addr = nop_align(data.addr, Detour.AlignSize);
-    assert(data.addr - @intFromPtr(data.buf.ptr) <= data.buf.len);
-}
-
-pub fn detour_unused_space(data: *Detour) u32 {
-    return data.buf.len - (data.addr - @intFromPtr(data.buf.ptr));
-}

@@ -216,24 +216,24 @@ const CustomTrigger = struct {
         _ = x86.call(0x476E80, @intFromPtr(&hookTrigger));
 
         // init
-        x86.detour_start(&d, 0x47D397, 0x47D3A0, &buf.init);
+        d.Start(0x47D397, 0x47D3A0, &buf.init);
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookInit), &[_]x86.PushSrc{ .{ .r32 = .esi }, .{ .r32 = .ebp } });
-        x86.detour_end(&d);
+        d.End();
 
         // destroy
-        x86.detour_start(&d, 0x47C4D9, 0x47C4E0, &buf.destroy);
+        d.Start(0x47C4D9, 0x47C4E0, &buf.destroy);
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookDestroy), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.CMP(d.addr, .esi, 0x08, .imm, 0x1F5);
-        x86.detour_end(&d);
+        d.End();
 
         // update
-        x86.detour_start(&d, 0x47C51B, 0x47C520, &buf.update);
+        d.Start(0x47C51B, 0x47C520, &buf.update);
         d.addr = x86.reg_save(d.addr, .eax, .ebp); // TODO: is this detour meant to replace a function body?
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.reg_restore(d.addr, .eax, .ebp);
         d.addr = x86.CMP(d.addr, .eax, null, .imm, 0x134);
-        x86.detour_end(&d);
+        d.End();
     }
 
     // FIXME: crashes after reinit -> track load

@@ -913,8 +913,8 @@ var text_clip_fix_buf = std.mem.zeroes([128]u8);
 fn PatchTextClippingBug(apply: bool) void {
     if (apply) {
         var d: x86.Detour = undefined;
-        x86.detour_start(&d, 0x42DD08, 0x42DD8A, &text_clip_fix_buf);
-        defer x86.detour_end(&d);
+        d.Start(0x42DD08, 0x42DD8A, &text_clip_fix_buf);
+        defer d.End();
 
         // get stable reference to esp, while storing ebp on the stack.
         // ebp contained pos_y2 (see instruction at 0x42DCB3), so the modified

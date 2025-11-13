@@ -47,10 +47,10 @@ const GAssetBuffer = struct {
 
         // patch TextureBuffer_Init (fn_447420)
         if (s_texbuf_enable) {
-            x86.detour_start(&d, 0x447471, 0x44748D, &texbuf_init_det);
+            d.Start(0x447471, 0x44748D, &texbuf_init_det);
             d.addr = x86.call(d.addr, @intFromPtr(&patch_texbuf));
             d.addr = x86.cdecl_call(d.addr, @intFromPtr(ra.Block_Close), &[_]x86.PushSrc{.{ .imm32 = 3 }});
-            x86.detour_end(&d);
+            d.End();
         }
     }
 

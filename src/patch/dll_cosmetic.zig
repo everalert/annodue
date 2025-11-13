@@ -177,7 +177,7 @@ fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) 
     _ = mem.write(0x423555, u32, buffer_size / 2);
 }
 
-// WARNING: not tested
+// WARN: not tested, also should verify consistency with old patch
 fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     // Replace the sprite loader with a version that checks for "data\\images\\sprite-%d.tga"
     var off: usize = memory;
@@ -193,43 +193,16 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
 
     // TODO: figure out what this asm means and make macros
     // Shift the width and height of the sprite to the right
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x68);
-    off = mem.write(off, u8, 0);
-    off = mem.write(off, u8, 1);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x68);
-    off = mem.write(off, u8, 2);
-    off = mem.write(off, u8, 2);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x68);
-    off = mem.write(off, u8, 14);
-    off = mem.write(off, u8, 2);
+    off = x86.SHR(off, .eax, @as(i16, 0x0), .imm, 1); // shr  WORD PTR [eax+0x0], 1
+    off = x86.SHR(off, .eax, @as(i16, 0x2), .imm, 2); // shr  WORD PTR [eax+0x2], 2
+    off = x86.SHR(off, .eax, @as(i16, 0xE), .imm, 2); // shr  WORD PTR [eax+0xE], 2
 
     // Get address of page and repeat steps
-    off = mem.write(off, u8, 0x8B);
-    off = mem.write(off, u8, 0x50);
-    off = mem.write(off, u8, 16);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x6A);
-    off = mem.write(off, u8, 0);
-    off = mem.write(off, u8, 1);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x6A);
-    off = mem.write(off, u8, 2);
-    off = mem.write(off, u8, 2);
+    off = mem.write_bytes(off, &[3]u8{ 0x8B, 0x50, 0x10 }); // mov  edx, DWORD PTR [eax+0x10]
+    off = x86.SHR(off, .edx, @as(i16, 0x0), .imm, 1); // shr  WORD PTR [edx+0x0], 1
+    off = x86.SHR(off, .edx, @as(i16, 0x2), .imm, 2); // shr  WORD PTR [edx+0x2], 2
 
     // Get address of texture and repeat steps
-
     //0:  8b 50 10                mov    edx,DWORD PTR [eax+0x10]
     //3:  66 c1 6a 02 02          shr    WORD PTR [edx+0x2],0x2
 
@@ -242,11 +215,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     const offset_tga_loader_code: usize = off;
 
     // Read the sprite_index from stack
-    //  -> mov     eax, [esp+4]
-    off = mem.write(off, u8, 0x8B);
-    off = mem.write(off, u8, 0x44);
-    off = mem.write(off, u8, 0x24);
-    off = mem.write(off, u8, 0x04);
+    off = mem.write_bytes(off, &[4]u8{ 0x8B, 0x44, 0x24, 0x04 }); // mov  eax, [esp+0x04]
 
     // Make room for sprintf buffer and keep the pointer in edx
     off = x86.ADD(off, .esp, null, .imm, -0x400);

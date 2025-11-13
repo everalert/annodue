@@ -79,13 +79,13 @@ const Addressing = enum(u2) {
     }
 };
 
-pub const ModRM = packed struct(u8) {
+pub const MODRM = packed struct(u8) {
     rm: u3,
     reg: u3,
     mod: u2,
 
-    pub fn Make(mod: Addressing, reg: GenReg, rm: GenReg) ModRM {
-        return ModRM{ .mod = @intFromEnum(mod), .reg = reg.RegIndex(), .rm = rm.RegIndex() };
+    pub fn Make(mod: Addressing, reg: GenReg, rm: GenReg) MODRM {
+        return MODRM{ .mod = @intFromEnum(mod), .reg = reg.RegIndex(), .rm = rm.RegIndex() };
     }
 };
 
@@ -281,10 +281,10 @@ pub fn GenericArithmeticInstruction(write_at: usize, dst: GenReg, v1: ?i32, src:
     const v2_s: u8 = if (v2) |v| parseAddSubOperandSize(v, base, dst, b_ptr, b_16bit) else 0;
     const v2_b: ?[]const u8 = if (v2) |*v| @as([*]const u8, @ptrCast(v))[0..4] else null;
 
-    const mod_rm: ?ModRM = if (base & 0b100 == 0) mod_rm: {
-        var mod: ModRM = undefined;
-        if (b_r_rm) mod = ModRM.Make(Addressing.FromLength(if (v2) |_| v2_s else null), dst, src);
-        if (!b_r_rm) mod = ModRM.Make(Addressing.FromLength(if (v1) |_| v1_s else null), src, dst);
+    const mod_rm: ?MODRM = if (base & 0b100 == 0) mod_rm: {
+        var mod: MODRM = undefined;
+        if (b_r_rm) mod = MODRM.Make(Addressing.FromLength(if (v2) |_| v2_s else null), dst, src);
+        if (!b_r_rm) mod = MODRM.Make(Addressing.FromLength(if (v1) |_| v1_s else null), src, dst);
         if (b_mod_ext) mod.reg = V_EXT;
         break :mod_rm mod;
     } else null;
@@ -455,6 +455,233 @@ test "CMP" {
         // of the parameters is the same between RM/MR when no deref; expected
         // output here is RM, codegen gives us MR (as above)
         //.{  .cx, null,  .di,  null, &[3]u8{ 0x66, 0x3B, 0xCF } }, 
+        // zig fmt: on
+    });
+}
+
+// FIXME: move to top, just here for proximity during initial experimentation
+// FIXME: impl 16bit addressing mapping for MODRM
+// NOTE: 16bit addressing uses a different register mapping for MODRM.rm field,
+//        see https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
+//       also yes, this means GenericArithmeticInstruction produces incorrect
+//        output currently for 16bit registers (sort of - currently it doesn't 
+//        attempt to enforce address size at all, and therefore never emits an
+//        instruction with invalid 16bit addressing; if it emitted a 0x67 prefix
+//        when given a 16bit register, like NASM, then they would be invalid)
+//       example correct output of 16bit dst == 16bit addressing:
+//        ->  add dword ptr [bx+0x11], 0x22
+//        ->  add(<addr>, .bx, 0x11, .imm, 0x22)
+//        ->  67 83 47 11 22  // 47 in 16bit mode, 43 otherwise (e.g. for ebx)
+//       note that none of the migration cases are affected by this either way,
+//        so it should be safe to change the output of the relevant cases
+/// helper struct for simplifying codegen in instruction mnemonic implementations 
+/// and reducing code bloat.
+/// some notes/goals of the api:
+/// - dst and src registers must be of equivalent width, if not using immediate value
+/// - operand size inferred from displacement type, or dst type when displacement is null
+///   -> equivalent to <SIZE> part of:  <INST> <SIZE> ptr [<REG>+N], M
+///   -> equivalent to <REG> part of:   <INST> <REG>, N
+///   -> operand size override depends on: disp_t==i16 OR disp_t==null and dst_t==r16
+/// - address size inferred from displacement size, or 0 when displacement is null
+///   -> equivalent to <REG> part of:  <INST> <SIZE> ptr [<REG>+N], M
+///   -> address size override depends on: dst_t==r16 AND presence of displacement
+/// - 16bit addressing mode (presence of address size override byte, according to
+///   above conditions) changes MODRM mapping.
+///   see: https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
+/// - truncation of displacement/immediate values according to width of target 
+///   register (inferred address size, as explained above)
+pub fn Instruction(comptime TD: type) type {
+    const DisplacementT = if (TD == @TypeOf(null)) i32 else TD; // FIXME: should we actually default to i32?
+    assert(std.meta.trait.isSignedInt(DisplacementT));
+    assert(std.math.isPowerOfTwo(@bitSizeOf(DisplacementT)));
+    assert(@bitSizeOf(DisplacementT) >= 8);
+    assert(@bitSizeOf(DisplacementT) <= 32);
+
+    return struct {
+        const Inst = @This();
+        const BehaviorPrefix = enum(u8) { LOCK=0xF0, REPN=0xF2, REP=0xF3, _ };
+        const SegmentPrefix = enum(u8) { CS=0x2E, SS=0x36, DS=0x3E, ES=0x26, FS=0x64, GS=0x65, _ };
+        const DestinationMode = enum(u2) { none, op, mod };
+        const b16BitDisp: bool = @bitSizeOf(DisplacementT) == 16;
+
+        BehaviorPf: ?BehaviorPrefix = null,
+        SegmentPf: ?SegmentPrefix = null,
+        bForceAddressPf: bool = false, // are these two necessary if the whole point is to automate?
+        bForceOperandPf: bool = false,
+
+        Opcode: u8,
+        OpcodeExtension: ?u3 = null, // override for MODRM.Reg
+        bTwoByteOpcode: bool = false,
+
+        TargetReg: ?GenReg = null, // MODRM.RM if mode==.mod
+        TargetMode: ?DestinationMode = null,
+
+        SourceReg: ?GenReg = null, // MODRM.Reg
+
+        ForceMod: ?Addressing = null, // override for MODRM.Mod
+        //SIB: SIB,
+
+        Displacement: ?i32 = null,
+        Immediate: ?i32 = null,
+
+        fn OperandSize(n: i32, max: u4, use_16bit: bool) u8 {
+            var s: u8 = s: {
+                if (n >= minInt(i8) and n <= maxInt(i8)) break :s 1;
+                if (n >= minInt(i16) and n <= maxInt(i16) and use_16bit) break :s 2;
+                break :s 4;
+            };
+            return @min(max, s);
+        }
+
+        // FIXME: add assertions that guarantee values won't be null in the wrong places
+        pub fn Emit(self: *const Inst , write_at: usize) usize {
+            assert(self.TargetReg == null or self.TargetReg.? != .imm);
+
+            const dst_t = self.TargetReg.?.RegType();
+            const dst_ti = self.TargetReg.?.RegTypeIndex();
+            const reg_sz: u4 = if (self.TargetReg) |_| @as(u4, 1) << dst_ti else 0; 
+            const b_mod = (self.Displacement != null or self.OpcodeExtension != null);
+            const b_16bit = (dst_t == .r16);
+            const b_16bit_addr = (b_16bit and self.Displacement != null);
+            const b_16bit_open = (b_16bit and self.Displacement == null) or b16BitDisp;
+
+            const dsp_sz: ?u8 = if (self.Displacement) |d| OperandSize(d, reg_sz, b_16bit) else null;
+            const dsp_sl = @as([*]const u8, @ptrCast(&self.Displacement))[0..dsp_sz orelse 0];
+            const imm_sz: ?u8 = if (self.Immediate) |i| OperandSize(i, reg_sz, b_16bit) else null;
+            const imm_sl = @as([*]const u8, @ptrCast(&self.Immediate))[0..imm_sz orelse 0];
+
+            // TODO: cleanup/actually implement something non-adhoc
+            const mod_rm_byte: ?MODRM = if (b_mod) modrm: {
+                const mod_mod = self.ForceMod orelse Addressing.FromLength(dsp_sz);
+                const mod_reg: GenReg = if (self.OpcodeExtension) |ext| @enumFromInt(ext) else self.TargetReg.?;
+                const mod_rm: GenReg = if (self.OpcodeExtension) |_| self.TargetReg.? else self.SourceReg.?;
+                break :modrm MODRM.Make(mod_mod, mod_reg, mod_rm);
+            } else null;
+
+            var addr = write_at;
+
+            // prefixes
+            // WARN: apparently the prefix order doesn't matter, but if it crashes try swapping these
+            addr = if (self.BehaviorPf) |b| mem.write(addr, u8, @intFromEnum(b)) else addr;
+            addr = if (self.SegmentPf) |s| mem.write(addr, u8, @intFromEnum(s)) else addr;
+            addr = if (self.bForceAddressPf or b_16bit_addr) mem.write(addr, u8, 0x67) else addr;
+            addr = if (self.bForceOperandPf or b_16bit_open) mem.write(addr, u8, 0x66) else addr;
+
+            addr = if (self.bTwoByteOpcode) mem.write(addr, u8, 0x0F) else addr;
+            addr = mem.write(addr, u8, self.Opcode);
+
+            addr = if (mod_rm_byte) |mod| mem.write(addr, u8, @as(u8, @bitCast(mod))) else addr;
+            // TODO: sib
+
+            addr = mem.write_bytes(addr, dsp_sl);
+            addr = mem.write_bytes(addr, imm_sl);
+
+            assert(addr - write_at <= 15); // max x86 instruction size
+            return addr;
+        }
+    };
+}
+
+// FIXME: add more thorough tests
+/// SAL/SAR/SHL/SHR — Shift
+fn ShiftArithmeticInstruction(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8, comptime V_EXT: u3) usize {
+    assert(dst != .imm);
+    assert(src == .imm or src == .cl);
+    assert((src == .imm) != (v2 == null));
+    const dst_t = dst.RegType();
+    const b_8bit = (dst_t == .r8);
+    const b_1 = (src == .imm and v2.? == 1);
+
+    var instruction = Instruction(@TypeOf(v1)){
+        .Opcode = 0xC0,
+        .OpcodeExtension = V_EXT,
+        .TargetReg = dst,
+        .SourceReg = src,
+        .Displacement = v1,
+        .Immediate = if (v2) |v| @intCast(v) else null,
+    };
+
+    if (b_1) {
+        instruction.Opcode |= 0b00010000;
+        instruction.Displacement = null;
+        instruction.Immediate = null;
+        instruction.ForceMod = .disp0;
+    }
+    if (!b_8bit)
+        instruction.Opcode |= 0b00000001;
+    if (src == .cl)
+        instruction.Opcode |= 0b00010010;
+
+    return instruction.Emit(write_at);
+}
+
+const ShiftArithmeticInstructionTestCase = struct { 
+    GenReg, 
+    union(enum) { b:i8, w:i16, d:i32, n:@TypeOf(null) }, 
+    GenReg, 
+    ?u8, 
+    []const u8,
+};
+
+fn ShiftArithmeticInstructionTest(
+    comptime label: []const u8,
+    comptime test_fn: *const fn (usize, GenReg, anytype, GenReg, ?u8) callconv(.Inline) usize,
+    comptime test_cases: []const ShiftArithmeticInstructionTestCase,
+) !void {
+    var output: [12]u8 = undefined;
+    const output_a = @intFromPtr(&output);
+    inline for (test_cases, 0..) |t, i| {
+        const v1 = switch (t[1]) { .b => t[1].b, .w => t[1].w, .d => t[1].d, .n => t[1].n };
+        errdefer std.debug.print("FAILED {d:0>2} :: {s}(<addr>, .{s}, {any}, .{s}, {?d})\n\n", .{
+            i, label, @tagName(t[0]), v1, @tagName(t[2]), t[3],
+        });
+        const expected = t[4];
+        const output_len = test_fn(@intFromPtr(&output), t[0], v1, t[2], t[3]) - output_a;
+        const output_s = output[0..output_len];
+        try std.testing.expectEqualSlices(u8, expected, output_s);
+        try std.testing.expectEqual(expected.len, output_len);
+    }
+}
+
+pub const SHL = SAL;
+
+pub inline fn SAL(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) usize {
+    return ShiftArithmeticInstruction(write_at, dst, v1, src, v2, 4);
+}
+
+test "SHL/SAL" {
+    try ShiftArithmeticInstructionTest("SHL", &SHL, &[_]ShiftArithmeticInstructionTestCase{
+        // zig fmt: off
+        // standard tests
+        .{  .al, .{ .d=0x10 }, .imm, 10, &[4]u8{ 0xC0, 0x60, 0x10, 0x0A } },
+        .{ .ebx, .{ .d=0x10 }, .imm,  2, &[4]u8{ 0xC1, 0x63, 0x10, 0x02 } },
+      // FIXME: needs 16bit addressing mode for MODRM
+      //.{  .bx, .{ .w=0x10 }, .imm,  2, &[6]u8{ 0x67, 0x66, 0xC1, 0x67, 0x10, 0x02 } },
+        .{  .bl, .{ .d=0x10 }, .imm,  2, &[4]u8{ 0xC0, 0x63, 0x10, 0x02 } },
+        .{  .bh, .{ .d=0x10 }, .imm,  2, &[4]u8{ 0xC0, 0x67, 0x10, 0x02 } },
+        .{  .bx, .{ .n=null }, .imm,  2, &[4]u8{ 0x66, 0xC1, 0xE3, 0x02 } },
+        .{  .bx, .{ .n=null }, .cl, null, &[3]u8{ 0x66, 0xD3, 0xE3 } },
+        // zig fmt: on
+    });
+}
+
+pub inline fn SAR(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) usize {
+    return ShiftArithmeticInstruction(write_at, dst, v1, src, v2, 7);
+}
+
+pub inline fn SHR(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) usize {
+    return ShiftArithmeticInstruction(write_at, dst, v1, src, v2, 5);
+}
+
+test "SHR" {
+    try ShiftArithmeticInstructionTest("SHR", &SHR, &[_]ShiftArithmeticInstructionTestCase{
+        // zig fmt: off
+        // migration
+        .{ .eax, .{ .w=0x00 }, .imm, 0x01, &[3]u8{ 0x66, 0xD1, 0x28 } },             // shr WORD [eax+0x0], 1
+        .{ .eax, .{ .w=0x02 }, .imm, 0x02, &[5]u8{ 0x66, 0xC1, 0x68, 0x02, 0x02 } }, // shr WORD [eax+0x2], 2
+        .{ .eax, .{ .w=0x0E }, .imm, 0x02, &[5]u8{ 0x66, 0xC1, 0x68, 0x0E, 0x02 } }, // shr WORD [eax+0xE], 2
+        .{ .edx, .{ .w=0x00 }, .imm, 0x01, &[3]u8{ 0x66, 0xD1, 0x2A } },             // shr WORD [edx+0x0], 1
+        .{ .edx, .{ .w=0x02 }, .imm, 0x02, &[5]u8{ 0x66, 0xC1, 0x6A, 0x02, 0x02 } }, // shr WORD [edx+0x2], 2
         // zig fmt: on
     });
 }
@@ -643,6 +870,8 @@ pub fn JG(write_at: usize, jump_to: usize) usize {
     return JccInstruction(write_at, jump_to, .g);
 }
 
+// FIXME: check if address size override prefix (0x67) required for 2-byte
+// offset during r/m16
 // TODO: generalized JMP; missing rm16/32 (FF /4), m16/32 (FF /5), ptr16/32
 // TODO: rename to JMP when above done
 /// JMP with D op/en only

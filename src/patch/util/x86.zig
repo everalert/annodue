@@ -12,15 +12,19 @@ const maxInt = std.math.maxInt;
 // NOTE: instructions roughly organized according to pnx.tf reference
 
 // TODO: some kind of documentation at the top summarizing the overall themes
-// with the api design
+//  with the api design
 // TODO: change all usize to u32; ensures correct size of address-related params
-// when not compiling for x86 target
+//  when not compiling for x86 target
 // FIXME: cut down on comptime requirements as much as possible (to reduce
-// function coloring)
+//  function coloring)
+// FIXME: some of the tests are getting stupid/redundant af, maybe add some
+//  integration/end-to-end style testing to cover it more concisely? or generally
+//  rethink where test content goes so that there isn't so much implicit redundancy
+// see: BSWAP, Jcc, etc.
 // FIXME: values are "type-less" because two's complement makes signed/unsigned
-// the same at bit-level; what convention should be used to allow user to use
-// both iN/uN types? or is it ok to just let them spam `@bitCast`?
-// - for now, defaulting to signed types because pointer offsets are signed
+//  the same at bit-level; what convention should be used to allow user to use
+//  both iN/uN types? or is it ok to just let them spam `@bitCast`?
+// for now, defaulting to signed types because pointer offsets are signed
 
 // references
 // https://wiki.osdev.org/X86-64_Instruction_Encoding
@@ -40,19 +44,19 @@ const maxInt = std.math.maxInt;
 
 // FIXME: move to top, just here for proximity during initial experimentation
 // FIXME: impl 16bit addressing mapping for MODRM
-// NOTE: 16bit addressing uses a different register mapping for MODRM.rm field,
-//        see https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
-//       also yes, this means GenericArithmeticInstruction produces incorrect
-//        output currently for 16bit registers (sort of - currently it doesn't
-//        attempt to enforce address size at all, and therefore never emits an
-//        instruction with invalid 16bit addressing; if it emitted a 0x67 prefix
-//        when given a 16bit register, like NASM, then they would be invalid)
-//       example correct output of 16bit dst == 16bit addressing:
-//        ->  add dword ptr [bx+0x11], 0x22
-//        ->  add(<addr>, .bx, 0x11, .imm, 0x22)
-//        ->  67 83 47 11 22  // 47 in 16bit mode, 43 otherwise (e.g. for ebx)
-//       note that none of the migration cases are affected by this either way,
-//        so it should be safe to change the output of the relevant cases
+// NOTE: 16bit addressing uses a different register mapping for MODRM.rm field
+// see https://wiki.osdev.org/X86-64_Instruction_Encoding#16-bit_addressing
+// also yes, this means GenericArithmeticInstruction produces incorrect output
+//  currently for 16bit registers (sort of - currently it doesn't attempt to
+//  enforce address size at all, and therefore never emits an instruction with
+//  invalid 16bit addressing; if it emitted a 0x67 prefix when given a 16bit
+//  register, like NASM, then they would be invalid)
+// example correct output of 16bit dst == 16bit addressing:
+//  ->  add dword ptr [bx+0x11], 0x22
+//  ->  add(<addr>, .bx, 0x11, .imm, 0x22)
+//  ->  67 83 47 11 22  // 47 in 16bit mode, 43 otherwise (e.g. for ebx)
+// note that none of the migration cases are affected by this either way,
+//  so it should be safe to change the output of the relevant cases
 // TODO: look into implementing operator encodings (RM, MI, II, ZO, etc.) as a
 // way to simplify the logic
 /// helper struct for simplifying codegen in instruction mnemonic implementations
@@ -166,6 +170,11 @@ pub fn Instruction(comptime TD: type) type {
 pub inline fn EmitOpcode(write_at: usize, opcode: u8, b_two_byte: bool) usize {
     var addr = if (b_two_byte) mem.write(write_at, u8, 0x0F) else write_at;
     return mem.write(addr, u8, opcode);
+}
+
+pub inline fn EncodeRegisterOp(base: u8, reg: GenReg) u8 {
+    assert(base & 0b111 == 0);
+    return base | reg.RegIndex();
 }
 
 const SegReg = enum { cs, ss, ds, es, fs, gs }; // segment register
@@ -302,6 +311,7 @@ inline fn parseModMR(
 // complains about them when e.g. push() is called with runtime .imm32 value,
 // they should not be called in that case anyway
 
+// FIXME: remove, replace usage with OverrideOperandSizePf + EncodeRegisterOp
 pub inline fn op_r16(
     write_at: usize,
     comptime base: u8,
@@ -310,6 +320,7 @@ pub inline fn op_r16(
     return mem.write_bytes(write_at, &[2]u8{ 0x66, base + @intFromEnum(reg) });
 }
 
+// FIXME: remove, replace usage with EncodeRegisterOp
 pub inline fn op_r32(
     write_at: usize,
     comptime base: u8,
@@ -357,15 +368,15 @@ pub inline fn op_modMR(
     return mem.write(addr, u8, comptime parseModMR(mod, dest, src));
 }
 
+// ------------------
+// arithmetic & logic
+// ------------------
+
 fn parseAddSubOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bit: bool) u8 {
     const op_size = parseOperandSize(n, b_use_16bit);
     if (b_ptr or (base == 0x83 and op_size == 1)) return op_size;
     return @as(u8, 1) << dst.RegTypeIndex();
 }
-
-// ------------------
-// arithmetic & logic
-// ------------------
 
 // FIXME: add tests: OR, ADC, SBB, AND, XOR, CMP
 // FIXME: impl SIB byte output, needed for non-low BYTE PTR output; see [ah] case
@@ -1516,6 +1527,35 @@ test "lea" {
         _ = lea(@intFromPtr(&output), t[0], t[1], t[2]);
         try std.testing.expectEqualSlices(u8, &expected, &output);
     }
+}
+
+/// BSWAP — Byte Swap
+fn BSWAP(write_at: usize, reg: GenReg) usize {
+    assert(reg.RegType() == .r32);
+    const op = EncodeRegisterOp(0xC8, reg);
+    return EmitOpcode(write_at, op, true);
+}
+
+test "BSWAP" {
+    var buf_o: [2]u8 = undefined;
+    const addr_o: usize = @intFromPtr(&buf_o);
+
+    try std.testing.expectEqual(@intFromPtr(&buf_o) + 2, BSWAP(addr_o, .eax));
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xC8}, &buf_o);
+    _ = BSWAP(addr_o, .ecx);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xC9}, &buf_o);
+    _ = BSWAP(addr_o, .edx);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xCA}, &buf_o);
+    _ = BSWAP(addr_o, .ebx);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xCB}, &buf_o);
+    _ = BSWAP(addr_o, .esp);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xCC}, &buf_o);
+    _ = BSWAP(addr_o, .ebp);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xCD}, &buf_o);
+    _ = BSWAP(addr_o, .esi);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xCE}, &buf_o);
+    _ = BSWAP(addr_o, .edi);
+    try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xCF}, &buf_o);
 }
 
 // ------------

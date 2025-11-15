@@ -57,6 +57,11 @@ const maxInt = std.math.maxInt;
 //  ->  67 83 47 11 22  // 47 in 16bit mode, 43 otherwise (e.g. for ebx)
 // note that none of the migration cases are affected by this either way,
 //  so it should be safe to change the output of the relevant cases
+// NOTE: 16-bit addressing doesn't use the SIB byte. instead, SIB-like behaviour
+//  is implicit based on MODRM.rm value in indirect modes. the main implications
+//  of this are that not all registers can be displaced or indexed (the SIB-like
+//  stuff replaces some of the slots, but not all), and that there is no way to
+//  configure the SIB, meaning no scaling factor.
 // TODO: look into implementing operator encodings (RM, MI, II, ZO, etc.) as a
 // way to simplify the logic
 /// helper struct for simplifying codegen in instruction mnemonic implementations
@@ -86,12 +91,12 @@ pub fn Instruction(comptime TD: type) type {
         const Inst = @This();
         const BehaviorPrefix = enum(u8) { LOCK = 0xF0, REPN = 0xF2, REP = 0xF3, _ };
         const SegmentPrefix = enum(u8) { CS = 0x2E, SS = 0x36, DS = 0x3E, ES = 0x26, FS = 0x64, GS = 0x65, _ };
-        const DestinationMode = enum(u2) { none, op, mod };
+        const RegOperandMode = enum(u2) { none, op, mod };
         const b16BitDisp: bool = @bitSizeOf(DisplacementT) == 16;
 
         BehaviorPf: ?BehaviorPrefix = null,
         SegmentPf: ?SegmentPrefix = null,
-        bForceAddressPf: bool = false, // are these two necessary if the whole point is to automate?
+        bForceAddressPf: bool = false,
         bForceOperandPf: bool = false,
 
         Opcode: u8,
@@ -99,7 +104,7 @@ pub fn Instruction(comptime TD: type) type {
         bTwoByteOpcode: bool = false,
 
         TargetReg: ?GenReg = null, // MODRM.RM if mode==.mod
-        TargetMode: ?DestinationMode = null,
+        TargetMode: RegOperandMode = .none,
 
         SourceReg: ?GenReg = null, // MODRM.Reg
 
@@ -107,6 +112,10 @@ pub fn Instruction(comptime TD: type) type {
         //SIB: SIB,
 
         Displacement: ?i32 = null,
+        DispScale: u8 = 1,
+        DispIndex: ?GenReg = null,
+        // DispBase = SourceReg when using SIB
+
         Immediate: ?i32 = null,
 
         fn OperandSize(n: i32, max: u4, use_16bit: bool) u8 {
@@ -118,32 +127,59 @@ pub fn Instruction(comptime TD: type) type {
             return @min(max, s);
         }
 
+        // TODO: more closely follow NASM size parsing
+        // operand size: width implied by MODRM.reg (in register mode, not opcode
+        //  ext) and MODRM.rm fields; use width if same, error if mismatch.
+        // address size: selected by priority - MODRM.rm field (in memory mode)
+        //  -> SIB.base -> SIB.index -> displacement size. if the displacement
+        //  is larger than the selected address size, it gets truncated
+        // currently things were not necessarily organized with this in mind, but
+        //  should be in line with this with the caveat that SIB is generally not
+        //  implemented yet and the logic will break once it is
+        // key realization is that "operand size" refers to operands that are NOT
+        //  "operator-encoded" but are values meant to be written into registers,
+        //  i.e. immediate values; this is why there is no further logic for op
+        //  size than making sure the registers are in agreement
+        // also, i think "MODRM.rm in memory mode" basically refers to indirect
+        //  addressing, i.e. the mod bits NOT being 0b11
+        // note that for [base+index*scale+disp] syntax, NASM does not allow opsize
+        //  override ("WORD" etc.); i.e. "SIB behaviour" should ignore displacement
+        //  input type and only use sizes implied by field-defined registers
         // FIXME: add assertions that guarantee values won't be null in the wrong places
         pub fn Emit(self: *const Inst, write_at: usize) usize {
+            var addr = write_at;
             assert(self.TargetReg == null or self.TargetReg.? != .imm);
+            assert(self.TargetReg != null or self.SourceReg != null);
+            assert(self.Displacement == null or self.TargetReg != null); // disp needs reg
+            assert(std.math.isPowerOfTwo(self.DispScale)); // implicit disp scale > 0
+            assert(self.DispScale <= 8);
+            assert(self.DispIndex == null or self.Displacement != null); // dispindex needs disp
+            assert(self.DispIndex == null or self.DispIndex.?.RegTypeIndex() & 1 == 0); // dispindex r8 or r32
+            defer assert(addr - write_at <= 15); // max x86 instruction size
 
+            // FIXME: assuming TargetMode == .mod for now; logic will be different for others
             const dst_t = self.TargetReg.?.RegType();
             const dst_ti = self.TargetReg.?.RegTypeIndex();
+
             const reg_sz: u4 = if (self.TargetReg) |_| @as(u4, 1) << dst_ti else 0;
-            const b_mod = (self.Displacement != null or self.OpcodeExtension != null);
             const b_16bit = (dst_t == .r16);
+
+            const dsp_sz: ?u8 = if (self.Displacement) |d| OperandSize(d, reg_sz, b_16bit) else null;
+            const imm_sz: ?u8 = if (self.Immediate) |i| OperandSize(i, reg_sz, b_16bit) else null;
+            const dsp_sl = @as([*]const u8, @ptrCast(&self.Displacement))[0 .. dsp_sz orelse 0];
+            const imm_sl = @as([*]const u8, @ptrCast(&self.Immediate))[0 .. imm_sz orelse 0];
+
+            const b_mod = (self.Displacement != null or self.OpcodeExtension != null);
             const b_16bit_addr = (b_16bit and self.Displacement != null);
             const b_16bit_open = (b_16bit and self.Displacement == null) or b16BitDisp;
 
-            const dsp_sz: ?u8 = if (self.Displacement) |d| OperandSize(d, reg_sz, b_16bit) else null;
-            const dsp_sl = @as([*]const u8, @ptrCast(&self.Displacement))[0 .. dsp_sz orelse 0];
-            const imm_sz: ?u8 = if (self.Immediate) |i| OperandSize(i, reg_sz, b_16bit) else null;
-            const imm_sl = @as([*]const u8, @ptrCast(&self.Immediate))[0 .. imm_sz orelse 0];
-
             // TODO: cleanup/actually implement something non-adhoc
             const mod_rm_byte: ?MODRM = if (b_mod) modrm: {
-                const mod_mod = self.ForceMod orelse Addressing.FromLength(dsp_sz);
-                const mod_reg: GenReg = if (self.OpcodeExtension) |ext| @enumFromInt(ext) else self.TargetReg.?;
-                const mod_rm: GenReg = if (self.OpcodeExtension) |_| self.TargetReg.? else self.SourceReg.?;
-                break :modrm MODRM.Make(mod_mod, mod_reg, mod_rm);
+                const mod = self.ForceMod orelse Addressing.FromLength(dsp_sz);
+                const reg: GenReg = if (self.OpcodeExtension) |ext| @enumFromInt(ext) else self.TargetReg.?;
+                const rm: GenReg = if (self.OpcodeExtension) |_| self.TargetReg.? else self.SourceReg.?;
+                break :modrm MODRM.Make(mod, reg, rm);
             } else null;
-
-            var addr = write_at;
 
             // prefixes
             // WARN: apparently the prefix order doesn't matter, but if it crashes try swapping these
@@ -160,7 +196,6 @@ pub fn Instruction(comptime TD: type) type {
             addr = mem.write_bytes(addr, dsp_sl);
             addr = mem.write_bytes(addr, imm_sl);
 
-            assert(addr - write_at <= 15); // max x86 instruction size
             return addr;
         }
     };
@@ -768,6 +803,9 @@ inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE:
 // pub const xNG = xLE;
 // pub const xNLE = xG;
 
+// FIXME: add support for 16bit operand size override; seems that operand is always 
+//  32bit in bytes, but truncated by the cpu in presence of the override. actually 
+//  not sure how useful this really is, but technically the impl is "wrong".
 /// Jcc - Jump if Condition Is Met
 /// Used via mnemonic-specific helpers JNZ, JE, etc.
 fn JccInstruction(write_at: usize, jump_to: u32, cond: Condition) usize {

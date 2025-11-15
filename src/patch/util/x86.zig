@@ -10,11 +10,15 @@ const maxInt = std.math.maxInt;
 
 // NOTE: supporting x86 only, not x86_64
 // NOTE: instructions roughly organized according to pnx.tf reference
+// NOTE: run tests in x86-windows mode
+//  `zig test src/patch/util/x86.zig -target x86-windows -freference-trace`
 
 // TODO: some kind of documentation at the top summarizing the overall themes
 //  with the api design
 // TODO: change all usize to u32; ensures correct size of address-related params
 //  when not compiling for x86 target
+// TODO: remove windows requirement; not urgent, not using this outside of
+//  windows for now anyway
 // FIXME: cut down on comptime requirements as much as possible (to reduce
 //  function coloring)
 // FIXME: some of the tests are getting stupid/redundant af, maybe add some
@@ -1733,26 +1737,48 @@ pub inline fn OverrideAddressSizePf(write_at: usize) usize {
 // ----------------
 
 // no-op
+// TODO: multi-byte nop flavors (e.g. 0xOF 0x1F)
 
 pub fn nop(write_at: usize) usize {
     return mem.write(write_at, u8, 0x90);
 }
 
-pub fn nop_align(write_at: usize, increment: usize) usize {
+pub fn nop_align(write_at: usize, alignment: usize) usize {
+    assert(std.math.isPowerOfTwo(alignment));
     var addr: usize = write_at;
-    while (addr % increment > 0) {
+    while (addr % alignment > 0) {
         addr = nop(addr);
     }
     return addr;
 }
 
 pub fn nop_until(write_at: usize, end: usize) usize {
-    assert(end <= write_at);
+    assert(end >= write_at);
     var addr: usize = write_at;
     while (addr < end) {
         addr = nop(addr);
     }
     return addr;
+}
+
+test "NOP" {
+    var buf_o: [4]u8 = undefined; // should be 4-byte aligned (stack-allocated)
+    const addr_o: usize = @intFromPtr(&buf_o);
+
+    try std.testing.expectEqual(addr_o + 1, nop(addr_o));
+    try std.testing.expectEqual(@as(u8, 0x90), buf_o[0]);
+    
+    const sl_until = buf_o[0..3];
+    try std.testing.expectEqual(addr_o + sl_until.len, nop_until(addr_o, addr_o + sl_until.len));
+    try std.testing.expectEqualSlices(u8, &[_]u8{0x90,0x90,0x90}, sl_until);
+
+    const alignment: usize = 4;
+    const sl_align0 = buf_o[0..0]; 
+    const sl_align1 = buf_o[1..alignment];
+    try std.testing.expectEqual(addr_o + 0, nop_align(addr_o + 0, alignment));
+    try std.testing.expectEqualSlices(u8, &[_]u8{}, sl_align0);
+    try std.testing.expectEqual(addr_o + alignment, nop_align(addr_o + 1, alignment));
+    try std.testing.expectEqualSlices(u8, &[_]u8{0x90,0x90,0x90}, sl_align1);
 }
 
 // --------------------

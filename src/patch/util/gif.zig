@@ -225,7 +225,7 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
     var sbr = MakeSubBlockReader(reader);
     const sbr_r = sbr.reader();
 
-    var canvas: []RGBA = try allocator.alloc(RGBA, self.CanvasW * self.CanvasH);
+    var canvas: []RGBA = try allocator.alloc(RGBA, @as(u32, self.CanvasW) * self.CanvasH);
     defer allocator.free(canvas);
     var cw = ColorWriter.Init(canvas, self);
     cw.ClearCanvas(); // ignore background color
@@ -435,7 +435,9 @@ test "Read GIF" {
         // NOTE: unclear what max size is if not 0xFFFF*0xFFFF, or why it should 
         // error; gif spec seems to imply that it's up to the decoder to decide 
         // supported resolution. maybe add max pixels as user option to decoder?
-        //.{ true,  pre2 ++ "max-size.gif",              error.Placeholder }, 
+        // for now, decoder has been updated to allow any size, but the following
+        // test is still disabled because there is no reference output available
+        //.{ true,  p2 ++ "max-size.gif",              error.Placeholder }, 
         .{ false, p2 ++ "4095-codes-clear.gif",      @embedFile(p2 ++ "random-image.rgba") },
         .{ false, p2 ++ "4095-codes.gif",            @embedFile(p2 ++ "random-image.rgba") },
         .{ false, p2 ++ "255-codes.gif",             @embedFile(p2 ++ "random-image.rgba") },
@@ -563,7 +565,7 @@ pub const ColorWriter = struct {
     img_initialized: bool = false,
 
     pub fn Init(buffer: []RGBA, gif: *const GIF) ColorWriter {
-        assert(buffer.len == gif.CanvasW * gif.CanvasH);
+        assert(buffer.len == @as(u32,gif.CanvasW) * gif.CanvasH);
 
         return .{
             .buffer = buffer,
@@ -583,7 +585,7 @@ pub const ColorWriter = struct {
 
         self.img_ctbl = ctbl;
         self.img_px = 0;
-        self.img_px_max = img.ImageW * img.ImageH;
+        self.img_px_max = @as(u32,img.ImageW) * img.ImageH;
         self.img = .{ .x = img.ImageX, .y = img.ImageY, .w = img.ImageW, .h = img.ImageH };
         self.img_interlaced = img.PackedField.bInterlace;
         self.img_y = 0;

@@ -576,8 +576,8 @@ inline fn GFA(
 const gif = @import("util/gif.zig");
 const cf = @import("util/color_format.zig");
 
-var fonts_initialized = false;
-var fonts_loaded = false;
+var fonts_initialized: bool = false;
+var fonts_loaded: bool = false;
 var fonts_using: bool = false;
 
 // NOTE: some texture sizes wrong here (HD) because defs not updated with new
@@ -587,16 +587,20 @@ var fonts_using: bool = false;
 var custom_font_active: u32 = 0;
 const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
     .{ &remake_font.FontTable, "base font (fixed, new atlas, new struct)", 256, 192 },
-    .{ &adj_font.FontTable, "base font (fixed, new struct)", 64, 128 },
-    .{ &hd_font.FontTable, "HD font (fixed, new struct)", 64, 128 },
+    //.{ &adj_font.FontTable, "base font (fixed, new struct)", 64, 128 },
+    .{ &hd_new_font.FontTable, "HD font (fixed, new atlas, new struct)", 256, 192 },
+    //.{ &hd_font.FontTable, "HD font (fixed, new struct)", 64, 128 },
 };
 
 // adjusted source font
 var adj_glyphs = std.mem.zeroes([5]CustomGlyphs);
 var adj_font: CustomFont = undefined;
 // old hd font
-var hd_page_bufs = std.mem.zeroes([5][512 * 1024]u16);
-var hd_font: CustomFont = undefined;
+//var hd_page_bufs = std.mem.zeroes([5][512 * 1024]u16);
+//var hd_font: CustomFont = undefined;
+// old hd font in new format
+var hd_new_page_buf = std.mem.zeroes([2048 * 1536]u16);
+var hd_new_font: CustomFont = undefined;
 // remake in custom format
 var remake_page_buf = std.mem.zeroes([256 * 192]u16); // TODO: resize for max size custom font
 var remake_font: CustomFont = undefined;
@@ -811,14 +815,29 @@ fn FontsInit() void {
     adj_font.LoadPagesFromFile(allocator);
 
     // old hd font
-    hd_font.Init(.Source, 512, 1024, true);
-    for (&hd_font.Pages, 0..) |*p, i| {
-        p.r = &hd_page_bufs[i];
-        _ = std.fmt.bufPrintZ(&p.filename, "fontraw{d}_test", .{i}) catch unreachable;
-    }
-    hd_font.CloneFonts(rf.aFontDef, false);
-    hd_font.CloneGlyphs(&adj_font.Glyphs);
-    hd_font.LoadPagesFromFile(allocator);
+    //hd_font.Init(.Source, 512, 1024, true);
+    //for (&hd_font.Pages, 0..) |*p, i| {
+    //    p.r = &hd_page_bufs[i];
+    //    _ = std.fmt.bufPrintZ(&p.filename, "fontraw{d}_test", .{i}) catch unreachable;
+    //}
+    //hd_font.CloneFonts(rf.aFontDef, false);
+    //hd_font.CloneGlyphs(&adj_font.Glyphs);
+    //hd_font.LoadPagesFromFile(allocator);
+
+    // remade old hd font
+    hd_new_font.Init(.Custom, 2048, 1536, true);
+    hd_new_font.GlyphAdjustments = .{
+        .{ &font0_new_g_adj, &font0_new_ge_adj },
+        .{ &font1_new_g_adj, &[0]GlyphAdjustment{} },
+        .{ &font2_new_g_adj, &[0]GlyphAdjustment{} },
+        .{ &font3_new_g_adj, &font3_new_ge_adj },
+        .{ &font4_new_g_adj, &font4_new_ge_adj },
+    };
+    hd_new_font.Pages[0].r = &hd_new_page_buf;
+    _ = std.fmt.bufPrintZ(&hd_new_font.Pages[0].filename, "font-hd-classic", .{}) catch unreachable;
+    hd_new_font.CloneFonts(rf.aFontDef, false);
+    hd_new_font.CloneGlyphs(&adj_font.Glyphs);
+    hd_new_font.LoadPagesFromFile(allocator);
 
     // remade source font
     remake_font.Init(.Custom, 256, 192, true);
@@ -843,7 +862,8 @@ fn FontsLoad() void {
     PatchTextClippingBug(true);
 
     adj_font.LoadPagesToGame();
-    hd_font.LoadPagesToGame();
+    //hd_font.LoadPagesToGame();
+    hd_new_font.LoadPagesToGame();
     remake_font.LoadPagesToGame();
 }
 
@@ -854,7 +874,8 @@ fn FontsUnload() void {
     PatchTextClippingBug(false);
 
     adj_font.UnloadPagesFromGame();
-    hd_font.UnloadPagesFromGame();
+    //hd_font.UnloadPagesFromGame();
+    hd_new_font.UnloadPagesFromGame();
     remake_font.UnloadPagesFromGame();
 
     UpdateGameFont(null);

@@ -586,24 +586,24 @@ var fonts_using: bool = false;
 // won't work once the texture size is unified
 var custom_font_active: u32 = 0;
 const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
-    .{ &remake_font.FontTable, "base font (fixed, new atlas, new struct)", 256, 192 },
-    //.{ &adj_font.FontTable, "base font (fixed, new struct)", 64, 128 },
-    .{ &hd_new_font.FontTable, "HD font (fixed, new atlas, new struct)", 256, 192 },
-    //.{ &hd_font.FontTable, "HD font (fixed, new struct)", 64, 128 },
+    .{ &font_custom_stock.FontTable, "base font (fixed, new atlas, new struct)", 256, 192 },
+    //.{ &font_fixed.FontTable, "base font (fixed, new struct)", 64, 128 },
+    .{ &font_custom_hd_classic.FontTable, "HD font (fixed, new atlas, new struct)", 256, 192 },
+    //.{ &font_fixed_hd_classic.FontTable, "HD font (fixed, new struct)", 64, 128 },
 };
 
 // adjusted source font
-var adj_glyphs = std.mem.zeroes([5]CustomGlyphs);
-var adj_font: CustomFont = undefined;
+var font_fixed_stock_glyphs = std.mem.zeroes([5]CustomGlyphs);
+var font_fixed_stock: CustomFont = undefined;
 // old hd font
-//var hd_page_bufs = std.mem.zeroes([5][512 * 1024]u16);
-//var hd_font: CustomFont = undefined;
+//var font_fixed_hd_classic_page_bufs = std.mem.zeroes([5][512 * 1024]u16);
+//var font_fixed_hd_classic: CustomFont = undefined;
 // old hd font in new format
-var hd_new_page_buf = std.mem.zeroes([2048 * 1536]u16);
-var hd_new_font: CustomFont = undefined;
+var font_custom_hd_classic_page_buf = std.mem.zeroes([2048 * 1536]u16);
+var font_custom_hd_classic: CustomFont = undefined;
 // remake in custom format
-var remake_page_buf = std.mem.zeroes([256 * 192]u16); // TODO: resize for max size custom font
-var remake_font: CustomFont = undefined;
+var font_custom_stock_page_buf = std.mem.zeroes([256 * 192]u16); // TODO: resize for max size custom font
+var font_custom_stock: CustomFont = undefined;
 
 const font_test_strings: [7][4][55:0]u8 = blk: {
     var test_text = std.mem.zeroes([100]u8);
@@ -797,62 +797,62 @@ fn FontsInit() void {
     // initializing during comptime seems to give invalid internally-facing pointers
 
     // adjusted source font
-    adj_glyphs[0].Clone(rf.aFontGlyphs0, rf.aFontGlyphs0Ext);
-    adj_glyphs[1].Clone(rf.aFontGlyphs1, &[0]rf.GLYPH{});
-    adj_glyphs[2].Clone(rf.aFontGlyphs2, &[0]rf.GLYPH{});
-    adj_glyphs[3].Clone(rf.aFontGlyphs3, rf.aFontGlyphs3Ext);
-    adj_glyphs[4].Clone(rf.aFontGlyphs4, rf.aFontGlyphs4Ext);
-    adj_font.Init(.Source, 64, 128, false);
-    adj_font.GlyphAdjustments = .{
-        .{ &font0_g_adj, &font0_ge_adj },
-        .{ &font1_g_adj, &[0]GlyphAdjustment{} },
-        .{ &font2_g_adj, &[0]GlyphAdjustment{} },
-        .{ &font3_g_adj, &font3_ge_adj },
-        .{ &font4_g_adj, &font4_ge_adj },
+    font_fixed_stock_glyphs[0].Clone(rf.aFontGlyphs0, rf.aFontGlyphs0Ext);
+    font_fixed_stock_glyphs[1].Clone(rf.aFontGlyphs1, &.{});
+    font_fixed_stock_glyphs[2].Clone(rf.aFontGlyphs2, &.{});
+    font_fixed_stock_glyphs[3].Clone(rf.aFontGlyphs3, rf.aFontGlyphs3Ext);
+    font_fixed_stock_glyphs[4].Clone(rf.aFontGlyphs4, rf.aFontGlyphs4Ext);
+    font_fixed_stock.Init(.Source, 64, 128, false);
+    font_fixed_stock.GlyphAdjustments = .{
+        .{ &ADJ_STOCK_TO_FIXED_FONT_0_CORE, &ADJ_STOCK_TO_FIXED_FONT_0_EXT },
+        .{ &ADJ_STOCK_TO_FIXED_FONT_1_CORE, &.{} },
+        .{ &ADJ_STOCK_TO_FIXED_FONT_2_CORE, &.{} },
+        .{ &ADJ_STOCK_TO_FIXED_FONT_3_CORE, &ADJ_STOCK_TO_FIXED_FONT_3_EXT },
+        .{ &ADJ_STOCK_TO_FIXED_FONT_4_CORE, &ADJ_STOCK_TO_FIXED_FONT_4_EXT },
     };
-    adj_font.CloneFonts(rf.aFontDef, true);
-    adj_font.CloneGlyphs(&adj_glyphs);
-    adj_font.LoadPagesFromFile(allocator);
+    font_fixed_stock.CloneFonts(rf.aFontDef, true);
+    font_fixed_stock.CloneGlyphs(&font_fixed_stock_glyphs);
+    font_fixed_stock.LoadPagesFromFile(allocator);
 
     // old hd font
-    //hd_font.Init(.Source, 512, 1024, true);
-    //for (&hd_font.Pages, 0..) |*p, i| {
+    //font_fixed_hd_classic.Init(.Source, 512, 1024, true);
+    //for (&font_fixed_hd_classic.Pages, 0..) |*p, i| {
     //    p.r = &hd_page_bufs[i];
     //    _ = std.fmt.bufPrintZ(&p.filename, "fontraw{d}_test", .{i}) catch unreachable;
     //}
-    //hd_font.CloneFonts(rf.aFontDef, false);
-    //hd_font.CloneGlyphs(&adj_font.Glyphs);
-    //hd_font.LoadPagesFromFile(allocator);
+    //font_fixed_hd_classic.CloneFonts(rf.aFontDef, false);
+    //font_fixed_hd_classic.CloneGlyphs(&adj_font.Glyphs);
+    //font_fixed_hd_classic.LoadPagesFromFile(allocator);
 
     // remade old hd font
-    hd_new_font.Init(.Custom, 2048, 1536, true);
-    hd_new_font.GlyphAdjustments = .{
-        .{ &font0_new_g_adj, &font0_new_ge_adj },
-        .{ &font1_new_g_adj, &[0]GlyphAdjustment{} },
-        .{ &font2_new_g_adj, &[0]GlyphAdjustment{} },
-        .{ &font3_new_g_adj, &font3_new_ge_adj },
-        .{ &font4_new_g_adj, &font4_new_ge_adj },
+    font_custom_hd_classic.Init(.Custom, 2048, 1536, true);
+    font_custom_hd_classic.GlyphAdjustments = .{
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_0_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_0_EXT },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_1_CORE, &.{} },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_2_CORE, &.{} },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_3_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_3_EXT },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_4_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_4_EXT },
     };
-    hd_new_font.Pages[0].r = &hd_new_page_buf;
-    _ = std.fmt.bufPrintZ(&hd_new_font.Pages[0].filename, "font-hd-classic", .{}) catch unreachable;
-    hd_new_font.CloneFonts(rf.aFontDef, false);
-    hd_new_font.CloneGlyphs(&adj_font.Glyphs);
-    hd_new_font.LoadPagesFromFile(allocator);
+    font_custom_hd_classic.Pages[0].r = &font_custom_hd_classic_page_buf;
+    _ = std.fmt.bufPrintZ(&font_custom_hd_classic.Pages[0].filename, "font-hd-classic", .{}) catch unreachable;
+    font_custom_hd_classic.CloneFonts(rf.aFontDef, false);
+    font_custom_hd_classic.CloneGlyphs(&font_fixed_stock.Glyphs);
+    font_custom_hd_classic.LoadPagesFromFile(allocator);
 
     // remade source font
-    remake_font.Init(.Custom, 256, 192, true);
-    remake_font.GlyphAdjustments = .{
-        .{ &font0_new_g_adj, &font0_new_ge_adj },
-        .{ &font1_new_g_adj, &[0]GlyphAdjustment{} },
-        .{ &font2_new_g_adj, &[0]GlyphAdjustment{} },
-        .{ &font3_new_g_adj, &font3_new_ge_adj },
-        .{ &font4_new_g_adj, &font4_new_ge_adj },
+    font_custom_stock.Init(.Custom, 256, 192, true);
+    font_custom_stock.GlyphAdjustments = .{
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_0_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_0_EXT },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_1_CORE, &.{} },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_2_CORE, &.{} },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_3_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_3_EXT },
+        .{ &ADJ_FIXED_TO_CUSTOM_FONT_4_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_4_EXT },
     };
-    remake_font.Pages[0].r = &remake_page_buf;
-    _ = std.fmt.bufPrintZ(&remake_font.Pages[0].filename, "font-basic-original", .{}) catch unreachable;
-    remake_font.CloneFonts(rf.aFontDef, false);
-    remake_font.CloneGlyphs(&adj_font.Glyphs);
-    remake_font.LoadPagesFromFile(allocator);
+    font_custom_stock.Pages[0].r = &font_custom_stock_page_buf;
+    _ = std.fmt.bufPrintZ(&font_custom_stock.Pages[0].filename, "font-basic-original", .{}) catch unreachable;
+    font_custom_stock.CloneFonts(rf.aFontDef, false);
+    font_custom_stock.CloneGlyphs(&font_fixed_stock.Glyphs);
+    font_custom_stock.LoadPagesFromFile(allocator);
 }
 
 fn FontsLoad() void {
@@ -861,10 +861,10 @@ fn FontsLoad() void {
 
     PatchTextClippingBug(true);
 
-    adj_font.LoadPagesToGame();
-    //hd_font.LoadPagesToGame();
-    hd_new_font.LoadPagesToGame();
-    remake_font.LoadPagesToGame();
+    font_fixed_stock.LoadPagesToGame();
+    font_custom_stock.LoadPagesToGame();
+    //font_fixed_hd_classic.LoadPagesToGame();
+    font_custom_hd_classic.LoadPagesToGame();
 }
 
 fn FontsUnload() void {
@@ -873,10 +873,10 @@ fn FontsUnload() void {
 
     PatchTextClippingBug(false);
 
-    adj_font.UnloadPagesFromGame();
-    //hd_font.UnloadPagesFromGame();
-    hd_new_font.UnloadPagesFromGame();
-    remake_font.UnloadPagesFromGame();
+    font_fixed_stock.UnloadPagesFromGame();
+    font_custom_stock.UnloadPagesFromGame();
+    //font_fixed_hd_classic.UnloadPagesFromGame();
+    font_custom_hd_classic.UnloadPagesFromGame();
 
     UpdateGameFont(null);
 }
@@ -1022,7 +1022,8 @@ fn ClipText(
     }
 }
 
-// HOUSEKEEPING
+//------------------------------------------------------------------------------
+// plugin housekeeping
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
     return PLUGIN_NAME;
@@ -1047,7 +1048,8 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     FontsUnload();
 }
 
-// HOOKS
+//------------------------------------------------------------------------------
+// plugin hooks
 
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
 
@@ -1104,34 +1106,38 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-// FIXME: add as an actual plugin feature with a settings toggle
-const gfa_disable = GFA(.Set, .TX, -1);
-const font0_g_adj = [_]GlyphAdjustment{
-    .{ .i = 1, .a = gfa_disable },
+//------------------------------------------------------------------------------
+// glyph adjustment defs
+
+const GLYPH_DISABLE = GFA(.Set, .TX, -1);
+
+const ADJ_STOCK_TO_FIXED_FONT_0_CORE = [_]GlyphAdjustment{
+    .{ .i = 1, .a = GLYPH_DISABLE },
     .{ .i = 2, .a = GFA(.Add, .OX, 5) },
-    .{ .i = 3, .a = gfa_disable },
-    .{ .i = 4, .a = gfa_disable },
+    .{ .i = 3, .a = GLYPH_DISABLE },
+    .{ .i = 4, .a = GLYPH_DISABLE },
     .{ .i = 7, .a = GFA(.Add, .OX, 5) },
-    .{ .i = 8, .a = gfa_disable },
-    .{ .i = 9, .a = gfa_disable },
-    .{ .i = 10, .a = gfa_disable },
+    .{ .i = 8, .a = GLYPH_DISABLE },
+    .{ .i = 9, .a = GLYPH_DISABLE },
+    .{ .i = 10, .a = GLYPH_DISABLE },
     .{ .i = 11, .a = GFA(.Add, .Ad, 3) },
-    .{ .i = 12, .a = gfa_disable },
-    .{ .i = 14, .a = gfa_disable },
+    .{ .i = 12, .a = GLYPH_DISABLE },
+    .{ .i = 14, .a = GLYPH_DISABLE },
     .{ .i = 12, .a = GFA(.Add, .Ad, 3) },
     .{ .i = 14, .a = GFA(.Add, .Ad, 5) },
     .{ .i = 15, .a = GFA(.Add, .OY, -1) },
-    .{ .i = 27, .a = gfa_disable },
+    .{ .i = 27, .a = GLYPH_DISABLE },
     .{ .i = 27, .a = GFA(.Add, .Ad, 5) }, // TODO: tweak against real text (use fixed new atlas)
-    .{ .i = 28, .a = gfa_disable },
-    .{ .i = 30, .a = gfa_disable },
+    .{ .i = 28, .a = GLYPH_DISABLE },
+    .{ .i = 30, .a = GLYPH_DISABLE },
     .{ .i = 35, .a = GFA(.Add, .OX, -1) },
     .{ .i = 51, .a = GFA(.Add, .OX, -1) },
     .{ .i = 57, .a = GFA(.Add, .OX, -1) },
 };
-const font0_ge_adj = [_]GlyphAdjustment{
-    .{ .i = 1, .a = gfa_disable },
-    .{ .i = 2, .a = gfa_disable },
+
+const ADJ_STOCK_TO_FIXED_FONT_0_EXT = [_]GlyphAdjustment{
+    .{ .i = 1, .a = GLYPH_DISABLE },
+    .{ .i = 2, .a = GLYPH_DISABLE },
     .{ .i = 6, .a = GFA(.Add, .OX, 1) },
     .{ .i = 7, .a = GFA(.Add, .OX, 1) },
     .{ .i = 8, .a = GFA(.Add, .OX, 1) },
@@ -1141,58 +1147,63 @@ const font0_ge_adj = [_]GlyphAdjustment{
     .{ .i = 13, .a = GFA(.Add, .OY, -2) },
     .{ .i = 14, .a = GFA(.Add, .OY, -2) },
 };
-const font1_g_adj = [_]GlyphAdjustment{
-    .{ .i = 1, .a = gfa_disable },
-    .{ .i = 3, .a = gfa_disable },
-    .{ .i = 4, .a = gfa_disable },
-    .{ .i = 7, .a = gfa_disable },
-    .{ .i = 8, .a = gfa_disable },
-    .{ .i = 9, .a = gfa_disable },
-    .{ .i = 10, .a = gfa_disable },
-    .{ .i = 12, .a = gfa_disable },
-    .{ .i = 13, .a = gfa_disable },
-    .{ .i = 14, .a = gfa_disable },
+
+const ADJ_STOCK_TO_FIXED_FONT_1_CORE = [_]GlyphAdjustment{
+    .{ .i = 1, .a = GLYPH_DISABLE },
+    .{ .i = 3, .a = GLYPH_DISABLE },
+    .{ .i = 4, .a = GLYPH_DISABLE },
+    .{ .i = 7, .a = GLYPH_DISABLE },
+    .{ .i = 8, .a = GLYPH_DISABLE },
+    .{ .i = 9, .a = GLYPH_DISABLE },
+    .{ .i = 10, .a = GLYPH_DISABLE },
+    .{ .i = 12, .a = GLYPH_DISABLE },
+    .{ .i = 13, .a = GLYPH_DISABLE },
+    .{ .i = 14, .a = GLYPH_DISABLE },
     .{ .i = 14, .a = GFA(.Add, .Ad, 5) },
-    .{ .i = 15, .a = gfa_disable },
+    .{ .i = 15, .a = GLYPH_DISABLE },
 };
-const font2_g_adj = [_]GlyphAdjustment{
-    .{ .i = 1, .a = gfa_disable },
-    .{ .i = 3, .a = gfa_disable },
-    .{ .i = 4, .a = gfa_disable },
-    .{ .i = 7, .a = gfa_disable },
-    .{ .i = 8, .a = gfa_disable },
-    .{ .i = 9, .a = gfa_disable },
-    .{ .i = 10, .a = gfa_disable },
-    .{ .i = 12, .a = gfa_disable },
-    .{ .i = 13, .a = gfa_disable },
+
+const ADJ_STOCK_TO_FIXED_FONT_2_CORE = [_]GlyphAdjustment{
+    .{ .i = 1, .a = GLYPH_DISABLE },
+    .{ .i = 3, .a = GLYPH_DISABLE },
+    .{ .i = 4, .a = GLYPH_DISABLE },
+    .{ .i = 7, .a = GLYPH_DISABLE },
+    .{ .i = 8, .a = GLYPH_DISABLE },
+    .{ .i = 9, .a = GLYPH_DISABLE },
+    .{ .i = 10, .a = GLYPH_DISABLE },
+    .{ .i = 12, .a = GLYPH_DISABLE },
+    .{ .i = 13, .a = GLYPH_DISABLE },
     .{ .i = 23, .a = GFA(.Add, .OX, -1) },
 };
-const font3_g_adj = [_]GlyphAdjustment{
-    .{ .i = 3, .a = gfa_disable },
-    .{ .i = 4, .a = gfa_disable },
-    .{ .i = 8, .a = gfa_disable },
-    .{ .i = 9, .a = gfa_disable },
+
+const ADJ_STOCK_TO_FIXED_FONT_3_CORE = [_]GlyphAdjustment{
+    .{ .i = 3, .a = GLYPH_DISABLE },
+    .{ .i = 4, .a = GLYPH_DISABLE },
+    .{ .i = 8, .a = GLYPH_DISABLE },
+    .{ .i = 9, .a = GLYPH_DISABLE },
     .{ .i = 11, .a = GFA(.Add, .TY, 1) },
     .{ .i = 12, .a = GFA(.Add, .OY, -2) },
     .{ .i = 13, .a = GFA(.Add, .OX, -1) },
     .{ .i = 17, .a = GFA(.Add, .OX, 1) },
     .{ .i = 17, .a = GFA(.Add, .TX, -1) },
     .{ .i = 26, .a = GFA(.Add, .OY, -1) },
-    .{ .i = 28, .a = gfa_disable },
-    .{ .i = 30, .a = gfa_disable },
+    .{ .i = 28, .a = GLYPH_DISABLE },
+    .{ .i = 30, .a = GLYPH_DISABLE },
 };
-const font3_ge_adj = [_]GlyphAdjustment{
+
+const ADJ_STOCK_TO_FIXED_FONT_3_EXT = [_]GlyphAdjustment{
     // pound (currency); this one may be intentional, overlaps 'L'
-    //.{ .i = 2, .a = gfa_disable },
+    //.{ .i = 2, .a = GLYPH_DISABLE },
     .{ .i = 3, .a = GFA(.Set, .TX, 20) },
     .{ .i = 4, .a = GFA(.Set, .TX, 12) },
 };
-const font4_g_adj = [_]GlyphAdjustment{
+
+const ADJ_STOCK_TO_FIXED_FONT_4_CORE = [_]GlyphAdjustment{
     .{ .i = 2, .a = GFA(.Add, .OY, 1) },
     .{ .i = 2, .a = GFA(.Add, .TH, -2) },
     .{ .i = 7, .a = GFA(.Add, .OY, 1) },
     .{ .i = 7, .a = GFA(.Add, .TH, -2) },
-    .{ .i = 10, .a = gfa_disable },
+    .{ .i = 10, .a = GLYPH_DISABLE },
     .{ .i = 12, .a = GFA(.Add, .TH, -2) },
     .{ .i = 14, .a = GFA(.Set, .TX, 1) },
     .{ .i = 14, .a = GFA(.Set, .TY, 25) },
@@ -1200,16 +1211,17 @@ const font4_g_adj = [_]GlyphAdjustment{
     .{ .i = 17, .a = GFA(.Add, .OX, -1) },
     .{ .i = 20, .a = GFA(.Add, .OX, -1) },
     .{ .i = 23, .a = GFA(.Add, .OX, 1) },
-    .{ .i = 28, .a = gfa_disable },
-    .{ .i = 30, .a = gfa_disable },
+    .{ .i = 28, .a = GLYPH_DISABLE },
+    .{ .i = 30, .a = GLYPH_DISABLE },
     .{ .i = 61, .a = GFA(.Add, .OX, 1) },
     .{ .i = 61, .a = GFA(.Add, .TX, -1) },
     .{ .i = 61, .a = GFA(.Add, .TW, 1) },
 };
-const font4_ge_adj = [_]GlyphAdjustment{
+
+const ADJ_STOCK_TO_FIXED_FONT_4_EXT = [_]GlyphAdjustment{
     .{ .i = 1, .a = GFA(.Set, .TX, 27) },
     .{ .i = 1, .a = GFA(.Set, .TY, 21) },
-    .{ .i = 2, .a = gfa_disable },
+    .{ .i = 2, .a = GLYPH_DISABLE },
     .{ .i = 3, .a = GFA(.Add, .OY, 1) },
     .{ .i = 4, .a = GFA(.Add, .OY, 1) },
     .{ .i = 9, .a = GFA(.Add, .OX, 2) },
@@ -1218,12 +1230,16 @@ const font4_ge_adj = [_]GlyphAdjustment{
     .{ .i = 14, .a = GFA(.Add, .OY, -1) },
 };
 
-///                   id     tx   ty   tw   th   ox   oy
-const CGAP = struct { usize, i16, i16, i16, i16, i16, i16 };
+/// t* values are absolute, o* values are relative
+///                                   id     tx   ty   tw   th   ox   oy
+const BatchGlyphAdjustment = struct { usize, i16, i16, i16, i16, i16, i16 };
 
+/// custom font format helper for batch generation of glyph adjustments
+/// @p      indices of glyphs to set to page 0 (format uses one page for all fonts)
+/// @a      glyph adjustment defs in batch format
 inline fn CGA(
     comptime p: []const usize,
-    comptime a: []const CGAP,
+    comptime a: []const BatchGlyphAdjustment,
 ) [p.len + a.len * 6]GlyphAdjustment {
     var ga = std.mem.zeroes([p.len + a.len * 6]GlyphAdjustment);
     for (p, 0..) |g, i| {
@@ -1240,10 +1256,10 @@ inline fn CGA(
     return ga;
 }
 
-const font0_new_g_adj = CGA(&[_]usize{
+const ADJ_FIXED_TO_CUSTOM_FONT_0_CORE = CGA(&[_]usize{
     2,  7,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
     23, 24, 25, 26, 31, 52, 53, 54, 55, 56, 57, 58,
-}, &[_]CGAP{
+}, &[_]BatchGlyphAdjustment{
     .{ 2, 46, 106, 11, 9, 2, 2 }, // "
     .{ 7, 57, 106, 11, 9, 2, 2 }, // '
     .{ 11, 57, 55, 17, 24, 2, 8 }, // +
@@ -1292,10 +1308,10 @@ const font0_new_g_adj = CGA(&[_]usize{
     .{ 58, 226, 26, 18, 26, 2, 2 }, // Z
 });
 
-const font0_new_ge_adj = CGA(&[_]usize{
+const ADJ_FIXED_TO_CUSTOM_FONT_0_EXT = CGA(&[_]usize{
     0,  1,  2,  3, 4, 5, 6, 7, 8, 9, 10, 11,
     12, 13, 14,
-}, &[_]CGAP{
+}, &[_]BatchGlyphAdjustment{
     .{ 3, 0, 94, 16, 16, 2, 2 }, // superscript a
     .{ 4, 16, 94, 16, 16, 2, 2 }, // superscript o
     .{ 5, 70, 79, 17, 25, 2, 2 }, // inverted ?
@@ -1310,7 +1326,7 @@ const font0_new_ge_adj = CGA(&[_]usize{
     .{ 14, 0, 73, 22, 21, 2, 2 }, // >>
 });
 
-const font1_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
+const ADJ_FIXED_TO_CUSTOM_FONT_1_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 14, 22, 76, 11, 14, 2, 1 }, // .
     .{ 26, 22, 52, 11, 24, 2, -3 }, // :
     .{ 16, 74, 52, 18, 27, 2, 2 }, // 0
@@ -1325,7 +1341,7 @@ const font1_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
     .{ 25, 236, 52, 18, 27, 3, 2 }, // 9
 });
 
-const font2_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
+const ADJ_FIXED_TO_CUSTOM_FONT_2_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 14, 84, 105, 9, 10, 2, 3 }, // .
     .{ 15, 102, 96, 14, 19, 2, 2 }, // /
     .{ 26, 93, 99, 9, 16, 2, -1 }, // :
@@ -1341,7 +1357,7 @@ const font2_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
     .{ 25, 242, 97, 14, 18, 2, 2 }, // 9
 });
 
-const font3_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
+const ADJ_FIXED_TO_CUSTOM_FONT_3_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 2, 65, 149, 9, 8, 3, 3 }, // "
     .{ 7, 74, 149, 9, 8, 3, 3 }, // '
     .{ 10, 226, 133, 13, 15, 2, 2 }, // +
@@ -1395,7 +1411,7 @@ const font3_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
     .{ 58, 51, 132, 12, 11, 2, 2 }, // Z
 });
 
-const font3_new_ge_adj = CGA(&[_]usize{}, &[_]CGAP{
+const ADJ_FIXED_TO_CUSTOM_FONT_3_EXT = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 1, 111, 143, 7, 11, 2, 2 }, // inverted !
     .{ 2, 144, 144, 10, 11, 2, 2 }, // pound (currency)
     .{ 3, 154, 144, 11, 11, 2, 2 }, // superscript a
@@ -1412,7 +1428,7 @@ const font3_new_ge_adj = CGA(&[_]usize{}, &[_]CGAP{
     .{ 14, 177, 144, 13, 11, 2, 2 }, // >>
 });
 
-const font4_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
+const ADJ_FIXED_TO_CUSTOM_FONT_4_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 2, 74, 180, 9, 7, 3, 3 }, // "
     .{ 7, 83, 180, 9, 7, 3, 3 }, // '
     .{ 13, 106, 179, 7, 9, 2, 2 }, // -
@@ -1468,7 +1484,7 @@ const font4_new_g_adj = CGA(&[_]usize{}, &[_]CGAP{
     .{ 58, 228, 162, 9, 9, 2, 2 }, // Z
 });
 
-const font4_new_ge_adj = CGA(&[_]usize{}, &[_]CGAP{
+const ADJ_FIXED_TO_CUSTOM_FONT_4_EXT = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 1, 120, 179, 7, 11, 3, 3 }, // inverted !
     .{ 3, 177, 179, 12, 11, 2, 2 }, // superscript a
     .{ 4, 189, 179, 12, 11, 2, 2 }, // superscript o

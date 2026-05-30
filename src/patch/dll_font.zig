@@ -447,47 +447,6 @@ fn LoadSpritePageFromCache(
     }
 }
 
-/// @reader     GIF file reader with cursor at top of data (i.e. call gif.ReadHead first)
-fn GIFBodyToRGBA4444(gif: *GIF, arena: std.mem.Allocator, reader: anytype, buf_o: []u16) void {
-    const buf_size = @as(usize, gif.CanvasW) * gif.CanvasH;
-    var out = std.ArrayList(u8).initCapacity(arena, buf_size * 4) catch |e|
-        PPanic("(LoadSpritePageFromGIF) init buffer: {s}", .{@errorName(e)});
-    defer out.deinit();
-    const out_w = out.writer();
-
-    // FIXME: error handling
-    gif.ReadBody(arena, reader, out_w) catch unreachable;
-
-    var out_fbs = std.io.fixedBufferStream(out.items);
-    const out_r = out_fbs.reader();
-    for (0..buf_size) |i| {
-        // FIXME: error handling?
-        const color = out_r.readInt(u32, .Little) catch break; // no more colors
-        // NOTE: output: shade goes into alpha, RGB must be 0xFFF
-        // FIXME: this may be achievable without casting if cf behaviour is
-        // changed, see note on ConvertMonoRGB A4->GA44 test case
-        buf_o[i] = (@as(u16, @intCast(cf.ConvertMonoRGB(cf.RGBA8888, cf.G4, color))) << 12) | 0xFFF;
-        // FIXME: with the following, grey value ends up in all four channels;
-        // gif tests seem to confirm that alpha will be white with my decoder,
-        // and similarly tests in color_format seem to indicate this will output
-        // AGGG if given RGBA. there appears to be no other place the color is
-        // transformed, so not sure why this drops the alpha
-        //buf_o[i] = cf.ConvertMonoRGB(cf.RGBA8888, cf.ARGB4444, color);
-    }
-}
-
-fn GIFTexturePath(arena: std.mem.Allocator, filename: []const u8) ![]const u8 {
-    const b_has_ext = std.mem.endsWith(u8, filename, ".gif") or std.mem.endsWith(u8, filename, ".GIF");
-    const n = if (b_has_ext) filename[0 .. filename.len - 4] else filename;
-    return std.fmt.allocPrint(arena, "annodue/textures/{s}.gif", .{n});
-}
-
-fn GIFCustomFontPath(arena: std.mem.Allocator, filename: []const u8) ![]const u8 {
-    const b_has_ext = std.mem.endsWith(u8, filename, ".gif") or std.mem.endsWith(u8, filename, ".GIF");
-    const n = if (b_has_ext) filename[0 .. filename.len - 4] else filename;
-    return std.fmt.allocPrint(arena, "annodue/custom/font/{s}.gif", .{n});
-}
-
 // FIXME: also, need to handle cases where the gif is the wrong size; can cause
 // buffer overflow etc.
 fn LoadSpritePageFromGIF(
@@ -554,6 +513,47 @@ fn LoadSpritePageFromGIFAndCache(
         LoadSpritePageFromGIF(allocator, buf_o, width, height, filename);
         DumpCache(buf_o, width, height, filename);
     };
+}
+
+/// @reader     GIF file reader with cursor at top of data (i.e. call gif.ReadHead first)
+fn GIFBodyToRGBA4444(gif: *GIF, arena: std.mem.Allocator, reader: anytype, buf_o: []u16) void {
+    const buf_size = @as(usize, gif.CanvasW) * gif.CanvasH;
+    var out = std.ArrayList(u8).initCapacity(arena, buf_size * 4) catch |e|
+        PPanic("(LoadSpritePageFromGIF) init buffer: {s}", .{@errorName(e)});
+    defer out.deinit();
+    const out_w = out.writer();
+
+    // FIXME: error handling
+    gif.ReadBody(arena, reader, out_w) catch unreachable;
+
+    var out_fbs = std.io.fixedBufferStream(out.items);
+    const out_r = out_fbs.reader();
+    for (0..buf_size) |i| {
+        // FIXME: error handling?
+        const color = out_r.readInt(u32, .Little) catch break; // no more colors
+        // NOTE: output: shade goes into alpha, RGB must be 0xFFF
+        // FIXME: this may be achievable without casting if cf behaviour is
+        // changed, see note on ConvertMonoRGB A4->GA44 test case
+        buf_o[i] = (@as(u16, @intCast(cf.ConvertMonoRGB(cf.RGBA8888, cf.G4, color))) << 12) | 0xFFF;
+        // FIXME: with the following, grey value ends up in all four channels;
+        // gif tests seem to confirm that alpha will be white with my decoder,
+        // and similarly tests in color_format seem to indicate this will output
+        // AGGG if given RGBA. there appears to be no other place the color is
+        // transformed, so not sure why this drops the alpha
+        //buf_o[i] = cf.ConvertMonoRGB(cf.RGBA8888, cf.ARGB4444, color);
+    }
+}
+
+fn GIFTexturePath(arena: std.mem.Allocator, filename: []const u8) ![]const u8 {
+    const b_has_ext = std.mem.endsWith(u8, filename, ".gif") or std.mem.endsWith(u8, filename, ".GIF");
+    const n = if (b_has_ext) filename[0 .. filename.len - 4] else filename;
+    return std.fmt.allocPrint(arena, "annodue/textures/{s}.gif", .{n});
+}
+
+fn GIFCustomFontPath(arena: std.mem.Allocator, filename: []const u8) ![]const u8 {
+    const b_has_ext = std.mem.endsWith(u8, filename, ".gif") or std.mem.endsWith(u8, filename, ".GIF");
+    const n = if (b_has_ext) filename[0 .. filename.len - 4] else filename;
+    return std.fmt.allocPrint(arena, "annodue/custom/font/{s}.gif", .{n});
 }
 
 // ------------
@@ -697,6 +697,7 @@ const CustomFont = struct {
     }
 
     // FIXME: better name that reflects the fact that it runs adjustments
+    // NOTE: see CloneAndAdjustGlyphSet
     pub fn CloneGlyphs(self: *CustomFont, glyphs: *const [5]CustomGlyphs) void {
         @memcpy(&self.Glyphs, glyphs);
         for (&self.Fonts, &self.Glyphs, &self.GlyphAdjustments) |*f, *g, *ga| {
@@ -815,13 +816,12 @@ fn FontsLoad() void {
     _ = arena.reset(.retain_capacity);
 
     // FIXME: error handling; fallback to disabled font features
-    const path_stock = GIFTexturePath(alloc, "font-basic-original") catch unreachable;
+    const path_stock = GIFTexturePath(alloc, "font-stock") catch unreachable;
     CustomFontFromFixed(alloc, &font_custom_stock, path_stock);
     _ = arena.reset(.retain_capacity);
 
-    // TODO: use custom content path
     // FIXME: error handling; fallback to fixed stock
-    const path_hd = GIFTexturePath(alloc, "font-hd-classic") catch unreachable;
+    const path_hd = GIFCustomFontPath(alloc, "hd-classic") catch unreachable;
     CustomFontFromFixed(alloc, &font_custom_hd_classic, path_hd);
     _ = arena.reset(.retain_capacity);
 }

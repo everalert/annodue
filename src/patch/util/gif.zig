@@ -162,6 +162,9 @@ pub fn Read(allocator: Allocator, stream: anytype, pixels: anytype, w: *u16, h: 
     h.* = gif.CanvasH;
 }
 
+// TODO: remove allocator? only used for global color table, which has a relatively
+//  small defined max size. however, not much reason to remove it when so much
+//  allocation is happening in ReadBody, which is harder to remove
 /// reads gif header block (header, logical screen descriptor and global color
 /// table) from a data stream. this is done as an extra step so that each image
 /// data block can be read separately while using this information as context.

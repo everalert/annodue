@@ -144,42 +144,53 @@ const rd = @import("racer").Debug;
 //buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
 
 // FEATURES
-// - High-resolution fonts
-// - Dump font data to file on launch (font sheets and glyph templates)
+// - custom font loading system, shipping with existing high definition font
+// - adjust font glyph defs to align more nicely and support more characters
+// - bugfix font glyph uv mapping during clipping
+// - ability to dump base game font data to file (glyph texture and UV mask images, font definition data)
+// - ability to display font testing text
 // - SETTINGS:
-//   patch_fonts            bool    * requires game restart to apply
-//   dump_fonts             bool    * requires game restart to apply
+//   enable                 bool    enable custom font system and associated font fixes
+//   font                   string  name of gif file (in /annodue/custom/font) used
+//                                  for currently shown font; use "STOCK" to display
+//                                  base game font with fixes
+//   can_dump_data          bool    enable dumping ingame font data to /annodue/developer
+//   can_show_test          bool    enable displaying font test text
 
 const PLUGIN_NAME: [*:0]const u8 = "Font";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const FontState = struct {
     var h_s_section: ?SettingHandle = null;
-    var h_s_patch_fonts: ?SettingHandle = null;
-    var h_s_dump_fonts: ?SettingHandle = null;
-    var s_patch_fonts: bool = false;
-    var s_dump_fonts: bool = false;
+    var h_s_enable: ?SettingHandle = null;
+    var h_s_font: ?SettingHandle = null;
+    var h_s_can_dump_data: ?SettingHandle = null;
+    var h_s_can_show_test: ?SettingHandle = null;
+    var s_enable: bool = false;
+    var s_font: [63:0]u8 = "STOCK";
+    var s_can_dump_data: bool = false;
+    var s_can_show_test: bool = false;
+
     var dump_fonts_done: bool = false;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "font", null);
         h_s_section = section;
 
-        h_s_patch_fonts =
-            gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, &s_patch_fonts, null);
-        h_s_dump_fonts = // working?
-            gf.ASettingOccupy(section, "dump_fonts", .B, .{ .b = false }, &s_dump_fonts, null);
+        h_s_enable =
+            gf.ASettingOccupy(section, "enable", .B, .{ .b = true }, &s_enable, null);
+        h_s_font =
+            gf.ASettingOccupy(section, "font", .Str, .{ .str = "STOCK" }, &s_enable, null);
+
+        // TODO: more of these debug toggles?
+        h_s_can_dump_data =
+            gf.ASettingOccupy(section, "can_dump_data", .B, .{ .b = false }, &s_can_dump_data, null);
+        h_s_can_show_test =
+            gf.ASettingOccupy(section, "can_show_test", .B, .{ .b = false }, &s_can_show_test, null);
     }
 
-    // FIXME: crashes, but only in OnInit; not on arbitrary keypress in the other
-    // version, nor here on plugin hot-reload (i.e. OnInitLate)
-    // TODO: make sure it only dumps once, even when hot reloading; alternatively,
-    // make it dump with a button press in a menu
-    fn settingsFontDump(value: Setting.Value) callconv(.C) void {
-        if (value.b and !dump_fonts_done)
-            FontDump();
-    }
-
+    // WARN: should be used after game init is done, e.g. in response to a button
+    //  press. may crash the game if called too early during game init.
     fn FontDump() void {
         dump_fonts_done = true;
         var font: [5][0x2000]u8 = undefined;
@@ -568,6 +579,15 @@ const GlyphFieldAdjustment = struct {
     v: i16,
 };
 
+// TODO: migrate to decl literal usage after updating zig version
+inline fn GFA(
+    t: GlyphFieldAdjustment.T,
+    f: GlyphFieldAdjustment.F,
+    v: i16,
+) GlyphFieldAdjustment {
+    return .{ .t = t, .f = f, .v = v };
+}
+
 const GlyphAdjustment = struct {
     i: usize,
     a: GlyphFieldAdjustment,
@@ -598,14 +618,6 @@ fn AdjustGlyphSet(set: []rf.GLYPH, adjustments: []const GlyphAdjustment) void {
     }
 }
 
-inline fn GFA(
-    t: GlyphFieldAdjustment.T,
-    f: GlyphFieldAdjustment.F,
-    v: i16,
-) GlyphFieldAdjustment {
-    return .{ .t = t, .f = f, .v = v };
-}
-
 // ------------
 // Custom stuff workspace
 // ------------
@@ -619,11 +631,12 @@ const cf = @import("util/color_format.zig");
 var fonts_loaded: bool = false;
 var fonts_active: bool = false;
 
+var custom_font_active: u32 = 0;
+
 // NOTE: some texture sizes wrong here (HD) because defs not updated with new
 // dimensions, but it works out because the old values map to the same UVs as
 // would be with correct values, since the atlas is similar; this trick likely
-// won't work once the texture size is unified
-var custom_font_active: u32 = 0;
+// won't work once the texture size is unified??? (idk)
 const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
     .{ &font_custom_stock.FontTable, "base font (fixed, new atlas, new struct)", 256, 192 },
     //.{ &font_fixed.FontTable, "base font (fixed, new struct)", 64, 128 },
@@ -1073,23 +1086,20 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 //------------------------------------------------------------------------------
 // plugin hooks
 
+// TODO: "better" control flow that actually shows the implication that fonts
+//  will only be loaded when the 'enable' setting is on?
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
-
     // NOTE: original function at fn_42D720
     // making sure original fonts are fully loaded before this runs
-    if (!fonts_loaded and FontState.s_patch_fonts) {
+    if (!fonts_loaded and FontState.s_enable) {
         FontsLoad();
     }
 
     // toggle custom fonts
     if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
-        if (fonts_active) {
-            fonts_active = false;
-            UpdateGameFont(null);
-        } else {
-            fonts_active = true;
-            UpdateGameFont(custom_font_active);
-        }
+        const font = if (fonts_active) null else custom_font_active;
+        UpdateGameFont(font);
+        fonts_active = !fonts_active;
     }
 
     // cycle displayed custom font
@@ -1098,8 +1108,10 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
         UpdateGameFont(custom_font_active);
     }
 
+    // TODO: use annodue text instead so that it can scale with unlimited text
+    //  and be cleaner?
     // testing display showing all(?) font glyphs
-    if (gf.InputGetKbRaw(.O).on()) {
+    if (FontState.s_can_show_test and gf.InputGetKbRaw(.O).on()) {
         var buf: [255:0]u8 = undefined;
         var x: i16 = 12;
         var y: i16 = 128;
@@ -1121,9 +1133,10 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
         }
     }
 
-    // testing font data dump
-    if (gf.InputGetKbRaw(.I) == .JustOn and FontState.s_dump_fonts) {
+    // font data dump
+    if (FontState.s_can_dump_data and gf.InputGetKbRaw(.I) == .JustOn) {
         FontState.FontDump();
+        gf.ToastNew("Font data dumped to /annodue/developer", 0xFFFFFFFF);
     }
 }
 

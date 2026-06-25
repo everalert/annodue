@@ -27,6 +27,13 @@ const r3 = @import("racer").@"3D";
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
+// FIXME: using ConsoleOut from here allows general logging to be spat out in the
+//  ConsoleOut window (see: gif.zig), meaning you don't actually have to call
+//  ConsoleOut to write to console once the window is actually up. maybe the
+//  ConsoleOut API should be adjusted to reflect this? maybe just have an
+//  enable/disable console API function in annodue, and let the user do whatever
+//  they want to actually forward console writes? might be more convenient to
+//  manage scoped logging this way
 // FIXME: remove, for testing
 const dbg = @import("util/debug.zig");
 const rd = @import("racer").Debug;
@@ -154,8 +161,9 @@ const rd = @import("racer").Debug;
 //   font                   string  name of gif file (in /annodue/custom/font) used
 //                                  for currently shown font; use "STOCK" to display
 //                                  base game font with fixes
-//   can_dump_data          bool    enable dumping ingame font data to /annodue/developer
 //   can_show_test          bool    enable displaying font test text
+//   can_dump_data          bool    enable dumping source ingame font data to /annodue/developer
+//   can_dump_glyphs        bool    enable dumping glyph binary data of currently loaded font
 
 const PLUGIN_NAME: [*:0]const u8 = "Font";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -164,12 +172,14 @@ const FontState = struct {
     var h_s_section: ?SettingHandle = null;
     var h_s_enable: ?SettingHandle = null;
     var h_s_font: ?SettingHandle = null;
-    var h_s_can_dump_data: ?SettingHandle = null;
     var h_s_can_show_test: ?SettingHandle = null;
+    var h_s_can_dump_data: ?SettingHandle = null;
+    var h_s_can_dump_glyphs: ?SettingHandle = null;
     var s_enable: bool = false;
     var s_font: [63:0]u8 = "STOCK";
-    var s_can_dump_data: bool = false;
     var s_can_show_test: bool = false;
+    var s_can_dump_data: bool = false;
+    var s_can_dump_glyphs: bool = false;
 
     var dump_fonts_done: bool = false;
 
@@ -183,10 +193,12 @@ const FontState = struct {
             gf.ASettingOccupy(section, "font", .Str, .{ .str = "STOCK" }, &s_enable, null);
 
         // TODO: more of these debug toggles?
-        h_s_can_dump_data =
-            gf.ASettingOccupy(section, "can_dump_data", .B, .{ .b = false }, &s_can_dump_data, null);
         h_s_can_show_test =
             gf.ASettingOccupy(section, "can_show_test", .B, .{ .b = false }, &s_can_show_test, null);
+        h_s_can_dump_data =
+            gf.ASettingOccupy(section, "can_dump_data", .B, .{ .b = false }, &s_can_dump_data, null);
+        h_s_can_dump_glyphs =
+            gf.ASettingOccupy(section, "can_dump_glyphs", .B, .{ .b = false }, &s_can_dump_glyphs, null);
     }
 
     // WARN: should be used after game init is done, e.g. in response to a button
@@ -633,15 +645,15 @@ var fonts_active: bool = false;
 
 var custom_font_active: u32 = 0;
 
+// TODO: probably consolidate the anonymous struct used here with CustomFont when
+//  moving to implementing dynamic font list
 // NOTE: some texture sizes wrong here (HD) because defs not updated with new
-// dimensions, but it works out because the old values map to the same UVs as
-// would be with correct values, since the atlas is similar; this trick likely
-// won't work once the texture size is unified??? (idk)
-const custom_fonts = [_]struct { *const [7]?*rf.FONT, []const u8, f32, f32 }{
-    .{ &font_custom_stock.FontTable, "base font (fixed, new atlas, new struct)", 256, 192 },
-    //.{ &font_fixed.FontTable, "base font (fixed, new struct)", 64, 128 },
-    .{ &font_custom_hd_classic.FontTable, "HD font (fixed, new atlas, new struct)", 256, 192 },
-    //.{ &font_fixed_hd_classic.FontTable, "HD font (fixed, new struct)", 64, 128 },
+//  dimensions, but it works out because the old values map to the same UVs as
+//  would be with correct values, since the atlas is similar; this trick likely
+//  won't work once the texture size is unified??? (idk)
+const custom_fonts = [_]struct { *const CustomFont, []const u8, f32, f32 }{
+    .{ &font_custom_stock, "base font (fixed, new atlas, new struct)", 256, 192 },
+    .{ &font_custom_hd_classic, "HD font (fixed, new atlas, new struct)", 256, 192 },
 };
 
 var font_fixed_stock: CustomFont = undefined;
@@ -674,6 +686,8 @@ const font_test_strings: [7][4][55:0]u8 = blk: {
     break :blk buf;
 };
 
+// FIXME: remove needless fields that could be function args, e.g. GlyphAdjustments;
+//  also do similar simplification pass on other code
 const CustomFont = struct {
     const Structure = enum(u8) { Source, Custom };
     const AdjustmentSet = struct { []const GlyphAdjustment, []const GlyphAdjustment };
@@ -768,6 +782,34 @@ const CustomFont = struct {
         switch (self.Mode) {
             .Source => for (&self.Pages) |*p| r3.hMaterial_OwnedFree(&p.m),
             .Custom => r3.hMaterial_OwnedFree(&self.Pages[0].m),
+        }
+    }
+
+    // FIXME: when making `GlyphBinLoad`, assert that the binary data byte length
+    //  matches the amount of bytes consumed by all the combined glyph arrays in
+    //  `CustomFont.Glyphs` (i.e. the combined byte size of the arrays in CustomGlyphs
+    //  times the length of the CustomGlyphs array in CustomFont). this is to
+    //  ensure that the error is more likely to be found if CustomGlyphs is changed
+    //  such that the old arrays no longer match the existing saved binary files.
+    // FIXME: crashes if directory doesn't exist
+    /// generates file containing the glyph definition data in binary form simply
+    /// concatenated together. this is used to store the result of adjusted glyph
+    /// defs so that they can be loaded as presets that don't require running the
+    /// adjustment code, ideally in the form of @embedFile so there is no end-user
+    /// runtime cost associated with the file system.
+    fn GlyphBinDump(self: *const CustomFont, filename: []const u8) void {
+        const file = std.fs.cwd().createFile(filename, .{}) catch |e|
+            PPanic("(GlyphBinDump) create file: {s}", .{@errorName(e)});
+        defer file.close();
+        var file_bw = std.io.bufferedWriter(file.writer());
+        defer _ = file_bw.flush() catch |e|
+            PPanic("(GlyphBinDump) flush: {s}", .{@errorName(e)});
+
+        for (&self.Glyphs) |*glyphs| {
+            _ = file_bw.write(std.mem.asBytes(&glyphs.Std)) catch |e|
+                PPanic("(GlyphBinDump) write std: {s}", .{@errorName(e)});
+            _ = file_bw.write(std.mem.asBytes(&glyphs.Ext)) catch |e|
+                PPanic("(GlyphBinDump) write ext: {s}", .{@errorName(e)});
         }
     }
 };
@@ -917,7 +959,7 @@ fn CustomFontFromFixed(arena: std.mem.Allocator, font: *CustomFont, filepath: []
 }
 
 fn UpdateGameFont(i: ?usize) void {
-    const table: u32 = if (i) |ii| @intFromPtr(custom_fonts[ii][0]) else @intFromPtr(rt.apTextFont);
+    const table: u32 = if (i) |ii| @intFromPtr(&custom_fonts[ii][0].FontTable) else @intFromPtr(rt.apTextFont);
     const unit_scale_x: f32 = if (i) |ii| 1 / custom_fonts[ii][2] else 1 / @as(f32, 64);
     const unit_scale_y: f32 = if (i) |ii| 1 / custom_fonts[ii][3] else 1 / @as(f32, 128);
 
@@ -1074,6 +1116,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 
 // NOTE: other fonts init in TextRenderB
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    // TODO: remove; this is only here because not referencing the variable
+    //  causes it to sometimes be initialized to a garbage value (even though
+    //  it's explitly set in the def), which causes an oob error below. unsure
+    //  of the cause, may not be an issue after upgrading from zig 0.11, and
+    //  might not come up after the globals get consolidated into structures.
+    custom_font_active = 0;
+
     FontState.settingsInit(gf);
 }
 
@@ -1091,15 +1140,14 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     // NOTE: original function at fn_42D720
     // making sure original fonts are fully loaded before this runs
-    if (!fonts_loaded and FontState.s_enable) {
+    if (!fonts_loaded and FontState.s_enable)
         FontsLoad();
-    }
 
     // toggle custom fonts
     if (fonts_loaded and gf.InputGetKbRaw(.K) == .JustOn) {
-        const font = if (fonts_active) null else custom_font_active;
-        UpdateGameFont(font);
         fonts_active = !fonts_active;
+        const font = if (fonts_active) custom_font_active else null;
+        UpdateGameFont(font);
     }
 
     // cycle displayed custom font
@@ -1136,7 +1184,20 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     // font data dump
     if (FontState.s_can_dump_data and gf.InputGetKbRaw(.I) == .JustOn) {
         FontState.FontDump();
-        gf.ToastNew("Font data dumped to /annodue/developer", 0xFFFFFFFF);
+        _ = gf.ToastNew("Font data dumped to /annodue/developer", 0xFFFFFFFF);
+    }
+
+    // TODO: setting to use manually generated adjustments instead of stored ones
+    // FIXME: will need a different place to store the generated fixed glyphs, once
+    //  fonts are loaded dynamically. should also probably generate the adjustments
+    //  ahead of time even if the user hasn't loaded any fonts yet, to remove the
+    //  dependency dumping currently has of the custom font actually being made, as
+    //  well as potentially simplifying the custom font loading process.
+    // font glyph binary data dump
+    if (FontState.s_can_dump_glyphs and fonts_active and gf.InputGetKbRaw(.E) == .JustOn) {
+        font_fixed_stock.GlyphBinDump("annodue/developer/fontcustom_glyphs_fixed.bin");
+        font_custom_stock.GlyphBinDump("annodue/developer/fontcustom_glyphs_custom.bin");
+        _ = gf.ToastNew("Font glyphs dumped to /annodue/developer", 0xFFFFFFFF);
     }
 }
 

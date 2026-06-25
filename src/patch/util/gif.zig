@@ -6,6 +6,8 @@ const Writer = std.io.Writer;
 const Reader = std.io.Reader;
 const Allocator = std.mem.Allocator;
 
+const log = std.log.scoped(.gif);
+
 // GIF 87a/89a
 // NOTE: just implementing enough to read single frame gifs for now
 // at the time of writing, the usecase is reading greyscale font glyphs
@@ -183,22 +185,22 @@ pub fn ReadHead(self: *GIF, allocator: Allocator, reader: anytype) !void {
         self.Version = .@"89a";
     if (self.Version == null)
         return error.InvalidHeader;
-    std.log.debug("ReadMetadata :: Version = {?s}", .{@tagName(self.Version.?)});
+    log.debug("ReadMetadata :: Version = {?s}", .{@tagName(self.Version.?)});
 
     self.CanvasW = try reader.readIntLittle(u16);
     self.CanvasH = try reader.readIntLittle(u16);
     self.PackedField = @bitCast(try reader.readByte());
     self.BackgroundColorIndex = try reader.readByte();
     self.PixelAspectRatio = try reader.readByte();
-    std.log.debug("ReadMetadata :: CanvasW = {d}", .{self.CanvasW});
-    std.log.debug("ReadMetadata :: CanvasH = {d}", .{self.CanvasH});
-    std.log.debug("ReadMetadata :: PackedField = 0b{b:0>8}", .{@as(u8, @bitCast(self.PackedField))});
-    std.log.debug("ReadMetadata ::  bGlobalColorTable = {any}", .{self.PackedField.bGlobalColorTable});
-    std.log.debug("ReadMetadata ::  ColorResolution = {d}", .{self.PackedField.ColorResolution});
-    std.log.debug("ReadMetadata ::  bSort = {any}", .{self.PackedField.bGlobalColorTableSorted});
-    std.log.debug("ReadMetadata ::  ColorTableSize = {d}", .{self.PackedField.ColorTableSize});
-    std.log.debug("ReadMetadata :: BackgroundColorIndex = {d}", .{self.BackgroundColorIndex});
-    std.log.debug("ReadMetadata :: PixelAspectRatio = {d}", .{self.PixelAspectRatio});
+    log.debug("ReadMetadata :: CanvasW = {d}", .{self.CanvasW});
+    log.debug("ReadMetadata :: CanvasH = {d}", .{self.CanvasH});
+    log.debug("ReadMetadata :: PackedField = 0b{b:0>8}", .{@as(u8, @bitCast(self.PackedField))});
+    log.debug("ReadMetadata ::  bGlobalColorTable = {any}", .{self.PackedField.bGlobalColorTable});
+    log.debug("ReadMetadata ::  ColorResolution = {d}", .{self.PackedField.ColorResolution});
+    log.debug("ReadMetadata ::  bSort = {any}", .{self.PackedField.bGlobalColorTableSorted});
+    log.debug("ReadMetadata ::  ColorTableSize = {d}", .{self.PackedField.ColorTableSize});
+    log.debug("ReadMetadata :: BackgroundColorIndex = {d}", .{self.BackgroundColorIndex});
+    log.debug("ReadMetadata :: PixelAspectRatio = {d}", .{self.PixelAspectRatio});
 
     if (self.CanvasW == 0 or self.CanvasH == 0)
         return error.InvalidCanvasDimensions;
@@ -209,8 +211,8 @@ pub fn ReadHead(self: *GIF, allocator: Allocator, reader: anytype) !void {
         const len = @as(usize, 1) << (@as(u4, @intCast(self.PackedField.ColorTableSize)) + 1);
         self.GlobalColorTable = try allocator.alloc(RGB, len);
         var gct_slice = std.mem.sliceAsBytes(self.GlobalColorTable.?);
-        std.log.debug("ReadMetadata :: gct len = {d}", .{len});
-        std.log.debug("ReadMetadata :: gct_slice.len = {d}", .{gct_slice.len});
+        log.debug("ReadMetadata :: gct len = {d}", .{len});
+        log.debug("ReadMetadata :: gct_slice.len = {d}", .{gct_slice.len});
         _ = try reader.read(gct_slice);
     }
 }
@@ -240,7 +242,7 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
         const block_label = reader.readEnum(BlockLabel, .Little) catch
             return error.InvalidBlockLabel;
 
-        std.log.debug(pre ++ "[BLOCK] {s}", .{@tagName(block_label)});
+        log.debug(pre ++ "[BLOCK] {s}", .{@tagName(block_label)});
         switch (block_label) {
             .Trailer => {
                 if (prev_block != null) return error.PrematureTrailer;
@@ -256,22 +258,22 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
                     prev_block.?[1].? == .GraphicControl))
                     return error.InvalidImageDescriptorLocation;
 
-                std.log.debug(pre ++ " Parsing Image Descriptor", .{});
+                log.debug(pre ++ " Parsing Image Descriptor", .{});
                 var idsc = std.mem.zeroes(ImageDescriptor);
                 idsc.ImageX = try reader.readIntLittle(u16);
                 idsc.ImageY = try reader.readIntLittle(u16);
                 idsc.ImageW = try reader.readIntLittle(u16);
                 idsc.ImageH = try reader.readIntLittle(u16);
                 idsc.PackedField = @bitCast(try reader.readByte());
-                std.log.debug(pre ++ "  ImageX = {d}", .{idsc.ImageX});
-                std.log.debug(pre ++ "  ImageY = {d}", .{idsc.ImageY});
-                std.log.debug(pre ++ "  ImageW = {d}", .{idsc.ImageW});
-                std.log.debug(pre ++ "  ImageH = {d}", .{idsc.ImageH});
-                std.log.debug(pre ++ "  PackedField = 0b{b:0>8}", .{@as(u8, @bitCast(idsc.PackedField))});
-                std.log.debug(pre ++ "   bLocalColorTable = {any}", .{idsc.PackedField.bLocalColorTable});
-                std.log.debug(pre ++ "   bInterlace = {any}", .{idsc.PackedField.bInterlace});
-                std.log.debug(pre ++ "   bSort = {any}", .{idsc.PackedField.bSort});
-                std.log.debug(pre ++ "   ColorTableSize = {d}", .{idsc.PackedField.ColorTableSize});
+                log.debug(pre ++ "  ImageX = {d}", .{idsc.ImageX});
+                log.debug(pre ++ "  ImageY = {d}", .{idsc.ImageY});
+                log.debug(pre ++ "  ImageW = {d}", .{idsc.ImageW});
+                log.debug(pre ++ "  ImageH = {d}", .{idsc.ImageH});
+                log.debug(pre ++ "  PackedField = 0b{b:0>8}", .{@as(u8, @bitCast(idsc.PackedField))});
+                log.debug(pre ++ "   bLocalColorTable = {any}", .{idsc.PackedField.bLocalColorTable});
+                log.debug(pre ++ "   bInterlace = {any}", .{idsc.PackedField.bInterlace});
+                log.debug(pre ++ "   bSort = {any}", .{idsc.PackedField.bSort});
+                log.debug(pre ++ "   ColorTableSize = {d}", .{idsc.PackedField.ColorTableSize});
 
                 defer prev_block = null;
 
@@ -280,7 +282,7 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
 
                 var local_color_table: ?[]RGB = null;
                 if (idsc.PackedField.bLocalColorTable) {
-                    std.log.debug(pre ++ " Parsing Local Color Table", .{});
+                    log.debug(pre ++ " Parsing Local Color Table", .{});
                     const len = @as(usize, 1) << (@as(u4, @intCast(idsc.PackedField.ColorTableSize)) + 1);
                     local_color_table = try allocator.alloc(RGB, len);
                     _ = try reader.read(std.mem.sliceAsBytes(local_color_table.?));
@@ -288,14 +290,14 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
                 defer if (local_color_table) |lct| allocator.free(lct);
 
                 // TODO: add option for "default" color table fallback instead of error
-                std.log.debug(pre ++ " Parsing Image Data", .{});
+                log.debug(pre ++ " Parsing Image Data", .{});
                 sbr.reset();
                 try cw.StartImage(local_color_table, &idsc);
                 var lzw = MakeDecodeLZW(allocator, sbr_r, cw.writer());
                 defer lzw.Deinit();
                 const lzw_min_code_size = try reader.readByte();
-                std.log.debug(pre ++ "  MinCodeSize = {d}", .{lzw_min_code_size});
-                defer std.log.debug(pre ++ "  Wrote {d}/{d}px", .{ cw.img_px, cw.img_px_max });
+                log.debug(pre ++ "  MinCodeSize = {d}", .{lzw_min_code_size});
+                defer log.debug(pre ++ "  Wrote {d}/{d}px", .{ cw.img_px, cw.img_px_max });
                 try lzw.Decode(@intCast(lzw_min_code_size));
                 try cw.EndImage();
             },
@@ -303,7 +305,7 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
                 const extension_label = reader.readEnum(ExtensionLabel, .Little) catch
                     return error.InvalidBlockLabel;
 
-                std.log.debug(pre ++ "[EXTENSION] {s}", .{@tagName(extension_label)});
+                log.debug(pre ++ "[EXTENSION] {s}", .{@tagName(extension_label)});
                 switch (extension_label) {
                     .GraphicControl => {
                         if (prev_block != null)
@@ -314,12 +316,12 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
                         g_ctrl.PackedField = @bitCast(try sbr_r.readByte());
                         g_ctrl.DelayTime = try sbr_r.readIntLittle(u16);
                         g_ctrl.TransparentColorIndex = try sbr_r.readByte();
-                        std.log.debug(pre ++ "  PackedField = 0b{b:0>8}", .{@as(u8, @bitCast(g_ctrl.PackedField))});
-                        std.log.debug(pre ++ "   bTransparentColor = {any}", .{g_ctrl.PackedField.bTransparentColor});
-                        std.log.debug(pre ++ "   bUserInput = {any}", .{g_ctrl.PackedField.bUserInput});
-                        std.log.debug(pre ++ "   DisposalMethod = {d}", .{g_ctrl.PackedField.DisposalMethod});
-                        std.log.debug(pre ++ "  DelayTime = {d}", .{g_ctrl.DelayTime});
-                        std.log.debug(pre ++ "  TransparentColorIndex = {d}", .{g_ctrl.TransparentColorIndex});
+                        log.debug(pre ++ "  PackedField = 0b{b:0>8}", .{@as(u8, @bitCast(g_ctrl.PackedField))});
+                        log.debug(pre ++ "   bTransparentColor = {any}", .{g_ctrl.PackedField.bTransparentColor});
+                        log.debug(pre ++ "   bUserInput = {any}", .{g_ctrl.PackedField.bUserInput});
+                        log.debug(pre ++ "   DisposalMethod = {d}", .{g_ctrl.PackedField.DisposalMethod});
+                        log.debug(pre ++ "  DelayTime = {d}", .{g_ctrl.DelayTime});
+                        log.debug(pre ++ "  TransparentColorIndex = {d}", .{g_ctrl.TransparentColorIndex});
 
                         prev_block = .{ .Extension, extension_label };
                     },
@@ -492,14 +494,14 @@ test "Read GIF" {
     };
 
     inline for (test_images) |ti| {
-        const log = ti[0];
+        const log_debug = ti[0];
         const log_old = std.testing.log_level;
         defer std.testing.log_level = log_old;
-        if (log) std.testing.log_level = .debug;
+        if (log_debug) std.testing.log_level = .debug;
 
         const file = ti[1];
         const expected = ti[2];
-        std.log.debug("Reading: {s}", .{file});
+        log.debug("Reading: {s}", .{file});
 
         var in = std.io.fixedBufferStream(@embedFile(file));
         const in_r = in.reader();
@@ -908,18 +910,18 @@ pub fn DecodeLZW(
                     }
                 }
 
-                std.log.debug(
+                log.debug(
                     "Decode :: STEP {d: <10}N=#{d: <6}P=#{d: <6}CS={d: <4}NC={d: <6}NCT={d: <6}",
                     .{ i, N, P, code_size, NC, NCT },
                 );
 
                 if (N == self.table_code_eoi) {
-                    std.log.debug("Decode :: End Of Information", .{});
+                    log.debug("Decode :: End Of Information", .{});
                     break;
                 }
 
                 if (N == self.table_code_clr) {
-                    std.log.debug("Decode :: Clearing Table", .{});
+                    log.debug("Decode :: Clearing Table", .{});
                     try self.TableReset(starting_code_count);
                     code_size = @intCast(min_code_size + 1);
                     NC = self.table_code_eoi + 1;
@@ -928,7 +930,7 @@ pub fn DecodeLZW(
                 }
 
                 if (N < NC) {
-                    //std.log.debug("Decode :: Code Found", .{});
+                    //log.debug("Decode :: Code Found", .{});
 
                     try self.ValueEmit(N);
                     //try self.ValueLog(N);
@@ -941,7 +943,7 @@ pub fn DecodeLZW(
                     const NV = self.table.get(N).?;
                     try self.table.put(NC, .{ .value = NV.start, .start = PV.start, .prefix = P });
                 } else {
-                    //std.log.debug("Decode :: Code Not Found", .{});
+                    //log.debug("Decode :: Code Not Found", .{});
 
                     if (N > NC) return error.InvalidCode; // FIXME: should this continue anyway?
                     if (NC > MAX_CODE) return error.MaxCodeSizeExceeded;
@@ -954,9 +956,9 @@ pub fn DecodeLZW(
                 }
             }
 
-            //std.log.debug("Decode :: Final Code List", .{});
+            //log.debug("Decode :: Final Code List", .{});
             //for (0..NC) |c| {
-            //    std.log.debug("Decode ::  #{d:0>4}", .{c});
+            //    log.debug("Decode ::  #{d:0>4}", .{c});
             //    if (c != self.table_code_clr and c != self.table_code_eoi)
             //        try self.ValueLog(@intCast(c));
             //}
@@ -1002,7 +1004,7 @@ pub fn DecodeLZW(
 
             if (V.?.prefix) |p| try self.ValueLog(p);
 
-            std.log.debug("ValueLog :: {d:0>2}", .{V.?.value});
+            log.debug("ValueLog :: {d:0>2}", .{V.?.value});
         }
     };
 }
@@ -1057,7 +1059,7 @@ pub const LoggingWriter = struct {
 
     pub fn write(self: *LoggingWriter, bytes: []const u8) Error!usize {
         switch (self.level) {
-            .debug => std.log.debug("{any}", .{bytes}),
+            .debug => log.debug("{any}", .{bytes}),
             else => @panic("not implemented"),
         }
         return bytes.len;

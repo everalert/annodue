@@ -600,35 +600,39 @@ inline fn GFA(
     return .{ .t = t, .f = f, .v = v };
 }
 
+const GlyphAdjustmentSet = struct { []const GlyphAdjustment, []const GlyphAdjustment };
+
 const GlyphAdjustment = struct {
     i: usize,
     a: GlyphFieldAdjustment,
-};
 
-fn CloneAndAdjustGlyphSet(src: []const rf.GLYPH, dst: []rf.GLYPH, adjustments: []const GlyphAdjustment) void {
-    assert(src.len == dst.len);
-    @memcpy(dst, src);
-    AdjustGlyphSet(dst, adjustments);
-}
-
-fn AdjustGlyphSet(set: []rf.GLYPH, adjustments: []const GlyphAdjustment) void {
-    for (adjustments) |adj| {
-        var value: *i16 = switch (adj.a.f) {
-            .Pg => &set[adj.i].PageID,
-            .Ad => &set[adj.i].Advance,
-            .OX => &set[adj.i].OffX,
-            .OY => &set[adj.i].OffY,
-            .TX => &set[adj.i].TexX,
-            .TY => &set[adj.i].TexY,
-            .TW => &set[adj.i].TexW,
-            .TH => &set[adj.i].TexH,
-        };
-        switch (adj.a.t) {
-            .Set => value.* = adj.a.v,
-            .Add => value.* += adj.a.v,
+    /// adjust set of game GLYPHs
+    pub fn AdjustSet(set: []rf.GLYPH, adjustments: []const GlyphAdjustment) void {
+        for (adjustments) |adj| {
+            var value: *i16 = switch (adj.a.f) {
+                .Pg => &set[adj.i].PageID,
+                .Ad => &set[adj.i].Advance,
+                .OX => &set[adj.i].OffX,
+                .OY => &set[adj.i].OffY,
+                .TX => &set[adj.i].TexX,
+                .TY => &set[adj.i].TexY,
+                .TW => &set[adj.i].TexW,
+                .TH => &set[adj.i].TexH,
+            };
+            switch (adj.a.t) {
+                .Set => value.* = adj.a.v,
+                .Add => value.* += adj.a.v,
+            }
         }
     }
-}
+
+    /// adjust copied set of game GLYPHs
+    pub fn AdjustSetClone(src: []const rf.GLYPH, dst: []rf.GLYPH, adjustments: []const GlyphAdjustment) void {
+        assert(src.len == dst.len);
+        @memcpy(dst, src);
+        AdjustSet(dst, adjustments);
+    }
+};
 
 // ------------
 // Custom stuff workspace
@@ -689,17 +693,18 @@ const font_test_strings: [7][4][55:0]u8 = blk: {
 // FIXME: remove needless fields that could be function args, e.g. GlyphAdjustments;
 //  also do similar simplification pass on other code
 const CustomFont = struct {
-    const Structure = enum(u8) { Source, Custom };
-    const AdjustmentSet = struct { []const GlyphAdjustment, []const GlyphAdjustment };
-
     FontTable: [7]?*rf.FONT,
     Fonts: [5]rf.FONT,
-    Pages: [5]FontPage,
+    Pages: [5]CustomPage,
     PageSize: struct { w: u16, h: u16 },
     Glyphs: [5]CustomGlyphs,
-    GlyphAdjustments: [5]AdjustmentSet,
     Mode: Structure,
     bPagesLoadedToGame: bool = false,
+
+    const Structure = enum(u8) { Source, Custom };
+
+    pub const GlyphBinDeserializationError = error{VersionMismatch};
+    pub const GLYPH_BIN_VERSION: u32 = 1;
 
     pub fn Init(font: *CustomFont, mode: Structure, page_w: u16, page_h: u16) void {
         font.* = std.mem.zeroes(CustomFont);
@@ -712,6 +717,8 @@ const CustomFont = struct {
         font.bPagesLoadedToGame = false;
     }
 
+    // TODO: merge with CloneGlyphs? does this even need to be a separate step?
+    //  how much of the stuff in FontLoad even needs to be individual steps?
     // TODO: fix font page number field; need to think about how to keep it
     // up to date overall
     pub fn CloneFonts(self: *CustomFont, defs: *const [5]rf.FONT, b_keep_pages: bool) void {
@@ -723,13 +730,47 @@ const CustomFont = struct {
         }
     }
 
-    // FIXME: better name that reflects the fact that it runs adjustments
-    // NOTE: see CloneAndAdjustGlyphSet
-    pub fn CloneGlyphs(self: *CustomFont, glyphs: *const [5]CustomGlyphs) void {
+    // TODO: ?? assert each glyph adjustment set only contains glyph ids that do
+    //  not exceed the glyph counts already specified in the `glyphs` structs?
+    /// clone glyphs and initialize by adjusting cloned glyphs
+    pub fn GlyphsFromAdjustment(
+        self: *CustomFont,
+        glyphs: *const [5]CustomGlyphs,
+        adjustments: *const [5]GlyphAdjustmentSet,
+    ) void {
         @memcpy(&self.Glyphs, glyphs);
-        for (&self.Fonts, &self.Glyphs, &self.GlyphAdjustments) |*f, *g, *ga| {
-            AdjustGlyphSet(&g.Std, ga[0]);
-            AdjustGlyphSet(&g.Ext, ga[1]);
+        for (&self.Fonts, &self.Glyphs, adjustments) |*f, *g, *ga| {
+            f._5C_glyphs = if (g.StdSize == 0) null else &g.Std;
+            f._60_glyphs_ext = if (g.ExtSize == 0) null else &g.Ext;
+            GlyphAdjustment.AdjustSet(&g.Std, ga[0]);
+            GlyphAdjustment.AdjustSet(&g.Ext, ga[1]);
+        }
+    }
+
+    // TODO: proper error handling rather than just insta crashing
+    // TODO: ?? assert each glyph binary set contains the same amount of glyphs
+    //  already specified in the `glyphs` structs?
+    // FIXME: is the GlyphsFromAdgjustment-style memcpy even needed here? do the
+    //  `glyphs` have wrong length values and/or is there a mismatch of values on
+    //  the `rf.FONT`s now that the adjustments have messed with which glyphs are
+    //  usable? (same question for the adjustment-based counterpart). update:
+    //  current usage implicitly matches the numbers already specified by the game
+    //  for the sake of keeping it consistent, so currently this isn't an issue,
+    //  but it may become an issue in future when expanding on the custom font
+    //  capabilities and allowing users to fully specify custom fonts with
+    //  unrestricted glyphs; in particular, the sizes imply a particular range of
+    //  ascii indices on the game font struct, which are currently not updated to
+    //  reflect the contents of CustomGlyphs, and CustomGlyphs itself doesn't
+    //  track the starting character of the range. also, for now memcpy has been
+    //  removed, since the CustomGlyphs deserializer overwrites all fields.
+    /// clone glyphs and initialize by loading glyph data directly from binary
+    /// data dumped with GlyphBinDump
+    fn GlyphsFromBin(self: *CustomFont, data: []const u8) void {
+        var data_fbs = std.io.fixedBufferStream(data);
+        self.GlyphBinDeserialize(data_fbs.reader()) catch |e|
+            PPanic("(GlyphsFromBin) deserialize glyphs: {s}", .{@errorName(e)});
+
+        for (&self.Fonts, &self.Glyphs) |*f, *g| {
             f._5C_glyphs = if (g.StdSize == 0) null else &g.Std;
             f._60_glyphs_ext = if (g.ExtSize == 0) null else &g.Ext;
         }
@@ -738,7 +779,10 @@ const CustomFont = struct {
     // FIXME: potential use-after-free, double-free, etc. if sharing materials
     //  between custom fonts and not tracking ownership; probably need a better
     //  way of referencing materials in CustomFont to mitigate/eliminate this
-    //  risk architecturally
+    //  risk architecturally. maybe track whether the game is holding references
+    //  to our pages on CustomPage directly? maybe CustomPage-es should be tracked
+    //  independently via handles and ref counted? incidentally, that would be
+    //  dangerously close to a straight up "load/unload texture" api
     /// creates a new game material from the raw pixel data, and stores the game
     /// references. not needed if using an existing material, such as the one
     /// the game loads normally.
@@ -752,6 +796,9 @@ const CustomFont = struct {
             // mimick source font page layout
             .Source => {
                 for (&self.Pages) |*p| {
+                    // FIXME: doesn't this just load the same pixels to all 5
+                    //  pages? why doesn't this get messed up, do we simply not
+                    //  use it and therefore never caught it?
                     r3.hMaterial_OwnedNewFromData(pixeldata, w, h, w, h, .ARGB4444, &p.t, &p.m);
                 }
                 self.Fonts[0]._08_page_list[0] = &self.Pages[0].m;
@@ -785,57 +832,98 @@ const CustomFont = struct {
         }
     }
 
-    // FIXME: when making `GlyphBinLoad`, assert that the binary data byte length
-    //  matches the amount of bytes consumed by all the combined glyph arrays in
-    //  `CustomFont.Glyphs` (i.e. the combined byte size of the arrays in CustomGlyphs
-    //  times the length of the CustomGlyphs array in CustomFont). this is to
-    //  ensure that the error is more likely to be found if CustomGlyphs is changed
-    //  such that the old arrays no longer match the existing saved binary files.
-    // FIXME: crashes if directory doesn't exist
-    /// generates file containing the glyph definition data in binary form simply
-    /// concatenated together. this is used to store the result of adjusted glyph
-    /// defs so that they can be loaded as presets that don't require running the
-    /// adjustment code, ideally in the form of @embedFile so there is no end-user
-    /// runtime cost associated with the file system.
-    fn GlyphBinDump(self: *const CustomFont, filename: []const u8) void {
-        const file = std.fs.cwd().createFile(filename, .{}) catch |e|
-            PPanic("(GlyphBinDump) create file: {s}", .{@errorName(e)});
+    // GlyphBin format (version 1):
+    //      0x00    u32(LE)             binary version
+    //      0x04    [5]CustomGlyphs     serialized data (version 1); variable size entries
+
+    // TODO: convert `writer` to actual writer type after upgrading zig version
+    pub fn GlyphBinSerialize(self: *const CustomFont, writer: anytype) !void {
+        try writer.writeIntLittle(u32, GLYPH_BIN_VERSION);
+
+        for (&self.Glyphs) |*glyphs| glyphs.Serialize(writer);
+    }
+
+    // TODO: convert `reader` to actual reader type after upgrading zig version
+    pub fn GlyphBinDeserialize(self: *CustomFont, reader: anytype) !void {
+        const ver = try reader.readIntLittle(u32);
+        if (ver != GLYPH_BIN_VERSION) return GlyphBinDeserializationError.VersionMismatch;
+
+        for (&self.Glyphs) |*g| try g.Deserialize(reader);
+    }
+
+    // FIXME: crashes/errors if directory doesn't exist
+    /// generates file containing the glyph definition data in binary form, used
+    /// to "bake" adjusted glyphs for direct loading via @embedFile or similar
+    pub fn GlyphBinDump(self: *const CustomFont, filename: []const u8) !void {
+        const file = try std.fs.cwd().createFile(filename, .{});
         defer file.close();
         var file_bw = std.io.bufferedWriter(file.writer());
-        defer _ = file_bw.flush() catch |e|
-            PPanic("(GlyphBinDump) flush: {s}", .{@errorName(e)});
+        defer _ = file_bw.flush() catch {};
 
-        for (&self.Glyphs) |*glyphs| {
-            _ = file_bw.write(std.mem.asBytes(&glyphs.Std)) catch |e|
-                PPanic("(GlyphBinDump) write std: {s}", .{@errorName(e)});
-            _ = file_bw.write(std.mem.asBytes(&glyphs.Ext)) catch |e|
-                PPanic("(GlyphBinDump) write ext: {s}", .{@errorName(e)});
-        }
+        try self.GlyphBinSerialize(file_bw.writer());
     }
 };
 
 const CustomGlyphs = struct {
-    const STD_SIZE = 62;
-    const EXT_SIZE = 15;
-
-    Std: [STD_SIZE]rf.GLYPH,
-    Ext: [EXT_SIZE]rf.GLYPH,
+    Std: [STD_LEN]rf.GLYPH,
+    Ext: [EXT_LEN]rf.GLYPH,
     StdSize: u32,
     ExtSize: u32,
 
+    const STD_LEN = 62;
+    const EXT_LEN = 15;
+
+    pub const BINARY_VERSION: u32 = 1;
+    pub const DeserializationError = error{ VersionMismatch, DataSizeTooLarge, DataSizeMismatch };
+
     // FIXME: better name that reflects the fact that it's not cloning CustomGlyphs
     pub fn Clone(self: *CustomGlyphs, glyphs_std: []rf.GLYPH, glyphs_ext: []rf.GLYPH) void {
-        assert(glyphs_std.len <= STD_SIZE);
-        assert(glyphs_ext.len <= EXT_SIZE);
+        assert(glyphs_std.len <= STD_LEN);
+        assert(glyphs_ext.len <= EXT_LEN);
         @memcpy(self.Std[0..glyphs_std.len], glyphs_std);
         @memcpy(self.Ext[0..glyphs_ext.len], glyphs_ext);
         self.StdSize = glyphs_std.len;
         self.ExtSize = glyphs_ext.len;
     }
+
+    // TODO: ?? use some kind of custom struct (de)serializer that ensures GLYPH
+    //  is serialized as LE? in future with expanded font stuff may be relevant
+    //  for external tools
+    // serialization format (version 1):
+    // all fields LE; for now, rf.GLYPH fields implicitly so
+    //     0x00    u32         version
+    //     0x04    u32         StdSize
+    //     0x08    u32         ExtSize
+    //     0x0C    [?]rf.GLYPH Std[0..StdSize]
+    //     0x??    [?]rf.GLYPH Ext[0..ExtSize]
+
+    // TODO: convert `writer` to actual writer type after upgrading zig version
+    pub fn Serialize(self: *const CustomGlyphs, writer: anytype) !void {
+        try writer.writeIntLittle(u32, BINARY_VERSION);
+        try writer.writeIntLittle(u32, self.StdSize);
+        try writer.writeIntLittle(u32, self.ExtSize);
+        try writer.write(std.mem.sliceAsBytes(self.Std[0..self.StdSize]));
+        try writer.write(std.mem.sliceAsBytes(self.Ext[0..self.ExtSize]));
+    }
+
+    // TODO: convert `reader` to actual reader type after upgrading zig version
+    pub fn Deserialize(self: *CustomGlyphs, reader: anytype) !void {
+        const ver = try reader.readIntLittle(u32);
+        if (ver != BINARY_VERSION) return DeserializationError.VersionMismatch;
+
+        const std_len = try reader.readIntLittle(u32);
+        if (std_len > STD_LEN) return DeserializationError.DataSizeTooLarge;
+        const ext_len = try reader.readIntLittle(u32);
+        if (ext_len > EXT_LEN) return DeserializationError.DataSizeTooLarge;
+
+        const std_read = try reader.read(std.mem.sliceAsBytes(self.Std[0..std_len]));
+        if (std_read != @sizeOf(rf.GLYPH) * std_len) return DeserializationError.DataSizeMismatch;
+        const ext_read = try reader.read(std.mem.sliceAsBytes(self.Ext[0..ext_len]));
+        if (ext_read != @sizeOf(rf.GLYPH) * ext_len) return DeserializationError.DataSizeMismatch;
+    }
 };
 
-// TODO: rename: CustomPage or CustomFontPage or smth
-const FontPage = struct {
+const CustomPage = struct {
     m: r3.Material = undefined,
     t: r3.SystemTexture = undefined,
 };
@@ -896,6 +984,7 @@ fn FontsUnload() void {
 const CUSTOM_FONT_W = 256;
 const CUSTOM_FONT_H = 192;
 const CUSTOM_FONT_MAX_SCALE = 8;
+const CUSTOM_FONT_USE_GLYPH_BINARY = true; // FIXME: set to `true` for release/when not testing
 
 fn FixedFontFromStock(arena: std.mem.Allocator, font: *CustomFont) void {
     var glyphs = arena.alloc(CustomGlyphs, 5) catch |e|
@@ -906,16 +995,14 @@ fn FixedFontFromStock(arena: std.mem.Allocator, font: *CustomFont) void {
     glyphs[2].Clone(rf.aFontGlyphs2, &.{});
     glyphs[3].Clone(rf.aFontGlyphs3, rf.aFontGlyphs3Ext);
     glyphs[4].Clone(rf.aFontGlyphs4, rf.aFontGlyphs4Ext);
+
     font.Init(.Source, 64, 128);
-    font.GlyphAdjustments = .{
-        .{ &ADJ_STOCK_TO_FIXED_FONT_0_CORE, &ADJ_STOCK_TO_FIXED_FONT_0_EXT },
-        .{ &ADJ_STOCK_TO_FIXED_FONT_1_CORE, &.{} },
-        .{ &ADJ_STOCK_TO_FIXED_FONT_2_CORE, &.{} },
-        .{ &ADJ_STOCK_TO_FIXED_FONT_3_CORE, &ADJ_STOCK_TO_FIXED_FONT_3_EXT },
-        .{ &ADJ_STOCK_TO_FIXED_FONT_4_CORE, &ADJ_STOCK_TO_FIXED_FONT_4_EXT },
-    };
     font.CloneFonts(rf.aFontDef, true);
-    font.CloneGlyphs(@ptrCast(glyphs));
+    if (CUSTOM_FONT_USE_GLYPH_BINARY) {
+        font.GlyphsFromBin(@embedFile("embed/font_glyphs_fixed.bin"));
+    } else {
+        font.GlyphsFromAdjustment(@ptrCast(glyphs), &GLYPH_ADJUSTMENT_STOCK_TO_FIXED);
+    }
 }
 
 // "fixed" meaning, the stock font with standard adjustments
@@ -945,15 +1032,13 @@ fn CustomFontFromFixed(arena: std.mem.Allocator, font: *CustomFont, filepath: []
         PPanic("CustomFontFromFixed: {s} (w*h={d})", .{ @errorName(e), @as(u32, w) * h });
 
     font.Init(.Custom, w, h);
-    font.GlyphAdjustments = .{
-        .{ &ADJ_FIXED_TO_CUSTOM_FONT_0_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_0_EXT },
-        .{ &ADJ_FIXED_TO_CUSTOM_FONT_1_CORE, &.{} },
-        .{ &ADJ_FIXED_TO_CUSTOM_FONT_2_CORE, &.{} },
-        .{ &ADJ_FIXED_TO_CUSTOM_FONT_3_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_3_EXT },
-        .{ &ADJ_FIXED_TO_CUSTOM_FONT_4_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_4_EXT },
-    };
     font.CloneFonts(rf.aFontDef, false);
-    font.CloneGlyphs(&font_fixed_stock.Glyphs); // FIXME: remove hardcoded ref?
+    // FIXME: remove hardcoded font_fixed_stock ref?
+    if (CUSTOM_FONT_USE_GLYPH_BINARY) {
+        font.GlyphsFromBin(@embedFile("embed/font_glyphs_custom.bin"));
+    } else {
+        font.GlyphsFromAdjustment(&font_fixed_stock.Glyphs, &GLYPH_ADJUSTMENT_FIXED_TO_CUSTOM);
+    }
     GIFBodyToRGBA4444(&gif, arena, file_r, pagebuf);
     font.LoadPagesToGame(pagebuf);
 }
@@ -1194,10 +1279,18 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     //  dependency dumping currently has of the custom font actually being made, as
     //  well as potentially simplifying the custom font loading process.
     // font glyph binary data dump
-    if (FontState.s_can_dump_glyphs and fonts_active and gf.InputGetKbRaw(.E) == .JustOn) {
-        font_fixed_stock.GlyphBinDump("annodue/developer/fontcustom_glyphs_fixed.bin");
-        font_custom_stock.GlyphBinDump("annodue/developer/fontcustom_glyphs_custom.bin");
-        _ = gf.ToastNew("Font glyphs dumped to /annodue/developer", 0xFFFFFFFF);
+    if (FontState.s_can_dump_glyphs and fonts_active and gf.InputGetKbRaw(.E) == .JustOn) blk: {
+        font_fixed_stock.GlyphBinDump("annodue/developer/fontcustom_glyphs_fixed.bin") catch {
+            _ = gf.ToastNew("Error dumping font fixed glyphs", rt.ColorRGB.Red.rgba(0xFF));
+            break :blk;
+        };
+        _ = gf.ToastNew("Font fixed glyphs dumped to /annodue/developer", rt.ColorRGB.White.rgba(0xFF));
+
+        font_custom_stock.GlyphBinDump("annodue/developer/fontcustom_glyphs_custom.bin") catch {
+            _ = gf.ToastNew("Error dumping font custom glyphs", rt.ColorRGB.Red.rgba(0xFF));
+            break :blk;
+        };
+        _ = gf.ToastNew("Font custom glyphs dumped to /annodue/developer", rt.ColorRGB.White.rgba(0xFF));
     }
 }
 
@@ -1205,6 +1298,22 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
 // glyph adjustment defs
 
 // TODO: fix nomenclature: "core" -> "std" (to match racerlib)
+
+const GLYPH_ADJUSTMENT_STOCK_TO_FIXED: [5]GlyphAdjustmentSet = .{
+    .{ &ADJ_STOCK_TO_FIXED_FONT_0_CORE, &ADJ_STOCK_TO_FIXED_FONT_0_EXT },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_1_CORE, &.{} },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_2_CORE, &.{} },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_3_CORE, &ADJ_STOCK_TO_FIXED_FONT_3_EXT },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_4_CORE, &ADJ_STOCK_TO_FIXED_FONT_4_EXT },
+};
+
+const GLYPH_ADJUSTMENT_FIXED_TO_CUSTOM: [5]GlyphAdjustmentSet = .{
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_0_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_0_EXT },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_1_CORE, &.{} },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_2_CORE, &.{} },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_3_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_3_EXT },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_4_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_4_EXT },
+};
 
 const GLYPH_DISABLE = GFA(.Set, .TX, -1);
 

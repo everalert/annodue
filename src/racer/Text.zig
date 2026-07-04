@@ -134,6 +134,7 @@ pub const ColorRGB = enum(u32) {
     }
 };
 
+// TODO: proper labels for body/title, sm/lg
 pub const Font = enum(u8) {
     Default,
     Unk2,

@@ -31,6 +31,10 @@ const rti = r.Time;
 // TODO: add global st/fn ptrs to fnOnChange defs?
 // TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
 // TODO: minor cleanup with handle_map 'update owner' fn?
+// TODO: ?? update nomenclature from 'Occupy' -> 'Register', also 'Sent' -> 'Msg'?
+// FIXME: is it necessary to have an explicit default value passed to SettingOccupy
+//  when the default could be derived from the pointer? isn't it a bug to even
+//  allow calling ASettingOccupy without either a value pointer or an update callback?
 
 // SYSTEM OVERVIEW
 // - support for bool, u32, i32, f32, and strings (64 bytes null-terminated)
@@ -55,6 +59,8 @@ const rti = r.Time;
 // - section callback will run after OnInit, and whenever values change on file; call
 //   ASettingSectionRunUpdate to manually run the section callback, e.g. after closing
 //   a related plugin menu
+// - if update callbacks for both an individual setting and its section are
+//   defined, the setting's callback will run first
 // - various cleanup functions are available in the api; batch vacating will be
 //   done for you after OnDeinit
 // - see official plugin source code for usage examples; cam7 is a good place to start
@@ -122,6 +128,13 @@ pub const ASettingSent = extern struct {
             };
         }
     };
+
+    // FIXME: update all core and plugins with section update functions to use
+    //  this in their update loop
+    /// convenience function for checking if the setting matches a given handle
+    pub fn IsSetting(self: *const ASettingSent, name: [*:0]const u8) bool {
+        return std.mem.orderZ(u8, self.name, name) == .eq;
+    }
 };
 
 pub const Setting = struct {

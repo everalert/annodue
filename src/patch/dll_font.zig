@@ -174,11 +174,11 @@ const rd = @import("racer").Debug;
 //   can_dump_data          bool    enable dumping source ingame font data to /annodue/developer
 //   can_dump_glyphs        bool    enable dumping glyph binary data of currently loaded font
 
-const PLUGIN_NAME: [*:0]const u8 = "Font";
-const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
-
 //------------------------------------------------------------------------------
 // plugin housekeeping
+
+const PLUGIN_NAME: [*:0]const u8 = "Font";
+const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 export fn PluginName() callconv(.C) [*:0]const u8 {
     return PLUGIN_NAME;
@@ -225,29 +225,8 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     //    FontState.FontLoad(font);
     //}
 
-    // TODO: use annodue text instead so that it can scale with unlimited text
-    //  and be cleaner? also, reminder for general structural cleanup here
-    // testing display showing all(?) font glyphs
     if (FontState.s_can_show_test and gf.InputGetKbRaw(.O).on()) {
-        var buf: [255:0]u8 = undefined;
-        var x: i16 = 12;
-        var y: i16 = 128;
-
-        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
-        y += 10;
-        const label: ?[*:0]const u8 = std.fmt.bufPrintZ(&buf, "~F4~3~s{s}", .{
-            if (!fonts_active) "base font" else if (!fonts_custom_active) &font_stock_custom.Name else &font_custom.Name,
-        }) catch null;
-        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, label);
-        y += 24;
-
-        for (0..5) |i| {
-            const y_step: i16 = if (i < 4) 12 else 32;
-            for (0..4) |j| {
-                rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[i + 2][j]);
-                y += y_step;
-            }
-        }
+        FontState.ShowFontTest();
     }
 
     // font data dump
@@ -304,6 +283,9 @@ const FontState = struct {
     var dump_fonts_done: bool = false;
     var fonts_initialized: bool = false;
 
+    //---------------------------------
+    // settings
+
     const SETTING_SECTION = "font";
 
     const SETTING_ENABLE = "enable";
@@ -347,6 +329,9 @@ const FontState = struct {
         FontLoad(value.str);
     }
 
+    //---------------------------------
+    // custom font system
+
     // NOTE: original font init function at fn_42D720
     // TODO: maintain hashmap of loaded custom font data as a cache, and refer to it
     //  when attempting to load a font, to mitigate constantly loading the same font
@@ -364,6 +349,7 @@ const FontState = struct {
         //  it's explitly set in the def). unsure of the cause, may not be an
         //  issue after upgrading from zig 0.11, and might not come up after the
         //  globals get consolidated into structures.
+        // FIXME: move decls to FontState until able to fully remove
         // TODO: this/these could possibly go in FontsLoad as an integration for
         //  the toggle buttons?
         fonts_active = true; // live-toggle for whole system
@@ -455,8 +441,31 @@ const FontState = struct {
         SetGameFont(null);
     }
 
+    pub fn SetGameFont(font: ?*const CustomFont) void {
+        const table: u32 = if (font) |f| @intFromPtr(&f.FontTable) else @intFromPtr(rt.apTextFont);
+
+        // regardless of font texture scale, the same values are used because the UVs
+        // are calculated based on the glyph values, not from the real texture dimensions
+        const unit_scale_x: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_W else 64);
+        const unit_scale_y: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_H else 128);
+
+        // font table reference
+        _ = mem.write(0x42D8EE + 3, u32, table);
+
+        // font atlas unit scale for converting texture coordinates to UVs
+        // because all glyphs use these values regardless of font def, all font pages
+        // of a font must be the same size; if not, this value would need to be updated
+        // every time a font is selected from the font table
+        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
+        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
+    }
+
+    //---------------------------------
+    // font dumping
+
     // WARN: should be used after game init is done, e.g. in response to a button
     //  press. may crash the game if called too early during game init.
+    /// dump stock font data embedded in game
     pub fn FontDump() void {
         dump_fonts_done = true;
         var font: [5][0x2000]u8 = undefined;
@@ -490,29 +499,67 @@ const FontState = struct {
         DumpFontGlyphMapToCSV("annodue/developer/fontglyphmap");
     }
 
-    pub fn SetGameFont(font: ?*const CustomFont) void {
-        const table: u32 = if (font) |f| @intFromPtr(&f.FontTable) else @intFromPtr(rt.apTextFont);
+    //---------------------------------
+    // font test display
 
-        // regardless of font texture scale, the same values are used because the UVs
-        // are calculated based on the glyph values, not from the real texture dimensions
-        const unit_scale_x: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_W else 64);
-        const unit_scale_y: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_H else 128);
+    const font_test_strings: [7][4][55:0]u8 = blk: {
+        var test_text = std.mem.zeroes([100]u8);
+        // 62 'normal' characters starting at 0x20
+        for (0..62) |i| test_text[i] = ' ' + i;
+        // 15 'extended' characters accessed from following ascii codes:
+        // 0xEn onwards can be skipped, same as previous -> 33 items
+        const test_chars_ext = [_]u8{
+            0x99, 0xA1, 0xA3, 0xAA, 0xAB, 0xBA, 0xBB, 0xBF, 0xC0, 0xC1, 0xC2, 0xC3,
+            0xC4, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD1, 0xD2,
+            0xD3, 0xD4, 0xD5, 0xD6, 0xD9, 0xDA, 0xDB, 0xDC, 0xDF, 0xE1, 0xE2, 0xE3,
+            0xE4, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF1, 0xF2,
+            0xF3, 0xF4, 0xF5, 0xF6, 0xF9, 0xFA, 0xFB, 0xFC,
+        };
+        @memcpy(test_text[62..95], test_chars_ext[0..33]);
 
-        // font table reference
-        _ = mem.write(0x42D8EE + 3, u32, table);
+        var buf = std.mem.zeroes([7][4][55:0]u8);
+        for (0..7) |i| {
+            for (0..4) |j| @memcpy(buf[i][j][0..5], &[5]u8{ '~', 'F', '0' + i, '~', 's' });
+            @memcpy(buf[i][0][5..15], @as(*[10]u8, @ptrCast(&test_text[16]))); // '0'..'9'
+            @memcpy(buf[i][1][5..31], @as(*[26]u8, @ptrCast(&test_text[33]))); // 'A'..'Z'
+            @memcpy(buf[i][2][5..29], @as(*[24]u8, @ptrCast(&test_text[70]))); // 0xC0..0xDF (diacritics)
+            @memcpy(buf[i][3][5..21], @as(*[16]u8, @ptrCast(&test_text[0]))); // SP..'/'
+            @memcpy(buf[i][3][21..28], @as(*[7]u8, @ptrCast(&test_text[26]))); // ':'..'@'
+            @memcpy(buf[i][3][28..39], @as(*[11]u8, @ptrCast(&test_text[59]))); // '['..0xBF
+            @memcpy(buf[i][3][39..40], @as(*[1]u8, @ptrCast(&test_text[94]))); // 0xDF
+        }
+        break :blk buf;
+    };
 
-        // font atlas unit scale for converting texture coordinates to UVs
-        // because all glyphs use these values regardless of font def, all font pages
-        // of a font must be the same size; if not, this value would need to be updated
-        // every time a font is selected from the font table
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
+    // TODO: using annodue api to draw text outside the game text system would be
+    //  'nice', but need to rework GDrawText api first
+    /// testing display showing all(?) font glyphs
+    pub fn ShowFontTest() void {
+        var buf: [255:0]u8 = undefined;
+        var x: i16 = 12;
+        var y: i16 = 12;
+
+        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
+        y += 12;
+        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, std.fmt.bufPrintZ(&buf, "~F4~3~s{s}", .{blk: {
+            if (!fonts_active) break :blk "base font";
+            break :blk if (!fonts_custom_active) &font_stock_custom.Name else &font_custom.Name;
+        }}) catch null);
+        y += 28;
+
+        // only show fonts 2-7
+        for (2..7) |i| {
+            for (0..4) |j| {
+                rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[i][j]);
+                y += if (i < 6) 11 else 28;
+            }
+            y += if (i < 5) 14 else 18;
+        }
     }
 };
 
-// ------------
-// IO/devtools
-// ------------
+//------------------------------------------------------------------------------
+// image/font format tooling
 
 // FIXME: crashes if directory doesn't exist
 // FIXME: handle FileAlreadyExists case (not sure best approach yet)
@@ -1357,32 +1404,6 @@ var font_stock_custom_loaded = false;
 /// holding font for user-chosen custom font
 var font_custom: CustomFont = undefined;
 var font_custom_loaded = false;
-
-const font_test_strings: [7][4][55:0]u8 = blk: {
-    var test_text = std.mem.zeroes([100]u8);
-    // 62 'normal' characters starting at 0x20
-    for (0..62) |i| test_text[i] = ' ' + i;
-    // 15 'extended' characters accessed from following ascii codes:
-    // 0xEn onwards can be skipped, same as previous -> 33 items
-    const test_chars_ext = [_]u8{
-        0x99, 0xA1, 0xA3, 0xAA, 0xAB, 0xBA, 0xBB, 0xBF, 0xC0, 0xC1, 0xC2, 0xC3,
-        0xC4, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD1, 0xD2,
-        0xD3, 0xD4, 0xD5, 0xD6, 0xD9, 0xDA, 0xDB, 0xDC, 0xDF, 0xE1, 0xE2, 0xE3,
-        0xE4, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF1, 0xF2,
-        0xF3, 0xF4, 0xF5, 0xF6, 0xF9, 0xFA, 0xFB, 0xFC,
-    };
-    @memcpy(test_text[62..95], test_chars_ext[0..33]);
-
-    var buf = std.mem.zeroes([7][4][55:0]u8);
-    for (0..7) |i| {
-        var pre = [5]u8{ '~', 'F', '0' + i, '~', 's' };
-        for (0..2) |j| {
-            @memcpy(buf[i][j][0..5], &pre);
-            @memcpy(buf[i][j][5..55], test_text[j * 50 .. (j + 1) * 50]);
-        }
-    }
-    break :blk buf;
-};
 
 // TODO: tests for de/serialization
 // FIXME: remove needless fields that could be function args, e.g. GlyphAdjustments;

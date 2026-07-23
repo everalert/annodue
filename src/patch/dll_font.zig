@@ -14,10 +14,12 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 const debug = @import("core/Debug.zig");
 
 const crot = @import("util/color.zig");
+const cf = @import("util/color_format.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const PPanic = @import("util/debug.zig").PPanic;
 const TGA = @import("util/tga.zig");
+const GIF = @import("util/gif.zig");
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -30,6 +32,23 @@ const r3 = @import("racer").@"3D";
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
+
+// TODO: possibly remove, possibly not, basically just here to shut up logging
+//  from gif.zig; see std.log comments for details/usage
+pub const std_options = struct {
+    pub const logFn = myLogFn;
+};
+
+pub fn myLogFn(
+    comptime level: std.log.Level,
+    comptime scope: @Type(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    if (scope == .gif) return;
+    if (scope == .tga) return;
+    std.log.log(level, scope, format, args);
+}
 
 // FIXME: using ConsoleOut from here allows general logging to be spat out in the
 //  ConsoleOut window (see: gif.zig), meaning you don't actually have to call
@@ -360,52 +379,7 @@ const FontState = struct {
         // NOTE: statically sized data read should not fail, if this crashes it is programmer error
         font_stock_fixed.BaseToFixed() catch unreachable;
 
-        SetGameFont(null);
-    }
-
-    pub fn FontLoad(font: [*:0]const u8) void {
-        assert(fonts_initialized);
-
-        if (!s_enable or !fonts_active) return;
-
-        var fba = FixedBufferAllocator.init(&load_scratch);
-        var arena = ArenaAllocator.init(fba.allocator());
-        const alloc = arena.allocator();
-
-        var load_stock: bool = true;
-
-        // attempt to load custom font
-        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq) blk: {
-            fonts_custom_active = true;
-            if (font_custom_loaded) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
-                .eq => {
-                    load_stock = false;
-                    break :blk;
-                },
-                // TODO: something more sophisticated here when moving to advanced
-                //  font/page loaders
-                else => font_custom.UnloadPagesFromGame(),
-            };
-
-            defer _ = arena.reset(.retain_capacity);
-            const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
-            font_custom.FixedToCustomFile(alloc, path) catch break :blk;
-            load_stock = false;
-        }
-
-        // fall back to stock-custom font
-        if (load_stock) blk: {
-            fonts_custom_active = false;
-            if (font_stock_custom_loaded) break :blk;
-
-            // NOTE: embedded gif should not fail, if load crashes it is programmer error
-            defer _ = arena.reset(.retain_capacity);
-            var stock_custom_fbs = std.io.fixedBufferStream(@embedFile("embed/font_stock.gif"));
-            font_stock_custom.FixedToCustom(alloc, "stock fixed", stock_custom_fbs.reader()) catch unreachable;
-        }
-
-        const f = if (!fonts_custom_active) &font_stock_custom else &font_custom;
-        SetGameFont(f);
+        FontSet(null);
     }
 
     pub fn FontsDeinit() void {
@@ -438,10 +412,57 @@ const FontState = struct {
         //  affects custom fonts)
         PatchTextClippingBug(false);
 
-        SetGameFont(null);
+        FontSet(null);
     }
 
-    pub fn SetGameFont(font: ?*const CustomFont) void {
+    pub fn FontLoad(font: [*:0]const u8) void {
+        assert(fonts_initialized);
+
+        if (!s_enable or !fonts_active) return;
+
+        var fba = FixedBufferAllocator.init(&load_scratch);
+        var arena = ArenaAllocator.init(fba.allocator());
+        const alloc = arena.allocator();
+
+        var load_stock: bool = true;
+
+        // attempt to load custom font
+        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq) blk: {
+            fonts_custom_active = true;
+            if (font_custom_loaded) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
+                .eq => {
+                    load_stock = false;
+                    break :blk;
+                },
+                // TODO: something more sophisticated here when moving to advanced
+                //  font/page loaders
+                else => font_custom.UnloadPagesFromGame(),
+            };
+
+            defer _ = arena.reset(.retain_capacity);
+            const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
+            font_custom.FixedToCustomFile(alloc, path) catch break :blk;
+            font_custom_loaded = true;
+            load_stock = false;
+        }
+
+        // fall back to stock-custom font
+        if (load_stock) blk: {
+            fonts_custom_active = false;
+            if (font_stock_custom_loaded) break :blk;
+
+            // NOTE: embedded gif should not fail, if load crashes it is programmer error
+            defer _ = arena.reset(.retain_capacity);
+            var stock_custom_fbs = std.io.fixedBufferStream(@embedFile("embed/font_stock.gif"));
+            font_stock_custom.FixedToCustom(alloc, "stock fixed", stock_custom_fbs.reader()) catch unreachable;
+            font_stock_custom_loaded = true;
+        }
+
+        const f = if (!fonts_custom_active) &font_stock_custom else &font_custom;
+        FontSet(f);
+    }
+
+    pub fn FontSet(font: ?*const CustomFont) void {
         const table: u32 = if (font) |f| @intFromPtr(&f.FontTable) else @intFromPtr(rt.apTextFont);
 
         // regardless of font texture scale, the same values are used because the UVs
@@ -1381,10 +1402,6 @@ const ADJ_FIXED_TO_CUSTOM_FONT_4_EXT = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment
 // custom stuff workspace
 
 // FIXME: to organize/streamline; random stuff used to work through feature dev
-
-// FIXME: relocate, for testing
-const GIF = @import("util/gif.zig");
-const cf = @import("util/color_format.zig");
 
 // FIXME: is fonts_active necessary when the enable setting itself can
 //  be used to toggle? maybe as a way to toggle it without affecting the

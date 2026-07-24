@@ -3,6 +3,10 @@ const Self = @This();
 const std = @import("std");
 const assert = std.debug.assert;
 
+// TODO: after updating zig version, use `std.builtin.mode == .Debug` instead
+const BuildOptions = @import("BuildOptions");
+const IS_DEV_MODE = BuildOptions.BUILD_MODE == .Developer;
+
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 const FixedBufferAllocator = std.heap.FixedBufferAllocator;
@@ -186,12 +190,13 @@ const rd = @import("racer").Debug;
 // - ability to display font testing text
 // - SETTINGS:
 //   enable                 bool    enable custom font system and associated font fixes
-//   font                   string  name of gif file (in /annodue/custom/font) used
-//                                  for currently shown font; use "STOCK" to display
-//                                  base game font with fixes
+//   font                   string  name of gif file (in /annodue/custom/font) used for currently shown
+//                                  font; use "STOCK" to display base game font with fixes
 //   can_show_test          bool    enable displaying font test text
-//   can_dump_data          bool    enable dumping source ingame font data to /annodue/developer
-//   can_dump_glyphs        bool    enable dumping glyph binary data of currently loaded font
+//   can_dump_data          bool    (dev-only) enable dumping source ingame font data to /annodue/developer
+//   can_dump_glyphs        bool    (dev-only) enable dumping glyph binary data of currently loaded font
+//   can_toggle_system      bool    (dev-only) enable soft-disabling custom font system
+//   can_toggle_custom      bool    (dev-only) enable toggling between stock and custom fonts
 
 //------------------------------------------------------------------------------
 // plugin housekeeping
@@ -225,31 +230,25 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 //------------------------------------------------------------------------------
 // plugin hooks
 
+// TODO: bring back scrolling through installed custom fonts, after core menu done
+// swap between fully-custom font and stock-custom font
 // TODO: "better" control flow that actually shows the implication that fonts
 //  will only be loaded when the 'enable' setting is on?
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
-    // TODO: setting to toggle hotkey; default off
-    // toggle custom fonts
-    if (FontState.s_enable and gf.InputGetKbRaw(.K) == .JustOn) {
-        fonts_active = !fonts_active;
-        if (fonts_active) FontState.FontsEnable() else FontState.FontsDisable();
+    // toggle custom fonts system
+    if (IS_DEV_MODE and FontState.s_can_toggle_system and gf.InputGetKbRaw(.K) == .JustOn) {
+        if (FontState.s_enable)
+            FontState.FontsSystemToggle(null);
     }
 
-    // TODO: re-enable, with setting to toggle hotkey; default off
-    // TODO: also bring back scrolling through installed custom fonts, after core menu done
-    // swap between fully-custom font and stock-custom font
-    //if (FontState.s_enable and fonts_active and gf.InputGetKbRaw(.L) == .JustOn) {
-    //    fonts_custom_active = !fonts_custom_active;
-    //    const font: [*:0]const u8 = if (fonts_custom_active) FontState.DEFAULT_FONT else &FontState.s_font;
-    //    FontState.FontLoad(font);
-    //}
-
-    if (FontState.s_can_show_test and gf.InputGetKbRaw(.O).on()) {
-        FontState.ShowFontTest();
+    // toggle showing user-custom font
+    if (IS_DEV_MODE and FontState.s_can_toggle_custom and gf.InputGetKbRaw(.L) == .JustOn) {
+        if (FontState.FontsShowable())
+            FontState.FontsCustomToggle(null);
     }
 
     // font data dump
-    if (FontState.s_can_dump_data and gf.InputGetKbRaw(.I) == .JustOn) {
+    if (IS_DEV_MODE and FontState.s_can_dump_data and gf.InputGetKbRaw(.I) == .JustOn) {
         FontState.FontDump();
         _ = gf.ToastNew("Font data dumped to /annodue/developer", 0xFFFFFFFF);
     }
@@ -267,18 +266,24 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     //  the custom font loading process. update: not sure how much of this is
     //  still relevant/incomplete, need to proper review what was actually wanted.
     // font glyph binary data dump
-    if (FontState.s_can_dump_glyphs and fonts_active and gf.InputGetKbRaw(.E) == .JustOn) blk: {
-        font_stock_fixed.GlyphBinDump("annodue/developer/fontcustom_glyphs_fixed.bin") catch {
+    if (IS_DEV_MODE and FontState.s_can_dump_glyphs and FontState.FontsShowable() and gf.InputGetKbRaw(.E) == .JustOn) blk: {
+        // stock-custom font containing glyph fixes relevant to base font
+        FontState.font_stock_fixed.GlyphBinDump("annodue/developer/fontcustom_glyphs_fixed.bin") catch {
             _ = gf.ToastNew("Error dumping font fixed glyphs", rt.ColorRGB.Red.rgba(0xFF));
             break :blk;
         };
         _ = gf.ToastNew("Font fixed glyphs dumped to /annodue/developer", rt.ColorRGB.White.rgba(0xFF));
 
-        font_stock_custom.GlyphBinDump("annodue/developer/fontcustom_glyphs_custom.bin") catch {
+        // user-custom font containing further glyph adjustments
+        FontState.font_stock_custom.GlyphBinDump("annodue/developer/fontcustom_glyphs_custom.bin") catch {
             _ = gf.ToastNew("Error dumping font custom glyphs", rt.ColorRGB.Red.rgba(0xFF));
             break :blk;
         };
         _ = gf.ToastNew("Font custom glyphs dumped to /annodue/developer", rt.ColorRGB.White.rgba(0xFF));
+    }
+
+    if (FontState.s_can_show_test and gf.InputGetKbRaw(.O).on()) {
+        FontState.ShowFontTest();
     }
 }
 
@@ -290,17 +295,57 @@ const FontState = struct {
     var h_s_enable: ?SettingHandle = null;
     var h_s_font: ?SettingHandle = null;
     var h_s_can_show_test: ?SettingHandle = null;
-    var h_s_can_dump_data: ?SettingHandle = null;
-    var h_s_can_dump_glyphs: ?SettingHandle = null;
     var s_enable: bool = false;
     var s_font: [63:0]u8 = std.mem.zeroes([63:0]u8);
     var s_can_show_test: bool = false;
+
+    var h_s_can_dump_data: ?SettingHandle = null;
+    var h_s_can_dump_glyphs: ?SettingHandle = null;
+    var h_s_can_toggle_system: ?SettingHandle = null;
+    var h_s_can_toggle_custom: ?SettingHandle = null;
+    /// dev-only feature
     var s_can_dump_data: bool = false;
+    /// dev-only feature
     var s_can_dump_glyphs: bool = false;
+    /// dev-only feature
+    var s_can_toggle_system: bool = false;
+    /// dev-only feature
+    var s_can_toggle_custom: bool = false;
 
     // FIXME: is this needed anymore now that we do button press dumping?
     var dump_fonts_done: bool = false;
     var fonts_initialized: bool = false;
+
+    // FIXME: to organize/streamline; random stuff used to work through feature dev
+
+    // FIXME: is fonts_active necessary when the enable setting itself can
+    //  be used to toggle? maybe as a way to toggle it without affecting the
+    //  setting or causing a reload of everything (is that even needed tho)?
+    /// font system is enabled; implies that s_enable is true and the font system
+    /// has been initialized
+    var fonts_active: bool = true;
+
+    /// holding font for (unused) stock fixed font
+    var font_stock_fixed: CustomFont = undefined;
+
+    /// holding font for stock fixed font in user-custom format
+    var font_stock_custom: CustomFont = undefined;
+    /// caching marker for stock-custom font
+    var font_stock_custom_loaded = false;
+
+    // TODO: hashmap-based collection of font structs, so that multiple can be loaded
+    //  at the same time to avoid load lag every time the font is switched in future
+    /// holding font for user-chosen custom font
+    var font_custom: CustomFont = undefined;
+    /// caching marker for user-custom font
+    var font_custom_loaded: bool = false;
+    /// user font is in use
+    var font_custom_active: bool = false;
+
+    /// dev-only toggle/override for disabling custom font system without having to deinit
+    var toggle_system: bool = true;
+    /// dev-only toggle/override for disabling user font
+    var toggle_custom: bool = true;
 
     //---------------------------------
     // settings
@@ -312,6 +357,8 @@ const FontState = struct {
     const SETTING_SHOW_TEST = "can_show_test";
     const SETTING_DUMP_DATA = "can_dump_data";
     const SETTING_DUMP_GLYPHS = "can_dump_glyphs";
+    const SETTING_TOGGLE_SYSTEM = "can_toggle_system";
+    const SETTING_TOGGLE_CUSTOM = "can_toggle_custom";
 
     const DEFAULT_FONT = "STOCK";
 
@@ -334,6 +381,10 @@ const FontState = struct {
             gf.ASettingOccupy(section, SETTING_DUMP_DATA, .B, .{ .b = false }, &s_can_dump_data, null);
         h_s_can_dump_glyphs =
             gf.ASettingOccupy(section, SETTING_DUMP_GLYPHS, .B, .{ .b = false }, &s_can_dump_glyphs, null);
+        h_s_can_toggle_system =
+            gf.ASettingOccupy(section, SETTING_TOGGLE_SYSTEM, .B, .{ .b = false }, &s_can_toggle_system, null);
+        h_s_can_toggle_custom =
+            gf.ASettingOccupy(section, SETTING_TOGGLE_CUSTOM, .B, .{ .b = false }, &s_can_toggle_custom, null);
     }
 
     // TODO: lazily call FontsInit? is it safe wrt game startup timing?
@@ -345,7 +396,7 @@ const FontState = struct {
     // TODO: lazily call FontsInit? is it safe wrt game startup timing?
     // WARN: assumes FontsInit has already been called
     fn SettingFontUpdate(value: SettingValue) callconv(.C) void {
-        FontLoad(value.str);
+        FontLoadAndSet(value.str);
     }
 
     //---------------------------------
@@ -368,13 +419,12 @@ const FontState = struct {
         //  it's explitly set in the def). unsure of the cause, may not be an
         //  issue after upgrading from zig 0.11, and might not come up after the
         //  globals get consolidated into structures.
-        // FIXME: move decls to FontState until able to fully remove
         // TODO: this/these could possibly go in FontsLoad as an integration for
         //  the toggle buttons?
-        fonts_active = true; // live-toggle for whole system
-        fonts_custom_active = false; // currently showing fully custom font
-        font_stock_custom_loaded = false; // cache note for stock-custom font
-        font_custom_loaded = false; // cache note for fully custom font
+        assert(fonts_active); // live-toggle for whole system
+        assert(!font_stock_custom_loaded); // cache note for stock-custom font
+        assert(!font_custom_loaded); // cache note for fully custom font
+        assert(!font_custom_active); // currently showing fully custom font
 
         // NOTE: statically sized data read should not fail, if this crashes it is programmer error
         font_stock_fixed.BaseToFixed() catch unreachable;
@@ -386,11 +436,20 @@ const FontState = struct {
         if (!fonts_initialized) return;
         defer fonts_initialized = false;
 
+        // return to default values
+        fonts_active = true;
+        font_stock_custom_loaded = false;
+        font_custom_loaded = false;
+        font_custom_active = false;
+
         FontsDisable();
 
         font_stock_custom.UnloadPagesFromGame();
+        font_stock_custom_loaded = false;
+
         // FIXME: in future, will need to unload whole hashmap cache of loaded fonts
         font_custom.UnloadPagesFromGame();
+        font_custom_loaded = false;
     }
 
     pub fn FontsEnable() void {
@@ -401,7 +460,7 @@ const FontState = struct {
         //  affects custom fonts)
         PatchTextClippingBug(true);
 
-        FontLoad(&s_font);
+        FontLoadAndSet(&s_font);
     }
 
     pub fn FontsDisable() void {
@@ -415,10 +474,44 @@ const FontState = struct {
         FontSet(null);
     }
 
-    pub fn FontLoad(font: [*:0]const u8) void {
+    pub fn FontsShowable() bool {
+        return s_enable and fonts_active;
+    }
+
+    /// toggle soft-enable for whole system. fonts must be initialized, and caller
+    /// is expected to manage user toggle rights separately
+    pub fn FontsSystemToggle(on: ?bool) void {
+        // FIXME: what is the need for an extra bool (fonts_active OR toggle_system)?
+        //  i forgot so just copy for now. maybe to decouple user applying the
+        //  setting changes from the main enable setting needing to be on? or just
+        //  a way to remember the toggle state regardless of enable state?
+        toggle_system = on orelse !toggle_system;
+        fonts_active = toggle_system;
+
+        if (FontsShowable()) FontsEnable() else FontsDisable();
+    }
+
+    /// toggle showing user-custom fonts, and update the shown font. caller is
+    /// expected to manage user toggle rights separately.
+    pub fn FontsCustomToggle(on: ?bool) void {
+        toggle_custom = on orelse !toggle_custom;
+
+        if (!FontsShowable()) return;
+
+        _ = FontsCustomActivate(true);
+        const font: [*:0]const u8 = if (!font_custom_active) DEFAULT_FONT else &s_font;
+        FontLoadAndSet(font); // implicitly calls FontsCustomActivate
+    }
+
+    pub fn FontsCustomActivate(on: bool) bool {
+        font_custom_active = on and toggle_custom;
+        return font_custom_active;
+    }
+
+    pub fn FontLoadAndSet(font: [*:0]const u8) void {
         assert(fonts_initialized);
 
-        if (!s_enable or !fonts_active) return;
+        if (!FontsShowable()) return;
 
         var fba = FixedBufferAllocator.init(&load_scratch);
         var arena = ArenaAllocator.init(fba.allocator());
@@ -427,28 +520,33 @@ const FontState = struct {
         var load_stock: bool = true;
 
         // attempt to load custom font
-        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq) blk: {
-            fonts_custom_active = true;
+
+        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq and FontsCustomActivate(true)) blk: {
             if (font_custom_loaded) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
                 .eq => {
                     load_stock = false;
                     break :blk;
                 },
-                // TODO: something more sophisticated here when moving to advanced
-                //  font/page loaders
-                else => font_custom.UnloadPagesFromGame(),
+                else => {
+                    // TODO: something more sophisticated here when moving to
+                    //  advanced font/page loaders
+                    font_custom.UnloadPagesFromGame();
+                    font_custom_loaded = false;
+                },
             };
 
             defer _ = arena.reset(.retain_capacity);
             const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
             font_custom.FixedToCustomFile(alloc, path) catch break :blk;
+
             font_custom_loaded = true;
             load_stock = false;
         }
 
         // fall back to stock-custom font
+
         if (load_stock) blk: {
-            fonts_custom_active = false;
+            _ = FontsCustomActivate(false);
             if (font_stock_custom_loaded) break :blk;
 
             // NOTE: embedded gif should not fail, if load crashes it is programmer error
@@ -458,7 +556,9 @@ const FontState = struct {
             font_stock_custom_loaded = true;
         }
 
-        const f = if (!fonts_custom_active) &font_stock_custom else &font_custom;
+        // finalize
+
+        const f = if (!font_custom_active) &font_stock_custom else &font_custom;
         FontSet(f);
     }
 
@@ -563,8 +663,8 @@ const FontState = struct {
         rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
         y += 12;
         rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, std.fmt.bufPrintZ(&buf, "~F4~3~s{s}", .{blk: {
-            if (!fonts_active) break :blk "base font";
-            break :blk if (!fonts_custom_active) &font_stock_custom.Name else &font_custom.Name;
+            if (!FontsShowable()) break :blk "base font";
+            break :blk if (!font_custom_active) &font_stock_custom.Name else &font_custom.Name;
         }}) catch null);
         y += 28;
 
@@ -1399,28 +1499,7 @@ const ADJ_FIXED_TO_CUSTOM_FONT_4_EXT = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment
 });
 
 //------------------------------------------------------------------------------
-// custom stuff workspace
-
-// FIXME: to organize/streamline; random stuff used to work through feature dev
-
-// FIXME: is fonts_active necessary when the enable setting itself can
-//  be used to toggle? maybe as a way to toggle it without affecting the
-//  setting (is that even needed tho)?
-var fonts_active: bool = true;
-var fonts_custom_active: bool = false;
-
-/// holding font for (unused) stock fixed font
-var font_stock_fixed: CustomFont = undefined;
-
-/// holding font for stock fixed font in user-custom format
-var font_stock_custom: CustomFont = undefined;
-var font_stock_custom_loaded = false;
-
-// TODO: hashmap-based collection of font structs, so that multiple can be loaded
-//  at the same time to avoid load lag every time the font is switched in future
-/// holding font for user-chosen custom font
-var font_custom: CustomFont = undefined;
-var font_custom_loaded = false;
+// custom font functionality
 
 // TODO: tests for de/serialization
 // FIXME: remove needless fields that could be function args, e.g. GlyphAdjustments;

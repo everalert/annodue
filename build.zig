@@ -81,6 +81,9 @@ pub fn build(b: *std.Build) void {
     //    .dependencies = &.{.{ .name = "zigwin32", .module = zigwin32_m }},
     //});
 
+    // TODO: remove this and BUILD_MODE/DEV_MODE after both implementing the
+    //  standalone updater (=no longer need for internal updater stability) and
+    //  migrating to new zig (=no longer need for code-level build mode detection)
     const options = b.addOptions();
     const options_label = "BuildOptions";
     options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
@@ -132,6 +135,10 @@ pub fn build(b: *std.Build) void {
     }
 
     // STEP - PLUGIN HASHING
+
+    // TODO: migrate official plugins to static linking in release builds and
+    //  remove the hashfile stuff altogether; signed user plugins will be checked
+    //  a different way
 
     const generate_safe_plugin_hash_file = b.addExecutable(.{
         .name = "generate_safe_plugin_hash_file",

@@ -25,12 +25,10 @@ const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
-const HotReloadPluginHandle = u32;
-const HotReloadPlugin = @import("../util/hot_reload.zig").HotReload(HotReloadPluginHandle);
+const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
 const dbg = @import("../util/debug.zig");
-const filetime_eql = @import("../util/file_system.zig").filetime_eql;
 
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
@@ -179,6 +177,10 @@ const PluginExportFn = enum(u32) {
     RenderSceneEndA,
 };
 
+// TODO: review plugin-related loops (including hot_reload impl); probably not
+//  a performance concern at all given the current array sizes, but there is
+//  a lot of looping over "nothing" when calling plugin functions and this grows
+//  at N*M for every plugin and callback hook added
 // TODO: owner range limiting
 pub const PluginState = struct {
     var core: ArrayList(Plugin) = undefined;
@@ -195,8 +197,9 @@ pub const PluginState = struct {
     var h_s_hot_reload: ?SettingHandle = null;
     var s_hot_reload: bool = true;
 
-    // TODO: tune number
     const PLUGIN_MAX = 64;
+    const HotReloadPluginHandle = u32;
+    const HotReloadPlugin = hot_reload.HotReload(HotReloadPluginHandle, PLUGIN_MAX);
 
     pub fn workingOwner() u16 {
         return working_owner;
@@ -206,12 +209,10 @@ pub const PluginState = struct {
         return working_owner < 0x0800;
     }
 
-    fn LoadPluginResultCallback(handle: HotReloadPluginHandle, _: [*:0]const u8, result: ?bool) void {
+    fn LoadPluginResultCallback(handle: HotReloadPluginHandle, _: [*:0]const u8, result: bool) void {
         defer assert(plugins_toast_count < PLUGIN_MAX);
 
-        if (result == null) return;
-
-        if (result.?) {
+        if (result) {
             plugins_toast[plugins_toast_count] = handle;
             plugins_toast_count += 1;
         } else {
@@ -238,7 +239,7 @@ pub const PluginState = struct {
     /// if reloading, as the newness is checked by hot_reload
     /// @return     null = no change, true = (re)loaded, false = rejected
     ///             guarantee of no dangling handles on failure
-    fn LoadPluginCallback(handle: HotReloadPluginHandle, filepath: [*:0]const u8) ?bool {
+    fn LoadPluginCallback(handle: HotReloadPluginHandle, filepath: [*:0]const u8) bool {
         assert(handle < PLUGIN_MAX);
         assert(plugins_used[handle] == true or (!plugins_used[handle] and !plugins[handle].Initialized));
         // FIXME: this would fail on initial load, but it makes more sense as an
@@ -405,7 +406,7 @@ fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
 
 pub fn init() void {
     defer assert(PluginState.plugins_count == std.mem.count(bool, &PluginState.plugins_used, &.{true}));
-    defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileList.items.len);
+    defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
 
     const alloc = CoreAllocator.allocator();
     std.fs.cwd().makePath("./annodue/tmp/plugin") catch
@@ -452,9 +453,9 @@ pub fn init() void {
 
     // loading plugins
 
-    PluginState.plugins_reloader = HotReloadPlugin.Init(alloc, PluginState.LoadPluginCallback);
+    PluginState.plugins_reloader = PluginState.HotReloadPlugin.Init(PluginState.LoadPluginCallback);
     PluginState.plugins_reloader.fnLoadResult = PluginState.LoadPluginResultCallback;
-    PluginState.plugins_reloader.CheckDelay = 40;
+    PluginState.plugins_reloader.CheckDelay = 40; // 25fps in ms
     PluginState.plugins_used = std.mem.zeroes([PluginState.PLUGIN_MAX]bool);
     PluginState.plugins_count = 0;
     defer PluginState.plugins_toast_count = 0;

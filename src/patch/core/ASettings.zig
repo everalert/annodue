@@ -21,8 +21,8 @@ const SparseIndex = @import("../util/handle_map.zig").SparseIndex(u16);
 pub const Handle = @import("../util/handle_map.zig").Handle(u16);
 pub const NullHandle = Handle.getNull();
 
-const HotReloadSettingsContextHandle = u32;
-const HotReloadSettings = @import("../util/hot_reload.zig").HotReload(HotReloadSettingsContextHandle);
+const HotReloadSettingsHandle = u32;
+const HotReloadSettings = @import("../util/hot_reload.zig").HotReload(HotReloadSettingsHandle, 1);
 
 const PPanic = @import("../util/debug.zig").PPanic;
 
@@ -310,7 +310,7 @@ pub const ASettings = struct {
         data_settings = HandleMap(Setting, u16).init(alloc);
         section_update_queue = ArrayList(ASettingSent).init(alloc);
 
-        ASettings.hot_reload = HotReloadSettings.Init(alloc, ASettings.load);
+        ASettings.hot_reload = HotReloadSettings.Init(ASettings.load);
         ASettings.hot_reload.CheckDelay = 250;
         ASettings.hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
 
@@ -754,10 +754,10 @@ pub const ASettings = struct {
 
     // callback for HotReload(HotReloadSettingsContextHandle)
     /// read settings from file
-    fn load(_: HotReloadSettingsContextHandle, filename: [*:0]const u8) ?bool {
+    fn load(_: HotReloadSettingsHandle, filename: [*:0]const u8) bool {
         if (skip_next_load) {
             skip_next_load = false;
-            return false;
+            return false; // TODO: should be true or false? no effect in current logic tho
         }
 
         ASettings.iniRead(coreAllocator(), std.mem.span(filename)) catch return false;

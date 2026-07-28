@@ -15,7 +15,6 @@ const FindFirstFileA = w32.storage.file_system.FindFirstFileA;
 const FindClose = w32.storage.file_system.FindClose;
 
 // FIXME: todos before moving back to finalize font stuff..
-//  - review and impl the below todo/fixme as appropriate
 //  - if it seems easy, impl the different versions (at least the single-file ver)
 //  - add tests
 //  - add docs (particularly top-level docs comment summary)
@@ -27,14 +26,13 @@ const FindClose = w32.storage.file_system.FindClose;
 //  new files, file deletion, etc. to dynamically adapt the hot reload list, rather
 //  than making a list and querying the files individually
 //      see: ReadDirectoryChangesW/-ExW
-// TODO: simplified version which operates on a single file only, as a convenience
-//  for sites like ASettings that only ever track one file
-// TODO: version which works with static memory, and takes a buffer or otherwise
-//  assumes the allocator given to it will have enough memory to handle the tracklist size
+// TODO: version which takes an allocator (and uses a hashmap)? avoided this before
+//  because my use case didn't need much memory, but might be worth keeping in mind
 
+// FIXME: seems to reload twice when compiling DLLs; maybe the file size and
+//  modification time update at different times?
 // FIXME: currently this doesn't protect against duplicate file listings
 // TODO: ?? impl "skip next load" (like ASettings) as part of hot-reloader
-// TODO: ?? callback for post-load action to handle different success states
 // TODO: ?? manage tracked files via handles
 // TODO: ?? add unload callback, might make things easier to reason about on impl
 //  side; will need to be called on deinit and in the various Untrack fns
@@ -46,88 +44,85 @@ const FindClose = w32.storage.file_system.FindClose;
 //  pub fn TrackDirectory() void {} // batch add files from directory; needs some method to filter files
 //  pub fn UntrackDirectory() void {}
 //  pub fn UntrackAll() void {}
-/// @ContextHandleT      reference to data associated with the file being tracked,
-///                      typically a struct pointer but may be an opaque handle
-///                      such as an array index, or void to "pass" on context
-pub fn HotReload(comptime ContextHandleT: type) type {
+
+/// file hot reload management util
+///  - "statically" allocated memory; for single-file usage, pass in ITEM_MAX=1
+/// @ContextHandleT     reference to data associated with the file being tracked,
+///                     typically a struct pointer but may be an opaque handle
+///                     such as an array index, or void to "pass" on context
+/// @ITEM_MAX           max number of trackable items, statically allocated
+pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
     return struct {
         const HotReloadT = @This();
 
-        FileList: ArrayList(FileRecord) = undefined,
+        FileList: [ITEM_MAX]FileRecord = undefined,
+        FileListUsed: [ITEM_MAX]bool = std.mem.zeroes([ITEM_MAX]bool),
+        FileListCount: usize = 0,
 
-        CheckDelay: u32 = 40, // 25fps in ms
-        CheckTimestamp: u32 = 0,
-        CheckIndex: usize = 0,
-
-        // TODO: return error instead of null? (e.g. error{LoadAborted})
-        // TODO: or don't return null at all? seems like it was only used to
-        //  handle load check error cases anyway, which are covered before ever
-        //  calling this callback under hot_reload
-        // TODO: or return an enum that can be fed into result callback a little
-        //  more nicely
+        // TODO: ?? return an enum for more result state granularity?
         /// callback for loading the hot-reload target. this will run both when
-        /// loading the target initially, and when hot-reloading
-        /// @return     null  = load aborted
-        ///             true  = load successful
-        ///             false = load failure
-        fnLoad: LoadCallback = undefined,
+        /// loading the target initially and when hot-reloading, and therefore
+        /// will also need to handle unloading if necessary
+        /// @return     true if load successful
+        fnLoad: LoadCallback,
         fnLoadResult: ?LoadResultCallback = null,
 
-        const LoadCallback = *const fn (ctx: ContextHandleT, filepath: [*:0]const u8) ?bool;
-        const LoadResultCallback = *const fn (ctx: ContextHandleT, filepath: [*:0]const u8, result: ?bool) void;
+        CheckDelay: usize = 0,
+        CheckTimestamp: usize = 0,
+        CheckIndex: usize = 0,
 
-        pub fn Init(gpa: Allocator, fn_load: LoadCallback) HotReloadT {
+        const LoadResultT = bool;
+        const LoadCallback = *const fn (ctx: ContextHandleT, filepath: [*:0]const u8) LoadResultT;
+        const LoadResultCallback = *const fn (ctx: ContextHandleT, filepath: [*:0]const u8, result: LoadResultT) void;
+
+        pub fn Init(fn_load: LoadCallback) HotReloadT {
             return HotReloadT{
-                .FileList = ArrayList(FileRecord).init(gpa),
                 .fnLoad = fn_load,
             };
         }
 
-        pub fn Deinit(self: *HotReloadT) void {
-            self.FileList.deinit();
+        pub fn Deinit(_: *HotReloadT) void {
+            //self.FileList.deinit();
         }
 
-        pub fn Update(self: *HotReloadT, timestamp: u32) void {
-            if (self.FileList.items.len == 0) return;
+        pub fn Update(self: *HotReloadT, timestamp: usize) void {
             if (timestamp < self.CheckTimestamp + self.CheckDelay) return;
+            if (self.FileListCount == 0) return;
+            defer _ = if (comptime ITEM_MAX > 1) {
+                self.CheckIndex = (self.CheckIndex + 1) % ITEM_MAX;
+                self.CheckTimestamp = timestamp;
+            };
 
-            const item = &self.FileList.items[self.CheckIndex];
+            if (comptime ITEM_MAX > 1) {
+                while (!self.FileListUsed[self.CheckIndex])
+                    self.CheckIndex = (self.CheckIndex + 1) % ITEM_MAX;
+            }
+
+            const item = &self.FileList[self.CheckIndex];
             if (!item.Check()) return;
 
-            const load = self.fnLoad(item.Context, &item.FilePath);
-
-            if (self.fnLoadResult) |f|
-                f(item.Context, &item.FilePath, load);
-
-            self.CheckIndex = (self.CheckIndex + 1) % self.FileList.items.len;
-            self.CheckTimestamp = timestamp;
+            const result = self.fnLoad(item.Context, &item.FilePath);
+            if (self.fnLoadResult) |f| f(item.Context, &item.FilePath, result);
         }
 
         /// adds a file to track for hot reloading, and runs the load-related
         /// callbacks. if the loading process fails for any reason, the file will
-        /// be removed from the tracking list automatically.
+        /// not be added to the tracking list.
         /// @return     true when the callbacks successfully run; on false, any
         ///             failure case dependent on `fnLoadResult` will not be
         ///             handled, so the caller may need to do manual cleanup
         pub fn TrackFile(self: *HotReloadT, filepath: [*:0]const u8, ctx: ContextHandleT) bool {
-            var queue_cleanup: bool = true;
-            defer _ = if (queue_cleanup) self.FileList.pop();
+            const file_slot = self.GetFreeFileSlot() orelse return false;
+            var record: *FileRecord = &self.FileList[file_slot];
 
-            if (self.FileList.items.len == self.FileList.capacity) {
-                const new_capacity = self.FileList.capacity + 1;
-                self.FileList.ensureTotalCapacity(new_capacity) catch
-                    self.FileList.ensureTotalCapacityPrecise(new_capacity) catch
-                    return false;
-            }
-
-            var record: *FileRecord = self.FileList.addOneAssumeCapacity();
             if (!record.Init(filepath, ctx)) return false;
-            queue_cleanup = false;
-
             const result = self.fnLoad(ctx, filepath);
+            if (self.fnLoadResult) |f| f(ctx, filepath, result);
 
-            if (self.fnLoadResult) |f|
-                f(ctx, filepath, result);
+            if (result) {
+                self.FileListCount += 1;
+                self.FileListUsed[file_slot] = true;
+            }
 
             return true;
         }
@@ -136,38 +131,40 @@ pub fn HotReload(comptime ContextHandleT: type) type {
         /// callbacks on it if possible. the file will always be added to the
         /// tracking list, even if the file doesn't exist yet
         pub fn TrackFileAlways(self: *HotReloadT, filepath: [*:0]const u8, ctx: ContextHandleT) void {
-            if (self.FileList.items.len == self.FileList.capacity) {
-                const new_capacity = self.FileList.capacity + 1;
-                self.FileList.ensureTotalCapacity(new_capacity) catch
-                    self.FileList.ensureTotalCapacityPrecise(new_capacity) catch |e|
-                    panic("TrackFileAlways: {s}", .{@errorName(e)});
-            }
+            const file_slot = self.GetFreeFileSlot() orelse @panic("TrackFileAlways: item capacity exceeded");
+            var record: *FileRecord = &self.FileList[file_slot];
 
-            var record: *FileRecord = self.FileList.addOneAssumeCapacity();
+            self.FileListCount += 1;
+            self.FileListUsed[file_slot] = true;
+
             if (!record.Init(filepath, ctx)) return;
-
             const result = self.fnLoad(ctx, filepath);
-
-            if (self.fnLoadResult) |f|
-                f(ctx, filepath, result);
+            if (self.fnLoadResult) |f| f(ctx, filepath, result);
         }
 
+        // TODO: ?? also call fnUnload here (after implementing such)
         // TODO: do something about possible duplicates. not sure if they should
         //  be prevented from the jump, or if that should be an option
-        // FIXME: more stable CheckIndex that doesn't move around so much if it
-        //  doesn't need to
-        // FIXME: not sure why this uses swapRemove, but a freelist was needed
-        //  for the plugin contexts even though the lists are the same size; should
-        //  this just be a freelist, until proven that unbounded file tracking is
-        //  required somewhere?
         pub fn UntrackFile(self: *HotReloadT, filepath: [*:0]const u8) void {
-            for (0..self.FileList.items.len) |i| {
-                if (std.mem.orderZ(u8, filepath, &self.FileList.items[i].FilePath) == .eq) {
-                    _ = self.FileList.swapRemove(i);
-                    self.CheckIndex %= self.FileList.items.len;
+            for (0..ITEM_MAX) |i| {
+                if (std.mem.orderZ(u8, filepath, &self.FileList[i].FilePath) == .eq) {
+                    assert(self.FileListUsed[i]);
+                    assert(self.FileListCount > 0);
+                    self.FileListUsed[i] = false;
+                    self.FileListCount -= 1;
                     break;
                 }
             }
+        }
+
+        fn GetFreeFileSlot(self: *HotReloadT) ?usize {
+            if (self.FileListCount == ITEM_MAX) return null;
+
+            for (0..ITEM_MAX) |i|
+                if (!self.FileListUsed[i])
+                    return i;
+
+            unreachable;
         }
 
         pub const FileRecord = struct {

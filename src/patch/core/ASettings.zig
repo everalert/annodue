@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const ArrayList = std.ArrayList;
+const assert = std.debug.assert;
 
 const ini = @import("zigini");
 const w32f = @import("zigwin32").foundation;
@@ -20,13 +21,17 @@ const SparseIndex = @import("../util/handle_map.zig").SparseIndex(u16);
 pub const Handle = @import("../util/handle_map.zig").Handle(u16);
 pub const NullHandle = Handle.getNull();
 
-const filetime_checkNewerWriteTime = @import("../util/file_system.zig").filetime_checkNewerWriteTime;
+const HotReloadSettingsContextHandle = u32;
+const HotReloadSettings = @import("../util/hot_reload.zig").HotReload(HotReloadSettingsContextHandle);
 
 const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
 const rt = r.Text;
 const rti = r.Time;
+
+// FIXME: remove, for testing
+const dbg = @import("../util/debug.zig");
 
 // TODO: add global st/fn ptrs to fnOnChange defs?
 // TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
@@ -105,7 +110,7 @@ pub const ASettingSent = extern struct {
 
         pub fn fromRaw(value: [*:0]const u8, t: Setting.Type) Value {
             const len = std.mem.len(@as([*:0]const u8, @ptrCast(value)));
-            std.debug.assert(len > 0 and len <= 63);
+            assert(len > 0 and len <= 63);
 
             return switch (t) {
                 .B => .{ .b = std.mem.eql(u8, "on", value[0..2]) or
@@ -279,12 +284,10 @@ pub const Section = struct {
 
 // reserved global settings: AutoSave
 pub const ASettings = struct {
-    const check_freq: u32 = 1000 / 24; // in lieu of every frame
     var data_sections: HandleMap(Section, u16) = undefined;
     var data_settings: HandleMap(Setting, u16) = undefined;
     var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
-    var last_check: u32 = 0;
-    var last_filetime: w32f.FILETIME = undefined;
+    var hot_reload: HotReloadSettings = undefined;
     var file_exists: bool = false;
     var skip_next_load: bool = false;
     var section_update_queue: ArrayList(ASettingSent) = undefined;
@@ -306,12 +309,19 @@ pub const ASettings = struct {
         data_sections = HandleMap(Section, u16).init(alloc);
         data_settings = HandleMap(Setting, u16).init(alloc);
         section_update_queue = ArrayList(ASettingSent).init(alloc);
+
+        ASettings.hot_reload = HotReloadSettings.Init(alloc, ASettings.load);
+        ASettings.hot_reload.CheckDelay = 250;
+        _ = ASettings.hot_reload.TrackFile(FILENAME_ACTIVE, 0); // settings.ini may not exist, unhandled is ok
+
+        //dbg.ConsoleOut("ASettings.init() END\n", .{}) catch unreachable;
     }
 
     pub fn deinit() void {
         data_sections.deinit();
         data_settings.deinit();
         section_update_queue.deinit();
+        hot_reload.Deinit();
     }
 
     /// gets index of data matching name and parenting pattern
@@ -322,7 +332,7 @@ pub const ASettings = struct {
         parent: ?Handle,
         name: [*:0]const u8,
     ) ?u16 {
-        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+        assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
         if (parent != null and (parent.?.isNull() or !data_sections.hasHandle(parent.?))) return null;
 
@@ -343,7 +353,7 @@ pub const ASettings = struct {
         section: ?Handle,
         name: [*:0]const u8,
     ) !Handle {
-        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+        assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
         if (section != null and
             (section.?.isNull() or
@@ -369,7 +379,7 @@ pub const ASettings = struct {
         name: [*:0]const u8,
         fnOnChange: ?*const fn ([*]ASettingSent, usize) callconv(.C) void,
     ) !Handle {
-        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+        assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
@@ -513,8 +523,8 @@ pub const ASettings = struct {
         value: [*:0]const u8, // -> value_saved
         from_file: bool,
     ) !Handle {
-        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
-        std.debug.assert(std.mem.len(value) > 0 and std.mem.len(value) <= 63);
+        assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+        assert(std.mem.len(value) > 0 and std.mem.len(value) <= 63);
 
         if (section != null and
             (section.?.isNull() or
@@ -554,8 +564,8 @@ pub const ASettings = struct {
         value_ptr: ?*anyopaque,
         fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
     ) !Handle {
-        std.debug.assert(value_type != .None);
-        std.debug.assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
+        assert(value_type != .None);
+        assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
@@ -613,7 +623,7 @@ pub const ASettings = struct {
         handle: Handle,
     ) void {
         var data: *Setting = data_settings.get(handle) orelse return;
-        std.debug.assert(data.flags.contains(.ValueIsSet));
+        assert(data.flags.contains(.ValueIsSet));
 
         data.fnOnChange = null;
 
@@ -742,17 +752,15 @@ pub const ASettings = struct {
         sectionRunUpdateAll();
     }
 
+    // callback for HotReload(HotReloadSettingsContextHandle)
     /// read settings from file
-    fn load() bool {
-        if (!filetime_checkNewerWriteTime(FILENAME_ACTIVE, &ASettings.last_filetime))
-            return false;
-
+    fn load(_: HotReloadSettingsContextHandle, filename: [*:0]const u8) ?bool {
         if (skip_next_load) {
             skip_next_load = false;
             return false;
         }
 
-        ASettings.iniRead(coreAllocator(), FILENAME_ACTIVE) catch return false;
+        ASettings.iniRead(coreAllocator(), std.mem.span(filename)) catch return false;
 
         file_exists = true;
         return true;
@@ -874,8 +882,8 @@ pub const ASettings = struct {
 // GLOBAL
 
 pub fn init() !void {
-    ASettings.init(coreAllocator());
-    _ = ASettings.load();
+    const alloc = coreAllocator();
+    ASettings.init(alloc);
 
     ASettings.h_s_settings_version =
         try ASettings.settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);
@@ -1067,9 +1075,7 @@ pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
     if (gf.SInRace().new() or (gf.SRaceStateNew() and gf.SRaceState() == .PreRace))
         ASettings.saveAuto() catch {};
 
-    if (rti.TIMESTAMP.* > ASettings.last_check + ASettings.check_freq)
-        _ = ASettings.load();
-    ASettings.last_check = rti.TIMESTAMP.*;
+    ASettings.hot_reload.Update(rti.TIMESTAMP.*);
 }
 
 // DEBUGGING & TESTING

@@ -1,6 +1,10 @@
 // TODO: revisit organisation, ordering
-// order must respect internal dependencies/assumptions about things already
-// being initialized
+//  order must respect internal dependencies/assumptions about things already
+//  being initialized
+// NOTE: ASettings is sort of "cheating" by being initialized by main.zig before
+//  Hook ever runs this stuff; need to straighten that out in the process of
+//  making the core hot-reloadable. also, don't really like how the core alloc
+//  is just thrown around, so that would be a good time to formalize that too
 
 // this stuff was outside core and hooked in this order before making this file
 pub const Hook = @import("Hook.zig");
@@ -18,8 +22,12 @@ pub const Testing = @import("Testing.zig");
 pub const Allocator = @import("Allocator.zig");
 pub const Debug = @import("Debug.zig");
 
+// FIXME: GAssetBuffer disabled because it was crashing due to unchecked undefined
+//  behaviour related to something to do with the hot_reload implementation used
+//  in ASettings; keeps breaking for seemingly no reason so must come back to this
+//  and figure it out
 // plugin-facing 'game' functions
-pub const GAssetBuffer = @import("GAssetBuffer.zig");
+//pub const GAssetBuffer = @import("GAssetBuffer.zig");
 pub const Draw = @import("GDraw.zig");
 pub const Freeze = @import("GFreeze.zig");
 pub const HideRaceUI = @import("GHideRaceUI.zig");

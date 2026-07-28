@@ -312,7 +312,7 @@ pub const ASettings = struct {
 
         ASettings.hot_reload = HotReloadSettings.Init(alloc, ASettings.load);
         ASettings.hot_reload.CheckDelay = 250;
-        _ = ASettings.hot_reload.TrackFile(FILENAME_ACTIVE, 0); // settings.ini may not exist, unhandled is ok
+        ASettings.hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
 
         //dbg.ConsoleOut("ASettings.init() END\n", .{}) catch unreachable;
     }

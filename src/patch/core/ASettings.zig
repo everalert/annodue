@@ -754,13 +754,13 @@ pub const ASettings = struct {
 
     // callback for HotReload(HotReloadSettingsContextHandle)
     /// read settings from file
-    fn load(_: HotReloadSettingsHandle, filename: [*:0]const u8) bool {
+    fn load(_: HotReloadSettingsHandle, filepath: [:0]const u8, _: [:0]const u8) bool {
         if (skip_next_load) {
             skip_next_load = false;
             return false; // TODO: should be true or false? no effect in current logic tho
         }
 
-        ASettings.iniRead(coreAllocator(), std.mem.span(filename)) catch return false;
+        ASettings.iniRead(coreAllocator(), filepath) catch return false;
 
         file_exists = true;
         return true;

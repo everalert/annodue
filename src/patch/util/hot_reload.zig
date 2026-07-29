@@ -34,8 +34,6 @@ const FindClose = w32.storage.file_system.FindClose;
 // TODO: ?? manage tracked files via handles
 // TODO: ?? add unload callback, might make things easier to reason about on impl
 //  side; will need to be called on deinit and in the various Untrack fns
-// TODO: ?? add filename (not filepath) to FileRecord, so that user can easily
-//  get it without searching the filepath string?
 // TODO: ?? add load time to FileRecord? to differentiate between file checking
 //  and file successfully loading
 // TODO: ?? impl the following
@@ -70,8 +68,10 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
         CheckIndex: usize = 0,
 
         const LoadResultT = bool;
-        const LoadCallback = *const fn (ctx: ContextHandleT, filepath: [*:0]const u8) LoadResultT;
-        const LoadResultCallback = *const fn (ctx: ContextHandleT, filepath: [*:0]const u8, result: LoadResultT) void;
+        /// ctx, filepath, filename
+        const LoadCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8) LoadResultT;
+        /// ctx, filepath, filename, result
+        const LoadResultCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8, LoadResultT) void;
 
         pub fn Init(fn_load: LoadCallback) HotReloadT {
             return HotReloadT{
@@ -99,8 +99,8 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             const item = &self.FileList[self.CheckIndex];
             if (!item.Check()) return;
 
-            const result = self.fnLoad(item.Context, &item.FilePath);
-            if (self.fnLoadResult) |f| f(item.Context, &item.FilePath, result);
+            const result = self.fnLoad(item.Context, item.FilePathSlice(), item.FileNameSlice());
+            if (self.fnLoadResult) |f| f(item.Context, item.FilePathSlice(), item.FileNameSlice(), result);
         }
 
         /// adds a file to track for hot reloading, and runs the load-related
@@ -114,8 +114,8 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             var record: *FileRecord = &self.FileList[file_slot];
 
             if (!record.Init(filepath, ctx)) return false;
-            const result = self.fnLoad(ctx, filepath);
-            if (self.fnLoadResult) |f| f(ctx, filepath, result);
+            const result = self.fnLoad(ctx, record.FilePathSlice(), record.FileNameSlice());
+            if (self.fnLoadResult) |f| f(ctx, record.FilePathSlice(), record.FileNameSlice(), result);
 
             if (result) {
                 self.FileListCount += 1;
@@ -136,8 +136,8 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             self.FileListUsed[file_slot] = true;
 
             if (!record.Init(filepath, ctx)) return;
-            const result = self.fnLoad(ctx, filepath);
-            if (self.fnLoadResult) |f| f(ctx, filepath, result);
+            const result = self.fnLoad(ctx, record.FilePathSlice(), record.FileNameSlice());
+            if (self.fnLoadResult) |f| f(ctx, record.FilePathSlice(), record.FileNameSlice(), result);
         }
 
         // TODO: ?? also call fnUnload here (after implementing such)
@@ -170,8 +170,8 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
         pub const FileRecord = struct {
             Context: ContextHandleT,
             FilePath: [MAX_PATH_SENTINEL:0]u8,
-            FilePathSlice: [:0]const u8,
-            FileNameSlice: [:0]const u8,
+            FilePathLen: usize,
+            FileNameLen: usize,
             FileHash: u64 = 0,
             WriteTimeL: u32 = 0,
             WriteTimeH: u32 = 0,
@@ -187,16 +187,16 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
                 record.Context = ctx;
 
                 _ = std.fmt.bufPrintZ(&record.FilePath, "{s}", .{filepath}) catch unreachable;
-                record.FilePathSlice = std.mem.span(@as([*:0]const u8, &record.FilePath));
-                const fn_st = std.mem.lastIndexOfScalar(u8, record.FilePathSlice, '/');
+                record.FilePathLen = std.mem.len(@as([*:0]const u8, &record.FilePath));
+                const fn_st = std.mem.lastIndexOfScalar(u8, record.FilePathSlice(), '/');
                 const fn_st_v = if (fn_st) |st| st + 1 else 0;
-                record.FileNameSlice = record.FilePathSlice[fn_st_v..];
+                record.FileNameLen = record.FilePathLen - fn_st_v;
 
                 var fd: WIN32_FIND_DATAA = undefined;
                 if (!DataGet(filepath, &fd)) return false;
 
                 var h: u64 = undefined;
-                if (!HashGet(record.FilePathSlice, &h)) return false;
+                if (!HashGet(record.FilePathSlice(), &h)) return false;
 
                 record.FileHash = h;
                 record.DataWrite(&fd);
@@ -213,7 +213,7 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
                     return false;
 
                 var h: u64 = undefined;
-                if (!HashGet(self.FilePathSlice, &h)) return false;
+                if (!HashGet(self.FilePathSlice(), &h)) return false;
                 if (self.FileHash == h) return false;
 
                 self.FileHash = h;
@@ -249,6 +249,14 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             fn DataWrite(self: *FileRecord, fd: *const WIN32_FIND_DATAA) void {
                 self.WriteTimeL = fd.ftLastWriteTime.dwLowDateTime;
                 self.WriteTimeH = fd.ftLastWriteTime.dwHighDateTime;
+            }
+
+            fn FilePathSlice(self: *const FileRecord) [:0]const u8 {
+                return self.FilePath[0..self.FilePathLen :0];
+            }
+
+            fn FileNameSlice(self: *const FileRecord) [:0]const u8 {
+                return self.FilePath[self.FilePathLen - self.FileNameLen .. self.FilePathLen :0];
             }
         };
     };

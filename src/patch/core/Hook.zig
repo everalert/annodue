@@ -210,9 +210,10 @@ pub const PluginState = struct {
     }
 
     fn LoadPluginResultCallback(handle: HotReloadPluginHandle, _: [:0]const u8, _: [:0]const u8, result: bool) void {
-        defer assert(plugins_toast_count < PLUGIN_MAX);
+        defer assert(plugins_toast_count <= PLUGIN_MAX);
 
-        if (result) {
+        if (result) blk: {
+            if (plugins_toast_count == PLUGIN_MAX) break :blk;
             plugins_toast[plugins_toast_count] = handle;
             plugins_toast_count += 1;
         } else {

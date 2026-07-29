@@ -143,6 +143,7 @@ const rd = @import("racer").Debug;
 //   there is one place during material generation that temp allocates
 
 // TODO: all settings hot-reloadable
+// TODO: directory-monitoring hot_reload impl (need for core menu impl)
 // TODO: option to show double-size fonts on font test visualization
 // TODO: ingame menu (not necessarily adding the menu itself during this pass, but
 // some of these features should still be implemented now as settings file stuff)

@@ -310,18 +310,15 @@ pub const ASettings = struct {
         data_settings = HandleMap(Setting, u16).init(alloc);
         section_update_queue = ArrayList(ASettingSent).init(alloc);
 
-        ASettings.hot_reload = HotReloadSettings.Init(ASettings.load);
+        HotReloadSettings.Init(&ASettings.hot_reload, ASettings.load);
         ASettings.hot_reload.CheckDelay = 250;
         ASettings.hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
-
-        //dbg.ConsoleOut("ASettings.init() END\n", .{}) catch unreachable;
     }
 
     pub fn deinit() void {
         data_sections.deinit();
         data_settings.deinit();
         section_update_queue.deinit();
-        hot_reload.Deinit();
     }
 
     /// gets index of data matching name and parenting pattern

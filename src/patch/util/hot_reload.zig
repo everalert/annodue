@@ -15,34 +15,57 @@ const FindFirstFileA = w32.storage.file_system.FindFirstFileA;
 const FindClose = w32.storage.file_system.FindClose;
 
 // FIXME: todos before moving back to finalize font stuff..
-//  - if it seems easy, impl the different versions (at least the single-file ver)
-//  - add tests
-//  - add docs (particularly top-level docs comment summary)
+//  - add tests (at least one to demonstrate usage; if punting test thoroughness, make todos for them)
 //  - probably also abstract out Plugins from Hook and clean up that API
-//  - review fixme/todos across whole file and tie up any loose ends/documentation
 //  - after finalizing, don't forget to actually try using this for fonts lol
 
+// FIXME: currently this doesn't protect against duplicate file listings. not sure
+//  if they should be prevented from the jump, or if that should be an option. not
+//  urgent until whole-directory monitoring impl
 // TODO: version which monitors a whole directory, and can handle cases such as
 //  new files, file deletion, etc. to dynamically adapt the hot reload list, rather
-//  than making a list and querying the files individually
-//      see: ReadDirectoryChangesW/-ExW
+//  than making a list and querying the files individually. see: ReadDirectoryChangesW/-ExW
 // TODO: version which takes an allocator (and uses a hashmap)? avoided this before
 //  because my use case didn't need much memory, but might be worth keeping in mind
-
-// FIXME: currently this doesn't protect against duplicate file listings
-// TODO: ?? impl "skip next load" (like ASettings) as part of hot-reloader
+// TODO: add fnUnload callback (and accompanying fnUnloadResult)
+//  - call on deinit, in untrack functions, during whole-directory monitoring
+// TODO: option/function to check all files in an update; not sure if looping
+//  behaviour is actually necessary for performance, need to verify with testers
+// TODO: deinit impl that batch-untracks the file list
+// TODO: ?? add scoped logging
 // TODO: ?? manage tracked files via handles
-// TODO: ?? add unload callback, might make things easier to reason about on impl
-//  side; will need to be called on deinit and in the various Untrack fns
-// TODO: ?? add load time to FileRecord? to differentiate between file checking
-//  and file successfully loading
-// TODO: ?? impl the following
+// TODO: ?? add load time to FileRecord? to differentiate between checking and successful load
+// TODO: ?? impl the following for convenience
 //  pub fn TrackDirectory() void {} // batch add files from directory; needs some method to filter files
 //  pub fn UntrackDirectory() void {}
 //  pub fn UntrackAll() void {}
-
-/// file hot reload management util
-///  - "statically" allocated memory; for single-file usage, pass in ITEM_MAX=1
+// TODO: ?? non-windows impls?
+/// API for monitoring and responding to file changes.
+///
+/// WARN: impl is windows-only
+///
+/// This implementation is entirely static and does not require the user to manage
+/// its memory; the user need only specify a maximum number for files to track and
+/// provide the bytes upfront. Any additional data needed for each file beyond the
+/// file monitoring functionality must be managed externally, and is associated with
+/// the API via user-provided handles.
+///
+///     1. Configure the type via `HotReload`.
+///         - If no external data is needed, typical usage is to set the context handle
+///           type to `u32` and pass `0` to any subsequent `TrackFile*` calls.
+///     2. Setup with `Init`.
+///         - `LoadCallback`:
+///             - runs when initially adding the file for tracking.
+///             - runs if a file changes (it can assume the file is new).
+///             - must also handle any "unloading" needed during an update.
+///         - Optional config via `fnLoadResultCallback` and `CheckDelay` fields.
+///     3. Add files to monitor via `TrackFile` and `TrackFileAlways`.
+///     4. Run `Update` at a regularly-executing callsite to monitor for changes.
+///         - `timestamp` is "unit-less"; timescale is up to the user. `CheckDelay`
+///           assumes the same units as `timestamp`/`CheckTimestamp`.
+///         - Only one file is updated per run in a looping fashion, to reduce OS load.
+///     5. Cleanup files with `UntrackFile`.
+///
 /// @ContextHandleT     reference to data associated with the file being tracked,
 ///                     typically a struct pointer but may be an opaque handle
 ///                     such as an array index, or void to "pass" on context
@@ -51,36 +74,39 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
     return struct {
         const HotReloadT = @This();
 
+        /// internal
         FileList: [ITEM_MAX]FileRecord = undefined,
+        /// internal
         FileListUsed: [ITEM_MAX]bool = std.mem.zeroes([ITEM_MAX]bool),
+        /// internal
         FileListCount: usize = 0,
 
-        // TODO: ?? return an enum for more result state granularity?
         /// callback for loading the hot-reload target. this will run both when
-        /// loading the target initially and when hot-reloading, and therefore
-        /// will also need to handle unloading if necessary
+        /// loading the target initially and when hot-reloading, and will need to
+        /// handle unloading if necessary
         /// @return     true if load successful
         fnLoad: LoadCallback,
+        /// callback for running any post-processing after a load attempt. this
+        /// is intended as an option for cleanly separating "reactive" loading
+        /// logic from "active", such as resource cleanup or sending UI notifications.
         fnLoadResult: ?LoadResultCallback = null,
 
+        /// minimum wait time before a new update can run, in `CheckTimestamp` units
         CheckDelay: usize = 0,
+        /// timestamp of previous update, in user-defined units
         CheckTimestamp: usize = 0,
+        /// internal: next item to be checked for changes
         CheckIndex: usize = 0,
 
+        // TODO: ?? return an enum for more result state granularity?
         const LoadResultT = bool;
         /// ctx, filepath, filename
         const LoadCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8) LoadResultT;
         /// ctx, filepath, filename, result
         const LoadResultCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8, LoadResultT) void;
 
-        pub fn Init(fn_load: LoadCallback) HotReloadT {
-            return HotReloadT{
-                .fnLoad = fn_load,
-            };
-        }
-
-        pub fn Deinit(_: *HotReloadT) void {
-            //self.FileList.deinit();
+        pub fn Init(self: *HotReloadT, fn_load: LoadCallback) void {
+            self.* = std.mem.zeroInit(HotReloadT, .{ .fnLoad = fn_load });
         }
 
         pub fn Update(self: *HotReloadT, timestamp: usize) void {
@@ -140,9 +166,6 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             if (self.fnLoadResult) |f| f(ctx, record.FilePathSlice(), record.FileNameSlice(), result);
         }
 
-        // TODO: ?? also call fnUnload here (after implementing such)
-        // TODO: do something about possible duplicates. not sure if they should
-        //  be prevented from the jump, or if that should be an option
         pub fn UntrackFile(self: *HotReloadT, filepath: [*:0]const u8) void {
             for (0..ITEM_MAX) |i| {
                 if (std.mem.orderZ(u8, filepath, &self.FileList[i].FilePath) == .eq) {
@@ -165,9 +188,9 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             unreachable;
         }
 
-        // TODO: ?? option to disable/skip file hash check
+        // TODO: ?? option to disable/skip file hash check, as a perf option
         // TODO: ?? also check for file size; still not 100% sure it was good to drop
-        pub const FileRecord = struct {
+        const FileRecord = struct {
             Context: ContextHandleT,
             FilePath: [MAX_PATH_SENTINEL:0]u8,
             FilePathLen: usize,

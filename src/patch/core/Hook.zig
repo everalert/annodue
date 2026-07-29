@@ -177,6 +177,7 @@ const PluginExportFn = enum(u32) {
     RenderSceneEndA,
 };
 
+// TODO: directory-monitoring hot_reload impl (need for core menu impl)
 // TODO: review plugin-related loops (including hot_reload impl); probably not
 //  a performance concern at all given the current array sizes, but there is
 //  a lot of looping over "nothing" when calling plugin functions and this grows
@@ -451,13 +452,15 @@ pub fn init() void {
 
     // loading plugins
 
-    PluginState.plugins_reloader = PluginState.HotReloadPlugin.Init(PluginState.LoadPluginCallback);
+    PluginState.HotReloadPlugin.Init(&PluginState.plugins_reloader, PluginState.LoadPluginCallback);
     PluginState.plugins_reloader.fnLoadResult = PluginState.LoadPluginResultCallback;
     PluginState.plugins_reloader.CheckDelay = 40; // 25fps in ms
     PluginState.plugins_used = std.mem.zeroes([PluginState.PLUGIN_MAX]bool);
     PluginState.plugins_count = 0;
     defer PluginState.plugins_toast_count = 0;
 
+    // TODO: check that each filename is short enough that both the plugin directory
+    //  filepath and the temp file path lengths don't exceed MAX_PATH_SENTINEL
     // FIXME: assumes cwd is the game directory
     var d = std.fs.cwd().makeOpenPathIterable("./annodue/plugin", .{}) catch null;
     if (d) |*dir| {

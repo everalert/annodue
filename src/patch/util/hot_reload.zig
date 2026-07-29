@@ -1,10 +1,10 @@
 const std = @import("std");
 
-const assert = std.debug.assert;
-const panic = std.debug.panic;
-
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const Wyhash = std.hash.Wyhash;
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 
 const w32 = @import("zigwin32");
 const FILETIME = w32.foundation.FILETIME;
@@ -29,8 +29,6 @@ const FindClose = w32.storage.file_system.FindClose;
 // TODO: version which takes an allocator (and uses a hashmap)? avoided this before
 //  because my use case didn't need much memory, but might be worth keeping in mind
 
-// FIXME: seems to reload twice when compiling DLLs; maybe the file size and
-//  modification time update at different times?
 // FIXME: currently this doesn't protect against duplicate file listings
 // TODO: ?? impl "skip next load" (like ASettings) as part of hot-reloader
 // TODO: ?? manage tracked files via handles
@@ -167,60 +165,90 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             unreachable;
         }
 
+        // TODO: ?? option to disable/skip file hash check
+        // TODO: ?? also check for file size; still not 100% sure it was good to drop
         pub const FileRecord = struct {
             Context: ContextHandleT,
             FilePath: [MAX_PATH_SENTINEL:0]u8,
-            FileSizeLow: u32 = 0,
-            FileSizeHigh: u32 = 0,
-            WriteTimeLow: u32 = 0,
-            WriteTimeHigh: u32 = 0,
+            FilePathSlice: [:0]const u8,
+            FileNameSlice: [:0]const u8,
+            FileHash: u64 = 0,
+            WriteTimeL: u32 = 0,
+            WriteTimeH: u32 = 0,
 
-            const FileRecordError = error{ DataGetFailed, FileNameTooLong };
-
-            /// will always clear and initialize the record. if the file is not
-            /// readable, the time/size info will be cleared to 0
-            /// @return     whether the file was actually readable
+            /// will always zero and initialize the record with the filename and
+            /// context. if the file is not readable, the write time and hash may
+            /// not be filled out
+            /// @return     true if file info was read successfully
             pub fn Init(record: *FileRecord, filepath: [*:0]const u8, ctx: ContextHandleT) bool {
+                assert(std.mem.len(filepath) <= MAX_PATH_SENTINEL);
+
                 record.* = std.mem.zeroes(FileRecord);
-                _ = std.fmt.bufPrintZ(&record.FilePath, "{s}", .{filepath}) catch unreachable;
                 record.Context = ctx;
+
+                _ = std.fmt.bufPrintZ(&record.FilePath, "{s}", .{filepath}) catch unreachable;
+                record.FilePathSlice = std.mem.span(@as([*:0]const u8, &record.FilePath));
+                const fn_st = std.mem.lastIndexOfScalar(u8, record.FilePathSlice, '/');
+                const fn_st_v = if (fn_st) |st| st + 1 else 0;
+                record.FileNameSlice = record.FilePathSlice[fn_st_v..];
 
                 var fd: WIN32_FIND_DATAA = undefined;
                 if (!DataGet(filepath, &fd)) return false;
 
+                var h: u64 = undefined;
+                if (!HashGet(record.FilePathSlice, &h)) return false;
+
+                record.FileHash = h;
                 record.DataWrite(&fd);
                 return true;
             }
 
             /// checks the file and updates the record if needed
-            /// @return     whether or not the file appears to have changed
+            /// @return     true if file has changed
             pub fn Check(self: *FileRecord) bool {
                 var fd: WIN32_FIND_DATAA = undefined;
                 if (!DataGet(&self.FilePath, &fd)) return false;
-
-                if (self.WriteTimeLow == fd.ftLastWriteTime.dwLowDateTime and
-                    self.FileSizeLow == fd.nFileSizeLow and
-                    self.WriteTimeHigh == fd.ftLastWriteTime.dwHighDateTime and
-                    self.FileSizeHigh == fd.nFileSizeHigh)
+                if (self.WriteTimeL == fd.ftLastWriteTime.dwLowDateTime and
+                    self.WriteTimeH == fd.ftLastWriteTime.dwHighDateTime)
                     return false;
 
+                var h: u64 = undefined;
+                if (!HashGet(self.FilePathSlice, &h)) return false;
+                if (self.FileHash == h) return false;
+
+                self.FileHash = h;
                 DataWrite(self, &fd);
                 return true;
             }
 
-            pub fn DataWrite(self: *FileRecord, fd: *const WIN32_FIND_DATAA) void {
-                self.WriteTimeLow = fd.ftLastWriteTime.dwLowDateTime;
-                self.WriteTimeHigh = fd.ftLastWriteTime.dwHighDateTime;
-                self.FileSizeLow = fd.nFileSizeLow;
-                self.FileSizeHigh = fd.nFileSizeHigh;
+            fn HashGet(filepath: []const u8, h: *u64) bool {
+                var f = std.fs.cwd().openFile(filepath, .{}) catch return false;
+                defer f.close();
+                const f_r = f.reader();
+
+                var wh = Wyhash.init(0);
+                var buf_f: [4096]u8 = undefined;
+                var buf_f_read = f_r.read(&buf_f) catch return false;
+                while (buf_f_read > 0) {
+                    wh.update(buf_f[0..buf_f_read]);
+                    buf_f_read = f_r.read(&buf_f) catch return false;
+                }
+
+                h.* = wh.final();
+                return true;
             }
 
-            pub fn DataGet(filepath: [*:0]const u8, fd: *WIN32_FIND_DATAA) bool {
+            fn DataGet(filepath: [*:0]const u8, fd: *WIN32_FIND_DATAA) bool {
                 if (std.mem.len(filepath) > MAX_PATH_SENTINEL) return false;
 
                 const find_handle = FindFirstFileA(filepath, fd);
                 defer _ = FindClose(find_handle); // TODO: hold onto the handle and reuse instead?
                 return (-1 != find_handle);
+            }
+
+            fn DataWrite(self: *FileRecord, fd: *const WIN32_FIND_DATAA) void {
+                self.WriteTimeL = fd.ftLastWriteTime.dwLowDateTime;
+                self.WriteTimeH = fd.ftLastWriteTime.dwHighDateTime;
             }
         };
     };

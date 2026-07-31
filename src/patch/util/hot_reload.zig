@@ -144,11 +144,13 @@ fn HotReloadInternal(
         }
 
         pub fn Update(self: *HotReloadT, timestamp: usize) void {
-            if (timestamp < self.CheckTimestamp + self.CheckDelay) return;
             if (self.FileListCount == 0) return;
+
+            if (timestamp <= self.CheckTimestamp + self.CheckDelay) return;
+            self.CheckTimestamp = timestamp;
+
             defer _ = if (comptime ITEM_MAX > 1) {
                 self.CheckIndex = (self.CheckIndex + 1) % ITEM_MAX;
-                self.CheckTimestamp = timestamp;
             };
 
             if (comptime ITEM_MAX > 1) {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -15,7 +16,21 @@ const FindFirstFileA = w32.storage.file_system.FindFirstFileA;
 const FindClose = w32.storage.file_system.FindClose;
 
 // FIXME: todos before moving back to finalize font stuff..
-//  - add tests (at least one to demonstrate usage; if punting test thoroughness, make todos for them)
+//  - add tests (at least one to demonstrate usage; if punting test thoroughness,
+//    make todos for them). update: even a demo test probably requires reworking
+//    the util to be platform-agnostic for the sake of mocking, maybe just punt
+//    the whole thing until coming back to this since it should be soon enough.
+//    update2: might be fun to do now since the OS stuff is already semi segregated.
+//      notes/ideas:
+//      - in FileEntry, change WIN32_FIND_DATAA field to new general type that holds
+//        write time and hash, and filesize in future if needed. write time common
+//        type becomes u64 (win: FILETIME->u64, linux: i64->u64)
+//      - HashGet and DataGet get abstracted away to OS-agnostic interface, which
+//        is selected at comptime; maybe also change/rename DataWrite to make it
+//        conceptually distinct from the direct-OS stuff
+//      - atp can probably also greatly simplify FileEntry and do all the "real
+//        logic" in HotReload
+//      - apparently std has an os abstraction over the raw data (see: std.os.stat/std.fs.stat)
 //  - probably also abstract out Plugins from Hook and clean up that API
 //  - after finalizing, don't forget to actually try using this for fonts lol
 
@@ -71,6 +86,23 @@ const FindClose = w32.storage.file_system.FindClose;
 ///                     such as an array index, or void to "pass" on context
 /// @ITEM_MAX           max number of trackable items, statically allocated
 pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
+    const functions: struct {
+        FileData.InfoGetFnT,
+        FileData.HashGetFnT,
+    } = switch (builtin.os.tag) {
+        .windows => .{ FileData.InfoGetWin32, FileData.HashGetWin32 },
+        else => @compileError("unsupported target"),
+    };
+
+    return HotReloadInternal(ContextHandleT, ITEM_MAX, functions[0], functions[1]);
+}
+
+fn HotReloadInternal(
+    comptime ContextHandleT: type,
+    comptime ITEM_MAX: usize,
+    comptime fnFileInfoGet: FileData.InfoGetFnT,
+    comptime fnFileHashGet: FileData.HashGetFnT,
+) type {
     return struct {
         const HotReloadT = @This();
 
@@ -105,6 +137,8 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
         /// ctx, filepath, filename, result
         const LoadResultCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8, LoadResultT) void;
 
+        const FileRecord = FileRecordInternal(ContextHandleT, fnFileInfoGet, fnFileHashGet);
+
         pub fn Init(self: *HotReloadT, fn_load: LoadCallback) void {
             self.* = std.mem.zeroInit(HotReloadT, .{ .fnLoad = fn_load });
         }
@@ -125,8 +159,8 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             const item = &self.FileList[self.CheckIndex];
             if (!item.Check()) return;
 
-            const result = self.fnLoad(item.Context, item.FilePathSlice(), item.FileNameSlice());
-            if (self.fnLoadResult) |f| f(item.Context, item.FilePathSlice(), item.FileNameSlice(), result);
+            const result = self.fnLoad(item.Context, item.PathSlice(), item.NameSlice());
+            if (self.fnLoadResult) |f| f(item.Context, item.PathSlice(), item.NameSlice(), result);
         }
 
         /// adds a file to track for hot reloading, and runs the load-related
@@ -140,8 +174,8 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             var record: *FileRecord = &self.FileList[file_slot];
 
             if (!record.Init(filepath, ctx)) return false;
-            const result = self.fnLoad(ctx, record.FilePathSlice(), record.FileNameSlice());
-            if (self.fnLoadResult) |f| f(ctx, record.FilePathSlice(), record.FileNameSlice(), result);
+            const result = self.fnLoad(ctx, record.PathSlice(), record.NameSlice());
+            if (self.fnLoadResult) |f| f(ctx, record.PathSlice(), record.NameSlice(), result);
 
             if (result) {
                 self.FileListCount += 1;
@@ -162,13 +196,13 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
             self.FileListUsed[file_slot] = true;
 
             if (!record.Init(filepath, ctx)) return;
-            const result = self.fnLoad(ctx, record.FilePathSlice(), record.FileNameSlice());
-            if (self.fnLoadResult) |f| f(ctx, record.FilePathSlice(), record.FileNameSlice(), result);
+            const result = self.fnLoad(ctx, record.PathSlice(), record.NameSlice());
+            if (self.fnLoadResult) |f| f(ctx, record.PathSlice(), record.NameSlice(), result);
         }
 
         pub fn UntrackFile(self: *HotReloadT, filepath: [*:0]const u8) void {
             for (0..ITEM_MAX) |i| {
-                if (std.mem.orderZ(u8, filepath, &self.FileList[i].FilePath) == .eq) {
+                if (std.mem.orderZ(u8, filepath, &self.FileList[i].Path) == .eq) {
                     assert(self.FileListUsed[i]);
                     assert(self.FileListCount > 0);
                     self.FileListUsed[i] = false;
@@ -187,100 +221,117 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
 
             unreachable;
         }
-
-        // TODO: ?? option to disable/skip file hash check, as a perf option
-        // TODO: ?? also check for file size; still not 100% sure it was good to drop
-        const FileRecord = struct {
-            Context: ContextHandleT,
-            FilePath: [MAX_PATH_SENTINEL:0]u8,
-            FilePathLen: usize,
-            FileNameLen: usize,
-            FileHash: u64 = 0,
-            WriteTimeL: u32 = 0,
-            WriteTimeH: u32 = 0,
-
-            /// will always zero and initialize the record with the filename and
-            /// context. if the file is not readable, the write time and hash may
-            /// not be filled out
-            /// @return     true if file info was read successfully
-            pub fn Init(record: *FileRecord, filepath: [*:0]const u8, ctx: ContextHandleT) bool {
-                assert(std.mem.len(filepath) <= MAX_PATH_SENTINEL);
-
-                record.* = std.mem.zeroes(FileRecord);
-                record.Context = ctx;
-
-                _ = std.fmt.bufPrintZ(&record.FilePath, "{s}", .{filepath}) catch unreachable;
-                record.FilePathLen = std.mem.len(@as([*:0]const u8, &record.FilePath));
-                const fn_st = std.mem.lastIndexOfScalar(u8, record.FilePathSlice(), '/');
-                const fn_st_v = if (fn_st) |st| st + 1 else 0;
-                record.FileNameLen = record.FilePathLen - fn_st_v;
-
-                var fd: WIN32_FIND_DATAA = undefined;
-                if (!DataGet(filepath, &fd)) return false;
-
-                var h: u64 = undefined;
-                if (!HashGet(record.FilePathSlice(), &h)) return false;
-
-                record.FileHash = h;
-                record.DataWrite(&fd);
-                return true;
-            }
-
-            /// checks the file and updates the record if needed
-            /// @return     true if file has changed
-            pub fn Check(self: *FileRecord) bool {
-                var fd: WIN32_FIND_DATAA = undefined;
-                if (!DataGet(&self.FilePath, &fd)) return false;
-                if (self.WriteTimeL == fd.ftLastWriteTime.dwLowDateTime and
-                    self.WriteTimeH == fd.ftLastWriteTime.dwHighDateTime)
-                    return false;
-
-                var h: u64 = undefined;
-                if (!HashGet(self.FilePathSlice(), &h)) return false;
-                if (self.FileHash == h) return false;
-
-                self.FileHash = h;
-                DataWrite(self, &fd);
-                return true;
-            }
-
-            fn HashGet(filepath: []const u8, h: *u64) bool {
-                var f = std.fs.cwd().openFile(filepath, .{}) catch return false;
-                defer f.close();
-                const f_r = f.reader();
-
-                var wh = Wyhash.init(0);
-                var buf_f: [4096]u8 = undefined;
-                var buf_f_read = f_r.read(&buf_f) catch return false;
-                while (buf_f_read > 0) {
-                    wh.update(buf_f[0..buf_f_read]);
-                    buf_f_read = f_r.read(&buf_f) catch return false;
-                }
-
-                h.* = wh.final();
-                return true;
-            }
-
-            fn DataGet(filepath: [*:0]const u8, fd: *WIN32_FIND_DATAA) bool {
-                if (std.mem.len(filepath) > MAX_PATH_SENTINEL) return false;
-
-                const find_handle = FindFirstFileA(filepath, fd);
-                defer _ = FindClose(find_handle); // TODO: hold onto the handle and reuse instead?
-                return (-1 != find_handle);
-            }
-
-            fn DataWrite(self: *FileRecord, fd: *const WIN32_FIND_DATAA) void {
-                self.WriteTimeL = fd.ftLastWriteTime.dwLowDateTime;
-                self.WriteTimeH = fd.ftLastWriteTime.dwHighDateTime;
-            }
-
-            fn FilePathSlice(self: *const FileRecord) [:0]const u8 {
-                return self.FilePath[0..self.FilePathLen :0];
-            }
-
-            fn FileNameSlice(self: *const FileRecord) [:0]const u8 {
-                return self.FilePath[self.FilePathLen - self.FileNameLen .. self.FilePathLen :0];
-            }
-        };
     };
 }
+
+// TODO: ?? option to disable/skip file hash check, as a perf option
+// TODO: ?? also check for file size; still not 100% sure it was good to drop
+fn FileRecordInternal(
+    comptime ContextHandleT: type,
+    comptime fnFileInfoGet: FileData.InfoGetFnT,
+    comptime fnFileHashGet: FileData.HashGetFnT,
+) type {
+    return struct {
+        const FileRecordT = @This();
+
+        Context: ContextHandleT,
+        Path: [MAX_PATH_SENTINEL:0]u8,
+        PathLen: usize,
+        NameLen: usize,
+        Data: FileData,
+
+        /// will always zero and initialize the record with the filename and
+        /// context. if the file is not readable, the write time and hash may
+        /// not be filled out
+        /// @return     true if file info was read successfully
+        pub fn Init(record: *FileRecordT, filepath: [*:0]const u8, ctx: ContextHandleT) bool {
+            assert(std.mem.len(filepath) <= MAX_PATH_SENTINEL);
+
+            record.* = std.mem.zeroes(FileRecordT);
+            record.Context = ctx;
+
+            _ = std.fmt.bufPrintZ(&record.Path, "{s}", .{filepath}) catch unreachable;
+            record.PathLen = std.mem.len(@as([*:0]const u8, &record.Path));
+            const fn_st = std.mem.lastIndexOfScalar(u8, record.PathSlice(), '/');
+            const fn_st_v = if (fn_st) |st| st + 1 else 0;
+            record.NameLen = record.PathLen - fn_st_v;
+
+            var fd: FileData = .{};
+            if (!fnFileInfoGet(&fd, record.PathSlice())) return false;
+            if (!fnFileHashGet(&fd, record.PathSlice())) return false;
+
+            record.Data = fd;
+            return true;
+        }
+
+        /// checks the file and updates the record if needed
+        /// @return     true if file has changed
+        pub fn Check(self: *FileRecordT) bool {
+            var fd: FileData = .{};
+
+            if (!fnFileInfoGet(&fd, self.PathSlice())) return false;
+            if (self.Data.WriteTime == fd.WriteTime) return false;
+
+            if (!fnFileHashGet(&fd, self.PathSlice())) return false;
+            if (self.Data.Hash == fd.Hash) return false;
+
+            self.Data = fd;
+            return true;
+        }
+
+        pub fn PathSlice(self: *const FileRecordT) [:0]const u8 {
+            return self.Path[0..self.PathLen :0];
+        }
+
+        pub fn NameSlice(self: *const FileRecordT) [:0]const u8 {
+            return self.Path[self.PathLen - self.NameLen .. self.PathLen :0];
+        }
+    };
+}
+
+const FileData = struct {
+    WriteTime: u64 = 0,
+    Hash: u64 = 0,
+
+    /// retrieves the last write time of `filepath`, and places it into `self.WriteTime`
+    /// @return     if true, the write time was successfully retrieved
+    const InfoGetFnT = fn (*FileData, [:0]const u8) bool;
+
+    /// calculates the hash of `filepath`s contents, and places it into `self.Hash`
+    /// @return     if true, the hash was successfully written
+    const HashGetFnT = fn (*FileData, [:0]const u8) bool;
+
+    fn InfoGetWin32(self: *FileData, filepath: [:0]const u8) bool {
+        if (filepath.len > MAX_PATH_SENTINEL) return false;
+
+        var fd: WIN32_FIND_DATAA = undefined;
+
+        const find_handle = FindFirstFileA(filepath, &fd);
+        defer _ = FindClose(find_handle); // TODO: hold onto the handle and reuse instead?
+        if (-1 == find_handle) return false;
+
+        self.WriteTime =
+            @as(u64, fd.ftLastWriteTime.dwLowDateTime) << 0x0 |
+            @as(u64, fd.ftLastWriteTime.dwHighDateTime) << 0x5;
+        return true;
+    }
+
+    fn HashGetWin32(self: *FileData, filepath: [:0]const u8) bool {
+        if (filepath.len > MAX_PATH_SENTINEL) return false;
+
+        var f = std.fs.cwd().openFile(filepath, .{}) catch return false;
+        defer f.close();
+        const f_r = f.reader();
+
+        var wh = Wyhash.init(0);
+        var buf_f: [4096]u8 = undefined;
+        var buf_f_read = f_r.read(&buf_f) catch return false;
+        while (buf_f_read > 0) {
+            wh.update(buf_f[0..buf_f_read]);
+            buf_f_read = f_r.read(&buf_f) catch return false;
+        }
+
+        self.Hash = wh.final();
+        return true;
+    }
+};

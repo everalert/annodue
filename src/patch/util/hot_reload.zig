@@ -7,36 +7,18 @@ const Wyhash = std.hash.Wyhash;
 const assert = std.debug.assert;
 const panic = std.debug.panic;
 
-const w32 = @import("zigwin32");
-const FILETIME = w32.foundation.FILETIME;
-const MAX_PATH = w32.foundation.MAX_PATH;
-const MAX_PATH_SENTINEL = MAX_PATH - 1;
-const WIN32_FIND_DATAA = w32.storage.file_system.WIN32_FIND_DATAA;
-const FindFirstFileA = w32.storage.file_system.FindFirstFileA;
-const FindClose = w32.storage.file_system.FindClose;
+const MAX_PATH_GLOBAL: u32 = 259; // MAX_PATH_SENTINEL
 
 // FIXME: todos before moving back to finalize font stuff..
-//  - add tests (at least one to demonstrate usage; if punting test thoroughness,
-//    make todos for them). update: even a demo test probably requires reworking
-//    the util to be platform-agnostic for the sake of mocking, maybe just punt
-//    the whole thing until coming back to this since it should be soon enough.
-//    update2: might be fun to do now since the OS stuff is already semi segregated.
-//      notes/ideas:
-//      - in FileEntry, change WIN32_FIND_DATAA field to new general type that holds
-//        write time and hash, and filesize in future if needed. write time common
-//        type becomes u64 (win: FILETIME->u64, linux: i64->u64)
-//      - HashGet and DataGet get abstracted away to OS-agnostic interface, which
-//        is selected at comptime; maybe also change/rename DataWrite to make it
-//        conceptually distinct from the direct-OS stuff
-//      - atp can probably also greatly simplify FileEntry and do all the "real
-//        logic" in HotReload
-//      - apparently std has an os abstraction over the raw data (see: std.os.stat/std.fs.stat)
 //  - probably also abstract out Plugins from Hook and clean up that API
 //  - after finalizing, don't forget to actually try using this for fonts lol
 
 // FIXME: currently this doesn't protect against duplicate file listings. not sure
 //  if they should be prevented from the jump, or if that should be an option. not
 //  urgent until whole-directory monitoring impl
+// FIXME: more thorough testing; current tests only demonstrate basic usage. also
+//  reminder to also test comptime variations that affect codegen (e.g. ITEM_MAX
+//  set to 1 and non-1 because of comptime conditionals in Update)
 // TODO: version which monitors a whole directory, and can handle cases such as
 //  new files, file deletion, etc. to dynamically adapt the hot reload list, rather
 //  than making a list and querying the files individually. see: ReadDirectoryChangesW/-ExW
@@ -54,7 +36,8 @@ const FindClose = w32.storage.file_system.FindClose;
 //  pub fn TrackDirectory() void {} // batch add files from directory; needs some method to filter files
 //  pub fn UntrackDirectory() void {}
 //  pub fn UntrackAll() void {}
-// TODO: ?? non-windows impls?
+// TODO: ?? look into simplifying FileRecord/merging as much of it as possible into HotReload
+// TODO: ?? non-windows impls? note that std has setup std.fs.stat to be platform-agnostic
 /// API for monitoring and responding to file changes.
 ///
 /// WARN: impl is windows-only
@@ -90,7 +73,7 @@ pub fn HotReload(comptime ContextHandleT: type, comptime ITEM_MAX: usize) type {
         FileData.InfoGetFnT,
         FileData.HashGetFnT,
     } = switch (builtin.os.tag) {
-        .windows => .{ FileData.InfoGetWin32, FileData.HashGetWin32 },
+        .windows => .{ FileDataWin32.InfoGet, FileDataWin32.HashGet },
         else => @compileError("unsupported target"),
     };
 
@@ -237,7 +220,7 @@ fn FileRecordInternal(
         const FileRecordT = @This();
 
         Context: ContextHandleT,
-        Path: [MAX_PATH_SENTINEL:0]u8,
+        Path: [MAX_PATH_GLOBAL:0]u8, // MAX_PATH_SENTINEL
         PathLen: usize,
         NameLen: usize,
         Data: FileData,
@@ -247,7 +230,7 @@ fn FileRecordInternal(
         /// not be filled out
         /// @return     true if file info was read successfully
         pub fn Init(record: *FileRecordT, filepath: [*:0]const u8, ctx: ContextHandleT) bool {
-            assert(std.mem.len(filepath) <= MAX_PATH_SENTINEL);
+            assert(std.mem.len(filepath) <= MAX_PATH_GLOBAL);
 
             record.* = std.mem.zeroes(FileRecordT);
             record.Context = ctx;
@@ -258,7 +241,7 @@ fn FileRecordInternal(
             const fn_st_v = if (fn_st) |st| st + 1 else 0;
             record.NameLen = record.PathLen - fn_st_v;
 
-            var fd: FileData = .{};
+            var fd = FileData.Zero();
             if (!fnFileInfoGet(&fd, record.PathSlice())) return false;
             if (!fnFileHashGet(&fd, record.PathSlice())) return false;
 
@@ -269,7 +252,7 @@ fn FileRecordInternal(
         /// checks the file and updates the record if needed
         /// @return     true if file has changed
         pub fn Check(self: *FileRecordT) bool {
-            var fd: FileData = .{};
+            var fd = FileData.Zero();
 
             if (!fnFileInfoGet(&fd, self.PathSlice())) return false;
             if (self.Data.WriteTime == fd.WriteTime) return false;
@@ -292,8 +275,8 @@ fn FileRecordInternal(
 }
 
 const FileData = struct {
-    WriteTime: u64 = 0,
-    Hash: u64 = 0,
+    WriteTime: u64,
+    Hash: u64,
 
     /// retrieves the last write time of `filepath`, and places it into `self.WriteTime`
     /// @return     if true, the write time was successfully retrieved
@@ -303,7 +286,30 @@ const FileData = struct {
     /// @return     if true, the hash was successfully written
     const HashGetFnT = fn (*FileData, [:0]const u8) bool;
 
-    fn InfoGetWin32(self: *FileData, filepath: [:0]const u8) bool {
+    fn Init(t: u64, h: u64) FileData {
+        return FileData{ .WriteTime = t, .Hash = h };
+    }
+
+    fn Zero() FileData {
+        return FileData{ .WriteTime = 0, .Hash = 0 };
+    }
+};
+
+const FileDataWin32 = struct {
+    const w32 = @import("zigwin32");
+    const FILETIME = w32.foundation.FILETIME;
+    const MAX_PATH = w32.foundation.MAX_PATH;
+    const MAX_PATH_SENTINEL = MAX_PATH - 1;
+    const WIN32_FIND_DATAA = w32.storage.file_system.WIN32_FIND_DATAA;
+    const FindFirstFileA = w32.storage.file_system.FindFirstFileA;
+    const FindClose = w32.storage.file_system.FindClose;
+
+    comptime {
+        if (MAX_PATH_GLOBAL != MAX_PATH_SENTINEL)
+            @compileError("MAX_PATH_GLOBAL must match MAX_PATH_SENTINEL");
+    }
+
+    fn InfoGet(self: *FileData, filepath: [:0]const u8) bool {
         if (filepath.len > MAX_PATH_SENTINEL) return false;
 
         var fd: WIN32_FIND_DATAA = undefined;
@@ -318,7 +324,7 @@ const FileData = struct {
         return true;
     }
 
-    fn HashGetWin32(self: *FileData, filepath: [:0]const u8) bool {
+    fn HashGet(self: *FileData, filepath: [:0]const u8) bool {
         if (filepath.len > MAX_PATH_SENTINEL) return false;
 
         var f = std.fs.cwd().openFile(filepath, .{}) catch return false;
@@ -337,3 +343,123 @@ const FileData = struct {
         return true;
     }
 };
+
+test "basic usage for one file" {
+    const TestData = struct {
+        var time: usize = 0; // update timestamp, not file write time
+        var data: []const TestFileSnapshot = &.{
+            .{ .time = 0, .data = FileData.Init(1, 0xB), .contents = "a" },
+            .{ .time = 2, .data = FileData.Init(2, 0xC), .contents = "b" },
+            .{ .time = 4, .data = FileData.Init(2, 0xC), .contents = "b" },
+            .{ .time = 6, .data = FileData.Init(3, 0xC), .contents = "b" },
+            .{ .time = 7, .data = FileData.Init(4, 0xD), .contents = "c" },
+            .{ .time = 8, .data = FileData.Init(5, 0xE), .contents = "d" },
+        };
+        var cases: []const TestCase = &.{
+            // starting state (after `TrackFile`s)
+            .{ .time = 0, .expected_loads = 1, .expected_snapshot = 0 },
+            // changed
+            .{ .time = 2, .expected_loads = 2, .expected_snapshot = 1 },
+            // no change: same file write time
+            .{ .time = 4, .expected_loads = 2, .expected_snapshot = 1 },
+            // no change: same file hash
+            .{ .time = 6, .expected_loads = 2, .expected_snapshot = 1 },
+            // no change: cycle duration too short (must be greater than `CheckDelay`)
+            .{ .time = 7, .expected_loads = 2, .expected_snapshot = 1 },
+            // changed: cycle duration ok
+            .{ .time = 8, .expected_loads = 3, .expected_snapshot = 5 },
+        };
+
+        var time_i: usize = 0;
+        var loads: usize = 0;
+        var loaded_snapshot: usize = 0;
+
+        const TestFileSnapshot = struct {
+            time: usize, // update timestamp, not file write time
+            data: FileData,
+            contents: []const u8,
+        };
+
+        const TestCase = struct {
+            time: usize, // update timestamp, not file write time
+            expected_loads: usize,
+            expected_snapshot: usize,
+        };
+
+        pub fn SetTime(t: usize) void {
+            time = t;
+            var ts = data[time_i].time;
+            for (time_i + 1..data.len) |i| {
+                assert(data[i].time > ts);
+                if (data[i].time > t) break;
+                ts = data[i].time;
+                time_i = i;
+            }
+        }
+
+        pub fn TestSnapshot(i: usize) !void {
+            const ex = &data[cases[i].expected_snapshot];
+            const ld = &data[loaded_snapshot];
+            try std.testing.expectEqual(ex.data.WriteTime, ld.data.WriteTime);
+            try std.testing.expectEqual(ex.data.Hash, ld.data.Hash);
+            try std.testing.expectEqualStrings(ex.contents, ld.contents);
+            try std.testing.expectEqual(cases[i].expected_loads, loads);
+        }
+
+        fn InfoGet(fd: *FileData, _: [:0]const u8) bool {
+            fd.WriteTime = data[time_i].data.WriteTime;
+            return true;
+        }
+
+        fn HashGet(fd: *FileData, _: [:0]const u8) bool {
+            fd.Hash = data[time_i].data.Hash;
+            return true;
+        }
+
+        fn LoadCallback(_: u32, _: [:0]const u8, _: [:0]const u8) bool {
+            loads += 1;
+            loaded_snapshot = time_i;
+            return true;
+        }
+
+        fn LoadResultCallback(_: u32, _: [:0]const u8, _: [:0]const u8, _: bool) void {}
+    };
+
+    // NOTE: in practice you would use `HotReload(...)` instead, but we use the internal
+    //  version here so we can use testing impls for `fnFileInfoGet` and `fnFileHashGet`
+    const HotReloadTest = HotReloadInternal(u32, 1, TestData.InfoGet, TestData.HashGet);
+
+    // initialization
+    var hr: HotReloadTest = undefined;
+    hr.Init(TestData.LoadCallback);
+    hr.fnLoadResult = TestData.LoadResultCallback; // optional
+    hr.CheckDelay = 1; // optional
+
+    TestData.SetTime(0);
+    try std.testing.expectEqual(hr.FileListCount, 0);
+
+    // adding files
+
+    var tf1 = hr.TrackFile("filepath_goes_here", 0);
+    try std.testing.expect(tf1); // first file ok
+
+    var tf2 = hr.TrackFile("no_more_files", 0);
+    try std.testing.expect(!tf2); // second file not ok (limit 1 set on HotReloadTest)
+
+    try std.testing.expectEqual(hr.FileListCount, 1);
+    try TestData.TestSnapshot(0);
+
+    // updating
+
+    // see `TestData.cases` comments for what each loop is testing
+    for (1..TestData.cases.len) |i| {
+        TestData.SetTime(TestData.cases[i].time);
+        hr.Update(TestData.time);
+        try TestData.TestSnapshot(i);
+    }
+
+    // removing files
+
+    hr.UntrackFile("filepath_goes_here");
+    try std.testing.expectEqual(hr.FileListCount, 0);
+}

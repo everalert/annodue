@@ -210,10 +210,7 @@ pub const Setting = struct {
                 .I => self.i == other.i,
                 .U => self.u == other.u,
                 .F => self.f == other.f,
-                else => {
-                    const len = std.mem.len(@as([*:0]const u8, @ptrCast(&self.str)));
-                    return std.mem.eql(u8, self.str[0..len], other.str[0..len]);
-                },
+                else => return std.mem.orderZ(u8, &self.str, &other.str) == .eq,
             };
         }
 
@@ -223,10 +220,7 @@ pub const Setting = struct {
                 .I => self.i == other.i,
                 .U => self.u == other.u,
                 .F => self.f == other.f,
-                else => {
-                    const len = std.mem.len(@as([*:0]const u8, @ptrCast(&self.str)));
-                    return std.mem.eql(u8, self.str[0..len], other.str[0..len]);
-                },
+                else => return std.mem.orderZ(u8, &self.str, other.str) == .eq,
             };
         }
 
@@ -1149,6 +1143,9 @@ fn testUpdateSet1(_: ASettingSent.Value) callconv(.C) void {
     //dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
 }
 
+// TODO: tests ensuring updated values actually propagate (i.e. the comparison
+//  returns the correct equality), particularly similar strings of different lengths
+//  such as "hd"->"hda"
 // TODO: impl testing in build script; cannot test statically because imports out of scope
 // TODO: move testing stuff to here but commented in meantime
 test {

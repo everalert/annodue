@@ -1,23 +1,16 @@
 const std = @import("std");
+
 const Allocator = std.mem.Allocator;
 const allocPrint = std.fmt.allocPrint;
-
-const rg = @import("racer").Global;
-const ri = @import("racer").Input;
-const rrd = @import("racer").RaceData;
-const re = @import("racer").Entity;
-const rt = @import("racer").Text;
-const rto = rt.TextStyleOpts;
-
-const msg = @import("message.zig");
-const mem = @import("memory.zig");
+const assert = std.debug.assert;
 
 // TODO: convenient way to repurpose an instance for different data? i.e. rerun init
-// but without alloc stuff
+//  but without alloc stuff
+// TODO: take allocator OR byte buffer in init, dont just rawdog a gpa inline
 // TODO: impl compression as option for actual compression logic
 // TODO: impl testing
 // TODO: overall needs some cleanup/reorganisation, mainly surrounding implementation
-// of alt compression options, which are not currently available in the compressor itself
+//  of alt compression options, which are not currently available in the compressor itself
 
 pub const DataPoint = struct {
     data: ?[]u8 = null,
@@ -80,7 +73,7 @@ pub fn TemporalCompressor(
 
         // TODO: take in allocator, sources slice
         pub fn init(self: *Self) void {
-            std.debug.assert(!self.initialized);
+            assert(!self.initialized);
             defer self.initialized = true;
 
             // calc sizes
@@ -133,7 +126,7 @@ pub fn TemporalCompressor(
         }
 
         pub fn canSave(self: *Self) bool {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
             const space_ok: bool = @intFromPtr(self.memory.ptr + self.memory.len) -
                 @intFromPtr(self.data) - self.offsets[self.frame] >= self.frame_size;
             const frames_ok: bool = self.frame < self.frames - 1;
@@ -144,8 +137,8 @@ pub fn TemporalCompressor(
         fn mapSources(self: *Self) void {
             var offset: usize = 0;
             for (self.sources) |*source| {
-                std.debug.assert(source.data != null);
-                std.debug.assert(source.data.?.len % item_size == 0);
+                assert(source.data != null);
+                assert(source.data.?.len % item_size == 0);
                 source.off = offset;
                 offset += source.data.?.len;
             }
@@ -153,13 +146,13 @@ pub fn TemporalCompressor(
         }
 
         inline fn getHeader(self: *Self, index: usize) []u8 {
-            std.debug.assert(index < self.frames);
+            assert(index < self.frames);
             const base = index * self.header_size;
             return self.raw_headers[base .. base + self.header_size];
         }
 
         inline fn getStage(self: *Self, index: usize) []ItemType {
-            std.debug.assert(index < 2);
+            assert(index < 2);
             const base = index * self.stage_items;
             return @as([*]ItemType, @ptrCast(@alignCast(self.raw_stage)))[base .. base + self.stage_items];
         }
@@ -202,7 +195,7 @@ pub fn TemporalCompressor(
         /// @index      frame to decode
         /// @skip_last  don't decode last layer in chain, used to set basis for new encode
         pub fn decode(self: *Self, index: usize, skip_last: bool) void {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
 
             @memcpy(self.raw_stage[0..self.frame_size], self.data[0..self.frame_size]);
 
@@ -229,7 +222,7 @@ pub fn TemporalCompressor(
         // FIXME: in future, probably can skip the first step each new frame, because
         // the most recent frame would already be in stage1 from last time
         pub fn save(self: *Self, framecount: usize) void {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
 
             self.last_framecount = framecount;
 
@@ -267,7 +260,7 @@ pub fn TemporalCompressor(
         }
 
         pub fn restore(self: *Self, index: usize) void {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
 
             self.decode(index, false);
             for (self.sources) |*source|
@@ -296,11 +289,11 @@ pub fn TemporalCompressor(
         // TODO: custom starting frame
         /// dump raw data to file, useful for gathering test data
         pub fn write(self: *Self, writer: anytype, opts: WriteSettings) !void {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
             // TODO: double-check idiomatic way of verifying arbitrary passed-in writers, following rejected
-            //std.debug.assert(@hasField(writer, "context"));
-            //std.debug.assert(@hasDecl(writer, "Error"));
-            //std.debug.assert(@hasDecl(writer, "write"));
+            //assert(@hasField(writer, "context"));
+            //assert(@hasDecl(writer, "Error"));
+            //assert(@hasDecl(writer, "write"));
 
             // common header
             if (opts.headers) {
@@ -342,8 +335,8 @@ pub fn TemporalCompressor(
 
         // TODO: strategy pattern thing for the actual compress step (diffing two frames into an output)
         pub fn calcPotential(alloc: Allocator, writer: anytype, opts: TestSettings) !void {
-            std.debug.assert(opts.compression != .none);
-            std.debug.assert(opts.frame_size % opts.item_size == 0);
+            assert(opts.compression != .none);
+            assert(opts.frame_size % opts.item_size == 0);
 
             var str: []u8 = "";
             var substr: []u8 = "";
@@ -427,7 +420,7 @@ pub fn TemporalCompressor(
                         break :bytes opts.frame_size + head_size;
                     },
                     .xrle => bytes: {
-                        std.debug.assert(opts.rle_head_size != null);
+                        assert(opts.rle_head_size != null);
                         const head_size: usize = opts.rle_head_size.?;
                         const head_max: usize = try std.math.powi(usize, 2, 8 * head_size) - 1;
                         var runs: usize = 0;
@@ -476,7 +469,7 @@ pub fn TemporalCompressor(
                         break :bytes opts.frame_size;
                     },
                     .xrles => bytes: {
-                        std.debug.assert(opts.rle_head_size != null);
+                        assert(opts.rle_head_size != null);
                         const head_size: usize = opts.rle_head_size.?;
                         const head_max: usize = try std.math.powi(usize, 2, 8 * head_size - 1) - 1;
                         var runs: usize = 0;

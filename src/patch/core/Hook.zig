@@ -46,6 +46,20 @@ const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAs
 
 // TODO: figure out exactly where the patch gets executed on load (i.e. where
 // the 'early init' happens), for documentation purposes
+// TODO: change "global function" nomenclature to "API function" project-wide
+
+// TODO: pull out plugin-related defs to separate module, so that it can be
+//  used as part of libannodue, and thus be importable by independent plugin
+//  projects. i.e. the cutoff point should be where it makes the most sense
+//  to separate plugin "metadata" from the stuff integrating them as hooks
+//    random ideas
+//    - make Plugin somewhat parameterized wrt which exported symbols it actually
+//      looks for, which ones are associated with which function signatures, which
+//      ones are actually required/rejected by core and user-plugin, etc.. probably
+//      do some kind of comptime input array that gets translated into various ref
+//      arrays thing, a la hashimoto "comptime data tables"
+//         - benefit: readability via helper functions on the metadata check in LoadPluginCallback
+//         - benefit: less definitions for various usecases spread out across file
 
 // FIXME: hooking (settings?) deinit causes racer process to never end, but only
 // when you quit with the X button, not with the ingame quit option

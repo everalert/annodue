@@ -9,16 +9,14 @@ const panic = std.debug.panic;
 
 const MAX_PATH_GLOBAL: u32 = 259; // MAX_PATH_SENTINEL
 
-// FIXME: todos before moving back to finalize font stuff..
-//  - probably also abstract out Plugins from Hook and clean up that API
-//  - after finalizing, don't forget to actually try using this for fonts lol
-
 // FIXME: currently this doesn't protect against duplicate file listings. not sure
 //  if they should be prevented from the jump, or if that should be an option. not
 //  urgent until whole-directory monitoring impl
-// FIXME: more thorough testing; current tests only demonstrate basic usage. also
-//  reminder to also test comptime variations that affect codegen (e.g. ITEM_MAX
-//  set to 1 and non-1 because of comptime conditionals in Update)
+// FIXME: more thorough testing; current tests only demonstrate basic usage and
+//  limitations. future tests should probably simplify this more and pull out
+//  failure cases into separate tests, and use a more robust (easy to follow)
+//  test type too. also reminder to also test comptime variations that affect
+//  codegen (e.g. ITEM_MAX due to comptime conditionals in Update)
 // TODO: version which monitors a whole directory, and can handle cases such as
 //  new files, file deletion, etc. to dynamically adapt the hot reload list, rather
 //  than making a list and querying the files individually. see: ReadDirectoryChangesW/-ExW
@@ -38,6 +36,7 @@ const MAX_PATH_GLOBAL: u32 = 259; // MAX_PATH_SENTINEL
 //  pub fn UntrackAll() void {}
 // TODO: ?? look into simplifying FileRecord/merging as much of it as possible into HotReload
 // TODO: ?? non-windows impls? note that std has setup std.fs.stat to be platform-agnostic
+
 /// API for monitoring and responding to file changes.
 ///
 /// WARN: impl is windows-only

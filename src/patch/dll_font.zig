@@ -24,6 +24,8 @@ const x86 = @import("util/x86.zig");
 const PPanic = @import("util/debug.zig").PPanic;
 const TGA = @import("util/tga.zig");
 const GIF = @import("util/gif.zig");
+const HotReloadFontHandle = u32;
+const HotReloadFont = @import("util/hot_reload.zig").HotReload(HotReloadFontHandle, 1);
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -33,6 +35,7 @@ const ra = @import("racer").Asset;
 const rt = @import("racer").Text;
 const rf = @import("racer").Font;
 const r3 = @import("racer").@"3D";
+const rti = @import("racer").Time;
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
@@ -236,6 +239,8 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 // TODO: "better" control flow that actually shows the implication that fonts
 //  will only be loaded when the 'enable' setting is on?
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
+    FontState.font_reloader.Update(rti.TIMESTAMP.*);
+
     // toggle custom fonts system
     if (IS_DEV_MODE and FontState.s_can_toggle_system and gf.InputGetKbRaw(.K) == .JustOn) {
         if (FontState.s_enable)
@@ -245,7 +250,7 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     // toggle showing user-custom font
     if (IS_DEV_MODE and FontState.s_can_toggle_custom and gf.InputGetKbRaw(.L) == .JustOn) {
         if (FontState.FontsShowable())
-            FontState.FontsCustomToggle(null);
+            FontState.FontCustomToggle(null);
     }
 
     // font data dump
@@ -313,6 +318,13 @@ const FontState = struct {
     /// dev-only feature
     var s_can_toggle_custom: bool = false;
 
+    var font_reloader: HotReloadFont = undefined;
+
+    // FIXME: these are getting used and abused, need to be careful about using
+    //  this memory while calling stuff that may also use (i.e. reset) it
+    var font_load_fba: FixedBufferAllocator = undefined;
+    var font_load_arena: ArenaAllocator = undefined;
+
     // FIXME: is this needed anymore now that we do button press dumping?
     var dump_fonts_done: bool = false;
     var fonts_initialized: bool = false;
@@ -340,6 +352,8 @@ const FontState = struct {
     var font_custom: CustomFont = undefined;
     /// caching marker for user-custom font
     var font_custom_loaded: bool = false;
+    /// hot-reloading marker for user-custom font
+    var font_custom_tracked: bool = false;
     /// user font is in use
     var font_custom_active: bool = false;
 
@@ -415,6 +429,12 @@ const FontState = struct {
         if (fonts_initialized) return;
         defer fonts_initialized = true;
 
+        font_load_fba = FixedBufferAllocator.init(&load_scratch);
+        font_load_arena = ArenaAllocator.init(font_load_fba.allocator());
+
+        font_reloader.Init(FontLoadCallback);
+        font_reloader.CheckDelay = 250;
+
         // FIXME: remove; these are only here because not referencing the variable
         //  causes it to sometimes be initialized to a garbage value (even though
         //  it's explitly set in the def). unsure of the cause, may not be an
@@ -424,6 +444,7 @@ const FontState = struct {
         //  the toggle buttons?
         assert(fonts_active); // live-toggle for whole system
         assert(!font_stock_custom_loaded); // cache note for stock-custom font
+        assert(!font_custom_tracked); // hot-reloading note for fully custom font
         assert(!font_custom_loaded); // cache note for fully custom font
         assert(!font_custom_active); // currently showing fully custom font
 
@@ -440,6 +461,7 @@ const FontState = struct {
         // return to default values
         fonts_active = true;
         font_stock_custom_loaded = false;
+        font_custom_tracked = false;
         font_custom_loaded = false;
         font_custom_active = false;
 
@@ -448,9 +470,10 @@ const FontState = struct {
         font_stock_custom.UnloadPagesFromGame();
         font_stock_custom_loaded = false;
 
-        // FIXME: in future, will need to unload whole hashmap cache of loaded fonts
-        font_custom.UnloadPagesFromGame();
-        font_custom_loaded = false;
+        if (font_custom_loaded) FontCustomUnload();
+        font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
+
+        font_load_arena.deinit();
     }
 
     pub fn FontsEnable() void {
@@ -492,75 +515,110 @@ const FontState = struct {
         if (FontsShowable()) FontsEnable() else FontsDisable();
     }
 
-    /// toggle showing user-custom fonts, and update the shown font. caller is
-    /// expected to manage user toggle rights separately.
-    pub fn FontsCustomToggle(on: ?bool) void {
-        toggle_custom = on orelse !toggle_custom;
-
-        if (!FontsShowable()) return;
-
-        _ = FontsCustomActivate(true);
-        const font: [*:0]const u8 = if (!font_custom_active) DEFAULT_FONT else &s_font;
-        FontLoadAndSet(font); // implicitly calls FontsCustomActivate
-    }
-
-    pub fn FontsCustomActivate(on: bool) bool {
-        font_custom_active = on and toggle_custom;
-        return font_custom_active;
-    }
-
     pub fn FontLoadAndSet(font: [*:0]const u8) void {
         assert(fonts_initialized);
 
         if (!FontsShowable()) return;
 
-        var fba = FixedBufferAllocator.init(&load_scratch);
-        var arena = ArenaAllocator.init(fba.allocator());
-        const alloc = arena.allocator();
-
-        var load_stock: bool = true;
-
         // attempt to load custom font
 
-        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq and FontsCustomActivate(true)) blk: {
-            if (font_custom_loaded) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
-                .eq => {
-                    load_stock = false;
-                    break :blk;
-                },
+        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq and FontCustomActivate(true)) blk: {
+            if (font_custom_tracked) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
+                .eq => return if (font_custom_loaded) FontSet(&font_custom),
                 else => {
-                    // TODO: something more sophisticated here when moving to
-                    //  advanced font/page loaders
-                    font_custom.UnloadPagesFromGame();
-                    font_custom_loaded = false;
+                    // TODO: hot_reload having a separate UnloadCallback would
+                    //  be nice here; would need to also update Deinit
+                    if (font_custom_loaded) FontCustomUnload();
+                    font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
+                    font_custom_tracked = false;
                 },
             };
 
-            defer _ = arena.reset(.retain_capacity);
+            _ = font_load_arena.reset(.retain_capacity);
+            const alloc = font_load_arena.allocator();
             const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
-            font_custom.FixedToCustomFile(alloc, path) catch break :blk;
 
-            font_custom_loaded = true;
-            load_stock = false;
+            // LoadCallback will call FontCustomLoad and set the font, and backup to STOCK if needed
+            font_reloader.TrackFileAlways(path, 0);
+            font_custom_tracked = true;
+            return;
         }
 
         // fall back to stock-custom font
 
-        if (load_stock) blk: {
-            _ = FontsCustomActivate(false);
-            if (font_stock_custom_loaded) break :blk;
+        _ = FontCustomActivate(false);
+        FontStockLoad();
+        FontSet(&font_stock_custom);
+    }
 
-            // NOTE: embedded gif should not fail, if load crashes it is programmer error
-            defer _ = arena.reset(.retain_capacity);
-            var stock_custom_fbs = std.io.fixedBufferStream(@embedFile("embed/font_stock.gif"));
-            font_stock_custom.FixedToCustom(alloc, "stock fixed", stock_custom_fbs.reader()) catch unreachable;
-            font_stock_custom_loaded = true;
+    /// toggle showing user-custom fonts, and update the shown font. caller is
+    /// expected to manage user toggle rights separately.
+    pub fn FontCustomToggle(on: ?bool) void {
+        toggle_custom = on orelse !toggle_custom;
+
+        if (!FontsShowable()) return;
+
+        _ = FontCustomActivate(true);
+        const font: [*:0]const u8 = if (!font_custom_active) DEFAULT_FONT else &s_font;
+        FontLoadAndSet(font); // implicitly calls FontsCustomActivate
+    }
+
+    pub fn FontCustomActivate(on: bool) bool {
+        font_custom_active = on and toggle_custom;
+        return font_custom_active;
+    }
+
+    /// helper for loading user fonts consistently across load sites
+    fn FontCustomLoad(arena: Allocator, font: [*:0]const u8) !void {
+        assert(!font_custom_loaded);
+        const path = try GIFCustomFontPath(arena, font[0..std.mem.len(font)]);
+        try font_custom.FixedToCustomFile(arena, path);
+        font_custom_loaded = true;
+    }
+
+    // TODO: something more sophisticated here when moving to
+    //  advanced font/page loaders
+    /// helper for unloading user fonts consistently across unload sites
+    fn FontCustomUnload() void {
+        assert(font_custom_loaded);
+        font_custom.UnloadPagesFromGame();
+        font_custom_loaded = false;
+    }
+
+    /// helper for loading stock-custom font consistently across load sites
+    fn FontStockLoad() void {
+        if (font_stock_custom_loaded) return;
+
+        _ = font_load_arena.reset(.retain_capacity);
+        const alloc = font_load_arena.allocator();
+
+        // NOTE: embedded gif should not fail, if load crashes it is programmer error
+        var stock_custom_fbs = std.io.fixedBufferStream(@embedFile("embed/font_stock.gif"));
+        font_stock_custom.FixedToCustom(alloc, "stock fixed", stock_custom_fbs.reader()) catch unreachable;
+        font_stock_custom_loaded = true;
+    }
+
+    /// callback for hot reload
+    fn FontLoadCallback(_: HotReloadFontHandle, _: [:0]const u8, name: [:0]const u8) bool {
+        if (font_custom_loaded) FontCustomUnload();
+
+        defer blk: {
+            if (!FontsShowable()) break :blk;
+
+            const f = if (font_custom_loaded and font_custom_active) &font_custom else &font_stock_custom;
+            FontSet(f);
         }
 
-        // finalize
+        _ = font_load_arena.reset(.retain_capacity);
+        FontCustomLoad(font_load_arena.allocator(), name) catch {
+            // don't call FontCustomActivate here; the only time we change what
+            // we "want" to show is when the user manually changes the setting
+            // and triggers FontLoadAndSet
+            FontStockLoad();
+            return false;
+        };
 
-        const f = if (!font_custom_active) &font_stock_custom else &font_custom;
-        FontSet(f);
+        return true;
     }
 
     pub fn FontSet(font: ?*const CustomFont) void {
@@ -892,16 +950,23 @@ fn GIFBodyToAlphaARGB4444(gif: *GIF, arena: Allocator, reader: anytype, buf_o: [
     }
 }
 
-fn GIFTexturePath(arena: Allocator, filename: []const u8) ![]const u8 {
-    const b_has_ext = std.mem.endsWith(u8, filename, ".gif") or std.mem.endsWith(u8, filename, ".GIF");
-    const n = if (b_has_ext) filename[0 .. filename.len - 4] else filename;
-    return std.fmt.allocPrint(arena, "annodue/textures/{s}.gif", .{n});
+fn GIFTexturePath(arena: Allocator, filename: []const u8) ![:0]const u8 {
+    const n = if (EndsWithLowerString(".gif", filename)) filename[0 .. filename.len - 4] else filename;
+    return std.fmt.allocPrintZ(arena, "annodue/textures/{s}.gif", .{n});
 }
 
-fn GIFCustomFontPath(arena: Allocator, filename: []const u8) ![]const u8 {
-    const b_has_ext = std.mem.endsWith(u8, filename, ".gif") or std.mem.endsWith(u8, filename, ".GIF");
-    const n = if (b_has_ext) filename[0 .. filename.len - 4] else filename;
-    return std.fmt.allocPrint(arena, "annodue/custom/font/{s}.gif", .{n});
+fn GIFCustomFontPath(arena: Allocator, filename: []const u8) ![:0]const u8 {
+    const n = if (EndsWithLowerString(".gif", filename)) filename[0 .. filename.len - 4] else filename;
+    return std.fmt.allocPrintZ(arena, "annodue/custom/font/{s}.gif", .{n});
+}
+
+fn EndsWithLowerString(comptime ext: []const u8, str: []const u8) bool {
+    const LEN = ext.len;
+    if (str.len < LEN) return false;
+
+    var cmp: [LEN]u8 = undefined;
+    _ = std.ascii.lowerString(&cmp, str[str.len - LEN ..]);
+    return std.mem.eql(u8, ext, &cmp);
 }
 
 //------------------------------------------------------------------------------

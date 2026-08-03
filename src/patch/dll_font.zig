@@ -1,15 +1,78 @@
-const Self = @This();
+//! font fixes and custom font loading system
+//!
+//!
+//! FEATURES
+//!
+//! - custom font loading system, shipping with existing high definition font
+//! - adjust font glyph defs to align more nicely and support more characters
+//! - adjust font glyphs for better appearance (alignment and margins) and character support
+//! - bugfix font glyph uv mapping corruption during clipping
+//! - ability to dump base game font data to file (glyph texture and UV mask images, font definition data)
+//! - ability to display font testing text
+//! - SETTINGS:
+//!   enable                 bool    enable custom font system and basic font fixes
+//!   font                   string  name of gif file (in /annodue/custom/font) used for currently shown
+//!                                  font; use "STOCK" to display base game font with fixes
+//!   can_show_test          bool    enable displaying font test text
+//!   can_dump_data          bool    (dev-only) enable dumping source ingame font data to /annodue/developer
+//!   can_dump_glyphs        bool    (dev-only) enable dumping glyph binary data of currently loaded font
+//!   can_toggle_system      bool    (dev-only) enable soft-disabling custom font system
+//!   can_toggle_custom      bool    (dev-only) enable toggling between stock and custom fonts
+//!
+//!
+//! USING CUSTOM FONTS
+//!
+//! basic user-side flow
+//! - create or download font in standard format (see: CREATING A CUSTOM FONT)
+//! - place font in `/annodue/custom/font`
+//! - setting: `Font->font = <filename>` to select font; e.g. `hd` to load `hd.gif`
+//! * selected font can be changed at any time by editing `settings.ini` without restarting the game
+//! * set font to `STOCK` for an enhanced base font
+//! * font will fallback to `STOCK` if the file doesn't exist
+//!
+//!
+//! CREATING A CUSTOM FONT
+//!
+//! creating a font is as simple as making an image containing your glyphs in the
+//! expected format
+//!
+//! see template files in `/annodue/images/font-template` for visual help
+//!
+//! TEMPLATE.gif
+//! - example custom font using the game's base font data
+//! - use this to know which glyph goes where, and as an alignment reference
+//!
+//! TEMPLATE_GUIDE.gif
+//! - green: glyph regions in the unmodified game. stick to green as much as
+//!   possible if you want to closely match the sizing of the base font.
+//! - blue: the actual regions of the custom font glyphs. these are "extended"
+//!   from the base font to allow more creative freedom, and to save you from
+//!   those pesky edge pixels of the larger glyphs from getting cut off. even
+//!   the base font benefits from this, see Y in the base game!
+//! - red: not rendered at all. ¯\_(ツ)_/¯
+//!
+//! "the expected format" and other notes
+//! - a GIF file
+//! - 256x192 (or an integer multiple up to 8x)
+//! - greyscale assumed; only one color channel will actually be used
+//! - glyph locations matching the template
+//! - filename using ascii characters only (characters 32-126 on the ascii table)
+//! - for developing fonts
+//!     - overwriting the font image will cause the font to be updated in-game automatically
+//!     - for larger fonts, scale the template using point filtering/nearest neighbour scaling
+//!     - use the font test display to easily preview the whole font
+//!       (`Font->can_show_test = on` and hold `O` in-game)
 
 const std = @import("std");
+
+const Allocator = std.mem.Allocator;
+const ArenaAllocator = std.heap.ArenaAllocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 const assert = std.debug.assert;
 
 // TODO: after updating zig version, use `std.builtin.mode == .Debug` instead
 const BuildOptions = @import("BuildOptions");
 const IS_DEV_MODE = BuildOptions.BUILD_MODE == .Developer;
-
-const Allocator = std.mem.Allocator;
-const ArenaAllocator = std.heap.ArenaAllocator;
-const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
@@ -35,6 +98,16 @@ const rf = @import("racer").Font;
 const r3 = @import("racer").@"3D";
 const rti = @import("racer").Time;
 
+// FIXME: using ConsoleOut from here allows general logging to be spat out in the
+//  ConsoleOut window (see: gif.zig), meaning you don't actually have to call
+//  ConsoleOut to write to console once the window is actually up. maybe the
+//  ConsoleOut API should be adjusted to reflect this? maybe just have an
+//  enable/disable console API function in annodue, and let the user do whatever
+//  they want to actually forward console writes? might be more convenient to
+//  manage scoped logging this way
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
@@ -54,17 +127,6 @@ pub fn myLogFn(
     if (scope == .tga) return;
     std.log.log(level, scope, format, args);
 }
-
-// FIXME: using ConsoleOut from here allows general logging to be spat out in the
-//  ConsoleOut window (see: gif.zig), meaning you don't actually have to call
-//  ConsoleOut to write to console once the window is actually up. maybe the
-//  ConsoleOut API should be adjusted to reflect this? maybe just have an
-//  enable/disable console API function in annodue, and let the user do whatever
-//  they want to actually forward console writes? might be more convenient to
-//  manage scoped logging this way
-// FIXME: remove, for testing
-const dbg = @import("util/debug.zig");
-const rd = @import("racer").Debug;
 
 // FIXME: review all fixme/todo in this file and consolidate in normal annodue
 // notes/todo file, so that stuff doesn't get lost or forgotten
@@ -183,22 +245,7 @@ const rd = @import("racer").Debug;
 //  packaged "hd" gif to "hd-classic" to preserve the old font and use "hd" for the
 //  new version (so that users are auto-updated to the new version, but still have
 //  the old version available)
-
-// FEATURES
-// - custom font loading system, shipping with existing high definition font
-// - adjust font glyph defs to align more nicely and support more characters
-// - bugfix font glyph uv mapping during clipping
-// - ability to dump base game font data to file (glyph texture and UV mask images, font definition data)
-// - ability to display font testing text
-// - SETTINGS:
-//   enable                 bool    enable custom font system and associated font fixes
-//   font                   string  name of gif file (in /annodue/custom/font) used for currently shown
-//                                  font; use "STOCK" to display base game font with fixes
-//   can_show_test          bool    enable displaying font test text
-//   can_dump_data          bool    (dev-only) enable dumping source ingame font data to /annodue/developer
-//   can_dump_glyphs        bool    (dev-only) enable dumping glyph binary data of currently loaded font
-//   can_toggle_system      bool    (dev-only) enable soft-disabling custom font system
-//   can_toggle_custom      bool    (dev-only) enable toggling between stock and custom fonts
+// TODO: when remaking hd font, need to add cedilla for C
 
 //------------------------------------------------------------------------------
 // plugin housekeeping

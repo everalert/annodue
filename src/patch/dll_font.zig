@@ -17,7 +17,6 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const debug = @import("core/Debug.zig");
 
-const crot = @import("util/color.zig");
 const cf = @import("util/color_format.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
@@ -29,7 +28,6 @@ const HotReloadFont = @import("util/hot_reload.zig").HotReload(HotReloadFontHand
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
 
 const ra = @import("racer").Asset;
 const rt = @import("racer").Text;
@@ -432,7 +430,7 @@ const FontState = struct {
         font_load_fba = FixedBufferAllocator.init(&load_scratch);
         font_load_arena = ArenaAllocator.init(font_load_fba.allocator());
 
-        font_reloader.Init(FontLoadCallback);
+        font_reloader.Init(FontLoadCallback, FontUnloadCallback);
         font_reloader.CheckDelay = 250;
 
         // FIXME: remove; these are only here because not referencing the variable
@@ -470,7 +468,6 @@ const FontState = struct {
         font_stock_custom.UnloadPagesFromGame();
         font_stock_custom_loaded = false;
 
-        if (font_custom_loaded) FontCustomUnload();
         font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
 
         font_load_arena.deinit();
@@ -526,9 +523,6 @@ const FontState = struct {
             if (font_custom_tracked) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
                 .eq => return if (font_custom_loaded) FontSet(&font_custom),
                 else => {
-                    // TODO: hot_reload having a separate UnloadCallback would
-                    //  be nice here; would need to also update Deinit
-                    if (font_custom_loaded) FontCustomUnload();
                     font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
                     font_custom_tracked = false;
                 },
@@ -598,10 +592,16 @@ const FontState = struct {
         font_stock_custom_loaded = true;
     }
 
+    // WARN: does not unset font from the game, even though the load callback
+    //  does set it. this asymmetry works for now, but should be reconsidered
+    //  when moving to directory-watching hot reload
+    /// callback for hot reload
+    fn FontUnloadCallback(_: HotReloadFontHandle, _: [:0]const u8, _: [:0]const u8) void {
+        if (font_custom_loaded) FontCustomUnload();
+    }
+
     /// callback for hot reload
     fn FontLoadCallback(_: HotReloadFontHandle, _: [:0]const u8, name: [:0]const u8) bool {
-        if (font_custom_loaded) FontCustomUnload();
-
         defer blk: {
             if (!FontsShowable()) break :blk;
 

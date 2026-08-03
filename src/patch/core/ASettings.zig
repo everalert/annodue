@@ -304,7 +304,7 @@ pub const ASettings = struct {
         data_settings = HandleMap(Setting, u16).init(alloc);
         section_update_queue = ArrayList(ASettingSent).init(alloc);
 
-        HotReloadSettings.Init(&ASettings.hot_reload, ASettings.load);
+        HotReloadSettings.Init(&ASettings.hot_reload, ASettings.load, ASettings.unload);
         ASettings.hot_reload.CheckDelay = 250;
         ASettings.hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
     }
@@ -742,6 +742,11 @@ pub const ASettings = struct {
 
         sectionRunUpdateAll();
     }
+
+    // callback for HotReload(HotReloadSettingsContextHandle)
+    // stub because the settings live throughout the whole program lifetime and
+    // will only be updated if a reload occurs
+    fn unload(_: HotReloadSettingsHandle, _: [:0]const u8, _: [:0]const u8) void {}
 
     // callback for HotReload(HotReloadSettingsContextHandle)
     /// read settings from file

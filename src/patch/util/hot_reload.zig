@@ -16,14 +16,19 @@ const MAX_PATH_GLOBAL: u32 = 259; // MAX_PATH_SENTINEL
 //  limitations. future tests should probably simplify this more and pull out
 //  failure cases into separate tests, and use a more robust (easy to follow)
 //  test type too. also reminder to also test comptime variations that affect
-//  codegen (e.g. ITEM_MAX due to comptime conditionals in Update)
+//  codegen (e.g. ITEM_MAX due to comptime conditionals in Update), and have good coverage
 // TODO: version which monitors a whole directory, and can handle cases such as
 //  new files, file deletion, etc. to dynamically adapt the hot reload list, rather
 //  than making a list and querying the files individually. see: ReadDirectoryChangesW/-ExW
 // TODO: version which takes an allocator (and uses a hashmap)? avoided this before
 //  because my use case didn't need much memory, but might be worth keeping in mind
-// TODO: add fnUnload callback (and accompanying fnUnloadResult)
-//  - call on deinit, in untrack functions, during whole-directory monitoring
+// TODO: ?? remove fnLoadResult (and fnUnloadResult); not sure it's really needed
+//  when the result callbacks call immediately after anyway
+// TODO: ?? do the callbacks really need to pass in the filename/path? if the api
+//  is being given the path, and expects the path on untrack, then the caller
+//  should be able to associate a path with a handle. the main reason this might
+//  be needed is, in a directory-watching api the filename/path is not actually
+//  known to the user until it tries to load
 // TODO: option/function to check all files in an update; not sure if looping
 //  behaviour is actually necessary for performance, need to verify with testers
 // TODO: deinit impl that batch-untracks the file list
@@ -33,7 +38,6 @@ const MAX_PATH_GLOBAL: u32 = 259; // MAX_PATH_SENTINEL
 // TODO: ?? impl the following for convenience
 //  pub fn TrackDirectory() void {} // batch add files from directory; needs some method to filter files
 //  pub fn UntrackDirectory() void {}
-//  pub fn UntrackAll() void {}
 // TODO: ?? look into simplifying FileRecord/merging as much of it as possible into HotReload
 // TODO: ?? non-windows impls? note that std has setup std.fs.stat to be platform-agnostic
 
@@ -104,6 +108,7 @@ fn HotReloadInternal(
         /// is intended as an option for cleanly separating "reactive" loading
         /// logic from "active", such as resource cleanup or sending UI notifications.
         fnLoadResult: ?LoadResultCallback = null,
+        fnUnload: UnloadCallback,
 
         /// minimum wait time before a new update can run, in `CheckTimestamp` units
         CheckDelay: usize = 0,
@@ -118,11 +123,13 @@ fn HotReloadInternal(
         const LoadCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8) LoadResultT;
         /// ctx, filepath, filename, result
         const LoadResultCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8, LoadResultT) void;
+        /// ctx, filepath, filename
+        const UnloadCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8) void;
 
         const FileRecord = FileRecordInternal(ContextHandleT, fnFileInfoGet, fnFileHashGet);
 
-        pub fn Init(self: *HotReloadT, fn_load: LoadCallback) void {
-            self.* = std.mem.zeroInit(HotReloadT, .{ .fnLoad = fn_load });
+        pub fn Init(self: *HotReloadT, fn_load: LoadCallback, fn_unload: UnloadCallback) void {
+            self.* = std.mem.zeroInit(HotReloadT, .{ .fnLoad = fn_load, .fnUnload = fn_unload });
         }
 
         pub fn Update(self: *HotReloadT, timestamp: usize) void {
@@ -142,6 +149,8 @@ fn HotReloadInternal(
 
             const item = &self.FileList[self.CheckIndex];
             if (!item.Check()) return;
+
+            self.fnUnload(item.Context, item.PathSlice(), item.NameSlice());
 
             const result = self.fnLoad(item.Context, item.PathSlice(), item.NameSlice());
             if (self.fnLoadResult) |f| f(item.Context, item.PathSlice(), item.NameSlice(), result);
@@ -184,16 +193,47 @@ fn HotReloadInternal(
             if (self.fnLoadResult) |f| f(ctx, record.PathSlice(), record.NameSlice(), result);
         }
 
+        /// removes a file from tracking, and runs the unload-related callbacks.
+        /// asserts that the file is being tracked
         pub fn UntrackFile(self: *HotReloadT, filepath: [*:0]const u8) void {
             for (0..ITEM_MAX) |i| {
-                if (std.mem.orderZ(u8, filepath, &self.FileList[i].Path) == .eq) {
-                    assert(self.FileListUsed[i]);
-                    assert(self.FileListCount > 0);
-                    self.FileListUsed[i] = false;
-                    self.FileListCount -= 1;
-                    break;
+                if (self.FileListUsed[i] and std.mem.orderZ(u8, filepath, &self.FileList[i].Path) == .eq) {
+                    self.UntrackFileIndex(i);
+                    return;
                 }
             }
+            assert(false); // file must be tracked
+        }
+
+        /// removes a file from tracking, and runs the unload-related callbacks.
+        /// asserts that the file is being tracked
+        pub fn UntrackFileHandle(self: *HotReloadT, ctx: ContextHandleT) void {
+            for (0..ITEM_MAX) |i| {
+                if (self.FileListUsed[i] and self.FileList[i].Context == ctx) {
+                    self.UntrackFileIndex(i);
+                    return;
+                }
+            }
+            assert(false); // file must be tracked
+        }
+
+        /// removes all files from tracking, running their unload callbacks
+        pub fn UntrackAll(self: *HotReloadT) void {
+            for (0..ITEM_MAX) |i| {
+                if (self.FileListUsed[i]) self.UntrackFileIndex(i);
+            }
+            assert(self.FileListCount == 0);
+        }
+
+        /// removes a file from tracking, and runs the unload-related callbacks.
+        /// asserts that the file is being tracked
+        fn UntrackFileIndex(self: *HotReloadT, i: usize) void {
+            assert(self.FileListUsed[i]);
+            assert(self.FileListCount > 0);
+            var record: *FileRecord = &self.FileList[i];
+            self.fnUnload(record.Context, record.PathSlice(), record.NameSlice());
+            self.FileListUsed[i] = false;
+            self.FileListCount -= 1;
         }
 
         fn GetFreeFileSlot(self: *HotReloadT) ?usize {
@@ -356,21 +396,22 @@ test "basic usage for one file" {
         };
         var cases: []const TestCase = &.{
             // starting state (after `TrackFile`s)
-            .{ .time = 0, .expected_loads = 1, .expected_snapshot = 0 },
+            .{ .time = 0, .exp_loads = 1, .exp_unloads = 0, .exp_snapshot = 0 },
             // changed
-            .{ .time = 2, .expected_loads = 2, .expected_snapshot = 1 },
+            .{ .time = 2, .exp_loads = 2, .exp_unloads = 1, .exp_snapshot = 1 },
             // no change: same file write time
-            .{ .time = 4, .expected_loads = 2, .expected_snapshot = 1 },
+            .{ .time = 4, .exp_loads = 2, .exp_unloads = 1, .exp_snapshot = 1 },
             // no change: same file hash
-            .{ .time = 6, .expected_loads = 2, .expected_snapshot = 1 },
+            .{ .time = 6, .exp_loads = 2, .exp_unloads = 1, .exp_snapshot = 1 },
             // no change: cycle duration too short (must be greater than `CheckDelay`)
-            .{ .time = 7, .expected_loads = 2, .expected_snapshot = 1 },
+            .{ .time = 7, .exp_loads = 2, .exp_unloads = 1, .exp_snapshot = 1 },
             // changed: cycle duration ok
-            .{ .time = 8, .expected_loads = 3, .expected_snapshot = 5 },
+            .{ .time = 8, .exp_loads = 3, .exp_unloads = 2, .exp_snapshot = 5 },
         };
 
         var time_i: usize = 0;
         var loads: usize = 0;
+        var unloads: usize = 0;
         var loaded_snapshot: usize = 0;
 
         const TestFileSnapshot = struct {
@@ -381,8 +422,9 @@ test "basic usage for one file" {
 
         const TestCase = struct {
             time: usize, // update timestamp, not file write time
-            expected_loads: usize,
-            expected_snapshot: usize,
+            exp_loads: usize,
+            exp_unloads: usize,
+            exp_snapshot: usize,
         };
 
         pub fn SetTime(t: usize) void {
@@ -397,12 +439,13 @@ test "basic usage for one file" {
         }
 
         pub fn TestSnapshot(i: usize) !void {
-            const ex = &data[cases[i].expected_snapshot];
+            const ex = &data[cases[i].exp_snapshot];
             const ld = &data[loaded_snapshot];
             try std.testing.expectEqual(ex.data.WriteTime, ld.data.WriteTime);
             try std.testing.expectEqual(ex.data.Hash, ld.data.Hash);
             try std.testing.expectEqualStrings(ex.contents, ld.contents);
-            try std.testing.expectEqual(cases[i].expected_loads, loads);
+            try std.testing.expectEqual(cases[i].exp_loads, loads);
+            try std.testing.expectEqual(cases[i].exp_unloads, unloads);
         }
 
         fn InfoGet(fd: *FileData, _: [:0]const u8) bool {
@@ -421,6 +464,10 @@ test "basic usage for one file" {
             return true;
         }
 
+        fn UnloadCallback(_: u32, _: [:0]const u8, _: [:0]const u8) void {
+            unloads += 1;
+        }
+
         fn LoadResultCallback(_: u32, _: [:0]const u8, _: [:0]const u8, _: bool) void {}
     };
 
@@ -430,7 +477,7 @@ test "basic usage for one file" {
 
     // initialization
     var hr: HotReloadTest = undefined;
-    hr.Init(TestData.LoadCallback);
+    hr.Init(TestData.LoadCallback, TestData.UnloadCallback);
     hr.fnLoadResult = TestData.LoadResultCallback; // optional
     hr.CheckDelay = 1; // optional
 
@@ -461,4 +508,5 @@ test "basic usage for one file" {
 
     hr.UntrackFile("filepath_goes_here");
     try std.testing.expectEqual(hr.FileListCount, 0);
+    try std.testing.expectEqual(TestData.cases[TestData.cases.len - 1].exp_loads, TestData.unloads);
 }

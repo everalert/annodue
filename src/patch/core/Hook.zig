@@ -225,6 +225,8 @@ pub const PluginState = struct {
     }
 
     fn LoadPluginResultCallback(handle: HotReloadPluginHandle, _: [:0]const u8, _: [:0]const u8, result: bool) void {
+        assert(plugins_used[handle]);
+        assert(plugins[handle].Initialized == result);
         defer assert(plugins_toast_count <= PLUGIN_MAX);
 
         if (result) blk: {
@@ -234,6 +236,22 @@ pub const PluginState = struct {
         } else {
             plugins_used[handle] = false;
             plugins_count -= 1;
+        }
+    }
+
+    /// callback for Plugin hot_reload impl; the file given is assumed to be newer
+    fn UnloadPluginCallback(handle: HotReloadPluginHandle, _: [:0]const u8, _: [:0]const u8) void {
+        assert(handle < PLUGIN_MAX);
+        assert(plugins_used[handle]);
+
+        const p: *Plugin = &plugins[handle];
+        if (!p.Initialized) return; // already unloaded
+
+        if (p.Handle) |h| {
+            p.OnDeinit.?(GLOBAL_FUNCTION);
+            PluginFnOnPluginInit(.OnPluginDeinitA, p.OwnerId);
+            _ = FreeLibrary(h);
+            p.Initialized = false;
         }
     }
 
@@ -258,20 +276,10 @@ pub const PluginState = struct {
     ///             guarantee of no dangling handles on failure
     fn LoadPluginCallback(handle: HotReloadPluginHandle, filepath: [:0]const u8, filename: [:0]const u8) bool {
         assert(handle < PLUGIN_MAX);
-        assert(plugins_used[handle] == true or (!plugins_used[handle] and !plugins[handle].Initialized));
-        // FIXME: this would fail on initial load, but it makes more sense as an
-        //  assert; maybe split loading and unloading in hot_reload api to help
-        //  simplify the impl overall
-        //assert(plugins_used[handle] == true);
+        assert(plugins_used[handle]);
+        assert(!plugins[handle].Initialized);
 
         const p: *Plugin = &plugins[handle];
-
-        // do we need to unload anything
-        if (p.Handle) |h| {
-            p.OnDeinit.?(GLOBAL_FUNCTION);
-            PluginFnOnPluginInit(.OnPluginDeinitA, p.OwnerId);
-            _ = FreeLibrary(h);
-        }
 
         // FIXME: to remove; will be embedding stock plugins moving forward
         if (BuildOptions.BUILD_MODE != .Developer) blk: {
@@ -316,7 +324,6 @@ pub const PluginState = struct {
             p.OnPluginDeinitA != null)
         {
             _ = FreeLibrary(p.Handle);
-            p.Initialized = false;
             return false;
         }
 
@@ -466,7 +473,7 @@ pub fn init() void {
 
     // loading plugins
 
-    PluginState.HotReloadPlugin.Init(&PluginState.plugins_reloader, PluginState.LoadPluginCallback);
+    PluginState.plugins_reloader.Init(PluginState.LoadPluginCallback, PluginState.UnloadPluginCallback);
     PluginState.plugins_reloader.fnLoadResult = PluginState.LoadPluginResultCallback;
     PluginState.plugins_reloader.CheckDelay = 40; // 25fps in ms
     PluginState.plugins_used = std.mem.zeroes([PluginState.PLUGIN_MAX]bool);

@@ -456,21 +456,22 @@ const FontState = struct {
         if (!fonts_initialized) return;
         defer fonts_initialized = false;
 
+        FontsDisable();
+
+        font_stock_custom.UnloadPagesFromGame();
+        font_stock_custom_loaded = false;
+
+        if (font_custom_tracked)
+            font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
+
+        font_load_arena.deinit();
+
         // return to default values
         fonts_active = true;
         font_stock_custom_loaded = false;
         font_custom_tracked = false;
         font_custom_loaded = false;
         font_custom_active = false;
-
-        FontsDisable();
-
-        font_stock_custom.UnloadPagesFromGame();
-        font_stock_custom_loaded = false;
-
-        font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
-
-        font_load_arena.deinit();
     }
 
     pub fn FontsEnable() void {

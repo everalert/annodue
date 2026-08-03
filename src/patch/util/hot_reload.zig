@@ -22,8 +22,6 @@ const MAX_PATH_GLOBAL: u32 = 259; // MAX_PATH_SENTINEL
 //  than making a list and querying the files individually. see: ReadDirectoryChangesW/-ExW
 // TODO: version which takes an allocator (and uses a hashmap)? avoided this before
 //  because my use case didn't need much memory, but might be worth keeping in mind
-// TODO: ?? remove fnLoadResult (and fnUnloadResult); not sure it's really needed
-//  when the result callbacks call immediately after anyway
 // TODO: ?? do the callbacks really need to pass in the filename/path? if the api
 //  is being given the path, and expects the path on untrack, then the caller
 //  should be able to associate a path with a handle. the main reason this might
@@ -59,7 +57,7 @@ const MAX_PATH_GLOBAL: u32 = 259; // MAX_PATH_SENTINEL
 ///             - runs when initially adding the file for tracking.
 ///             - runs if a file changes (it can assume the file is new).
 ///             - must also handle any "unloading" needed during an update.
-///         - Optional config via `fnLoadResultCallback` and `CheckDelay` fields.
+///         - Optional config via `CheckDelay` field.
 ///     3. Add files to monitor via `TrackFile` and `TrackFileAlways`.
 ///     4. Run `Update` at a regularly-executing callsite to monitor for changes.
 ///         - `timestamp` is "unit-less"; timescale is up to the user. `CheckDelay`
@@ -100,14 +98,12 @@ fn HotReloadInternal(
         FileListCount: usize = 0,
 
         /// callback for loading the hot-reload target. this will run both when
-        /// loading the target initially and when hot-reloading, and will need to
-        /// handle unloading if necessary
+        /// loading the target initially and when hot-reloading.
         /// @return     true if load successful
         fnLoad: LoadCallback,
-        /// callback for running any post-processing after a load attempt. this
-        /// is intended as an option for cleanly separating "reactive" loading
-        /// logic from "active", such as resource cleanup or sending UI notifications.
-        fnLoadResult: ?LoadResultCallback = null,
+        /// callback for unloading the hot-reload target. this will run both when
+        /// hot-reloading, and when untracking the target. when hot-reloading, it
+        /// runs immediately before `fnLoad`.
         fnUnload: UnloadCallback,
 
         /// minimum wait time before a new update can run, in `CheckTimestamp` units
@@ -119,11 +115,9 @@ fn HotReloadInternal(
 
         // TODO: ?? return an enum for more result state granularity?
         const LoadResultT = bool;
-        /// ctx, filepath, filename
+        /// fn (ctx, filepath, filename) result
         const LoadCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8) LoadResultT;
-        /// ctx, filepath, filename, result
-        const LoadResultCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8, LoadResultT) void;
-        /// ctx, filepath, filename
+        /// fn (ctx, filepath, filename)
         const UnloadCallback = *const fn (ContextHandleT, [:0]const u8, [:0]const u8) void;
 
         const FileRecord = FileRecordInternal(ContextHandleT, fnFileInfoGet, fnFileHashGet);
@@ -152,23 +146,19 @@ fn HotReloadInternal(
 
             self.fnUnload(item.Context, item.PathSlice(), item.NameSlice());
 
-            const result = self.fnLoad(item.Context, item.PathSlice(), item.NameSlice());
-            if (self.fnLoadResult) |f| f(item.Context, item.PathSlice(), item.NameSlice(), result);
+            _ = self.fnLoad(item.Context, item.PathSlice(), item.NameSlice());
         }
 
-        /// adds a file to track for hot reloading, and runs the load-related
-        /// callbacks. if the loading process fails for any reason, the file will
-        /// not be added to the tracking list.
-        /// @return     true when the callbacks successfully run; on false, any
-        ///             failure case dependent on `fnLoadResult` will not be
-        ///             handled, so the caller may need to do manual cleanup
+        /// adds a file to track for hot reloading, and runs the load callback.
+        /// if the loading process fails for any reason, the file will not be
+        /// added to the tracking list.
+        /// @return     true when the load callback successfully runs
         pub fn TrackFile(self: *HotReloadT, filepath: [*:0]const u8, ctx: ContextHandleT) bool {
             const file_slot = self.GetFreeFileSlot() orelse return false;
             var record: *FileRecord = &self.FileList[file_slot];
 
             if (!record.Init(filepath, ctx)) return false;
             const result = self.fnLoad(ctx, record.PathSlice(), record.NameSlice());
-            if (self.fnLoadResult) |f| f(ctx, record.PathSlice(), record.NameSlice(), result);
 
             if (result) {
                 self.FileListCount += 1;
@@ -178,9 +168,9 @@ fn HotReloadInternal(
             return true;
         }
 
-        /// adds a file to track for hot reloading, and runs the load-related
-        /// callbacks on it if possible. the file will always be added to the
-        /// tracking list, even if the file doesn't exist yet
+        /// adds a file to track for hot reloading, and runs the load callback
+        /// on it if possible. the file will always be added to the tracking list,
+        /// even if the file doesn't exist yet
         pub fn TrackFileAlways(self: *HotReloadT, filepath: [*:0]const u8, ctx: ContextHandleT) void {
             const file_slot = self.GetFreeFileSlot() orelse @panic("TrackFileAlways: item capacity exceeded");
             var record: *FileRecord = &self.FileList[file_slot];
@@ -189,8 +179,7 @@ fn HotReloadInternal(
             self.FileListUsed[file_slot] = true;
 
             if (!record.Init(filepath, ctx)) return;
-            const result = self.fnLoad(ctx, record.PathSlice(), record.NameSlice());
-            if (self.fnLoadResult) |f| f(ctx, record.PathSlice(), record.NameSlice(), result);
+            _ = self.fnLoad(ctx, record.PathSlice(), record.NameSlice());
         }
 
         /// removes a file from tracking, and runs the unload-related callbacks.
@@ -441,11 +430,11 @@ test "basic usage for one file" {
         pub fn TestSnapshot(i: usize) !void {
             const ex = &data[cases[i].exp_snapshot];
             const ld = &data[loaded_snapshot];
+            try std.testing.expectEqual(cases[i].exp_loads, loads);
+            try std.testing.expectEqual(cases[i].exp_unloads, unloads);
             try std.testing.expectEqual(ex.data.WriteTime, ld.data.WriteTime);
             try std.testing.expectEqual(ex.data.Hash, ld.data.Hash);
             try std.testing.expectEqualStrings(ex.contents, ld.contents);
-            try std.testing.expectEqual(cases[i].exp_loads, loads);
-            try std.testing.expectEqual(cases[i].exp_unloads, unloads);
         }
 
         fn InfoGet(fd: *FileData, _: [:0]const u8) bool {
@@ -467,8 +456,6 @@ test "basic usage for one file" {
         fn UnloadCallback(_: u32, _: [:0]const u8, _: [:0]const u8) void {
             unloads += 1;
         }
-
-        fn LoadResultCallback(_: u32, _: [:0]const u8, _: [:0]const u8, _: bool) void {}
     };
 
     // NOTE: in practice you would use `HotReload(...)` instead, but we use the internal
@@ -478,7 +465,6 @@ test "basic usage for one file" {
     // initialization
     var hr: HotReloadTest = undefined;
     hr.Init(TestData.LoadCallback, TestData.UnloadCallback);
-    hr.fnLoadResult = TestData.LoadResultCallback; // optional
     hr.CheckDelay = 1; // optional
 
     TestData.SetTime(0);

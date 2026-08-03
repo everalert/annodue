@@ -224,21 +224,6 @@ pub const PluginState = struct {
         return working_owner < 0x0800;
     }
 
-    fn LoadPluginResultCallback(handle: HotReloadPluginHandle, _: [:0]const u8, _: [:0]const u8, result: bool) void {
-        assert(plugins_used[handle]);
-        assert(plugins[handle].Initialized == result);
-        defer assert(plugins_toast_count <= PLUGIN_MAX);
-
-        if (result) blk: {
-            if (plugins_toast_count == PLUGIN_MAX) break :blk;
-            plugins_toast[plugins_toast_count] = handle;
-            plugins_toast_count += 1;
-        } else {
-            plugins_used[handle] = false;
-            plugins_count -= 1;
-        }
-    }
-
     /// callback for Plugin hot_reload impl; the file given is assumed to be newer
     fn UnloadPluginCallback(handle: HotReloadPluginHandle, _: [:0]const u8, _: [:0]const u8) void {
         assert(handle < PLUGIN_MAX);
@@ -278,22 +263,38 @@ pub const PluginState = struct {
         assert(handle < PLUGIN_MAX);
         assert(plugins_used[handle]);
         assert(!plugins[handle].Initialized);
+        var result: bool = false;
+
+        defer {
+            assert(plugins_used[handle]);
+            assert(plugins[handle].Initialized == result);
+            defer assert(plugins_toast_count <= PLUGIN_MAX);
+
+            if (result) blk: {
+                if (plugins_toast_count == PLUGIN_MAX) break :blk;
+                plugins_toast[plugins_toast_count] = handle;
+                plugins_toast_count += 1;
+            } else {
+                plugins_used[handle] = false;
+                plugins_count -= 1;
+            }
+        }
 
         const p: *Plugin = &plugins[handle];
 
         // FIXME: to remove; will be embedding stock plugins moving forward
         if (BuildOptions.BUILD_MODE != .Developer) blk: {
-            const this_hash = getFileSha512(filepath) catch return false;
+            const this_hash = getFileSha512(filepath) catch return result;
             for (plugin_hashes) |hash|
                 if (std.mem.eql(u8, &this_hash, &hash))
                     break :blk;
-            return false;
+            return result;
         }
 
         var buf_tmp: [MAX_PATH_SENTINEL:0]u8 = undefined;
         const filename_no_ext = filename[0 .. filename.len - 4];
         _ = std.fmt.bufPrintZ(&buf_tmp, "./annodue/tmp/plugin/{s}.tmp.dll", .{filename_no_ext}) catch
-            return false;
+            return result;
 
         // now we ball
 
@@ -324,7 +325,7 @@ pub const PluginState = struct {
             p.OnPluginDeinitA != null)
         {
             _ = FreeLibrary(p.Handle);
-            return false;
+            return result;
         }
 
         p.OwnerId = PluginState.owners_user;
@@ -334,7 +335,9 @@ pub const PluginState = struct {
         PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
         if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_FUNCTION);
         p.Initialized = true;
-        return true;
+
+        result = true;
+        return result;
     }
 };
 
@@ -474,17 +477,18 @@ pub fn init() void {
     // loading plugins
 
     PluginState.plugins_reloader.Init(PluginState.LoadPluginCallback, PluginState.UnloadPluginCallback);
-    PluginState.plugins_reloader.fnLoadResult = PluginState.LoadPluginResultCallback;
     PluginState.plugins_reloader.CheckDelay = 40; // 25fps in ms
     PluginState.plugins_used = std.mem.zeroes([PluginState.PLUGIN_MAX]bool);
     PluginState.plugins_count = 0;
-    defer PluginState.plugins_toast_count = 0;
+    defer PluginState.plugins_toast_count = 0; // don't toast initial plugin load
 
     // TODO: check that each filename is short enough that both the plugin directory
     //  filepath and the temp file path lengths don't exceed MAX_PATH_SENTINEL
     // FIXME: assumes cwd is the game directory
     var d = std.fs.cwd().makeOpenPathIterable("./annodue/plugin", .{}) catch null;
     if (d) |*dir| {
+        defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
+        defer assert(PluginState.plugins_count <= PluginState.PLUGIN_MAX);
         defer dir.close();
 
         var buf_path = std.mem.zeroes([MAX_PATH_SENTINEL:0]u8);
@@ -492,6 +496,7 @@ pub fn init() void {
 
         var it_dir = dir.iterate();
         while (it_dir.next() catch null) |file| {
+            if (PluginState.plugins_count == PluginState.PLUGIN_MAX) break;
             if (file.kind != .file) continue;
 
             if (file.name.len < 4) continue; // minimum length for extension
@@ -505,11 +510,7 @@ pub fn init() void {
 
             PluginState.plugins_used[handle] = true;
             PluginState.plugins_count += 1;
-            if (!PluginState.plugins_reloader.TrackFile(&buf_path, handle)) {
-                // only runs if the callback never got a chance to cleanup
-                PluginState.plugins_used[handle] = false;
-                PluginState.plugins_count -= 1;
-            }
+            _ = PluginState.plugins_reloader.TrackFile(&buf_path, handle);
         }
     }
 

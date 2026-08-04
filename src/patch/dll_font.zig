@@ -57,6 +57,7 @@
 //! - greyscale assumed; only one color channel will actually be used
 //! - glyph locations matching the template
 //! - filename using ascii characters only (characters 32-126 on the ascii table)
+//! - filename without path or extension no more than 127 characters long
 //! - for developing fonts
 //!     - overwriting the font image will cause the font to be updated in-game automatically
 //!     - for larger fonts, scale the template using point filtering/nearest neighbour scaling
@@ -98,13 +99,6 @@ const rf = @import("racer").Font;
 const r3 = @import("racer").@"3D";
 const rti = @import("racer").Time;
 
-// FIXME: using ConsoleOut from here allows general logging to be spat out in the
-//  ConsoleOut window (see: gif.zig), meaning you don't actually have to call
-//  ConsoleOut to write to console once the window is actually up. maybe the
-//  ConsoleOut API should be adjusted to reflect this? maybe just have an
-//  enable/disable console API function in annodue, and let the user do whatever
-//  they want to actually forward console writes? might be more convenient to
-//  manage scoped logging this way
 // FIXME: remove, for testing
 const dbg = @import("util/debug.zig");
 
@@ -127,125 +121,6 @@ pub fn myLogFn(
     if (scope == .tga) return;
     std.log.log(level, scope, format, args);
 }
-
-// FIXME: review all fixme/todo in this file and consolidate in normal annodue
-// notes/todo file, so that stuff doesn't get lost or forgotten
-
-// TODO: ROADMAP
-// - texture loader/manager in core, that caches GPU references to loaded textures
-//   instead of freeing them when no longer used; i.e. avoid creating GPU resources
-//   unnecessarily, as a way to avoid the "memory leak crash". one other avenue
-//   to explore here is having an actual texture atlas, to minimize the absolute
-//   number of GPU resources needed. See the Display_VSurfaceLock, etc. family
-//   of functions for a way to do this, example usage and logic flow in VBufferLock,
-//   MaterialLoadEntry, the screenshot function, etc.. Will need to manage own
-//   VBuffers and therefore reimpl the functionality around these (again, see
-//   MaterialLoadEntry)
-// - font loader/manager as a plugin. pixel data stored in the plugin, and copied
-//   to the font texture directly whenever the user swaps font choice (i.e. there
-//   is only one texture used in the font system, use VSurfaceLock etc. for this).
-//   font api should take a 'nice' image of glyphs rather than ones organized like
-//   the game fonts, and therefore needs to also accommodate custom font definitions
-//   that have different glyph coordinates accordingly. Plugin developers should
-//   also have the option to provide their own font definitions, so the system
-//   must be able to translate the font definition coordinates to the font atlas
-//   texture coordinates at runtime. regular users should be able to just place
-//   an image file matching the standard font def in 'annodue/fonts' or somewhere
-//   and have it appear as an option in the game. the standard font def should also
-//   have the glyph coordinates cleaned up so users can actually make fonts that
-//   use the currently busted glyphs (like '!')
-//      - mod brainstorming:
-//          - user option to not use the added margins on the planned "standard"
-//            fonts; changes the look of the glyphs a little because the cutoff
-//            on the original font makes some parts look more solid/blocky
-//          - two standard fonts (ones where you can just drop an image into a
-//            folder): a "minimal" one that only has the stock font glyphs, and
-//            a "normal" one as originally planned that expands on available
-//            glyphs but keeps the stock ones faithfully sized etc
-//          - custom extended glyph defs (LUT) by overwriting game memory (the
-//            stuff at 4BFA10, 4BFA58)
-//          - feature to dump or otherwise display the font defs, glyph defs,
-//            extended glyph LUT, etc. as text/csv
-// - remake old HD font with better proportions that actually match the original
-//   font
-// - future: some kind of text rendering system that lets developers draw with
-//   fonts other than the ones the game is using? also could be useful as a
-//   way of dodging the triangle count limitations imposed by the game's normal
-//   rendering system (all text, geo, etc. is dumped into the same queue that
-//   draw calls are made from, which has a limit), and could also open the door
-//   for an imgui down the line
-
-// NOTE: scratchpad notes
-//
-// mod
-// - make 'fixed' base font patch option with the minor adjustments that work with
-//   the original font defs/textures, using some kind of 'adjustment table'
-// - then use that as a base and apply changes from another such adjustment table
-//   for the custom font def
-// - i.e. 'progressively enhance' from the base fonts, to simplify figuring out all
-//   the new numbers
-// - general rule = 'basic custom font' should not introduce any glyphs that do not
-//   already have pixels drawn on the original font, and should not make any changes
-//   that affect the spacing of the output; but adjustments to coords and splitting
-//   overlapping defs into independent mappings OK; this is so that it can serve as
-//   a 'ground truth' baseline representing a user who has no custom fonts enabled
-// - font dll should have the timings adjusted so that the original fonts are fully
-//   loaded before executing any mods; that way the 'copied' versions can use the
-//   prepared resources (i.e. default to late-loading, and only execute on any
-//   features before font loading when that feature really needs it)
-//
-// notes
-// - can't totally fix accent alignment, because differences in base character width
-//   naturally misalign them; can only fix this case in code
-// - can't make inverted exclamation mark in the way '?' is done without changing
-//   code; but could just make another glyph
-// - loading textures into gpu seems to be the cause of the "memory leak" crash?
-//   so the plan is to just reuse a single texture and rewrite the pixels whenever
-//   a font is changed/loaded. not sure if this is a dgvoodoo problem or just a
-//   windows regression. still need to completely rule out game allocations because
-//   there is one place during material generation that temp allocates
-
-// TODO: all settings hot-reloadable
-// TODO: directory-monitoring hot_reload impl (need for core menu impl)
-// TODO: option to show double-size fonts on font test visualization
-// TODO: ingame menu (not necessarily adding the menu itself during this pass, but
-// some of these features should still be implemented now as settings file stuff)
-// - buttons for the dumping ("developer") features
-// - font selector
-// - button to clear cached fonts (including or excluding ones without a paired gif)
-// - button to reload fonts
-// - button to add/remove glyph margins
-// - exotic stuff (e.g. font designer/importer)
-// - show test strings for previewing fonts
-// - opt to show font textures directly?
-// FIXME: change user of custom fonts to something like "annodue/custom/fonts";
-// i.e. part of a unified location for custom content. maybe also consider an
-// external location as a common place for custom content to go for both annodue
-// and community mod (need to discuss)
-// FIXME: update changelog and manual to reflect new font functionality and stuff
-// inherited from cosmetic/developer plugins, as well as updating old parts of
-// current changelog that talk about font-related features on other plugins in
-// this release round
-
-// NOTE: consider halving old hd font, as this would enable the max texture size
-// of custom fonts to be 4x less. in this case, glyphs will still be oversized for
-// normal text, but undersized for "large" text (~75% @ 1440p, ~85-90% @ 1080p).
-// possibly acceptable (unscaled non-large normal body text @ 960p has similar
-// ratio and is subjectively good-looking), but ~6x base size would be needed for
-// no/minimal scaling in all cases; 8x is actually justified for pow2.
-// NOTE: technically, fonts probably don't need to be in the pixel format the
-// game uses; might be possible to just accept any format, including colored, and
-// just translate to ARGB4444/ARGB1555 in our loader. unsure if this is a good
-// idea, for now just mimicking the game format closely.
-// NOTE: sample old code lines showing the old .data files were GA88-format pixels
-//var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, page }) catch
-//buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
-
-// TODO: when getting around to remaking the hd font with better proportions, rename
-//  packaged "hd" gif to "hd-classic" to preserve the old font and use "hd" for the
-//  new version (so that users are auto-updated to the new version, but still have
-//  the old version available)
-// TODO: when remaking hd font, need to add cedilla for C
 
 //------------------------------------------------------------------------------
 // plugin housekeeping
@@ -279,10 +154,11 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 //------------------------------------------------------------------------------
 // plugin hooks
 
+// TODO: setting to use online adjustments instead of offline; will possibly
+//  need to implement a way of re-making the adjustments on the custom font
+//  on-demand to handle hot setting changes
 // TODO: bring back scrolling through installed custom fonts, after core menu done
 // swap between fully-custom font and stock-custom font
-// TODO: "better" control flow that actually shows the implication that fonts
-//  will only be loaded when the 'enable' setting is on?
 export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     FontState.font_reloader.Update(rti.TIMESTAMP.*);
 
@@ -304,18 +180,6 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
         _ = gf.ToastNew("Font data dumped to /annodue/developer", 0xFFFFFFFF);
     }
 
-    // TODO: setting to use online adjustments instead of offline; will possibly
-    //  need to implement a way of re-making the adjustments on the custom font
-    //  on-demand to handle hot setting changes
-    // FIXME: will need a different place to store the generated fixed glyphs, once
-    //  fonts are loaded dynamically (meaning: a place in memory that stores the
-    //  calculated glyphs independently, so that any loaded custom font is not
-    //  dependent on a custom font load chain to get the glyphs). should also
-    //  probably generate the adjustments ahead of time even if the user hasn't
-    //  loaded any fonts yet, to remove the dependency dumping currently has of
-    //  the custom font actually being made, as well as potentially simplifying
-    //  the custom font loading process. update: not sure how much of this is
-    //  still relevant/incomplete, need to proper review what was actually wanted.
     // font glyph binary data dump
     if (IS_DEV_MODE and FontState.s_can_dump_glyphs and FontState.FontsShowable() and gf.InputGetKbRaw(.E) == .JustOn) blk: {
         // stock-custom font containing glyph fixes relevant to base font
@@ -370,17 +234,15 @@ const FontState = struct {
     var font_load_fba: FixedBufferAllocator = undefined;
     var font_load_arena: ArenaAllocator = undefined;
 
-    // FIXME: is this needed anymore now that we do button press dumping?
+    // TODO: memory-efficient GIF/LZW implementation -> small buffer
+    var font_load_scratch: [48 * 1024 * 1024]u8 = undefined;
+
     var dump_fonts_done: bool = false;
     var fonts_initialized: bool = false;
 
-    // FIXME: to organize/streamline; random stuff used to work through feature dev
-
-    // FIXME: is fonts_active necessary when the enable setting itself can
-    //  be used to toggle? maybe as a way to toggle it without affecting the
-    //  setting or causing a reload of everything (is that even needed tho)?
-    /// font system is enabled; implies that s_enable is true and the font system
-    /// has been initialized
+    /// font system is enabled and customized fonts are shown; implies that
+    /// `s_enable` is `true` and the font system is initialized. `false` does
+    /// NOT imply system de-initialization, only that customized fonts are hidden.
     var fonts_active: bool = true;
 
     /// holding font for (unused) stock fixed font
@@ -463,9 +325,6 @@ const FontState = struct {
     // custom font system
 
     // NOTE: original font init function at fn_42D720
-    // TODO: maintain hashmap of loaded custom font data as a cache, and refer to it
-    //  when attempting to load a font, to mitigate constantly loading the same font
-    //  into a new texture if the user messes with settings
     // TODO: see how much of font init can be comptime. main issue it's not is that
     //  initializing during comptime seems to give invalid internally-facing pointers
     // TODO: run glyph adjustments online/offline based on setting (or debug vs release build)
@@ -474,7 +333,7 @@ const FontState = struct {
         if (fonts_initialized) return;
         defer fonts_initialized = true;
 
-        font_load_fba = FixedBufferAllocator.init(&load_scratch);
+        font_load_fba = FixedBufferAllocator.init(&font_load_scratch);
         font_load_arena = ArenaAllocator.init(font_load_fba.allocator());
 
         font_reloader.Init(FontLoadCallback, FontUnloadCallback);
@@ -523,23 +382,13 @@ const FontState = struct {
 
     pub fn FontsEnable() void {
         assert(fonts_initialized);
-
-        // TODO: ?? move to plugin level, not custom font level? (for the sake of
-        //  cleanly separating them for toggle-ability, even though it only really
-        //  affects custom fonts)
         PatchTextClippingBug(true);
-
         FontLoadAndSet(&s_font);
     }
 
     pub fn FontsDisable() void {
         assert(fonts_initialized);
-
-        // TODO: ?? move to plugin level, not custom font level? (for the sake of
-        //  cleanly separating them for toggle-ability, even though it only really
-        //  affects custom fonts)
         PatchTextClippingBug(false);
-
         FontSet(null);
     }
 
@@ -547,22 +396,20 @@ const FontState = struct {
         return s_enable and fonts_active;
     }
 
+    // FIXME: what is the need for an extra bool (fonts_active OR toggle_system)?
+    //  i forgot so just copying for now. maybe to decouple user applying the
+    //  setting changes from the main enable setting needing to be on? or just
+    //  a way to remember the toggle state regardless of enable state?
     /// toggle soft-enable for whole system. fonts must be initialized, and caller
     /// is expected to manage user toggle rights separately
     pub fn FontsSystemToggle(on: ?bool) void {
-        // FIXME: what is the need for an extra bool (fonts_active OR toggle_system)?
-        //  i forgot so just copy for now. maybe to decouple user applying the
-        //  setting changes from the main enable setting needing to be on? or just
-        //  a way to remember the toggle state regardless of enable state?
         toggle_system = on orelse !toggle_system;
         fonts_active = toggle_system;
-
         if (FontsShowable()) FontsEnable() else FontsDisable();
     }
 
     pub fn FontLoadAndSet(font: [*:0]const u8) void {
         assert(fonts_initialized);
-
         if (!FontsShowable()) return;
 
         // attempt to load custom font
@@ -597,7 +444,6 @@ const FontState = struct {
     /// expected to manage user toggle rights separately.
     pub fn FontCustomToggle(on: ?bool) void {
         toggle_custom = on orelse !toggle_custom;
-
         if (!FontsShowable()) return;
 
         _ = FontCustomActivate(true);
@@ -677,13 +523,7 @@ const FontState = struct {
         const unit_scale_x: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_W else 64);
         const unit_scale_y: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_H else 128);
 
-        // font table reference
-        _ = mem.write(0x42D8EE + 3, u32, table);
-
-        // font atlas unit scale for converting texture coordinates to UVs
-        // because all glyphs use these values regardless of font def, all font pages
-        // of a font must be the same size; if not, this value would need to be updated
-        // every time a font is selected from the font table
+        _ = mem.write(0x42D8EE + 3, u32, table); // font table reference
         _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
         _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
     }
@@ -691,8 +531,8 @@ const FontState = struct {
     //---------------------------------
     // font dumping
 
-    // WARN: should be used after game init is done, e.g. in response to a button
-    //  press. may crash the game if called too early during game init.
+    // WARN: should be used after game init is done; may crash the game if called
+    //  too early during game init.
     /// dump stock font data embedded in game
     pub fn FontDump() void {
         dump_fonts_done = true;
@@ -789,19 +629,18 @@ const FontState = struct {
 //------------------------------------------------------------------------------
 // image/font format tooling
 
-// FIXME: crashes if directory doesn't exist
-// FIXME: handle FileAlreadyExists case (not sure best approach yet)
+// FIXME: generally, these crash if directory doesn't exist
+// FIXME: generally, for all createFile usage, need to switch to exclusive mode
+//  and handle FileAlreadyExists case on createFile (not sure best approach yet)
+
 // FIXME: using bufferedwriter multiple times in the fn causes crash for some
-// reason, even with defer-closing everything serially in advance??? so we use
-// non-buffered for now; also, same issue with glyph map dump
+//  reason, even with defer-closing everything serially in advance??? so we use
+//  non-buffered for now; also, same issue with glyph map dump
 fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []const u8) void {
-    //assert(filename.len > 4);
-    //assert(!std.mem.endsWith(u8, filename_stem, ".csv")); // we will add ".csv"
     var buf: [2048]u8 = undefined;
 
     { // MAIN FILE
         const filename = std.fmt.bufPrint(&buf, "{s}.csv", .{filename_stem}) catch unreachable;
-        // FIXME: switch to exclusive mode and handle FileAlreadyExists
         const file = std.fs.cwd().createFile(filename, .{}) catch |e|
             PPanic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
         defer file.close();
@@ -870,13 +709,10 @@ fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []con
 }
 
 fn DumpFontGlyphMapToCSV(filename_stem: []const u8) void {
-    //assert(filename.len > 4);
-    //assert(!std.mem.endsWith(u8, filename_stem, ".csv")); // we will add ".csv"
     var buf: [2048]u8 = undefined;
 
     { // KEYS
         const filename = std.fmt.bufPrint(&buf, "{s}_k.csv", .{filename_stem}) catch unreachable;
-        // FIXME: switch to exclusive mode and handle FileAlreadyExists
         const file = std.fs.cwd().createFile(filename, .{}) catch |e|
             PPanic("(DumpFontGlyphMapToCSV) create file: {s}", .{@errorName(e)});
         defer file.close();
@@ -946,8 +782,6 @@ fn DrawGlyphRegions(glyphs: []const []const rf.GLYPH, pages: []const []u8, page_
     }
 }
 
-// FIXME: crashes if directory doesn't exist
-// FIXME: handle FileAlreadyExists case (not sure best approach yet)
 fn DumpGrey8toTGA(pixels: []const u8, width: u16, height: u16, filename: []const u8) void {
     assert(pixels.len == @as(u32, @intCast(width)) * height);
     assert(width > 0);
@@ -955,7 +789,6 @@ fn DumpGrey8toTGA(pixels: []const u8, width: u16, height: u16, filename: []const
     assert(filename.len > 4);
     assert(std.mem.endsWith(u8, filename, ".tga"));
 
-    // FIXME: switch to exclusive mode and handle FileAlreadyExists
     const file = std.fs.cwd().createFile(filename, .{}) catch |e|
         PPanic("(DumpGrey8toTGA) create file: {s}", .{@errorName(e)});
     defer file.close();
@@ -983,26 +816,21 @@ fn GIFBodyToAlphaARGB4444(gif: *GIF, arena: Allocator, reader: anytype, buf_o: [
     var out_fbs = std.io.fixedBufferStream(out.items);
     const out_r = out_fbs.reader();
     for (0..buf_size) |i| {
-        // FIXME: error handling?
         const color = out_r.readInt(u32, .Little) catch break; // no more colors
         // NOTE: output: shade goes into alpha, RGB must be 0xFFF
         // FIXME: this may be achievable without casting if cf behaviour is
         // changed, see note on ConvertMonoRGB A4->GA44 test case
         buf_o[i] = (@as(u16, @intCast(cf.ConvertMonoRGB(cf.RGBA8888, cf.G4, color))) << 12) | 0xFFF;
-        // FIXME: with the following, grey value ends up in all four channels;
-        // gif tests seem to confirm that alpha will be white with my decoder,
-        // and similarly tests in color_format seem to indicate this will output
-        // AGGG if given RGBA. there appears to be no other place the color is
-        // transformed, so not sure why this drops the alpha
-        //buf_o[i] = cf.ConvertMonoRGB(cf.RGBA8888, cf.ARGB4444, color);
     }
 }
 
+// TODO: move to annodue api
 fn GIFTexturePath(arena: Allocator, filename: []const u8) ![:0]const u8 {
     const n = if (EndsWithLowerString(".gif", filename)) filename[0 .. filename.len - 4] else filename;
     return std.fmt.allocPrintZ(arena, "annodue/textures/{s}.gif", .{n});
 }
 
+// TODO: move to annodue api
 fn GIFCustomFontPath(arena: Allocator, filename: []const u8) ![:0]const u8 {
     const n = if (EndsWithLowerString(".gif", filename)) filename[0 .. filename.len - 4] else filename;
     return std.fmt.allocPrintZ(arena, "annodue/custom/font/{s}.gif", .{n});
@@ -1042,7 +870,7 @@ var text_clip_fix_buf = std.mem.zeroes([128]u8);
 //     mapping of the currently rendering glyph, in range 0..1 of the whole texture
 //   - bug: if edge E is clipping
 //          EdgeDifference = CurrentClipRegion[E] - GlyphRegion[E]
-//          new GlyphUVs[E] += EdgeDifference
+//          GlyphUVs[E] += EdgeDifference  <-- UV wraps whole texture; offset is pixel-sized, not UV-sized
 //          (if case of x2/y2 edges, EdgeDifference terms reversed and output -=)
 //   - fix: map EdgeDifference to UV range
 //          ScreenToVirtualFactor = ScreenWidth/640 OR ScreenHeight/480
@@ -1203,27 +1031,25 @@ const GlyphAdjustment = struct {
 //------------------------------------------------------------------------------
 // glyph adjustment defs
 
-// TODO: fix nomenclature: "core" -> "std" (to match racerlib)
-
 const GLYPH_ADJUSTMENT_STOCK_TO_FIXED: [5]GlyphAdjustmentSet = .{
-    .{ &ADJ_STOCK_TO_FIXED_FONT_0_CORE, &ADJ_STOCK_TO_FIXED_FONT_0_EXT },
-    .{ &ADJ_STOCK_TO_FIXED_FONT_1_CORE, &.{} },
-    .{ &ADJ_STOCK_TO_FIXED_FONT_2_CORE, &.{} },
-    .{ &ADJ_STOCK_TO_FIXED_FONT_3_CORE, &ADJ_STOCK_TO_FIXED_FONT_3_EXT },
-    .{ &ADJ_STOCK_TO_FIXED_FONT_4_CORE, &ADJ_STOCK_TO_FIXED_FONT_4_EXT },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_0_STD, &ADJ_STOCK_TO_FIXED_FONT_0_EXT },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_1_STD, &.{} },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_2_STD, &.{} },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_3_STD, &ADJ_STOCK_TO_FIXED_FONT_3_EXT },
+    .{ &ADJ_STOCK_TO_FIXED_FONT_4_STD, &ADJ_STOCK_TO_FIXED_FONT_4_EXT },
 };
 
 const GLYPH_ADJUSTMENT_FIXED_TO_CUSTOM: [5]GlyphAdjustmentSet = .{
-    .{ &ADJ_FIXED_TO_CUSTOM_FONT_0_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_0_EXT },
-    .{ &ADJ_FIXED_TO_CUSTOM_FONT_1_CORE, &.{} },
-    .{ &ADJ_FIXED_TO_CUSTOM_FONT_2_CORE, &.{} },
-    .{ &ADJ_FIXED_TO_CUSTOM_FONT_3_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_3_EXT },
-    .{ &ADJ_FIXED_TO_CUSTOM_FONT_4_CORE, &ADJ_FIXED_TO_CUSTOM_FONT_4_EXT },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_0_STD, &ADJ_FIXED_TO_CUSTOM_FONT_0_EXT },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_1_STD, &.{} },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_2_STD, &.{} },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_3_STD, &ADJ_FIXED_TO_CUSTOM_FONT_3_EXT },
+    .{ &ADJ_FIXED_TO_CUSTOM_FONT_4_STD, &ADJ_FIXED_TO_CUSTOM_FONT_4_EXT },
 };
 
 const GLYPH_DISABLE = GFA(.Set, .TX, -1);
 
-const ADJ_STOCK_TO_FIXED_FONT_0_CORE = [_]GlyphAdjustment{
+const ADJ_STOCK_TO_FIXED_FONT_0_STD = [_]GlyphAdjustment{
     .{ .i = 1, .a = GLYPH_DISABLE },
     .{ .i = 2, .a = GFA(.Add, .OX, 5) },
     .{ .i = 3, .a = GLYPH_DISABLE },
@@ -1260,7 +1086,7 @@ const ADJ_STOCK_TO_FIXED_FONT_0_EXT = [_]GlyphAdjustment{
     .{ .i = 14, .a = GFA(.Add, .OY, -2) },
 };
 
-const ADJ_STOCK_TO_FIXED_FONT_1_CORE = [_]GlyphAdjustment{
+const ADJ_STOCK_TO_FIXED_FONT_1_STD = [_]GlyphAdjustment{
     .{ .i = 1, .a = GLYPH_DISABLE },
     .{ .i = 3, .a = GLYPH_DISABLE },
     .{ .i = 4, .a = GLYPH_DISABLE },
@@ -1275,7 +1101,7 @@ const ADJ_STOCK_TO_FIXED_FONT_1_CORE = [_]GlyphAdjustment{
     .{ .i = 15, .a = GLYPH_DISABLE },
 };
 
-const ADJ_STOCK_TO_FIXED_FONT_2_CORE = [_]GlyphAdjustment{
+const ADJ_STOCK_TO_FIXED_FONT_2_STD = [_]GlyphAdjustment{
     .{ .i = 1, .a = GLYPH_DISABLE },
     .{ .i = 3, .a = GLYPH_DISABLE },
     .{ .i = 4, .a = GLYPH_DISABLE },
@@ -1288,7 +1114,7 @@ const ADJ_STOCK_TO_FIXED_FONT_2_CORE = [_]GlyphAdjustment{
     .{ .i = 23, .a = GFA(.Add, .OX, -1) },
 };
 
-const ADJ_STOCK_TO_FIXED_FONT_3_CORE = [_]GlyphAdjustment{
+const ADJ_STOCK_TO_FIXED_FONT_3_STD = [_]GlyphAdjustment{
     .{ .i = 3, .a = GLYPH_DISABLE },
     .{ .i = 4, .a = GLYPH_DISABLE },
     .{ .i = 8, .a = GLYPH_DISABLE },
@@ -1310,7 +1136,7 @@ const ADJ_STOCK_TO_FIXED_FONT_3_EXT = [_]GlyphAdjustment{
     .{ .i = 4, .a = GFA(.Set, .TX, 12) },
 };
 
-const ADJ_STOCK_TO_FIXED_FONT_4_CORE = [_]GlyphAdjustment{
+const ADJ_STOCK_TO_FIXED_FONT_4_STD = [_]GlyphAdjustment{
     .{ .i = 2, .a = GFA(.Add, .OY, 1) },
     .{ .i = 2, .a = GFA(.Add, .TH, -2) },
     .{ .i = 7, .a = GFA(.Add, .OY, 1) },
@@ -1368,7 +1194,7 @@ inline fn CGA(
     return ga;
 }
 
-const ADJ_FIXED_TO_CUSTOM_FONT_0_CORE = CGA(&[_]usize{
+const ADJ_FIXED_TO_CUSTOM_FONT_0_STD = CGA(&[_]usize{
     2,  7,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
     23, 24, 25, 26, 31, 52, 53, 54, 55, 56, 57, 58,
 }, &[_]BatchGlyphAdjustment{
@@ -1421,8 +1247,7 @@ const ADJ_FIXED_TO_CUSTOM_FONT_0_CORE = CGA(&[_]usize{
 });
 
 const ADJ_FIXED_TO_CUSTOM_FONT_0_EXT = CGA(&[_]usize{
-    0,  1,  2,  3, 4, 5, 6, 7, 8, 9, 10, 11,
-    12, 13, 14,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
 }, &[_]BatchGlyphAdjustment{
     .{ 3, 0, 94, 16, 16, 2, 2 }, // superscript a
     .{ 4, 16, 94, 16, 16, 2, 2 }, // superscript o
@@ -1438,7 +1263,7 @@ const ADJ_FIXED_TO_CUSTOM_FONT_0_EXT = CGA(&[_]usize{
     .{ 14, 0, 73, 22, 21, 2, 2 }, // >>
 });
 
-const ADJ_FIXED_TO_CUSTOM_FONT_1_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
+const ADJ_FIXED_TO_CUSTOM_FONT_1_STD = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 14, 22, 76, 11, 14, 2, 1 }, // .
     .{ 26, 22, 52, 11, 24, 2, -3 }, // :
     .{ 16, 74, 52, 18, 27, 2, 2 }, // 0
@@ -1453,7 +1278,7 @@ const ADJ_FIXED_TO_CUSTOM_FONT_1_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustmen
     .{ 25, 236, 52, 18, 27, 3, 2 }, // 9
 });
 
-const ADJ_FIXED_TO_CUSTOM_FONT_2_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
+const ADJ_FIXED_TO_CUSTOM_FONT_2_STD = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 14, 84, 105, 9, 10, 2, 3 }, // .
     .{ 15, 102, 96, 14, 19, 2, 2 }, // /
     .{ 26, 93, 99, 9, 16, 2, -1 }, // :
@@ -1469,7 +1294,7 @@ const ADJ_FIXED_TO_CUSTOM_FONT_2_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustmen
     .{ 25, 242, 97, 14, 18, 2, 2 }, // 9
 });
 
-const ADJ_FIXED_TO_CUSTOM_FONT_3_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
+const ADJ_FIXED_TO_CUSTOM_FONT_3_STD = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 2, 65, 149, 9, 8, 3, 3 }, // "
     .{ 7, 74, 149, 9, 8, 3, 3 }, // '
     .{ 10, 226, 133, 13, 15, 2, 2 }, // +
@@ -1540,7 +1365,7 @@ const ADJ_FIXED_TO_CUSTOM_FONT_3_EXT = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment
     .{ 14, 177, 144, 13, 11, 2, 2 }, // >>
 });
 
-const ADJ_FIXED_TO_CUSTOM_FONT_4_CORE = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
+const ADJ_FIXED_TO_CUSTOM_FONT_4_STD = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment{
     .{ 2, 74, 180, 9, 7, 3, 3 }, // "
     .{ 7, 83, 180, 9, 7, 3, 3 }, // '
     .{ 13, 106, 179, 7, 9, 2, 2 }, // -
@@ -1616,8 +1441,6 @@ const ADJ_FIXED_TO_CUSTOM_FONT_4_EXT = CGA(&[_]usize{}, &[_]BatchGlyphAdjustment
 // custom font functionality
 
 // TODO: tests for de/serialization
-// FIXME: remove needless fields that could be function args, e.g. GlyphAdjustments;
-//  also do similar simplification pass on other code
 const CustomFont = struct {
     Name: [127:0]u8,
     FontTable: [7]?*rf.FONT,
@@ -1964,12 +1787,3 @@ const CustomPage = struct {
     m: r3.Material = undefined,
     t: r3.SystemTexture = undefined,
 };
-
-// TODO: memory-efficient GIF/LZW implementation -> small buffer
-// enough for max size custom font pixels (~12MB*2+6MB) plus some extra for
-// scratch space. this amount could be brought down a lot, and potentially just
-// be on the heap, if: 1) gif decoder is a streaming implementation that doesn't
-// require the whole pixel buffer upfront, 2) LZW decoder within GIF uses a fixed
-// buffer for the table hashmap, rather than being unbounded and potentially
-// needing a similar amount of memory as the pixel buffer.
-var load_scratch: [48 * 1024 * 1024]u8 = undefined;

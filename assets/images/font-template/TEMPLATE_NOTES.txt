@@ -22,6 +22,7 @@ TEMPLATE_GUIDE.gif
 - greyscale assumed; only one color channel will actually be used
 - glyph locations matching the template
 - filename using ascii characters only (characters 32-126 on the ascii table)
+- filename without path or extension no more than 127 characters long
 - for developing fonts
     - overwriting the font image will cause the font to be updated in-game automatically
     - for larger fonts, scale the template using point filtering/nearest neighbour scaling

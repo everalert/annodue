@@ -64,10 +64,45 @@
 //!     - use the font test display to easily preview the whole font
 //!       (`Font->can_show_test = on` and hold `O` in-game)
 
+// TODO: directory-monitoring hot_reload impl (need for core menu impl)
+// TODO: option to show double-size fonts on font test visualization
+// TODO: option to add/remove glyph margins
+// TODO: "SD" font as a middle-ground between HD and stock
+// TODO: remake HD font with more accurate glyph proportions
+// TODO: after remaking HD font, rename current "HD" gif to "HD-classic" to preserve
+//  the old font, and use "HD" for the new version (so that users are auto-updated
+//  to the new version, but still have the old version available)
+// TODO: when remaking hd font, need to add cedilla for C
+// TODO: ?? some kind of API or "full-custom format" for developer/user-defined font formats
+// TODO: ?? migrate img helpers to /util if general enough
 // TODO: dev-only settings toggle to replace CUSTOM_FONT_USE_GLYPH_BINARY_DEV, which
 //  lazy-calculates the derived glyphs and applies them on the spot
 // TODO: after upgrading zig version, do a code upgrade pass, particularly on all
 //  the update/problem points specifically citing zig version issues
+// TODO: independent storage for glyph def sets outside of CustomFont even for online
+//  defs, so that you don't need to go through some CustomFont to get a precalculated base
+// TODO: improve/replace GIF impl so that decoding scratch buffer can be reduced
+//  or eliminated; e.g. a streaming GIF impl, more efficient LZW decoder, etc.
+// TODO: ?? "extended" custom font format that increases the number of glyphs
+//  available, rather than just maximizing what comes with stock font. switch
+//  on texture size to select which loader/data to use at load time
+// TODO: ingame menu
+// - font selector
+// - buttons to trigger the various toggles/hotkeys
+// - config for settings
+// - button to reload fonts
+// - show test strings inline
+// - option to show font textures directly?
+// - exotic stuff? (e.g. font designer/importer)
+
+// NOTE: can't totally fix accent alignment; differences in base character width
+//  naturally misalign them, can only fix this case in code (per-character logic)
+// NOTE: loading textures into gpu seems to be the cause of the "memory leak" crash?
+//  not sure if this is a dgvoodoo problem or just a windows regression. still
+//  need to completely rule out game allocations because there is one place
+//  during material generation that temp allocates
+// NOTE: sample old code lines showing the old .data files were GA88-format pixels
+//    buffer_slice[j / 2] |= ra.hInsert4BPP(ra.hGA88toG4(px), j);
 
 const std = @import("std");
 
@@ -103,9 +138,6 @@ const rt = @import("racer").Text;
 const rf = @import("racer").Font;
 const r3 = @import("racer").@"3D";
 const rti = @import("racer").Time;
-
-// FIXME: remove, for testing
-const dbg = @import("util/debug.zig");
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;

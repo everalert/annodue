@@ -49,17 +49,17 @@ pub const HideRaceUI = extern struct {
 // GLOBAL EXPORTS
 
 /// @return request processed successfully
-pub fn GHideRaceUIOn() bool {
+pub fn GHideRaceUIOn() callconv(.C) bool {
     return HideRaceUI.hide(workingOwner());
 }
 
 /// @return request processed successfully
-pub fn GHideRaceUIOff() bool {
+pub fn GHideRaceUIOff() callconv(.C) bool {
     return HideRaceUI.unhide(workingOwner());
 }
 
 /// @return game currently hiding race ui via api
-pub fn GHideRaceUIIsOn() bool {
+pub fn GHideRaceUIIsOn() callconv(.C) bool {
     return HideRaceUI.hidden or HideRaceUI.owner != null;
 }
 

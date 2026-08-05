@@ -98,25 +98,25 @@ pub const GlobalFunction = extern struct {
     ASettingSectionResetFile: *const fn (handle: Handle(u16)) callconv(.C) void,
     ASettingSectionClean: *const fn (handle: Handle(u16)) callconv(.C) void,
     // Input
-    InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ActiveState) bool,
-    InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) ActiveState,
+    InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ActiveState) callconv(.C) bool,
+    InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) callconv(.C) ActiveState,
     InputGetMouse: *const fn () callconv(.C) POINT,
     InputGetMouseDelta: *const fn () callconv(.C) POINT,
     InputLockMouse: *const fn () callconv(.C) void,
     //InputGetMouseInWindow: *const fn () callconv(.C) ActiveState,
-    InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) ActiveState,
-    InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) f32,
+    InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) callconv(.C) ActiveState,
+    InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) callconv(.C) f32,
     // Game
-    GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) bool,
+    GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) callconv(.C) bool,
     //GDrawTextBox: *const fn (layer: GDrawLayer, text: ?*TextDef, pad_x: i16, pad_y: i16, rect_color: u32) bool,
-    GDrawRect: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) bool,
-    GDrawRectBdr: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32, bdr_w: i16, bdr_col: u32) bool,
-    GFreezeOn: *const fn () bool,
-    GFreezeOff: *const fn () bool,
-    GFreezeIsOn: *const fn () bool,
-    GHideRaceUIOn: *const fn () bool,
-    GHideRaceUIOff: *const fn () bool,
-    GHideRaceUIIsOn: *const fn () bool,
+    GDrawRect: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) callconv(.C) bool,
+    GDrawRectBdr: *const fn (layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32, bdr_w: i16, bdr_col: u32) callconv(.C) bool,
+    GFreezeOn: *const fn () callconv(.C) bool,
+    GFreezeOff: *const fn () callconv(.C) bool,
+    GFreezeIsOn: *const fn () callconv(.C) bool,
+    GHideRaceUIOn: *const fn () callconv(.C) bool,
+    GHideRaceUIOff: *const fn () callconv(.C) bool,
+    GHideRaceUIIsOn: *const fn () callconv(.C) bool,
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources
@@ -151,3 +151,19 @@ pub const GlobalFunction = extern struct {
     SPlayerDead: *const fn () callconv(.C) ActiveState, // player -> dead
     SPlayerDeaths: *const fn () callconv(.C) u32, // player -> deaths
 };
+
+comptime {
+    const info = @typeInfo(GlobalFunction);
+
+    if (info.Struct.layout != .Extern)
+        @compileError("GlobalFunction must have Extern layout");
+
+    for (info.Struct.fields) |field| {
+        const field_info = @typeInfo(field.type);
+        const fn_info = @typeInfo(field_info.Pointer.child);
+        if (fn_info.Fn.calling_convention != .C) {
+            const m = std.fmt.comptimePrint("GlobalFunction: {s} must use C calling convention", .{field.name});
+            @compileError(m);
+        }
+    }
+}

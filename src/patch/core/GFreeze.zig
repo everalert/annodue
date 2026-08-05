@@ -57,17 +57,17 @@ pub const Freeze = extern struct {
 // GLOBAL EXPORTS
 
 /// @return request processed successfully
-pub fn GFreezeOn() bool {
+pub fn GFreezeOn() callconv(.C) bool {
     return Freeze.freeze(workingOwner());
 }
 
 /// @return request processed successfully
-pub fn GFreezeOff() bool {
+pub fn GFreezeOff() callconv(.C) bool {
     return Freeze.unfreeze(workingOwner());
 }
 
 /// @return game currently frozen via api
-pub fn GFreezeIsOn() bool {
+pub fn GFreezeIsOn() callconv(.C) bool {
     return Freeze.frozen or Freeze.owner != null;
 }
 

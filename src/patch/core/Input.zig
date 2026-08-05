@@ -181,11 +181,11 @@ pub fn update_xinput() callconv(.C) void {
     InputState.xbox.Axis[5] = @as(f32, @floatFromInt(InputState.xbox_raw.sThumbRY)) / 32767;
 }
 
-pub fn get_xinput_button(button: XINPUT_GAMEPAD_BUTTON_INDEX) st.ActiveState {
+pub fn get_xinput_button(button: XINPUT_GAMEPAD_BUTTON_INDEX) callconv(.C) st.ActiveState {
     return InputState.xbox.Button[@intFromEnum(button)];
 }
 
-pub fn get_xinput_axis(axis: XINPUT_GAMEPAD_AXIS_INDEX) f32 {
+pub fn get_xinput_axis(axis: XINPUT_GAMEPAD_AXIS_INDEX) callconv(.C) f32 {
     return InputState.xbox.Axis[@intFromEnum(axis)];
 }
 
@@ -204,27 +204,27 @@ pub fn update_kb() callconv(.C) void {
     }
 }
 
-pub fn get_kb_raw(keycode: w32kb.VIRTUAL_KEY) st.ActiveState {
+pub fn get_kb_raw(keycode: w32kb.VIRTUAL_KEY) callconv(.C) st.ActiveState {
     return InputState.kb[@as(u8, @truncate(@intFromEnum(keycode)))];
 }
 
-pub fn get_kb(keycode: w32kb.VIRTUAL_KEY, state: st.ActiveState) bool {
+pub fn get_kb(keycode: w32kb.VIRTUAL_KEY, state: st.ActiveState) callconv(.C) bool {
     return get_kb_raw(keycode) == state;
 }
 
-pub fn get_kb_down(keycode: w32kb.VIRTUAL_KEY) bool {
+pub fn get_kb_down(keycode: w32kb.VIRTUAL_KEY) callconv(.C) bool {
     return get_kb(keycode, .On);
 }
 
-pub fn get_kb_up(keycode: w32kb.VIRTUAL_KEY) bool {
+pub fn get_kb_up(keycode: w32kb.VIRTUAL_KEY) callconv(.C) bool {
     return get_kb(keycode, .Off);
 }
 
-pub fn get_kb_pressed(keycode: w32kb.VIRTUAL_KEY) bool {
+pub fn get_kb_pressed(keycode: w32kb.VIRTUAL_KEY) callconv(.C) bool {
     return get_kb(keycode, .JustOn);
 }
 
-pub fn get_kb_released(keycode: w32kb.VIRTUAL_KEY) bool {
+pub fn get_kb_released(keycode: w32kb.VIRTUAL_KEY) callconv(.C) bool {
     return get_kb(keycode, .JustOff);
 }
 

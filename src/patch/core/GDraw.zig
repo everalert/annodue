@@ -157,7 +157,7 @@ const GDraw = struct {
 /// - string must be within 247 characters to fit into queue buffer
 /// - set color 0 for layer-specific default
 /// @return     true if text successfully added to queue
-pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) bool {
+pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) callconv(.C) bool {
     if (text == null) return false;
     if ((layer == .System or layer == .SystemP) and !workingOwnerIsSystem()) return false;
     GDraw.insertText(layer, text.?) catch return false;
@@ -172,7 +172,7 @@ pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) bool {
 /// - set color 0 in text for layer-specific default
 /// - set rect_color 0 for default
 /// @return     true if text successfully added to queue
-pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_y: i16, rect_color: u32) bool {
+pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_y: i16, rect_color: u32) callconv(.C) bool {
     if (text == null) return false;
     if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
 
@@ -196,7 +196,7 @@ pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_
 /// will be drawn under text of the same layer
 /// - set color 0 for default
 /// @return     true if rect successfully added to queue
-pub fn GDrawRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) bool {
+pub fn GDrawRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) callconv(.C) bool {
     if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
     GDraw.insertRect(layer, x, y, w, h, color) catch return false;
     return true;
@@ -215,7 +215,7 @@ pub fn GDrawRectBdr(
     color: u32,
     bdr_w: i16,
     bdr_col: u32,
-) bool {
+) callconv(.C) bool {
     if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
     const bw = bdr_w;
     GDraw.insertRect(layer, x + bw, y + bw, w - bw * 2, h - bw * 2, color) catch return false;

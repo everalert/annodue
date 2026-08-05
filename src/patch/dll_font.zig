@@ -64,6 +64,11 @@
 //!     - use the font test display to easily preview the whole font
 //!       (`Font->can_show_test = on` and hold `O` in-game)
 
+// TODO: dev-only settings toggle to replace CUSTOM_FONT_USE_GLYPH_BINARY_DEV, which
+//  lazy-calculates the derived glyphs and applies them on the spot
+// TODO: after upgrading zig version, do a code upgrade pass, particularly on all
+//  the update/problem points specifically citing zig version issues
+
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
@@ -230,7 +235,8 @@ const FontState = struct {
     var font_reloader: HotReloadFont = undefined;
 
     // FIXME: these are getting used and abused, need to be careful about using
-    //  this memory while calling stuff that may also use (i.e. reset) it
+    //  this memory while calling stuff that may also use (i.e. reset) it; maybe
+    //  impl arena memory as annodue api
     var font_load_fba: FixedBufferAllocator = undefined;
     var font_load_arena: ArenaAllocator = undefined;
 
@@ -296,7 +302,6 @@ const FontState = struct {
         h_s_font =
             gf.ASettingOccupy(section, SETTING_FONT, .Str, .{ .str = DEFAULT_FONT }, &s_font, SettingFontUpdate);
 
-        // TODO: more of these debug toggles?
         h_s_can_show_test =
             gf.ASettingOccupy(section, SETTING_SHOW_TEST, .B, .{ .b = false }, &s_can_show_test, null);
         h_s_can_dump_data =
@@ -408,38 +413,6 @@ const FontState = struct {
         if (FontsShowable()) FontsEnable() else FontsDisable();
     }
 
-    pub fn FontLoadAndSet(font: [*:0]const u8) void {
-        assert(fonts_initialized);
-        if (!FontsShowable()) return;
-
-        // attempt to load custom font
-
-        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq and FontCustomActivate(true)) blk: {
-            if (font_custom_tracked) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
-                .eq => return if (font_custom_loaded) FontSet(&font_custom),
-                else => {
-                    font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
-                    font_custom_tracked = false;
-                },
-            };
-
-            _ = font_load_arena.reset(.retain_capacity);
-            const alloc = font_load_arena.allocator();
-            const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
-
-            // LoadCallback will call FontCustomLoad and set the font, and backup to STOCK if needed
-            font_reloader.TrackFileAlways(path, 0);
-            font_custom_tracked = true;
-            return;
-        }
-
-        // fall back to stock-custom font
-
-        _ = FontCustomActivate(false);
-        FontStockLoad();
-        FontSet(&font_stock_custom);
-    }
-
     /// toggle showing user-custom fonts, and update the shown font. caller is
     /// expected to manage user toggle rights separately.
     pub fn FontCustomToggle(on: ?bool) void {
@@ -486,6 +459,51 @@ const FontState = struct {
         font_stock_custom_loaded = true;
     }
 
+    pub fn FontSet(font: ?*const CustomFont) void {
+        const table: u32 = if (font) |f| @intFromPtr(&f.FontTable) else @intFromPtr(rt.apTextFont);
+
+        // regardless of font texture scale, the same values are used because the UVs
+        // are calculated based on the glyph values, not from the real texture dimensions
+        const unit_scale_x: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_W else 64);
+        const unit_scale_y: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_H else 128);
+
+        _ = mem.write(0x42D8EE + 3, u32, table); // font table reference
+        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
+        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
+    }
+
+    pub fn FontLoadAndSet(font: [*:0]const u8) void {
+        assert(fonts_initialized);
+        if (!FontsShowable()) return;
+
+        // attempt to load custom font
+
+        if (std.mem.orderZ(u8, DEFAULT_FONT, font) != .eq and FontCustomActivate(true)) blk: {
+            if (font_custom_tracked) switch (std.mem.orderZ(u8, font, &font_custom.Name)) {
+                .eq => return if (font_custom_loaded) FontSet(&font_custom),
+                else => {
+                    font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
+                    font_custom_tracked = false;
+                },
+            };
+
+            _ = font_load_arena.reset(.retain_capacity);
+            const alloc = font_load_arena.allocator();
+            const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
+
+            // LoadCallback will call FontCustomLoad and set the font, and backup to STOCK if needed
+            font_reloader.TrackFileAlways(path, 0);
+            font_custom_tracked = true;
+            return;
+        }
+
+        // fall back to stock-custom font
+
+        _ = FontCustomActivate(false);
+        FontStockLoad();
+        FontSet(&font_stock_custom);
+    }
+
     // WARN: does not unset font from the game, even though the load callback
     //  does set it. this asymmetry works for now, but should be reconsidered
     //  when moving to directory-watching hot reload
@@ -513,19 +531,6 @@ const FontState = struct {
         };
 
         return true;
-    }
-
-    pub fn FontSet(font: ?*const CustomFont) void {
-        const table: u32 = if (font) |f| @intFromPtr(&f.FontTable) else @intFromPtr(rt.apTextFont);
-
-        // regardless of font texture scale, the same values are used because the UVs
-        // are calculated based on the glyph values, not from the real texture dimensions
-        const unit_scale_x: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_W else 64);
-        const unit_scale_y: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_H else 128);
-
-        _ = mem.write(0x42D8EE + 3, u32, table); // font table reference
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
     }
 
     //---------------------------------
@@ -1628,7 +1633,9 @@ const CustomFont = struct {
     pub const CUSTOM_FONT_W = 256;
     pub const CUSTOM_FONT_H = 192;
     pub const CUSTOM_FONT_MAX_SCALE = 8;
-    pub const CUSTOM_FONT_USE_GLYPH_BINARY = true; // FIXME: set to `true` for release/when not testing
+    pub const CUSTOM_FONT_USE_GLYPH_BINARY = if (!IS_DEV_MODE) true else CUSTOM_FONT_USE_GLYPH_BINARY_DEV;
+    // TODO: dev-only settings toggle for glyph adjustments, which lazy-calculates the derived glyphs
+    pub const CUSTOM_FONT_USE_GLYPH_BINARY_DEV = true; // TODO: dev-only settings toggle
 
     pub fn BaseToFixed(self: *CustomFont) !void {
         if (!FIXED_GLYPHS_LOADED) {

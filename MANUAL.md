@@ -308,7 +308,6 @@ Configured under `[collisionviewer]`
 ### Font
 
 - High-resolution fonts
-- Visualize matrices via hijacking debug spline markers
 - Custom font loading system, shipping with existing high definition font (set `font` to `HD`)
 - Adjust font glyphs for better appearance and character support
 - Bugfix font glyph UV mapping corruption during clipping
@@ -407,7 +406,7 @@ Configurable under `[gameplay]`
 
 *Disabled in current release*
 
-- Dump font data to file on launch (font sheets and glyph templates)
+- Visualize matrices via hijacking debug spline markers
 
 ##### Settings
 

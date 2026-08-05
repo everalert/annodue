@@ -49,6 +49,7 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 	- Extended post-race summary
 	- Extended race UI overlay
 	- Framerate limiter
+	- Custom font support, shipping with HD font
 - Quality of life
 	- Pause mapped to gamepad
 	- Race restart hotkey
@@ -65,7 +66,6 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 	- Collisions disabled in multiplayer
 	- Pod upgrades in multiplayer
 - Cosmetic
-	- Hi-res fonts
 	- Triggered race events displayed on UI
 	- Rainbow-colored race UI elements
 
@@ -305,9 +305,50 @@ Configured under `[collisionviewer]`
 |:---|:---|:---|:---|
 |`depth_bias`           |`i32`|`10`|correct misalignment between game and collision visuals
 
-### Cosmetic
+### Font
 
 - High-resolution fonts
+- Custom font loading system, shipping with existing high definition font (set `font` to `HD`)
+- Adjust font glyphs for better appearance and character support
+- Bugfix font glyph UV mapping corruption during clipping
+- Ability to display font testing text
+- (dev-only) Ability to dump base game font data to file
+
+To use a custom font, place the font in `<game>/annodue/custom/font` and set `font`
+to its filename without the path or extension. For example, the font 
+`<game>/annodue/custom/font/HD.gif` should be written as `HD` in the setting.
+
+The font can be changed any number of times without closing the game. In future, 
+this will be configurable via an in-game menu.
+
+For information about creating custom fonts, see: `<game>/annodue/images/font-template`
+
+##### Controls
+
+|Action|Keyboard|XInput|Note|
+|:---|:---|:---|:---|
+|Show font test text    |`O` |&nbsp; |&nbsp;
+|Dump base font data    |`I` |&nbsp; |(disabled in release)
+|Dump base font glyphs  |`E` |&nbsp; |(disabled in release)
+|Soft-toggle font system|`K` |&nbsp; |(disabled in release)
+|Soft-toggle user font  |`L` |&nbsp; |(disabled in release)
+
+##### Settings
+
+Configurable under `[font]`
+
+|Option|Type|Default|Note|
+|:---|:---|:---|:---|
+|`enable`           |`bool`  |`on`   |enable custom font system and basic font fixes
+|`font`             |`string`|`STOCK`|name of gif file (in `/annodue/custom/font`) used for currently shown font; `STOCK` displays base game font with fixes
+|`can_show_test`    |`bool`  |`off`  |enable displaying font test text
+|`can_dump_data`    |`bool`  |`off`  |(dev-only) enable dumping source ingame font data to /annodue/developer
+|`can_dump_glyphs`  |`bool`  |`off`  |(dev-only) enable dumping glyph binary data of currently loaded font
+|`can_toggle_system`|`bool`  |`off`  |(dev-only) enable soft-disabling custom font system
+|`can_toggle_custom`|`bool`  |`off`  |(dev-only) enable toggling between stock and custom fonts
+
+### Cosmetic
+
 - Rotating rainbow colors for race UI elements
 - Show race triggers via game notification system
 - (disabled) High-fidelity audio
@@ -323,7 +364,6 @@ Configurable under `[cosmetic]`
 |`rainbow_value_enable` |`bool`|`off`|Values shown above `LAP`, `TIME` and `POS`
 |`rainbow_label_enable` |`bool`|`off`|The `LAP`, `TIME` and `POS` text itself
 |`rainbow_speed_enable` |`bool`|`off`|&nbsp;
-|`patch_fonts`          |`bool`|`off`|*Requires game restart to apply*
 |`patch_audio`          |`bool`|`off`|*Disabled*
 |`patch_tga_loader`     |`bool`|`off`|*Disabled*
 
@@ -366,7 +406,6 @@ Configurable under `[gameplay]`
 
 *Disabled in current release*
 
-- Dump font data to file on launch
 - Visualize matrices via hijacking debug spline markers
 
 ##### Settings
@@ -375,7 +414,6 @@ Configurable under `[developer]`
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
-|`dump_fonts`        |`bool`|`off`|*Requires game restart to re-dump*
 |`visualize_matrices`|`bool`|`off`|&nbsp;
 
 ### RTrigger System

@@ -29,6 +29,7 @@ const rt = r.Text;
 const rg = r.Global;
 
 const msg = @import("../util/message.zig");
+const PPanic = @import("../util/debug.zig").PPanic;
 
 // BUSINESS LOGIC
 
@@ -296,6 +297,9 @@ fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
         defer alloc.free(fp);
         const out = std.fs.cwd().createFile(fp, .{}) catch |e| return e;
         defer out.close();
-        lf.compression.uncompress(alloc, data, out.writer(), df.crc32) catch |e| return e;
+        var out_bw = std.io.bufferedWriter(out.writer());
+        defer _ = out_bw.flush() catch |e|
+            PPanic("(Update) [updateApplyFromZipData] write buffer flush: {s}", .{@errorName(e)});
+        lf.compression.uncompress(alloc, data, out_bw.writer(), df.crc32) catch |e| return e;
     }
 }

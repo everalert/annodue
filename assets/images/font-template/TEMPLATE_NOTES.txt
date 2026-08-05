@@ -1,0 +1,31 @@
+creating a font is as simple as making an image containing your glyphs in the
+expected format
+
+see template files in `/annodue/images/font-template` for visual help
+
+TEMPLATE.gif
+- example custom font using the game's base font data
+- use this to know which glyph goes where, and as an alignment reference
+
+TEMPLATE_GUIDE.gif
+- green: glyph regions in the unmodified game. stick to green as much as
+  possible if you want to closely match the sizing of the base font.
+- blue: the actual regions of the custom font glyphs. these are "extended"
+  from the base font to allow more creative freedom, and to save you from
+  those pesky edge pixels of the larger glyphs from getting cut off. even
+  the base font benefits from this, see Y in the base game!
+- red: not rendered at all. ¯\_(ツ)_/¯
+
+"the expected format" and other notes
+- a GIF file
+- 256x192 (or an integer multiple up to 8x)
+- greyscale assumed; only one color channel will actually be used
+- glyph locations matching the template
+- filename using ascii characters only (characters 32-126 on the ascii table)
+- filename without path or extension no more than 127 characters long
+- for developing fonts
+    - overwriting the font image will cause the font to be updated in-game automatically
+    - for larger fonts, scale the template using point filtering/nearest neighbour scaling
+	- use the font test display to easily preview the whole font 
+	  (`Font->can_show_test = on` and hold `O` in-game)
+

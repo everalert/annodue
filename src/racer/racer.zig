@@ -11,6 +11,7 @@ pub const Entity = @import("Entity/entity.zig");
 pub const Time = @import("Time.zig");
 pub const File = @import("File.zig");
 pub const Save = @import("Save.zig");
+pub const Debug = @import("Debug.zig");
 
 pub const Random = @import("Random.zig");
 pub const Vector = @import("Vector.zig");
@@ -21,8 +22,10 @@ pub const Sound = @import("Sound.zig");
 pub const Video = @import("Video.zig");
 pub const Quad = @import("Quad.zig");
 pub const Text = @import("Text.zig");
+pub const Font = @import("Font.zig");
 pub const Model = @import("Model.zig");
 pub const Asset = @import("Asset.zig");
+pub const @"3D" = @import("3D.zig");
 
 pub const Camera = @import("Camera.zig");
 pub const Vehicle = @import("Vehicle.zig");

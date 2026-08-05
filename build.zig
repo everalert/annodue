@@ -81,6 +81,9 @@ pub fn build(b: *std.Build) void {
     //    .dependencies = &.{.{ .name = "zigwin32", .module = zigwin32_m }},
     //});
 
+    // TODO: remove this and BUILD_MODE/DEV_MODE after both implementing the
+    //  standalone updater (=no longer need for internal updater stability) and
+    //  migrating to new zig (=no longer need for code-level build mode detection)
     const options = b.addOptions();
     const options_label = "BuildOptions";
     options.addOption(BuildMode, "BUILD_MODE", BUILD_MODE);
@@ -132,6 +135,10 @@ pub fn build(b: *std.Build) void {
     }
 
     // STEP - PLUGIN HASHING
+
+    // TODO: migrate official plugins to static linking in release builds and
+    //  remove the hashfile stuff altogether; signed user plugins will be checked
+    //  a different way
 
     const generate_safe_plugin_hash_file = b.addExecutable(.{
         .name = "generate_safe_plugin_hash_file",
@@ -252,6 +259,17 @@ pub fn build(b: *std.Build) void {
     );
     hash_step.dependOn(plugin_step);
 
+    var single_plugin_step = b.step(
+        "plugin",
+        "Build individual plugin DLL; use -Dplugin=<name>, see build.zig for list",
+    );
+
+    const single_plugin_option = b.option(
+        []const u8,
+        "plugin",
+        "name of the plugin to compile in the 'plugin' step",
+    ) orelse null;
+
     // STEP - build collision viewer c/c++ part
 
     const collision_viewer = b.addStaticLibrary(.{
@@ -275,6 +293,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "overlay" },
         .{ .name = "gameplaytweak", .to_hash = false },
         .{ .name = "cosmetic" },
+        .{ .name = "font" },
         .{ .name = "multiplayer" },
         .{ .name = "developer", .to_hash = false },
         .{ .name = "inputdisplay" },
@@ -306,6 +325,8 @@ pub fn build(b: *std.Build) void {
         // TODO: investigate options arg
         var dll_install = b.addInstallArtifact(dll, .{});
         plugin_step.dependOn(&dll_install.step);
+        if (single_plugin_option != null and std.mem.eql(u8, plugin.name, single_plugin_option.?))
+            single_plugin_step.dependOn(&dll_install.step);
 
         var bufo = std.fmt.allocPrint(alloc, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
         if (DEV_MODE and copypath != null)

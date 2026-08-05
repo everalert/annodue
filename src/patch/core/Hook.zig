@@ -4,15 +4,20 @@ const BuildOptions = @import("BuildOptions");
 
 const std = @import("std");
 const SemVer = std.SemanticVersion;
+const ArrayList = std.ArrayList;
+const assert = std.debug.assert;
 
-const w = std.os.windows;
 const w32 = @import("zigwin32");
-const w32ll = w32.system.library_loader;
-const w32f = w32.foundation;
-const w32fs = w32.storage.file_system;
+const HINSTANCE = w32.foundation.HINSTANCE;
+const MAX_PATH = w32.foundation.MAX_PATH;
+const MAX_PATH_SENTINEL = MAX_PATH - 1;
+const CopyFileA = w32.storage.file_system.CopyFileA;
+const LoadLibraryA = w32.system.library_loader.LoadLibraryA;
+const FreeLibrary = w32.system.library_loader.FreeLibrary;
+const GetProcAddress = w32.system.library_loader.GetProcAddress;
 
 const core = @import("core.zig");
-const allocator = core.Allocator;
+const CoreAllocator = core.Allocator;
 const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
 
@@ -20,10 +25,10 @@ const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
+const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
 const dbg = @import("../util/debug.zig");
-const filetime_eql = @import("../util/file_system.zig").filetime_eql;
 
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
@@ -41,6 +46,20 @@ const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAs
 
 // TODO: figure out exactly where the patch gets executed on load (i.e. where
 // the 'early init' happens), for documentation purposes
+// TODO: change "global function" nomenclature to "API function" project-wide
+
+// TODO: pull out plugin-related defs to separate module, so that it can be
+//  used as part of libannodue, and thus be importable by independent plugin
+//  projects. i.e. the cutoff point should be where it makes the most sense
+//  to separate plugin "metadata" from the stuff integrating them as hooks
+//    random ideas
+//    - make Plugin somewhat parameterized wrt which exported symbols it actually
+//      looks for, which ones are associated with which function signatures, which
+//      ones are actually required/rejected by core and user-plugin, etc.. probably
+//      do some kind of comptime input array that gets translated into various ref
+//      arrays thing, a la hashimoto "comptime data tables"
+//         - benefit: readability via helper functions on the metadata check in LoadPluginCallback
+//         - benefit: less definitions for various usecases spread out across file
 
 // FIXME: hooking (settings?) deinit causes racer process to never end, but only
 // when you quit with the X button, not with the ingame quit option
@@ -48,12 +67,12 @@ const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAs
 
 // OKOKOKOKOK
 
+pub const PLUGIN_FUNCTION_VERSION = 1;
+
 const Plugin = plugin: {
     const stdf = .{
-        .{ "Handle", ?w.HINSTANCE },
-        .{ "WriteTime", ?w32f.FILETIME },
+        .{ "Handle", ?HINSTANCE },
         .{ "Initialized", bool },
-        .{ "Filename", [127:0]u8 },
         .{ "OwnerId", u16 },
     };
     const ev = std.enums.values(PluginExportFn);
@@ -166,15 +185,26 @@ const PluginExportFn = enum(u32) {
     TextRenderA, // TODO: deprecate
     MapRenderB,
     MapRenderA,
+    RenderSceneBeginB,
+    RenderSceneBeginA,
+    RenderSceneEndB,
+    RenderSceneEndA,
 };
 
+// TODO: directory-monitoring hot_reload impl (need for core menu impl)
+// TODO: review plugin-related loops (including hot_reload impl); probably not
+//  a performance concern at all given the current array sizes, but there is
+//  a lot of looping over "nothing" when calling plugin functions and this grows
+//  at N*M for every plugin and callback hook added
 // TODO: owner range limiting
 pub const PluginState = struct {
-    const check_freq: u32 = 1000 / 24; // in lieu of every frame
-    var last_check: u32 = 0;
-    var core: std.ArrayList(Plugin) = undefined;
-    var plugin: std.ArrayList(Plugin) = undefined;
-    var hot_reload_i: usize = 0;
+    var core: ArrayList(Plugin) = undefined;
+    var plugins: [PLUGIN_MAX]Plugin = undefined;
+    var plugins_used: [PLUGIN_MAX]bool = std.mem.zeroes([PLUGIN_MAX]bool);
+    var plugins_count: u32 = 0;
+    var plugins_toast: [PLUGIN_MAX]HotReloadPluginHandle = undefined;
+    var plugins_toast_count: u32 = 0;
+    var plugins_reloader: HotReloadPlugin = undefined;
     var owners_core: u16 = 0x0000;
     var owners_user: u16 = 0x0800;
     var working_owner: u16 = 0;
@@ -182,12 +212,132 @@ pub const PluginState = struct {
     var h_s_hot_reload: ?SettingHandle = null;
     var s_hot_reload: bool = true;
 
+    const PLUGIN_MAX = 64;
+    const HotReloadPluginHandle = u32;
+    const HotReloadPlugin = hot_reload.HotReload(HotReloadPluginHandle, PLUGIN_MAX);
+
     pub fn workingOwner() u16 {
         return working_owner;
     }
 
     pub fn workingOwnerIsSystem() bool {
         return working_owner < 0x0800;
+    }
+
+    /// callback for Plugin hot_reload impl; the file given is assumed to be newer
+    fn UnloadPluginCallback(handle: HotReloadPluginHandle, _: [:0]const u8, _: [:0]const u8) void {
+        assert(handle < PLUGIN_MAX);
+        assert(plugins_used[handle]);
+
+        const p: *Plugin = &plugins[handle];
+        if (!p.Initialized) return; // already unloaded
+
+        if (p.Handle) |h| {
+            p.OnDeinit.?(GLOBAL_FUNCTION);
+            PluginFnOnPluginInit(.OnPluginDeinitA, p.OwnerId);
+            _ = FreeLibrary(h);
+            p.Initialized = false;
+        }
+    }
+
+    // TODO: ascertain the necessity of `Plugin.Initialized`; cursory review seems
+    //  to suggest that p.Initialized basically just performed the same task as
+    //  `PluginState.plugins_used` does now, but unsure if there will be any ill
+    //  effects if removed outright
+    // TODO: ?? log stuff at all the failure/exit points?
+    // TODO: ignore hash check to re-enable hot reloading for dev and unofficial plugins
+    //  only, probably want modal system in place properly first
+    // TODO: possibly assert that this fully sets all fields and acts as an initializer
+    //  to a plugin struct, not just something that hooks up the fn refs
+    // TODO: OnLoad, OnUnload, OnEnable, OnDisable
+    // TODO: also stuff for loading and unloading based on watching the directory, outside of
+    //  updating already loaded plugins
+    // TODO: allow OnPluginDeinit for user-plugins; needs protections and to communicate which plugin
+    // NOTE: assumes index is allocated and initialized, to allow different
+    //  ways of handling the backing data
+    /// callback for Plugin hot_reload impl; the file given is assumed to be newer
+    /// if reloading, as the newness is checked by hot_reload
+    /// @return     null = no change, true = (re)loaded, false = rejected
+    ///             guarantee of no dangling handles on failure
+    fn LoadPluginCallback(handle: HotReloadPluginHandle, filepath: [:0]const u8, filename: [:0]const u8) bool {
+        assert(handle < PLUGIN_MAX);
+        assert(plugins_used[handle]);
+        assert(!plugins[handle].Initialized);
+        var result: bool = false;
+
+        defer {
+            assert(plugins_used[handle]);
+            assert(plugins[handle].Initialized == result);
+            defer assert(plugins_toast_count <= PLUGIN_MAX);
+
+            if (result) blk: {
+                if (plugins_toast_count == PLUGIN_MAX) break :blk;
+                plugins_toast[plugins_toast_count] = handle;
+                plugins_toast_count += 1;
+            } else {
+                plugins_used[handle] = false;
+                plugins_count -= 1;
+            }
+        }
+
+        const p: *Plugin = &plugins[handle];
+
+        // FIXME: to remove; will be embedding stock plugins moving forward
+        if (BuildOptions.BUILD_MODE != .Developer) blk: {
+            const this_hash = getFileSha512(filepath) catch return result;
+            for (plugin_hashes) |hash|
+                if (std.mem.eql(u8, &this_hash, &hash))
+                    break :blk;
+            return result;
+        }
+
+        var buf_tmp: [MAX_PATH_SENTINEL:0]u8 = undefined;
+        const filename_no_ext = filename[0 .. filename.len - 4];
+        _ = std.fmt.bufPrintZ(&buf_tmp, "./annodue/tmp/plugin/{s}.tmp.dll", .{filename_no_ext}) catch
+            return result;
+
+        // now we ball
+
+        _ = CopyFileA(filepath, &buf_tmp, 0);
+        p.Handle = LoadLibraryA(&buf_tmp);
+        // NOTE: handled by hot_reload; maybe add LoadTime to hot_reload as a way of
+        //  differentiating successful loads with file checks
+        //p.WriteTime = fd1.ftLastWriteTime;
+
+        const fields = comptime std.enums.values(PluginExportFn);
+        inline for (fields) |field| {
+            const process = GetProcAddress(p.Handle, @tagName(field));
+            @field(p, @tagName(field)) = if (process) |proc| @ptrCast(proc) else null;
+        }
+
+        // required functions and metadata
+        if (p.PluginName == null or
+            p.PluginVersion == null or
+            SemVer.parse(p.PluginVersion.?()[0..std.mem.len(p.PluginVersion.?())]) == error.InvalidVersion or
+            p.PluginCompatibilityVersion == null or
+            p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
+            p.OnInit == null or
+            p.OnInitLate == null or
+            p.OnDeinit == null or
+            // only allowed in core
+            p.OnPluginInitA != null or
+            p.OnPluginInitLateA != null or
+            p.OnPluginDeinitA != null)
+        {
+            _ = FreeLibrary(p.Handle);
+            return result;
+        }
+
+        p.OwnerId = PluginState.owners_user;
+        PluginState.owners_user += 1;
+        PluginState.working_owner = p.OwnerId;
+        p.OnInit.?(GLOBAL_FUNCTION);
+        PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
+        if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_FUNCTION);
+        p.Initialized = true;
+
+        result = true;
+        return result;
     }
 };
 
@@ -204,7 +354,9 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
                     }
                 }
             }
-            for (PluginState.plugin.items) |p| {
+            for (PluginState.plugins_used, 0..) |used, i| {
+                if (!used) continue;
+                const p: *const Plugin = &PluginState.plugins[i];
                 PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| {
                     f(GLOBAL_FUNCTION);
@@ -260,134 +412,30 @@ fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
     defer file.close();
 
     var sha512 = Sha512.init(.{});
-    const rdr = file.reader();
+    var file_br = std.io.bufferedReader(file.reader());
+    const file_r = file_br.reader();
 
     var buf: [std.mem.page_size]u8 = undefined;
-    var n = try rdr.read(&buf);
+    var n = try file_r.read(&buf);
     while (n != 0) {
         sha512.update(buf[0..n]);
-        n = try rdr.read(&buf);
+        n = try file_r.read(&buf);
     }
 
     return sha512.finalResult();
 }
 
-// TODO: move to lib
-/// @return     requested directory exists
-fn ensureDirectoryExists(alloc: std.mem.Allocator, path: []const u8) bool {
-    if (std.mem.lastIndexOf(u8, path, "/")) |end|
-        _ = ensureDirectoryExists(alloc, path[0..end]);
-
-    const p = std.fmt.allocPrintZ(alloc, "{s}", .{path}) catch return false;
-    defer alloc.free(p);
-
-    if (0 != w32fs.CreateDirectoryA(p, null)) return true;
-    if (w.kernel32.GetLastError() == w.Win32Error.ALREADY_EXISTS) return true;
-
-    return false;
-}
-
-// TODO: ignore hash check to re-enable hot reloading for dev and unofficial plugins
-// only, probably want modal system in place properly first
-// TODO: possibly assert that this fully sets all fields and acts as an initializer
-// to a plugin struct, not just something that hooks up the fn refs
-// TODO: OnLoad, OnUnload, OnEnable, OnDisable
-// TODO: also stuff for loading and unloading based on watching the directory, outside of
-// updating already loaded plugins
-// TODO: allow OnPluginDeinit for user-plugins; needs protections and to communicate which plugin
-// NOTE: assumes index is allocated and initialized, to allow different
-// ways of handling the backing data
-/// @return     null = no change, true = (re)loaded, false = rejected
-///             guarantee of no dangling handles on failure
-fn LoadPlugin(p: *Plugin, filename: []const u8) ?bool {
-    const i_ext = filename.len - 4;
-
-    std.debug.assert(std.mem.eql(u8, ".DLL", filename[i_ext..]) or
-        std.mem.eql(u8, ".dll", filename[i_ext..]));
-
-    var buf1: [2047:0]u8 = undefined;
-    var filepath = std.fmt.bufPrintZ(&buf1, "annodue/plugin/{s}", .{
-        filename,
-    }) catch @panic("failed to format path to plugin");
-
-    // do we even need to do anything
-    var fd1: w32fs.WIN32_FIND_DATAA = undefined;
-    const find_handle = w32fs.FindFirstFileA(&buf1, &fd1);
-    defer _ = w32fs.FindClose(find_handle); // TODO: hold onto the handle and reuse instead?
-    if (p.Initialized and filetime_eql(&fd1.ftLastWriteTime, &p.WriteTime.?))
-        return null;
-
-    if (BuildOptions.BUILD_MODE != .Developer) blk: {
-        const this_hash = getFileSha512(filepath) catch return false;
-        for (plugin_hashes) |hash|
-            if (std.mem.eql(u8, &this_hash, &hash))
-                break :blk;
-        return false;
-    }
-
-    // separated from buf1 to minimize work on the hot path
-    var buf0: [127:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf0, "{s}", .{filename}) catch @panic("failed to format plugin filename");
-    var buf2: [2047:0]u8 = undefined;
-    _ = std.fmt.bufPrintZ(&buf2, "annodue/tmp/plugin/{s}.tmp.dll", .{
-        filename[0..i_ext],
-    }) catch @panic("failed to format path to plugin tmp file");
-
-    // do we need to unload anything
-    if (p.Handle) |h| {
-        p.OnDeinit.?(GLOBAL_FUNCTION);
-        PluginFnOnPluginInit(.OnPluginDeinitA, p.OwnerId);
-        _ = w32ll.FreeLibrary(h);
-    }
-
-    // now we ball
-
-    _ = w32fs.CopyFileA(&buf1, &buf2, 0);
-    p.Handle = w32ll.LoadLibraryA(&buf2);
-    p.WriteTime = fd1.ftLastWriteTime;
-    @memcpy(p.Filename[0..], buf0[0..]);
-
-    const fields = comptime std.enums.values(PluginExportFn);
-    inline for (fields) |field| {
-        const process = w32ll.GetProcAddress(p.Handle, @tagName(field));
-        @field(p, @tagName(field)) = if (process) |proc| @ptrCast(proc) else null;
-    }
-
-    if (p.PluginName == null or
-        p.PluginVersion == null or
-        SemVer.parse(p.PluginVersion.?()[0..std.mem.len(p.PluginVersion.?())]) == error.InvalidVersion or
-        p.PluginCompatibilityVersion == null or
-        p.PluginCompatibilityVersion.?() != COMPATIBILITY_VERSION or
-        p.OnInit == null or
-        p.OnInitLate == null or
-        p.OnDeinit == null or
-        p.OnPluginInitA != null or
-        p.OnPluginInitLateA != null or
-        p.OnPluginDeinitA != null)
-    {
-        _ = w32ll.FreeLibrary(p.Handle);
-        p.Initialized = false;
-        return false;
-    }
-
-    p.OwnerId = PluginState.owners_user;
-    PluginState.owners_user += 1;
-    PluginState.working_owner = p.OwnerId;
-    p.OnInit.?(GLOBAL_FUNCTION);
-    PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
-    if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_FUNCTION);
-    p.Initialized = true;
-    return true;
-}
-
 // SETUP
 
 pub fn init() void {
-    const alloc = allocator.allocator();
-    _ = ensureDirectoryExists(alloc, "annodue/tmp/plugin");
+    defer assert(PluginState.plugins_count == std.mem.count(bool, &PluginState.plugins_used, &.{true}));
+    defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
 
-    PluginState.core = std.ArrayList(Plugin).init(alloc);
-    PluginState.plugin = std.ArrayList(Plugin).init(alloc);
+    const alloc = CoreAllocator.allocator();
+    std.fs.cwd().makePath("./annodue/tmp/plugin") catch
+        @panic("failed to create temp plugin directory");
+
+    PluginState.core = ArrayList(Plugin).init(alloc);
 
     var p: *Plugin = undefined;
 
@@ -428,22 +476,42 @@ pub fn init() void {
 
     // loading plugins
 
-    const cwd = std.fs.cwd();
-    var dir = cwd.openIterableDir("./annodue/plugin", .{}) catch
-        cwd.makeOpenPathIterable("./annodue/plugin", .{}) catch @panic("failed to open plugin directory");
-    defer dir.close();
+    PluginState.plugins_reloader.Init(PluginState.LoadPluginCallback, PluginState.UnloadPluginCallback);
+    PluginState.plugins_reloader.CheckDelay = 40; // 25fps in ms
+    PluginState.plugins_used = std.mem.zeroes([PluginState.PLUGIN_MAX]bool);
+    PluginState.plugins_count = 0;
+    defer PluginState.plugins_toast_count = 0; // don't toast initial plugin load
 
-    var it_dir = dir.iterate();
-    while (it_dir.next() catch @panic("failed to fetch next plugin")) |file| {
-        if (file.kind != .file) continue;
-        if (!std.mem.eql(u8, ".DLL", file.name[file.name.len - 4 ..]) and
-            !std.mem.eql(u8, ".dll", file.name[file.name.len - 4 ..])) continue;
+    // TODO: check that each filename is short enough that both the plugin directory
+    //  filepath and the temp file path lengths don't exceed MAX_PATH_SENTINEL
+    // FIXME: assumes cwd is the game directory
+    var d = std.fs.cwd().makeOpenPathIterable("./annodue/plugin", .{}) catch null;
+    if (d) |*dir| {
+        defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
+        defer assert(PluginState.plugins_count <= PluginState.PLUGIN_MAX);
+        defer dir.close();
 
-        p = PluginState.plugin.addOne() catch @panic("failed to add user plugin to arraylist");
-        p.* = std.mem.zeroInit(Plugin, .{});
-        const load = LoadPlugin(p, file.name);
-        if (load != null and !load.?)
-            _ = PluginState.plugin.pop();
+        var buf_path = std.mem.zeroes([MAX_PATH_SENTINEL:0]u8);
+        var buf_ext: [4]u8 = undefined;
+
+        var it_dir = dir.iterate();
+        while (it_dir.next() catch null) |file| {
+            if (PluginState.plugins_count == PluginState.PLUGIN_MAX) break;
+            if (file.kind != .file) continue;
+
+            if (file.name.len < 4) continue; // minimum length for extension
+            _ = std.ascii.lowerString(&buf_ext, file.name[file.name.len - 4 ..]);
+            if (!std.mem.endsWith(u8, ".dll", &buf_ext)) continue;
+
+            _ = std.fmt.bufPrintZ(&buf_path, "./annodue/plugin/{s}", .{file.name}) catch continue;
+
+            const handle = PluginState.plugins_count;
+            PluginState.plugins[handle] = std.mem.zeroInit(Plugin, .{});
+
+            PluginState.plugins_used[handle] = true;
+            PluginState.plugins_count += 1;
+            _ = PluginState.plugins_reloader.TrackFile(&buf_path, handle);
+        }
     }
 
     // hooking game
@@ -459,6 +527,7 @@ pub fn init() void {
     //off = HookGameEnd(off);
     off = HookTextRender(off);
     off = HookMenuDrawing(off);
+    off = HookSceneBeginEnd(off);
     //off = HookLoadSprite(off);
     GLOBAL_STATE.patch_offset = off;
 }
@@ -475,25 +544,19 @@ pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
-    if (PluginState.s_hot_reload and rti.TIMESTAMP.* > PluginState.last_check + PluginState.check_freq) {
-        PluginState.last_check = rti.TIMESTAMP.*;
-        PluginState.hot_reload_i = (PluginState.hot_reload_i + 1) % PluginState.plugin.items.len;
-        const p: *Plugin = &PluginState.plugin.items[PluginState.hot_reload_i];
+    if (PluginState.s_hot_reload) {
+        PluginState.plugins_reloader.Update(rti.TIMESTAMP.*);
 
-        const len = for (p.Filename, 0..) |c, j| {
-            if (c == 0) break j;
-        } else p.Filename.len;
-        const load = LoadPlugin(p, p.Filename[0..len]);
+        var buf_toast: [127:0]u8 = undefined;
+        for (0..PluginState.plugins_toast_count) |i| {
+            const handle = PluginState.plugins_toast[i];
+            assert(PluginState.plugins_used[handle]);
 
-        if (load == null) return;
-
-        if (load.?) {
-            var buf: [127:0]u8 = undefined;
-            _ = std.fmt.bufPrintZ(&buf, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch return;
-            _ = gf.ToastNew(&buf, r.Text.ColorRGB.Green.rgba(0));
-        } else {
-            _ = PluginState.plugin.swapRemove(PluginState.hot_reload_i);
+            const p: *const Plugin = &PluginState.plugins[handle];
+            _ = std.fmt.bufPrintZ(&buf_toast, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch continue;
+            _ = gf.ToastNew(&buf_toast, r.Text.ColorRGB.Green.rgba(0));
         }
+        PluginState.plugins_toast_count = 0;
     }
 }
 
@@ -694,5 +757,27 @@ fn HookTextRender(memory: usize) usize {
         PluginFnCallback(.Draw2DB),
         PluginFnCallback(.Draw2DA),
     );
+    return off;
+}
+
+fn HookSceneBeginEnd(memory: usize) usize {
+    var off = memory;
+
+    // 3D_StartScene__48A300 in Render_Flush__48DCE0
+    off = hook.intercept_call(
+        off,
+        0x48DCEC,
+        PluginFnCallback(.RenderSceneBeginB),
+        PluginFnCallback(.RenderSceneBeginA),
+    );
+
+    // 3D_EndScene__48A330 in Render_Flush__48DCE0
+    off = hook.intercept_call(
+        off,
+        0x48DD5A,
+        PluginFnCallback(.RenderSceneEndB),
+        PluginFnCallback(.RenderSceneEndA),
+    );
+
     return off;
 }

@@ -198,13 +198,10 @@ const CustomTrigger = struct {
     // - original fn may need to be called manually if you do non-dynamic stuff
     //fn hookDoEntityCreate(_: *Trig) callconv(.C) void {}
 
-    // TODO: cmp util in x86.zig
     const buf = struct {
         var init: [32]u8 = undefined;
         var destroy: [32]u8 = undefined;
-        const d_ins = [_]u8{ 0x81, 0x7E, 0x08, 0xF5, 0x01, 0x00, 0x00 }; // cmp dword ptr [esi+08], 0x1F5 (501)
         var update: [48]u8 = undefined;
-        const u_ins = [_]u8{ 0x3D, 0x34, 0x01, 0x00, 0x00 }; // cmp eax, 0x134 (308)
     };
 
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
@@ -219,24 +216,24 @@ const CustomTrigger = struct {
         _ = x86.call(0x476E80, @intFromPtr(&hookTrigger));
 
         // init
-        x86.detour_start(&d, 0x47D397, 0x47D3A0, &buf.init);
+        d.Start(0x47D397, 0x47D3A0, &buf.init);
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookInit), &[_]x86.PushSrc{ .{ .r32 = .esi }, .{ .r32 = .ebp } });
-        x86.detour_end(&d);
+        d.End();
 
         // destroy
-        x86.detour_start(&d, 0x47C4D9, 0x47C4E0, &buf.destroy);
+        d.Start(0x47C4D9, 0x47C4E0, &buf.destroy);
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookDestroy), &[_]x86.PushSrc{.{ .r32 = .esi }});
-        d.addr = mem.write_bytes(d.addr, &buf.d_ins, 7);
-        x86.detour_end(&d);
+        d.addr = x86.CMP(d.addr, .esi, 0x08, .imm, 0x1F5);
+        d.End();
 
         // update
-        x86.detour_start(&d, 0x47C51B, 0x47C520, &buf.update);
-        d.addr = x86.save_eax(d.addr); // TODO: is this detour meant to replace a function body?
+        d.Start(0x47C51B, 0x47C520, &buf.update);
+        d.addr = x86.reg_save(d.addr, .eax, .ebp); // TODO: is this detour meant to replace a function body?
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
-        d.addr = x86.restore_eax(d.addr);
-        d.addr = mem.write_bytes(d.addr, &buf.u_ins, 5);
-        x86.detour_end(&d);
+        d.addr = x86.reg_restore(d.addr, .eax, .ebp);
+        d.addr = x86.CMP(d.addr, .eax, null, .imm, 0x134);
+        d.End();
     }
 
     // FIXME: crashes after reinit -> track load
@@ -254,10 +251,10 @@ const CustomTrigger = struct {
         _ = x86.cdecl_call(0x47D397, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
 
         // destroy
-        _ = mem.write_bytes(0x47C4D9, &buf.d_ins, 7);
+        _ = x86.CMP(0x47C4D9, .esi, 0x08, .imm, 0x1F5);
 
         // update
-        _ = mem.write_bytes(0x47C51B, &buf.u_ins, 5);
+        _ = x86.CMP(0x47C51B, .eax, null, .imm, 0x134);
     }
 
     fn settingsInit(gf: *GlobalFn) void {

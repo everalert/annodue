@@ -34,15 +34,15 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
     var scratch: [DETOUR_LIMIT]u8 = undefined;
     mem.read_bytes(addr_detour, &scratch, len);
 
-    const off_hook: usize = x86.jmp(addr_detour, off);
+    const off_hook: usize = x86.jmp_rel(addr_detour, off);
     _ = x86.nop_until(off_hook, addr_detour + len);
 
     if (dest_before) |dest| off = x86.call(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, &scratch[0], off_call);
+    off = mem.write_bytes(off, scratch[0..off_call]);
     off = x86.call(off, call_target);
-    off = mem.write_bytes(off, &scratch[off_call + 5], len - off_call - 5);
+    off = mem.write_bytes(off, scratch[off_call + 5 .. len]);
     if (dest_after) |dest| off = x86.call(off, @intFromPtr(dest));
-    off = x86.jmp(off, addr_detour + len);
+    off = x86.jmp_rel(off, addr_detour + len);
     off = x86.nop_align(off, ALIGN_SIZE);
 
     return off;
@@ -62,9 +62,9 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
     const off_hook: usize = x86.call(addr, off);
     _ = x86.nop_until(off_hook, addr + len);
 
-    if (dest_before) |dest| off = x86.jmp(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, &scratch, len);
-    if (dest_after) |dest| off = x86.jmp(off, @intFromPtr(dest));
+    if (dest_before) |dest| off = x86.jmp_rel(off, @intFromPtr(dest));
+    off = mem.write_bytes(off, scratch[0..len]);
+    if (dest_after) |dest| off = x86.jmp_rel(off, @intFromPtr(dest));
     off = x86.retn(off);
     off = x86.nop_align(off, ALIGN_SIZE);
 
@@ -77,7 +77,7 @@ pub fn detour_retn(memory: usize, addr: usize, dest: *const fn () void) usize {
 
     var off: usize = memory;
 
-    _ = x86.jmp(addr, off);
+    _ = x86.jmp_rel(addr, off);
 
     off = x86.call(off, @intFromPtr(dest));
     off = x86.retn(off);
@@ -126,7 +126,7 @@ pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *co
     _ = mem.write(item_addr, u32, off);
 
     off = x86.call(off, @intFromPtr(dest));
-    off = x86.jmp(off, item_target);
+    off = x86.jmp_rel(off, item_target);
     off = x86.nop_align(off, ALIGN_SIZE);
 
     return off;

@@ -2,7 +2,12 @@ const Self = @This();
 
 const std = @import("std");
 
+const COLOR_RGB24 = @import("Asset.zig").COLOR_RGB24;
+const FONT = @import("Font.zig").FONT;
+
 // TODO: merge with Quad
+// TODO: TextFormat.zig
+// TODO: TextNotification.zig
 
 // NOTE: original idea notes
 // swrText_CreateEntry helper ideas
@@ -28,33 +33,42 @@ const std = @import("std");
 // 3
 // - an api that lets you do both ways, with overlapping ideas homogenized
 
+// GAME TYPEDEFS
+
+// ..
+
 // GAME FUNCTIONS
 
-pub const swrText_CreateEntry: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
-pub const swrText_CreateEntry1: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
-pub const swrText_CreateEntry2: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
-pub const swrText_DrawTime2: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
-pub const swrText_DrawTime3: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
-pub const swrText_NewNotification: *const fn (str: [*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
+pub const swrText_CreateEntry: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+pub const swrText_CreateEntry1: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+pub const swrText_CreateEntry2: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+pub const swrText_DrawTime2: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
+pub const swrText_DrawTime3: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
 
-pub const swrText_Translate: *const fn ([*:0]const u8) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x421360);
+// FIXME: move to TextNotification.zig
+pub const swrText_NewNotification: *const fn (str: ?[*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
 
-pub const RenderSetColor: *const fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void = @ptrFromInt(0x42D950);
-pub const RenderSetPosition: *const fn (x: i16, y: i16) callconv(.C) void = @ptrFromInt(0x42D910);
-pub const RenderString: *const fn (str: [*:0]const u8) callconv(.C) void = @ptrFromInt(0x42EC50);
+pub const swrText_Translate: *const fn (?[*:0]const u8) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x421360);
 
-pub const GetStringWidthByFontIndex: *const fn (str: [*:0]const u8, font: u32) callconv(.C) i32 =
+// FIXME: move all to TextFormat.zig
+pub const RenderSetColor: *const fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void =
+    @ptrFromInt(0x42D950);
+pub const RenderSetPosition: *const fn (x: i16, y: i16) callconv(.C) void =
+    @ptrFromInt(0x42D910);
+pub const RenderString: *const fn (str: ?[*:0]const u8) callconv(.C) void =
+    @ptrFromInt(0x42EC50);
+pub const GetStringWidthByFontIndex: *const fn (str: ?[*:0]const u8, font: u32) callconv(.C) i32 =
     @ptrFromInt(0x42DE10);
-pub const GetStringWidth: *const fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const GetStringWidth: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DE30);
-pub const GetStringHeight: *const fn (str: [*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const GetStringHeight: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DF70);
 pub const SetCurrentFont: *const fn (index: u32) callconv(.C) void =
     @ptrFromInt(0x42D8D0);
 
 // GAME CONSTANTS
 
-pub const TEXT_COLOR_PRESET = [10]u32{
+pub const TEXT_COLOR_PRESET = [12]u32{
     0x000000, // (black)
     0xFFFFFF, // (white)
     0x6EB4FF, // (blue)
@@ -65,18 +79,16 @@ pub const TEXT_COLOR_PRESET = [10]u32{
     0x6E6E80, // (gray)
     0xFFA7D1, // (pink)
     0x985EFF, // (purple)
+    0xFFFF8C, // (yellow2)
+    0x82C9FF, // (blue2)
 };
 
-pub const TEXT_HIRES_FLAG_ADDR: usize = 0x50C0AC;
-pub const TEXT_HIRES_FLAG: *u32 = @ptrFromInt(TEXT_HIRES_FLAG_ADDR);
-
-// TODO: font typedef (probably sprite?)
-pub const TEXT_FONT_CURRENT_ADDR: usize = 0x50C0C4;
-pub const TEXT_FONT_CURRENT: **anyopaque = @ptrFromInt(TEXT_FONT_CURRENT_ADDR);
-pub const TEXT_FONT_NUM_ADDR: usize = 0x50C0C0;
-pub const TEXT_FONT_NUM: *u32 = @ptrFromInt(TEXT_FONT_NUM_ADDR);
-pub const TEXT_FONT_TABLE_ADDR: usize = 0xE99720;
-pub const TEXT_FONT_TABLE: *[*]*anyopaque = @ptrFromInt(TEXT_FONT_TABLE_ADDR);
+// FIXME: move all to TextFormat.zig
+pub const aTextColor: *[12]COLOR_RGB24 = @ptrFromInt(0x4BF9E8);
+pub const bTextHiRes: *i32 = @ptrFromInt(0x50C0AC);
+pub const TextFontCount: *i32 = @ptrFromInt(0x50C0C0);
+pub const pTextFontCurrent: **FONT = @ptrFromInt(0x50C0C4);
+pub const apTextFont: *[7]*FONT = @ptrFromInt(0xE99720);
 
 // HELPERS
 
@@ -95,6 +107,8 @@ pub const Color = enum(u8) {
     Gray = 7,
     Pink = 8,
     Purple = 9,
+    Yellow2 = 10,
+    Blue2 = 11,
 };
 
 pub const ColorRGB = enum(u32) {
@@ -108,6 +122,8 @@ pub const ColorRGB = enum(u32) {
     Gray = 0x6E6E80,
     Pink = 0xFFA7D1,
     Purple = 0x985EFF,
+    Yellow2 = 0xFFFF8C,
+    Blue2 = 0x82C9FF,
 
     pub fn rgba(self: *const ColorRGB, a: u8) u32 {
         return (@intFromEnum(self.*) << 8) | a;
@@ -118,6 +134,7 @@ pub const ColorRGB = enum(u32) {
     }
 };
 
+// TODO: proper labels for body/title, sm/lg
 pub const Font = enum(u8) {
     Default,
     Unk2,
@@ -243,7 +260,7 @@ pub fn TextGetFontIndex(str: [*:0]const u8) u32 {
     var i: u32 = 0;
     while (str[i] != 0) : (i += 1) {
         if (str[i] == '~' and (str[i + 1] == 'f' or str[i + 1] == 'F'))
-            return std.math.clamp(str[i + 2] - '0', 0, TEXT_FONT_NUM.* - 1);
+            return std.math.clamp(str[i + 2] - '0', 0, TextFontCount.* - 1);
     }
     return 0;
 }
@@ -261,7 +278,7 @@ pub fn TextGetAlignment(str: [*:0]const u8) Alignment {
 
 pub fn TextGetDimensions(str: [*:0]const u8) struct { w: i16, h: i16 } {
     const font_idx = TextGetFontIndex(str);
-    const font = TEXT_FONT_TABLE.*[font_idx];
+    const font = apTextFont.*[font_idx];
     return .{
         .w = @truncate(GetStringWidth(str, font)), // FIXME: crash
         .h = @truncate(GetStringHeight(str, font)), // FIXME: crash

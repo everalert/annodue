@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Font: New plugin for custom fonts and font fixes
+	- Setting group: `font`
+	- Custom font loading system (see MANUAL for details, settings: `enable` `font`)
+   	- HD custom font in new format
+  	- Improved font appearance and character support
+  	- Bugfix mangled glyph texture UVs when clipping a UI region (such as the file list in the file select box)
+   	- Helpers for making custom fonts
+   		- Custom font template
+  		- Custom font hot-reloading
+		- Font test display showing all font glyphs at once (setting: `can_show_test`, hotkey: `O`)
+  	- (dev-only) Dump game base font data including images and definitions (setting: `can_dump_data`, hotkey: `I`)
+  	- (dev-only) Dump glyph binary of currently used font (setting: `can_dump_glyphs`, hotkey: `E`)
+  	- (dev-only) Soft-toggle font system (setting: `can_toggle_system`, hotkey: `L`)
+  	- (dev-only) Soft-toggle custom font (setting: `can_toggle_custom`, hotkey: `E`)
 - Overlay: Detailed speed readout, with raw readout option (setting: `show_speed` `show_speed_raw`)
 - Overlay: Terrain speed offsets readout (setting: `show_speed_offsets`)
 - Overlay: Simplified FPS readout option (setting: `show_fps_simple`)
@@ -20,20 +34,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Auto-reset race on death or engine fire (settings: `autoreset_enable` `autoreset_dead_enable` `autoreset_dead_delay` `autoreset_fire_enable` `autoreset_fire_delay`)
 - QOL: Track select remembers your selection when leaving menu, and between game sessions (settings: `trackselect_remember` `trackselect_last`)
 - QOL: Fast menu navigation by removing input wait times (setting: `fast_navigation`)
-- QOL: Allow hat (d-pad) input for menu navigation (setting: `dpad_navigation`)
+- QOL: Allow hat (D-PAD) input for menu navigation (setting: `dpad_navigation`)
 - QOL: Show true values of times on post-race screen (setting: `show_postrace_times_hex`)
 - QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`)
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
-- Core: Patch texture buffer size to allow custom tracks with large number of textures (settings: `texbuf_enable` `texbuf_size`, category: `core/GAssetBuffer`)
+- Core: (temporarily disabled) Patch texture buffer size to allow custom tracks with large number of textures (settings: `texbuf_enable` `texbuf_size`, category: `core/GAssetBuffer`)
+- Backend(Core): Plugin Function version (`1`)
+- Backend(Core): Plugin Functions
+	- `RenderSceneBeginB`
+	- `RenderSceneBeginA`
+	- `RenderSceneEndB`
+	- `RenderSceneEndA`
 - Backend(Core): `GlobalState.window_in_foreground`
-- Backend(RacerLib): `Save`, `Asset` utils
-- Backend(RacerLib): `Input` defs
+- Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
+- Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
+- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload` utils
 
 ### Changed
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - QOL: More organized formatting of post-race stats
+- Backend(ASettings): Migrate to new hot reloading util
+- Backend(Hook): Migrate to new hot reloading util
 - Backend(Core): Global State version `5` to `7`
 - Backend(Core): Global Function version `29` to `31`
 - Backend(Core): Settings now also autosave on race reset
@@ -41,19 +64,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Cosmetic: Font-related functionality
+- Cosmetic: `patch_fonts` setting
+- Developer: Font-related functionality
+- Developer: `dump_fonts` setting
 - Backend(Core): 
     - `GlobalState.hwnd` (use racerlib->global->HWND)
     - `GlobalState.hinstance` (use racerlib->global->HINSTANCE)
 - Backend(Core): Removed public Global State access from plugin API (use new getters from Global Function)
 - Backend(Core): Removed many redundant global state getters in favor of accessing game state via RacerLib
+- Backend(Assets): Old HD font texture data
 
 ### Fixed
 
+- Core: Improved loading performance
 - Cam7: Mouse position locking when tabbing out with free cam active
 - QOL: Settings not saving when closing Quick Race Menu without loading race
 - QOL: Being able to stack race resets when a load is already queued
 - QOL: Fire finish timer counting any healed overheat for post-race stats
 - QOL: Game not being returned to original code for some features when plugin unloads
+- Backend(ASettings): String settings not propagating an update when the start of the new string matched the whole old string
 
 ## [0.1.6] - 2024-08-11
 

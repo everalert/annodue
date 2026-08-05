@@ -398,7 +398,8 @@ fn patchFog(on: bool) void {
         _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @bitCast(dist)); // fog dist, flags @0=1 case
         return;
     }
-    _ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
+    //_ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
+    _ = x86.mov_r32_rm32o(0x4539A0, .ecx, .esi, i32, 0x2D8); // fog dist, normal case
     _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
 }
 

@@ -1,6 +1,7 @@
 const Self = @This();
 
 const std = @import("std");
+const assert = std.debug.assert;
 
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
@@ -11,16 +12,25 @@ const debug = @import("core/Debug.zig");
 const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+const PPanic = @import("util/debug.zig").PPanic;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
+const ra = @import("racer").Asset;
+const rt = @import("racer").Text;
+const rf = @import("racer").Font;
+const r3 = @import("racer").@"3D";
+
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
 
+// FIXME: remove, for testing
+const dbg = @import("util/debug.zig");
+const rd = @import("racer").Debug;
+
 // FEATURES
-// - High-resolution fonts
 // - Rotating rainbow colors for race UI elements: top values, top labels, speedo
 // - (disabled) High-fidelity audio
 // - (disabled) Load sprites from TGA
@@ -29,7 +39,6 @@ pub const panic = debug.annodue_panic;
 //   rainbow_value_enable   bool
 //   rainbow_label_enable   bool
 //   rainbow_speed_enable   bool
-//   patch_fonts            bool    * requires game restart to apply
 //   patch_audio            bool    ignored
 //   patch_tga_loader       bool    ignored
 
@@ -40,7 +49,6 @@ pub const panic = debug.annodue_panic;
 // TODO: convert all allocations to global allocator once part of GlobalFn
 // TODO: all settings hot-reloadable
 // TODO: convert trigger display to our notification system
-// TODO: embed fonts and point to ours, rather than patching the whole thing (for faster loadtimes)
 
 const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
@@ -53,7 +61,6 @@ const CosmeticState = struct {
     var h_s_rb_speed_enable: ?SettingHandle = null;
     var h_s_patch_tga_loader: ?SettingHandle = null;
     var h_s_patch_audio: ?SettingHandle = null;
-    var h_s_patch_fonts: ?SettingHandle = null;
     var s_rb_enable: bool = false;
     var s_rb_value_enable: bool = false;
     var s_rb_label_enable: bool = false;
@@ -63,13 +70,6 @@ const CosmeticState = struct {
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
     var s_patch_tga_loader: bool = false;
     var s_patch_audio: bool = false;
-    var s_patch_fonts: bool = false;
-
-    // FIXME: sized specifically for original font patch, will need to be changed for future
-    // FIXME: doing it this way (without annodue alloc) also causes the game to crash whenever
-    // the dll unloads, which for now is fine just to get rid of global state ref, because
-    // reworking the font patch is high priority anyway
-    var font_buf: [0x1D0000]u8 = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", settingsUpdate);
@@ -88,8 +88,6 @@ const CosmeticState = struct {
             gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, &s_patch_tga_loader, null);
         h_s_patch_audio = // FIXME: crashes
             gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, &s_patch_audio, null);
-        h_s_patch_fonts =
-            gf.ASettingOccupy(section, "patch_fonts", .B, .{ .b = false }, &s_patch_fonts, null);
     }
 
     fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
@@ -161,88 +159,6 @@ const CosmeticState = struct {
 
 // SWE1R-PATCHER STUFF
 
-// NOTE: code_begin_offset = part of the arguments to a function call (sprite setup-related fn fn_445EE0)
-// args expected in this range: maxwidth?, maxheight?, width, height (args 3-6)
-// NOTE: code_end_offset = the instruction after 4 arguments later
-// NOTE: texture table seems to be 'len' in first field (u32), followed by len ptrs to texture segments
-// FIXME: can probably convert font->sprite conversion to comptime embed then hook up ptrs only in code,
-// then all the allocation bs can be skipped
-// NOTE: probably cannot reverse this, because it patches something that seems to only run once during setup
-fn PatchTextureTable(
-    memory: usize,
-    table_offset: usize,
-    code_begin_offset: usize,
-    code_end_offset: usize,
-    width: u32,
-    height: u32,
-    filename: []const u8,
-) usize {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
-
-    var off: usize = memory;
-    off = x86.nop_align(off, 16);
-
-    // Original code takes u8 dimension args, so we use our own code that takes u32
-    const cave_memory_offset: usize = off;
-
-    // Patches the arguments for the texture loader
-    off = x86.push(off, .{ .imm32 = height });
-    off = x86.push(off, .{ .imm32 = width });
-    off = x86.push(off, .{ .imm32 = height });
-    off = x86.push(off, .{ .imm32 = width });
-    off = x86.jmp(off, code_end_offset);
-
-    // Detour original code to ours
-    var hack_offset: usize = x86.jmp(code_begin_offset, cave_memory_offset);
-    _ = x86.nop_until(hack_offset, code_end_offset);
-
-    // Get number of textures in the table
-    const count: u32 = mem.read(table_offset + 0, u32);
-
-    // Have a buffer for pixeldata
-    const texture_size: u32 = width * height * 4 / 8;
-    var buffer = alloc.alloc(u8, texture_size) catch
-        @panic("failed to allocate memory for texture table patch");
-    defer alloc.free(buffer);
-    const buffer_slice = @as([*]u8, @ptrCast(buffer))[0..texture_size];
-    //const buffer_slice = @as([*]u8, @ptrFromInt(off))[0..texture_size];
-
-    // Loop over all textures
-    var i: usize = 0;
-    var str_buf: [1023:0]u8 = undefined;
-    while (i < count) : (i += 1) {
-        // Load input texture to buffer
-        var path = std.fmt.bufPrintZ(&str_buf, "annodue/textures/{s}_{d}_test.data", .{ filename, i }) catch
-            @panic("failed to format path for texture table patch"); // FIXME: error handling
-
-        const file = std.fs.cwd().openFile(path, .{}) catch
-            @panic("failed to open texture table patch file"); // FIXME: error handling
-        defer file.close();
-        @memset(buffer_slice, 0x00);
-        var j: u32 = 0;
-        while (j < texture_size * 2) : (j += 1) {
-            var pixel: [2]u8 = undefined; // GIMP only exports Gray + Alpha..
-            _ = file.read(&pixel) catch
-                @panic("failed to read segment of texture table patch file"); // FIXME: error handling
-            buffer_slice[j / 2] |= (pixel[0] & 0xF0) >> @as(u3, @truncate((j % 2) * 4));
-        }
-
-        // Write pixel data to game
-        const texture_new: usize = off;
-        off = mem.write_bytes(off, buffer.ptr, texture_size);
-
-        // Patch the table entry
-        //const texture_old: usize = mem.read(table_offset + 4 + i * 4, u32);
-        _ = mem.write(table_offset + 4 + i * 4, u32, texture_new);
-        //printf("%d: 0x%X -> 0x%X\n", i, texture_old, texture_new);
-
-        //off += texture_size;
-    }
-
-    return off;
-}
-
 // FIXME: crashes, not sure why because the memory written should be identical
 // to swe1r-patcher, yet that doesn't crash
 fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) void {
@@ -261,7 +177,7 @@ fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) 
     _ = mem.write(0x423555, u32, buffer_size / 2);
 }
 
-// WARNING: not tested
+// WARN: not tested, also should verify consistency with old patch
 fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     // Replace the sprite loader with a version that checks for "data\\images\\sprite-%d.tga"
     var off: usize = memory;
@@ -277,64 +193,33 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
 
     // TODO: figure out what this asm means and make macros
     // Shift the width and height of the sprite to the right
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x68);
-    off = mem.write(off, u8, 0);
-    off = mem.write(off, u8, 1);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x68);
-    off = mem.write(off, u8, 2);
-    off = mem.write(off, u8, 2);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x68);
-    off = mem.write(off, u8, 14);
-    off = mem.write(off, u8, 2);
+    off = x86.SHR(off, .eax, @as(i16, 0x0), .imm, 1); // shr  WORD PTR [eax+0x0], 1
+    off = x86.SHR(off, .eax, @as(i16, 0x2), .imm, 2); // shr  WORD PTR [eax+0x2], 2
+    off = x86.SHR(off, .eax, @as(i16, 0xE), .imm, 2); // shr  WORD PTR [eax+0xE], 2
 
     // Get address of page and repeat steps
-    off = mem.write(off, u8, 0x8B);
-    off = mem.write(off, u8, 0x50);
-    off = mem.write(off, u8, 16);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x6A);
-    off = mem.write(off, u8, 0);
-    off = mem.write(off, u8, 1);
-
-    off = mem.write(off, u8, 0x66);
-    off = mem.write(off, u8, 0xC1);
-    off = mem.write(off, u8, 0x6A);
-    off = mem.write(off, u8, 2);
-    off = mem.write(off, u8, 2);
+    off = mem.write_bytes(off, &[3]u8{ 0x8B, 0x50, 0x10 }); // mov  edx, DWORD PTR [eax+0x10]
+    off = x86.SHR(off, .edx, @as(i16, 0x0), .imm, 1); // shr  WORD PTR [edx+0x0], 1
+    off = x86.SHR(off, .edx, @as(i16, 0x2), .imm, 2); // shr  WORD PTR [edx+0x2], 2
 
     // Get address of texture and repeat steps
-
     //0:  8b 50 10                mov    edx,DWORD PTR [eax+0x10]
     //3:  66 c1 6a 02 02          shr    WORD PTR [edx+0x2],0x2
 
     // finish: Clear stack and return
     const offset_finish: usize = off;
-    off = x86.add_esp32(off, 0x4 + 0x400);
+    off = x86.ADD(off, .esp, null, .imm, 0x4 + 0x400);
     off = x86.retn(off);
 
     // Start of actual code
     const offset_tga_loader_code: usize = off;
 
     // Read the sprite_index from stack
-    //  -> mov     eax, [esp+4]
-    off = mem.write(off, u8, 0x8B);
-    off = mem.write(off, u8, 0x44);
-    off = mem.write(off, u8, 0x24);
-    off = mem.write(off, u8, 0x04);
+    off = mem.write_bytes(off, &[4]u8{ 0x8B, 0x44, 0x24, 0x04 }); // mov  eax, [esp+0x04]
 
     // Make room for sprintf buffer and keep the pointer in edx
-    off = x86.add_esp32(off, @bitCast(@as(i32, -0x400)));
-    off = x86.mov_edx_esp(off);
+    off = x86.ADD(off, .esp, null, .imm, -0x400);
+    off = x86.mov_rm32_r32(off, .edx, .esp); // mov edx, esp
 
     // Generate the path, keep sprite_index on stack as we'll keep using it
     off = x86.push(off, .{ .r32 = .eax }); // (sprite_index)
@@ -342,24 +227,24 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x49EB80); // sprintf
     off = x86.pop(off, .{ .r32 = .edx }); // (buffer)
-    off = x86.add_esp32(off, 0x4);
+    off = x86.ADD(off, .esp, null, .imm, 0x4);
 
     // Attempt to load the TGA, then remove path from stack
     off = x86.push(off, .{ .r32 = .edx }); // (buffer)
     off = x86.call(off, 0x4114D0); // load_sprite_from_tga_and_add_loaded_sprite
-    off = x86.add_esp32(off, 0x4);
+    off = x86.ADD(off, .esp, null, .imm, 0x4);
 
     // Check if the load failed
     off = x86.test_eax_eax(off);
-    off = x86.jnz(off, offset_load_success);
+    off = x86.JNZ(off, offset_load_success);
 
     // Load failed, so load the original sprite (sprite-index still on stack)
     off = x86.call(off, 0x446CA0); // load_sprite_internal
 
-    off = x86.jmp(off, offset_finish);
+    off = x86.jmp_rel(off, offset_finish);
 
     // Install it by jumping from 0x446FB0 (and we'll return directly)
-    _ = x86.jmp(0x446FB0, offset_tga_loader_code);
+    _ = x86.jmp_rel(0x446FB0, offset_tga_loader_code);
 
     return off;
 }
@@ -385,17 +270,8 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // then we can properly deinit it when the plugin unloads or the user setting changes.
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
-    // NOTE: original function at fn_42D720
     //var off = gs.patch_offset;
-    if (CosmeticState.s_patch_fonts) {
-        var off = @intFromPtr(&CosmeticState.font_buf);
-        off = PatchTextureTable(off, 0x4BF91C, 0x42D745, 0x42D753, 512, 1024, "font0");
-        off = PatchTextureTable(off, 0x4BF7E4, 0x42D786, 0x42D794, 512, 1024, "font1");
-        off = PatchTextureTable(off, 0x4BF84C, 0x42D7C7, 0x42D7D5, 512, 1024, "font2");
-        off = PatchTextureTable(off, 0x4BF8B4, 0x42D808, 0x42D816, 512, 1024, "font3");
-        off = PatchTextureTable(off, 0x4BF984, 0x42D849, 0x42D857, 512, 1024, "font4");
-        std.debug.assert(off - @intFromPtr(&CosmeticState.font_buf) <= CosmeticState.font_buf.len);
-    }
+
     //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
     //    const bits_per_sample: u8 = 16;
@@ -405,6 +281,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     //if (CosmeticState.s_patch_tga_loader) {
     //    off = PatchSpriteLoaderToLoadTga(off);
     //}
+
     //gs.patch_offset = off;
 }
 

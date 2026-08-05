@@ -16,7 +16,7 @@ const rq = r.Quad;
 const TextDef = rt.TextDef;
 const ResetMaterial = r.Quad.ResetMaterial;
 
-pub const GDRAW_VERSION: usize = 4;
+pub const GDRAW_VERSION = 4;
 
 // NOTE: anything above around 256 characters seems pointless even with excessive formatting
 // characters, but may be worth reconsidering down the line if e.g. higher res viewport

@@ -27,12 +27,12 @@ pub const VERSION_MIN = SemVer{
 
 // TODO: use SemanticVersion parse fn instead
 // TODO: include tag when appropriate
-pub const VERSION_STR: [:0]u8 = s: {
-    var buf: [127:0]u8 = undefined;
-    break :s std.fmt.bufPrintZ(&buf, "Annodue {d}.{d}.{d}.{s}", .{
+pub const VERSION_STR: [:0]const u8 = std.fmt.comptimePrint(
+    "Annodue {d}.{d}.{d}.{s}",
+    .{
         VERSION.major,
         VERSION.minor,
         VERSION.patch,
         VERSION.build.?,
-    }) catch unreachable; // comptime
-};
+    },
+);

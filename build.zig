@@ -74,6 +74,7 @@ pub fn build(b: *std.Build) void {
 
     const racerlib = b.createModule(.{
         .source_file = .{ .path = "src/racer/racer.zig" },
+        .dependencies = &.{.{ .name = "zigwin32", .module = zigwin32_m }},
     });
 
     //const appinfo = b.createModule(.{

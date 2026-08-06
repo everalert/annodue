@@ -1,12 +1,11 @@
 const std = @import("std");
 
-const HWND = std.os.windows.HWND;
-const HINSTANCE = std.os.windows.HINSTANCE;
-const BOOL = std.os.windows.BOOL;
-
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const POINT = w32.foundation.POINT;
+const BOOL = w32.foundation.BOOL;
+const HWND = w32.foundation.HWND;
+const HINSTANCE = w32.foundation.HINSTANCE;
 
 const ActiveState = @import("../util/active_state.zig").ActiveState;
 const Handle = @import("../util/handle_map.zig").Handle;

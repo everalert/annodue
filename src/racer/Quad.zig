@@ -1,6 +1,8 @@
 /// Screen-space sprite drawing
 const std = @import("std");
-const BOOL = std.os.windows.BOOL;
+
+const w32 = @import("zigwin32");
+const BOOL = w32.foundation.BOOL;
 
 // GAME FUNCTIONS
 

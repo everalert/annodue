@@ -1,10 +1,10 @@
 const std = @import("std");
 
-const w = std.os.windows;
 const w32 = @import("zigwin32");
-const w32ll = w32.system.library_loader;
-const w32f = w32.foundation;
-const w32fs = w32.storage.file_system;
+const GetLastError = w32.foundation.GetLastError;
+const CreateDirectoryA = w32.storage.file_system.CreateDirectoryA;
+const CopyFileA = w32.storage.file_system.CopyFileA;
+const PATH_NOT_FOUND = w32.foundation.ERROR_PATH_NOT_FOUND;
 
 // TODO: cleanup so that it doesn't have to be called a separate time for each subdir
 
@@ -39,9 +39,9 @@ pub fn main() !void {
     if (i_path == null) return error.NoInputPath;
     if (o_path == null) return error.NoOutputPath;
 
-    if (0 == w32fs.CreateDirectoryA(o_path.?, null)) {
-        var e = w.kernel32.GetLastError();
-        if (e == w.Win32Error.PATH_NOT_FOUND) {
+    if (0 == CreateDirectoryA(o_path.?, null)) {
+        var e = GetLastError();
+        if (e == PATH_NOT_FOUND) {
             std.debug.print(
                 "MOVE ERROR  Cannot create directory \"{s}\"; intermediary path does not exist.\n",
                 .{o_path.?},
@@ -59,8 +59,8 @@ pub fn main() !void {
     for (files.items) |f| {
         var i = try std.fmt.bufPrintZ(&buf1, "{s}/{s}", .{ i_path.?, f });
         var o = try std.fmt.bufPrintZ(&buf2, "{s}/{s}", .{ o_path.?, f });
-        if (0 == w32fs.CopyFileA(i, o, 0)) {
-            var e = w.kernel32.GetLastError();
+        if (0 == CopyFileA(i, o, 0)) {
+            var e = GetLastError();
             std.debug.print("MOVE ERROR  {s}  {s}\n", .{ @tagName(e), f });
             copy_all = false;
         } else copy_partial = true;

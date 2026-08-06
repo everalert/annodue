@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const BOOL = std.os.windows.BOOL;
+const w32 = @import("zigwin32");
+const BOOL = w32.foundation.BOOL;
 
 const e = @import("entity.zig");
 const Mat4x4 = @import("../Matrix.zig").Mat4x4;

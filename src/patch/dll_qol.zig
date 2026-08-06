@@ -1,9 +1,8 @@
 const Self = @This();
 
 const std = @import("std");
-const win = std.os.windows;
 const w32 = @import("zigwin32");
-const w32wm = w32.ui.windows_and_messaging;
+const ShowCursor = w32.ui.windows_and_messaging.ShowCursor;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
@@ -1302,7 +1301,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: keep at top
     QuickRaceMenu.gf = gf;
 
-    _ = w32wm.ShowCursor(0); // cursor fix
+    _ = ShowCursor(0); // cursor fix
     QolState.settingsInit(gf);
 
     PatchCameraFKeys(true);

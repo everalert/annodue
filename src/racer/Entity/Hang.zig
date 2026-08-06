@@ -1,7 +1,9 @@
 const std = @import("std");
+
 const EnumSet = std.EnumSet;
-const w = std.os.windows;
-const BOOL = w.BOOL;
+
+const w32 = @import("zigwin32");
+const BOOL = w32.foundation.BOOL;
 
 const e = @import("entity.zig");
 

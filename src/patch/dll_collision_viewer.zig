@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const win = std.os.windows;
 const w32 = @import("zigwin32");
-const w32wm = w32.ui.windows_and_messaging;
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 

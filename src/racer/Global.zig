@@ -1,9 +1,11 @@
 const std = @import("std");
-const w = std.os.windows;
-const BOOL = w.BOOL;
-const HWND = w.HWND;
-const LPARAM = w.LPARAM;
-const WPARAM = w.WPARAM;
+
+const w32 = @import("zigwin32");
+const BOOL = w32.foundation.BOOL;
+const HWND = w32.foundation.HWND;
+const HINSTANCE = w32.foundation.HINSTANCE;
+const LPARAM = w32.foundation.LPARAM;
+const WPARAM = w32.foundation.WPARAM;
 
 // GAME FUNCTIONS
 
@@ -18,9 +20,9 @@ pub const Window_Activate: *const fn (hwnd: HWND, active: BOOL) callconv(.C) voi
 
 // Window
 
-pub const WINDOW_HWND: *w.HWND = @ptrFromInt(0x52EE70);
-pub const HINSTANCE: *w.HINSTANCE = @ptrFromInt(0x52EE74);
-pub const WINDOW_ACTIVE: *w.BOOL = @ptrFromInt(0x50B5D0); // only accurate if game has been tabbed out and in
+pub const WINDOW_HWND: *HWND = @ptrFromInt(0x52EE70);
+pub const WINDOW_HINSTANCE: *HINSTANCE = @ptrFromInt(0x52EE74);
+pub const WINDOW_ACTIVE: *BOOL = @ptrFromInt(0x50B5D0); // only accurate if game has been tabbed out and in
 
 // Game State
 

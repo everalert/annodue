@@ -1,3 +1,7 @@
+//! FIXME: delete this file; defs available in zigwin32 (except XINPUT_GAMEPAD_BUTTONS,
+//!  which is custom). currently used zigwin32 externs the wrong lib and thus has
+//!  linking issues, so need to wait until upgrading zig version to upgrade zigwin32.
+
 pub const XINPUT_DLL_A = "xinput1_4.dll";
 pub const XINPUT_DLL_W = "xinput1_4.dll";
 pub const XINPUT_DLL = "xinput1_4.dll";

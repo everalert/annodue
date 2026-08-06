@@ -1,14 +1,19 @@
 const std = @import("std");
-const w = std.os.windows;
+
 const w32 = @import("zigwin32");
-const w32f = w32.foundation;
-const w32wp = w32.system.windows_programming;
+const NTSTATUS = w32.foundation.NTSTATUS;
+const TIMECAPS = w32.media.TIMECAPS;
+const TIMERR_NOERROR = w32.media.TIMERR_NOERROR;
+const WINAPI = std.os.windows.WINAPI;
+const timeGetDevCaps = w32.media.timeGetDevCaps;
+const timeBeginPeriod = w32.media.timeBeginPeriod;
+const timeEndPeriod = w32.media.timeEndPeriod;
 
 pub extern "ntdll" fn NtSetTimerResolution(
     DesiredResolution: u32,
     SetResolution: bool,
     CurrentResolution: ?*u32,
-) callconv(w.WINAPI) w32f.NTSTATUS;
+) callconv(WINAPI) NTSTATUS;
 
 // TIME-BASED SPINLOCK
 
@@ -29,9 +34,9 @@ pub const TimeSpinlock = struct {
         if (self.initialized) return;
         defer self.initialized = true;
 
-        var caps: w.winmm.TIMECAPS = undefined;
-        if (w.winmm.timeGetDevCaps(&caps, 8) != w.winmm.TIMERR_NOERROR) return; // FIXME: error handling
-        if (w.winmm.timeBeginPeriod(caps.wPeriodMin) != w.winmm.TIMERR_NOERROR) return; // FIXME: error handling
+        var caps: TIMECAPS = undefined;
+        if (timeGetDevCaps(&caps, 8) != TIMERR_NOERROR) return; // FIXME: error handling
+        if (timeBeginPeriod(caps.wPeriodMin) != TIMERR_NOERROR) return; // FIXME: error handling
 
         self.timer_step = caps.wPeriodMin;
         self.timer_step_ns = self.timer_step * std.time.ns_per_ms; // convert to ns
@@ -45,7 +50,7 @@ pub const TimeSpinlock = struct {
         if (!self.initialized) return;
         defer self.initialized = false;
 
-        if (self.timer_step > 0) _ = w.winmm.timeEndPeriod(self.timer_step); // FIXME: error handling
+        if (self.timer_step > 0) _ = timeEndPeriod(self.timer_step); // FIXME: error handling
     }
 
     pub fn Sleep(self: *TimeSpinlock) void {

@@ -4,8 +4,8 @@ const e = @import("entity.zig");
 const m = @import("../Model.zig");
 const ModelNodeXf = m.ModelNodeXf;
 
-const w = std.os.windows;
-const BOOL = w.BOOL;
+const w32 = @import("zigwin32");
+const BOOL = w32.foundation.BOOL;
 
 // GAME FUNCTIONS
 

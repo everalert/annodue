@@ -5,7 +5,6 @@ const GlobalFunction = @import("SharedDef.zig").GlobalFunction;
 const RaceState = @import("SharedDef.zig").RaceState;
 
 const std = @import("std");
-const win = std.os.windows;
 
 const draw = @import("GDraw.zig");
 const freeze = @import("GFreeze.zig");
@@ -36,10 +35,10 @@ const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 
 const w32 = @import("zigwin32");
-const w32kb = w32.ui.input.keyboard_and_mouse;
-const w32xc = w32.ui.input.xbox_controller;
-const w32wm = w32.ui.windows_and_messaging;
 const POINT = w32.foundation.POINT;
+const GetAsyncKeyState = w32.ui.input.keyboard_and_mouse.GetAsyncKeyState;
+const GetForegroundWindow = w32.ui.windows_and_messaging.GetForegroundWindow;
+const VK_SHIFT = w32.ui.input.keyboard_and_mouse.VK_SHIFT;
 const KS_DOWN: i16 = -1;
 const KS_PRESSED: i16 = 1; // since last call
 
@@ -208,7 +207,7 @@ fn DrawVersionString() void {
 // INIT
 
 pub fn init() bool {
-    const kb_shift: i16 = w32kb.GetAsyncKeyState(@intFromEnum(w32kb.VK_SHIFT));
+    const kb_shift: i16 = GetAsyncKeyState(@intFromEnum(VK_SHIFT));
     const kb_shift_dn: bool = (kb_shift & KS_DOWN) != 0;
     if (kb_shift_dn)
         return false;
@@ -228,7 +227,7 @@ pub fn OnDeinit(_: *GlobalFunction) callconv(.C) void {}
 
 pub fn EarlyEngineUpdateB(_: *GlobalFunction) callconv(.C) void {
     const hwnd_racer: u32 = @intFromPtr(rg.WINDOW_HWND.*);
-    const hwnd_fg: u32 = if (w32wm.GetForegroundWindow()) |h| @intFromPtr(h) else 0;
+    const hwnd_fg: u32 = if (GetForegroundWindow()) |h| @intFromPtr(h) else 0;
     GLOBAL_STATE.window_in_foreground = hwnd_racer == hwnd_fg;
 }
 

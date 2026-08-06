@@ -2,10 +2,9 @@ pub const Self = @This();
 
 const std = @import("std");
 
-const user32 = std.os.windows.user32;
-const MessageBoxA = user32.MessageBoxA;
-const MB_OK = user32.MB_OK;
-const MB_ICONINFORMATION = user32.MB_ICONINFORMATION;
+const w32 = @import("zigwin32");
+const MessageBoxA = w32.ui.windows_and_messaging.MessageBoxA;
+const MB_OK = w32.ui.windows_and_messaging.MB_OK;
 
 pub fn Message(comptime fmt_t: []const u8, args_t: anytype, comptime fmt_m: []const u8, args_m: anytype) void {
     var buf_t: [2047:0]u8 = undefined;

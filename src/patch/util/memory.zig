@@ -1,7 +1,13 @@
 pub const Self = @This();
 
 const std = @import("std");
-const win = std.os.windows;
+const panic = std.debug.panic;
+
+const w32 = @import("zigwin32");
+const PAGE_PROTECTION_FLAGS = w32.system.memory.PAGE_PROTECTION_FLAGS;
+const PAGE_EXECUTE_READWRITE = w32.system.memory.PAGE_EXECUTE_READWRITE;
+const VirtualProtect = w32.system.memory.VirtualProtect;
+const GetLastError = w32.foundation.GetLastError;
 
 // TODO: write page protection for reading functions too? for api symmetry
 
@@ -38,11 +44,11 @@ pub fn write_bytes(offset: usize, data: []const u8) usize {
 }
 
 fn write_unprotected(dst: [*]u8, src: []const u8) void {
-    var protect: win.DWORD = undefined;
-    _ = win.VirtualProtect(dst, src.len, win.PAGE_EXECUTE_READWRITE, &protect) catch
-        @panic("failed to set PAGE_EXECUTE_READWRITE for memory write operation");
-    defer _ = win.VirtualProtect(dst, src.len, protect, &protect) catch
-        @panic("failed to restore previous protection after memory write operation");
+    var protect: PAGE_PROTECTION_FLAGS = undefined;
+    if (0 == VirtualProtect(dst, src.len, PAGE_EXECUTE_READWRITE, &protect))
+        panic("(write_unprotected) failed to set PAGE_EXECUTE_READWRITE: {s}", .{@tagName(GetLastError())});
+    defer _ = if (0 == VirtualProtect(dst, src.len, protect, &protect))
+        panic("(write_unprotected) failed to restore page protection: {s}", .{@tagName(GetLastError())});
     @memcpy(dst, src);
 }
 

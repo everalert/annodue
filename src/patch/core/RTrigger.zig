@@ -1,7 +1,9 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
-const BOOL = std.os.windows.BOOL;
+
+const w32 = @import("zigwin32");
+const BOOL = w32.foundation.BOOL;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 

@@ -1,8 +1,9 @@
 const std = @import("std");
 
-const BOOL = std.os.windows.BOOL;
-const FALSE = std.os.windows.FALSE;
-const TRUE = std.os.windows.TRUE;
+const w32 = @import("zigwin32");
+const BOOL = w32.foundation.BOOL;
+const FALSE = w32.zig.FALSE;
+const TRUE = w32.zig.TRUE;
 
 const assert = std.debug.assert;
 

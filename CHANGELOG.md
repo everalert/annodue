@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Core: Improved loading performance
 - Cam7: Mouse position locking when tabbing out with free cam active
+- Savestate: UI animation for engine status and minimap transition now recorded in savestate (some aspects of minimap still not recorded)
 - QOL: Settings not saving when closing Quick Race Menu without loading race
 - QOL: Being able to stack race resets when a load is already queued
 - QOL: Fire finish timer counting any healed overheat for post-race stats

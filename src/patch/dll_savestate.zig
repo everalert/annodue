@@ -74,6 +74,8 @@ pub const panic = debug.annodue_panic;
 // TODO: convert all allocations to global allocator once part of GlobalFn
 // FIXME: stop recording when quitting, pausing, etc.
 // TODO: recording during the opening cutscene, to account for world animations (SMR, etc.)
+// TODO: recording Jdge entity; needed for minimap mode etc., iirc this was taken
+//  out because of conflicts with restarting etc
 // TODO: dinput controls
 
 const PLUGIN_NAME: [*:0]const u8 = "Savestate";
@@ -111,6 +113,9 @@ const state = struct {
         .{ .data = @as([*]u8, @ptrCast(rin.PACKED))[0..@sizeOf(rin.INPUT_PACKED)] }, // Input
         .{ .data = @as([*]u8, @ptrCast(rti.TIMING))[0..rti.TIMING_SIZE] }, // Timing
         .{ .data = @as([*]u8, @ptrCast(rr.NUMBER))[0..4] }, // RNG
+        .{ .data = @as([*]u8, @ptrCast(re.Jdge.UI_ENGINE_TIMING_BLOCK_01))[0 .. 4 * 4] }, // Jdge global
+        .{ .data = @as([*]u8, @ptrCast(re.Jdge.UI_ENGINE_TIMING_BLOCK_02))[0 .. 4 * 10] }, // Jdge global
+        .{ .data = @as([*]u8, @ptrCast(re.Jdge.UI_MINIMAP_TIMING_UNK_01))[0..4] }, // Jdge global
     };
 
     var load_time: usize = 0;

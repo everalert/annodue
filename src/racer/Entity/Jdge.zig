@@ -9,7 +9,7 @@ const BOOL = w32.foundation.BOOL;
 
 // GAME FUNCTIONS
 
-pub const QueueLoad: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
+pub const fnQueueLoad: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
 
 pub const fnStage14: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x45E200);
 //pub const fnStage18: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x00);
@@ -20,6 +20,19 @@ pub const fnEvent: *fn (jdge: *Jdge, magic: *e.MAGIC_EVENT, payload: u32) callco
 // GAME CONSTANTS
 
 pub const LOAD_QUEUED: *BOOL = @ptrFromInt(0x50CA34);
+
+// TODO: work through fn_45F230 and related, and characterize this properly. also
+//  need to find related values; this seems to be a transitional animation value
+//  for the different minimap modes, however some aspects of the minimap are not
+//  tracked yet, such as the mode itself, as well as there being a frame delay in
+//  the minimap element rendering
+pub const UI_MINIMAP_TIMING_UNK_01: *f32 = @ptrFromInt(0x4C5298);
+
+// TODO: work through fn_4611F0 and characterize the individual arrays. both blocks
+//  contain a series of [2]f32 arrays tracking various aspects of the player engine
+//  UI animation and sound effects
+pub const UI_ENGINE_TIMING_BLOCK_01: *[4]f32 = @ptrFromInt(0x4C52A0);
+pub const UI_ENGINE_TIMING_BLOCK_02: *[10]f32 = @ptrFromInt(0x50CA60);
 
 // GAME TYPEDEFS
 

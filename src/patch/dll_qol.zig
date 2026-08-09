@@ -1304,7 +1304,7 @@ fn RestartRace(play_sound: bool) void {
     if (!re.Jdge.CouldPause(jdge)) return;
 
     if (play_sound) rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
-    re.Jdge.QueueLoad(jdge, re.M_RSTR);
+    re.Jdge.fnQueueLoad(jdge, re.M_RSTR);
 }
 
 // HOUSEKEEPING

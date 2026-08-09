@@ -64,6 +64,8 @@ fn global_player_update(self: *GlobalState) void {
     const pt = re.Test.GetPlayerAssertValid();
 
     p.boosting.update(pt.flags1.IS_BOOSTING);
+    p.boost_charging.update(pt.boostChargeStatus == 1);
+    p.boost_ready.update(pt.boostChargeStatus == 2);
     p.underheating.update(re.Test.GetUnderheating(pt));
     p.overheating.update(re.Test.GetOverheating(pt));
     p.dead.update(pt.flags1.IS_DEAD);
@@ -101,6 +103,14 @@ fn SRaceStatePrev() callconv(.C) RaceState {
 fn SRaceStateNew() callconv(.C) bool {
     return GLOBAL_STATE.race_state_new;
 } // race_state_new
+
+fn SPlayerBoostCharging() callconv(.C) ActiveState {
+    return GLOBAL_STATE.player.boost_charging;
+} // player -> boost_charging
+
+fn SPlayerBoostReady() callconv(.C) ActiveState {
+    return GLOBAL_STATE.player.boost_ready;
+} // player -> boost_ready
 
 fn SPlayerBoosting() callconv(.C) ActiveState {
     return GLOBAL_STATE.player.boosting;
@@ -180,6 +190,8 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .SRaceStatePrev = &SRaceStatePrev,
     .SRaceStateNew = &SRaceStateNew,
     .SPlayerBoosting = &SPlayerBoosting,
+    .SPlayerBoostCharging = &SPlayerBoostCharging,
+    .SPlayerBoostReady = &SPlayerBoostReady,
     .SPlayerUnderheating = &SPlayerUnderheating,
     .SPlayerOverheating = &SPlayerOverheating,
     .SPlayerDead = &SPlayerDead,

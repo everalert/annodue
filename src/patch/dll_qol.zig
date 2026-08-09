@@ -93,39 +93,43 @@ pub const panic = debug.annodue_panic;
 // - feat: fast countdown timer
 // - feat: run game in background
 // - feat: patch truguts cheat to give more truguts and have infinite uses
-// - feat: auto-reset on death and engine fire
+// - feat: auto-reset on missed starting boost, underheat, engine fire and death
 // - feat: track select remembers selection when leaving menu and between sessions
 // - feat: fast menu navigation
 // - feat: allow dpad input for menu navigation
 // - feat: clear best times with hotkey on track detail screen
-//     - CONTROLS:              keyboard
-//       Clear Best Lap         1+Backspace
-//       Clear 3-Lap Record     3+Backspace
+//     - CONTROLS:                  keyboard
+//       Clear Best Lap             1+Backspace
+//       Clear 3-Lap Record         3+Backspace
 // - SETTINGS:
-//   quick_restart_enable       bool
-//   quick_race_menu_enable     bool
-//   ms_timer_enable            bool
-//   fps_limiter_enable         bool
-//   default_racers             u32     max 12
-//   default_laps               u32     max 5
-//   default_camera             u32     1,2,4,5
-//   default_camera_auto        bool
-//   fast_countdown_enable      bool
-//   fast_countdown_duration    f32     min 0.05, max 3.00
-//   fix_viewport_edges         bool
-//   run_in_background          bool
-//   autoreset_enable           bool
-//   autoreset_dead_enable      bool
-//   autoreset_dead_delay       f32     default 0.5
-//   autoreset_fire_enable      bool
-//   autoreset_fire_delay       f32     default 3.0
-//   trackselect_remember       bool
-//   trackselect_last           u32     0..24
-//   fast_navigation            bool
-//   dpad_navigation            bool
-//   show_postrace_times_hex    bool
-//   clear_records_enable       bool
-//   favorite_characters        u32     bitfield where character id = nth bit
+//   quick_restart_enable           bool
+//   quick_race_menu_enable         bool
+//   ms_timer_enable                bool
+//   fps_limiter_enable             bool
+//   default_racers                 u32     max 12
+//   default_laps                   u32     max 5
+//   default_camera                 u32     1,2,4,5
+//   default_camera_auto            bool
+//   fast_countdown_enable          bool
+//   fast_countdown_duration        f32     min 0.05, max 3.00
+//   fix_viewport_edges             bool
+//   run_in_background              bool
+//   autoreset_enable               bool
+//   autoreset_dead_enable          bool
+//   autoreset_dead_delay           f32     default 0.50
+//   autoreset_fire_enable          bool
+//   autoreset_fire_delay           f32     default 3.00, time limit per engine fire
+//   autoreset_firstboost_enable    bool
+//   autoreset_firstboost_delay     f32     default 0.25, time limit from when the first boost is ready
+//   autoreset_underheat_enable     bool
+//   autoreset_underheat_delay      f32     default 3.00, time limit per underheat
+//   trackselect_remember           bool
+//   trackselect_last               u32     0..24
+//   fast_navigation                bool
+//   dpad_navigation                bool
+//   show_postrace_times_hex        bool
+//   clear_records_enable           bool
+//   favorite_characters            u32     bitfield where character id = nth bit
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -158,6 +162,10 @@ const QolState = struct {
     var h_s_autoreset_dead_delay: ?SettingHandle = null;
     var h_s_autoreset_fire_enable: ?SettingHandle = null;
     var h_s_autoreset_fire_delay: ?SettingHandle = null;
+    var h_s_autoreset_firstboost_enable: ?SettingHandle = null;
+    var h_s_autoreset_firstboost_delay: ?SettingHandle = null;
+    var h_s_autoreset_underheat_enable: ?SettingHandle = null;
+    var h_s_autoreset_underheat_delay: ?SettingHandle = null;
     var h_s_trackselect_remember: ?SettingHandle = null;
     var h_s_trackselect_last: ?SettingHandle = null;
     var h_s_fast_navigation: ?SettingHandle = null;
@@ -181,6 +189,10 @@ const QolState = struct {
     var s_autoreset_dead_delay: f32 = 0.5;
     var s_autoreset_fire_enable: bool = false;
     var s_autoreset_fire_delay: f32 = 3.0;
+    var s_autoreset_firstboost_enable: bool = false;
+    var s_autoreset_firstboost_delay: f32 = 0.25;
+    var s_autoreset_underheat_enable: bool = false;
+    var s_autoreset_underheat_delay: f32 = 3.0;
     var s_trackselect_remember: bool = false;
     var s_trackselect_last: u32 = 0;
     var s_fast_navigation: bool = false;
@@ -202,6 +214,10 @@ const QolState = struct {
     var autoreset_dead: st.ActiveState = .Off;
     var autoreset_dead_timer: f32 = 0;
     var autoreset_fire_timer: f32 = 0;
+    var autoreset_has_boost_charged: bool = false;
+    var autoreset_firstboost_timer: f32 = 0;
+    var autoreset_has_boost_boosted: bool = false;
+    var autoreset_underheat_timer: f32 = 0;
 
     fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
         input_pause.update(gf);
@@ -248,6 +264,14 @@ const QolState = struct {
             gf.ASettingOccupy(section, "autoreset_fire_enable", .B, .{ .b = false }, &s_autoreset_fire_enable, null);
         h_s_autoreset_fire_delay =
             gf.ASettingOccupy(section, "autoreset_fire_delay", .F, .{ .f = 3.0 }, &s_autoreset_fire_delay, null);
+        h_s_autoreset_firstboost_enable =
+            gf.ASettingOccupy(section, "autoreset_firstboost_enable", .B, .{ .b = false }, &s_autoreset_firstboost_enable, null);
+        h_s_autoreset_firstboost_delay =
+            gf.ASettingOccupy(section, "autoreset_firstboost_delay", .F, .{ .f = 0.25 }, &s_autoreset_firstboost_delay, null);
+        h_s_autoreset_underheat_enable =
+            gf.ASettingOccupy(section, "autoreset_underheat_enable", .B, .{ .b = false }, &s_autoreset_underheat_enable, null);
+        h_s_autoreset_underheat_delay =
+            gf.ASettingOccupy(section, "autoreset_underheat_delay", .F, .{ .f = 3.0 }, &s_autoreset_underheat_delay, null);
 
         h_s_trackselect_remember =
             gf.ASettingOccupy(section, "trackselect_remember", .B, .{ .b = false }, &s_trackselect_remember, null);
@@ -1507,8 +1531,19 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
 
             // auto reset
 
-            if (QolState.s_autoreset_enable) {
+            if (QolState.s_autoreset_enable) autoreset: {
                 var reset_race = false;
+
+                defer if (reset_race) {
+                    RestartRace(true);
+                    QolState.autoreset_dead.update(false);
+                    QolState.autoreset_has_boost_charged = false;
+                    QolState.autoreset_has_boost_boosted = false;
+                    QolState.autoreset_dead_timer = 0;
+                    QolState.autoreset_fire_timer = 0;
+                    QolState.autoreset_firstboost_timer = 0;
+                    QolState.autoreset_underheat_timer = 0;
+                };
 
                 if (QolState.s_autoreset_dead_enable) {
                     QolState.autoreset_dead.update(p.flags1.IS_DEAD or
@@ -1519,8 +1554,10 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                         QolState.autoreset_dead_timer = 0;
                     if (QolState.autoreset_dead.on()) {
                         QolState.autoreset_dead_timer += rti.FRAMETIME.*;
-                        if (QolState.autoreset_dead_timer >= QolState.s_autoreset_dead_delay)
+                        if (QolState.autoreset_dead_timer >= QolState.s_autoreset_dead_delay) {
                             reset_race = true;
+                            break :autoreset;
+                        }
                     }
                 }
 
@@ -1529,16 +1566,42 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                         QolState.autoreset_fire_timer = 0;
                     if (gf.SPlayerOverheating().on()) {
                         QolState.autoreset_fire_timer += rti.FRAMETIME.*;
-                        if (QolState.autoreset_fire_timer >= QolState.s_autoreset_fire_delay)
+                        if (QolState.autoreset_fire_timer >= QolState.s_autoreset_fire_delay) {
                             reset_race = true;
+                            break :autoreset;
+                        }
                     }
                 }
 
-                if (reset_race) {
-                    RestartRace(true);
-                    QolState.autoreset_dead.update(false);
-                    QolState.autoreset_dead_timer = 0;
-                    QolState.autoreset_fire_timer = 0;
+                if (QolState.s_autoreset_firstboost_enable and !QolState.autoreset_has_boost_boosted) blk: {
+                    if (gf.SPlayerBoosting() == .JustOn) {
+                        QolState.autoreset_firstboost_timer = 0;
+                        QolState.autoreset_has_boost_boosted = true;
+                        break :blk;
+                    }
+
+                    if (gf.SPlayerBoostReady() == .JustOn)
+                        QolState.autoreset_has_boost_charged = true;
+
+                    if (QolState.autoreset_has_boost_charged) {
+                        QolState.autoreset_firstboost_timer += rti.FRAMETIME.*;
+                        if (QolState.autoreset_firstboost_timer >= QolState.s_autoreset_firstboost_delay) {
+                            reset_race = true;
+                            break :autoreset;
+                        }
+                    }
+                }
+
+                if (QolState.s_autoreset_underheat_enable and QolState.autoreset_has_boost_boosted) {
+                    if (gf.SPlayerUnderheating() == .JustOn)
+                        QolState.autoreset_underheat_timer = 0;
+                    if (gf.SPlayerUnderheating().on()) {
+                        QolState.autoreset_underheat_timer += rti.FRAMETIME.*;
+                        if (QolState.autoreset_underheat_timer >= QolState.s_autoreset_underheat_delay) {
+                            reset_race = true;
+                            break :autoreset;
+                        }
+                    }
                 }
             }
         }

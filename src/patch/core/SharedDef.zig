@@ -28,7 +28,7 @@ const TextDef = r.Text.TextDef;
 
 pub const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 
-pub const GLOBAL_STATE_VERSION = 7;
+pub const GLOBAL_STATE_VERSION = 8;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -58,6 +58,8 @@ pub const GlobalState = extern struct {
     race_state_new: bool = false,
     player: extern struct {
         boosting: ActiveState = .Off,
+        boost_charging: ActiveState = .Off,
+        boost_ready: ActiveState = .Off,
         underheating: ActiveState = .On,
         overheating: ActiveState = .Off,
         dead: ActiveState = .Off,
@@ -65,7 +67,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 31;
+pub const GLOBAL_FUNCTION_VERSION = 32;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -145,6 +147,8 @@ pub const GlobalFunction = extern struct {
     SRaceStatePrev: *const fn () callconv(.C) RaceState, // race_state_prev
     SRaceStateNew: *const fn () callconv(.C) bool, // race_state_new
     SPlayerBoosting: *const fn () callconv(.C) ActiveState, // player -> boosting
+    SPlayerBoostCharging: *const fn () callconv(.C) ActiveState, // player -> boost_charging
+    SPlayerBoostReady: *const fn () callconv(.C) ActiveState, // player -> boost_ready
     SPlayerUnderheating: *const fn () callconv(.C) ActiveState, // player -> underheating
     SPlayerOverheating: *const fn () callconv(.C) ActiveState, // player -> overheating
     SPlayerDead: *const fn () callconv(.C) ActiveState, // player -> dead

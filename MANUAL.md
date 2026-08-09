@@ -218,7 +218,7 @@ Configured under `[overlay]`
 - Fast countdown timer
 - Run game in background
 - Patch truguts cheat to give more truguts and have infinite uses
-- Auto-reset on death and engine fire
+- Auto-reset on missed first boost, underheat, engine fire and death
 - Track select remembers selection when leaving menu and between sessions
 - Fast menu navigation
 - Allow dpad input for menu navigation
@@ -254,33 +254,37 @@ Configured under `[qol]`
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
-|`quick_restart_enable`   |`bool`|`off` |&nbsp;
-|`quick_race_menu_enable` |`bool`|`off` |&nbsp;
-|`ms_timer_enable`        |`bool`|`off` |&nbsp;
-|`fps_limiter_enable`     |`bool`|`off` |&nbsp;
-|`fps_limiter_default`    |`u32` |`24`  |&nbsp;
-|`skip_planet_cutscenes`  |`bool`|`off` |&nbsp;
-|`skip_podium_cutscene`   |`bool`|`off` |&nbsp;
-|`default_racers`         |`u32` |`12`  |1 to 12
-|`default_laps`           |`u32` |`3`   |1 to 5
-|`default_camera`         |`u32` |`1`   |1,2,4,5
-|`default_camera_auto`    |`bool`|`off` |&nbsp;
-|`fast_countdown_enable`  |`bool`|`off` |&nbsp;
-|`fast_countdown_duration`|`f32` |`1.00`|0.05 to 3.00
-|`fix_viewport_edges`     |`bool`|`off` |May cause sprites at edge to be slightly cut off
-|`run_in_background`      |`bool`|`off` |&nbsp;
-|`autoreset_enable`       |`bool`|`off` |&nbsp;
-|`autoreset_dead_enable`  |`bool`|`off` |&nbsp;
-|`autoreset_dead_delay`   |`f32` |`0.5` |&nbsp;
-|`autoreset_fire_enable`  |`bool`|`off` |&nbsp;
-|`autoreset_fire_delay`   |`f32` |`3.0` |&nbsp;
-|`trackselect_remember`   |`bool`|`off` |&nbsp;
-|`trackselect_last`       |`u32` |`0`   |0 to 24
-|`fast_navigation`        |`bool`|`off` |&nbsp;
-|`dpad_navigation`        |`bool`|`off` |&nbsp;
-|`show_postrace_times_hex`|`bool`|`off` |&nbsp;
-|`clear_records_enable`   |`bool`|`off` |&nbsp;
-|`favorite_characters`    |`u32` |`0`   |bitfield where character id = nth bit
+|`quick_restart_enable`       |`bool`|`off` |&nbsp;
+|`quick_race_menu_enable`     |`bool`|`off` |&nbsp;
+|`ms_timer_enable`            |`bool`|`off` |&nbsp;
+|`fps_limiter_enable`         |`bool`|`off` |&nbsp;
+|`fps_limiter_default`        |`u32` |`24`  |&nbsp;
+|`skip_planet_cutscenes`      |`bool`|`off` |&nbsp;
+|`skip_podium_cutscene`       |`bool`|`off` |&nbsp;
+|`default_racers`             |`u32` |`12`  |1 to 12
+|`default_laps`               |`u32` |`3`   |1 to 5
+|`default_camera`             |`u32` |`1`   |1,2,4,5
+|`default_camera_auto`        |`bool`|`off` |&nbsp;
+|`fast_countdown_enable`      |`bool`|`off` |&nbsp;
+|`fast_countdown_duration`    |`f32` |`1.00`|0.05 to 3.00
+|`fix_viewport_edges`         |`bool`|`off` |May cause sprites at edge to be slightly cut off
+|`run_in_background`          |`bool`|`off` |&nbsp;
+|`autoreset_enable`           |`bool`|`off` |&nbsp;
+|`autoreset_dead_enable`      |`bool`|`off` |&nbsp;
+|`autoreset_dead_delay`       |`f32` |`0.50`|&nbsp;
+|`autoreset_fire_enable`      |`bool`|`off` |&nbsp;
+|`autoreset_fire_delay`       |`f32` |`3.00`|time limit per engine fire
+|`autoreset_firstboost_enable`|`bool`|`off` |&nbsp;
+|`autoreset_firstboost_delay` |`f32` |`0.25`|time limit from when the first boost is ready
+|`autoreset_underheat_enable` |`bool`|`off` |&nbsp;
+|`autoreset_underheat_delay`  |`f32` |`3.00`|time limit per underheat
+|`trackselect_remember`       |`bool`|`off` |&nbsp;
+|`trackselect_last`           |`u32` |`0`   |0 to 24
+|`fast_navigation`            |`bool`|`off` |&nbsp;
+|`dpad_navigation`            |`bool`|`off` |&nbsp;
+|`show_postrace_times_hex`    |`bool`|`off` |&nbsp;
+|`clear_records_enable`       |`bool`|`off` |&nbsp;
+|`favorite_characters`        |`u32` |`0`   |bitfield where character id = nth bit
 
 ### Collision Viewer
 

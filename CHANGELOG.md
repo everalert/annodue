@@ -31,7 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Game bugfix for changing camera with F1-F4 not persisting after crashing
 - QOL: Option to set custom default camera, and set it automatically (settings: `default_camera` `default_camera_auto`)
 - QOL: Patch truguts cheat (Shift+F4+4) to give 10,000 truguts and have infinite uses
-- QOL: Auto-reset race on death or engine fire (settings: `autoreset_enable` `autoreset_dead_enable` `autoreset_dead_delay` `autoreset_fire_enable` `autoreset_fire_delay`)
+- QOL: Auto-reset race under various conditions, each individually configurable:
+    - Death `autoreset_dead_enable` `autoreset_dead_delay`
+    - Engine fire `autoreset_fire_enable` `autoreset_fire_delay`
+    - Missed first boost `autoreset_firstboost_enable` `autoreset_firstboost_delay`
+    - Underheat `autoreset_underheat_enable` `autoreset_underheat_delay`
+    - Toggle auto-reset entirely with `autoreset_enable`
 - QOL: Track select remembers your selection when leaving menu, and between game sessions (settings: `trackselect_remember` `trackselect_last`)
 - QOL: Fast menu navigation by removing input wait times (setting: `fast_navigation`)
 - QOL: Allow hat (D-PAD) input for menu navigation (setting: `dpad_navigation`)
@@ -45,7 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- `RenderSceneBeginA`
 	- `RenderSceneEndB`
 	- `RenderSceneEndA`
-- Backend(Core): `GlobalState.window_in_foreground`
+- Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`
+- Backend(Core): Global functions `SPlayerBoostCharging`, `SPlayerBoostReady`
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
@@ -57,8 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: More organized formatting of post-race stats
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util
-- Backend(Core): Global State version `5` to `7`
-- Backend(Core): Global Function version `29` to `31`
+- Backend(Core): Global State version `5` to `8`
+- Backend(Core): Global Function version `29` to `32`
 - Backend(Core): Settings now also autosave on race reset
 - Backend(Core): All global state migrated to getter functions in Global Function API
 

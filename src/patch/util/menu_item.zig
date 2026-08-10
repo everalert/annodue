@@ -10,6 +10,7 @@ const ScrollControl = @import("scroll_control.zig").ScrollControl;
 const st = @import("active_state.zig");
 const input = @import("../core/input.zig");
 
+/// @return     whether or not to play sound effect
 pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) bool;
 
 pub const MenuItem = extern struct {
@@ -79,12 +80,14 @@ pub inline fn MenuItemButton(
 pub inline fn MenuItemToggle(
     value: *i32,
     label: [*:0]const u8,
+    callback: ?MenuItemCallbackType,
 ) MenuItem {
     return .{
         .value = value,
         .label = label,
         .options = &menu_item_toggle_opts,
         .max = 2,
+        .callback = callback,
     };
 }
 

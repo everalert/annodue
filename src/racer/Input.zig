@@ -3,6 +3,7 @@ const std = @import("std");
 // TODO: get up to date with personal notes, update naming to match new understanding, finish cleanup, etc.
 // TODO: add force feedback
 
+//------------------------------------------------------------------------------
 // GAME FUNCTIONS
 
 pub const swrInput_ProcessInput: *fn () callconv(.C) void = @ptrFromInt(0x404DD0);
@@ -11,6 +12,7 @@ pub const swrInput_ReadKeyboard: *fn () callconv(.C) void = @ptrFromInt(0x486170
 pub const swrInput_ReadJoysticks: *fn () callconv(.C) void = @ptrFromInt(0x486340);
 pub const swrInput_ReadMouse: *fn () callconv(.C) void = @ptrFromInt(0x486710);
 
+//------------------------------------------------------------------------------
 // GAME CONSTANTS
 
 // FIXME: remove, old defs; convert refs here to 'unprocessed inputs' stuff below
@@ -22,18 +24,16 @@ pub const RAW_STATE_JUST_ON_ADDR: usize = 0x50F668;
 pub const RAW_STATE_JUST_ON: *[0x210]u32 = @ptrFromInt(RAW_STATE_JUST_ON_ADDR);
 // FIXME: end of block to remove
 
-// ---
+//--------------------------------------
 // raw device inputs
 // - written to directly from dinput api without modification
-// ---
 
 pub const JOYSTICK_DEVICE_COUNT: *u32 = @ptrFromInt(0x50FEC8);
 pub const JOYSTICK_DEVICE_ACTIVE: *u32 = @ptrFromInt(0x4D6B3C);
 
-// ---
+//--------------------------------------
 // unprocessed inputs
 // - minimal mapping from dinput data
-// ---
 
 // TODO: proper characterization of button state addresses
 pub const RAW_STATE_AXIS: *RAW_AXIS = @ptrFromInt(0x50D568);
@@ -67,10 +67,9 @@ pub const RAW_BUTTON = extern struct {
     },
 };
 
-// ---
+//--------------------------------------
 // mapped inputs
 // - converted to 'racer inputs' from 'unprocessed inputs' via control map
-// ---
 
 // TODO: 0xEC8820 (unk setup), 0xEC8880 (likely settings)
 pub const MAPPED_BUTTON: *RaceInputs(BUTTON, u8) = @ptrFromInt(0xEC8810); // combined mapping
@@ -216,10 +215,9 @@ pub const AXIS_CONFIG = extern struct {
     _14_sensitivity: f32,
 };
 
-// ---
+//--------------------------------------
 // packed inputs, i.e. 'racer inputs type 2'
 // - converted from 'combined mapped inputs' into bitfield, via mapping input buffer
-// ---
 
 pub const PACKED: *INPUT_PACKED = @ptrFromInt(0xE98E80);
 
@@ -281,16 +279,23 @@ pub const INPUT_BITFIELD = packed struct {
     _31: bool,
 };
 
-// ---
+//--------------------------------------
 // menu inputs
 // - same as 'racer inputs type 2', but remapped specifically for menu (hang) use
-// ---
 
 pub const MENU_RAW: *[4]INPUT_BITFIELD = @ptrFromInt(0x50C908);
 pub const MENU_JUST_ON: *[4]INPUT_BITFIELD = @ptrFromInt(0x50C918);
 pub const MENU_AXIS_X: *[4]i32 = @ptrFromInt(0x50C970);
 pub const MENU_AXIS_Y: *[4]i32 = @ptrFromInt(0x50C980);
 
+//--------------------------------------
+// misc
+
+// multipliers for raw pitch input used on PC version only
+pub const PITCH_SCALE_MAX: *f32 = @ptrFromInt(0x4AD8D8); // 0x3F4CCCCD (+0.8)
+pub const PITCH_SCALE_MIN: *f32 = @ptrFromInt(0x4AD8DC); // 0xBF4CCCCD (-0.8)
+
+//------------------------------------------------------------------------------
 // HELPERS
 
 // ...

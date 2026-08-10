@@ -210,6 +210,7 @@ Configured under `[overlay]`
 - Show true values of times on post-race screen, via the underlying hexadecimal number
 - Show milliseconds on all timers
 - Limit framerate during races (configurable via Quick Race Menu)
+- N64 Pitch input toggle (experimental) (accessible via Quick Race Menu)
 - Skip planet cutscenes
 - Skip podium cutscene
 - Custom default number of racers

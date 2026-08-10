@@ -21,15 +21,9 @@ pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 pub const MenuCallbackType = @import("menu_item.zig").MenuItemCallbackType;
 
 pub const Menu = extern struct {
-    const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{
-        rto.ToggleShadow,
-    }) catch "";
-    const style_item_on = rt.MakeTextHeadStyle(.Default, true, .Yellow, null, .{
-        rto.ToggleShadow,
-    }) catch "";
-    const style_item_off = rt.MakeTextHeadStyle(.Default, true, .White, null, .{
-        rto.ToggleShadow,
-    }) catch "";
+    const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{rto.ToggleShadow}) catch "";
+    const style_item_on = rt.MakeTextHeadStyle(.Default, true, .Yellow, null, .{rto.ToggleShadow}) catch "";
+    const style_item_off = rt.MakeTextHeadStyle(.Default, true, .White, null, .{rto.ToggleShadow}) catch "";
 
     idx: i32 = 0,
     wrap: bool = true,

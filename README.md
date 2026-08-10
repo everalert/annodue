@@ -1,6 +1,6 @@
 # Annodue
 
-![Ben Quadinaros](assets/images/ben.png)
+![Ben Quadinaros](assets/images/ben-cooking.png)
 
 **A universal extension platform for *STAR WARS Episode I Racer* oriented toward speedrunning.**
 

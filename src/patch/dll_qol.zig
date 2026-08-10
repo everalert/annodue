@@ -1009,7 +1009,7 @@ const QuickRaceMenu = extern struct {
         state: st.ActiveState = undefined,
     };
 
-    const inputs = [_]MenuInput{
+    var inputs = [_]MenuInput{
         .{ .kb = .UP, .xi = .DPAD_UP },
         .{ .kb = .DOWN, .xi = .DPAD_DOWN },
         .{ .kb = .LEFT, .xi = .DPAD_LEFT },

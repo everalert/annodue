@@ -1,5 +1,7 @@
 const std = @import("std");
 
+// FIXME: move pause menu stuff out of Jdge?
+
 const e = @import("entity.zig");
 const m = @import("../Model.zig");
 const ModelNodeXf = m.ModelNodeXf;
@@ -9,14 +11,16 @@ const BOOL = w32.foundation.BOOL;
 
 // GAME FUNCTIONS
 
-pub const fnQueueLoad: *fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
+pub const fnQueueLoad: *const fn (jdge: *Jdge, magic: u32) callconv(.C) void = @ptrFromInt(0x45D0B0);
 
-pub const fnStage14: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x45E200);
+pub const fnStage14: *const fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x45E200);
 //pub const fnStage18: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x00);
-pub const fnStage1C: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x45EA30);
-pub const fnStage20: *fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x463580);
-pub const fnEvent: *fn (jdge: *Jdge, magic: *e.MAGIC_EVENT, payload: u32) callconv(.C) void = @ptrFromInt(0x463A50);
+pub const fnStage1C: *const fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x45EA30);
+pub const fnStage20: *const fn (jdge: *Jdge) callconv(.C) void = @ptrFromInt(0x463580);
+pub const fnEvent: *const fn (jdge: *Jdge, magic: *e.MAGIC_EVENT, payload: u32) callconv(.C) void = @ptrFromInt(0x463A50);
 
+pub const fnPauseMenuOpen: *const fn () callconv(.C) void = @ptrFromInt(0x445680);
+pub const fnPauseMenuClose: *const fn () callconv(.C) void = @ptrFromInt(0x445780);
 // GAME CONSTANTS
 
 pub const LOAD_QUEUED: *BOOL = @ptrFromInt(0x50CA34);
@@ -33,6 +37,9 @@ pub const UI_MINIMAP_TIMING_UNK_01: *f32 = @ptrFromInt(0x4C5298);
 //  UI animation and sound effects
 pub const UI_ENGINE_TIMING_BLOCK_01: *[4]f32 = @ptrFromInt(0x4C52A0);
 pub const UI_ENGINE_TIMING_BLOCK_02: *[10]f32 = @ptrFromInt(0x50CA60);
+
+// TODO: PauseMenuState enum
+pub const PAUSE_MENU_STATE: *i32 = @ptrFromInt(0x50C5F0);
 
 // GAME TYPEDEFS
 
@@ -90,7 +97,7 @@ pub const JDGE_FLAGS = packed struct {
 // HELPERS
 
 // based on fn_462D40 (Pause_ShouldPause)
-pub fn CouldPause(jdge: *Jdge) bool {
+pub fn hCouldPause(jdge: *Jdge) bool {
     if (jdge.Flags._05_cannot_pause)
         return false;
     switch (jdge.Flags.RACE_STATE) {

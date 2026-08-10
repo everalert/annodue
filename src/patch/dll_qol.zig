@@ -1340,9 +1340,12 @@ fn RestartRace(play_sound: bool) void {
     if (0 != re.Jdge.LOAD_QUEUED.*) return;
 
     const jdge = re.Manager.entity(.Jdge, 0);
-    if (!re.Jdge.CouldPause(jdge)) return;
+    if (!re.Jdge.hCouldPause(jdge)) return;
 
-    if (play_sound) rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
+    const is_paused = re.Jdge.PAUSE_MENU_STATE.* > 0;
+    if (is_paused) re.Jdge.fnPauseMenuClose();
+
+    if (!is_paused and play_sound) rso.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
     re.Jdge.fnQueueLoad(jdge, re.M_RSTR);
 }
 

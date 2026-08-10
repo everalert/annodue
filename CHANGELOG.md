@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - QOL: More organized formatting of post-race stats
+- QOL: Quick Reset now auto-closes in-game pause menu
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util
 - Backend(Core): Global State version `5` to `8`

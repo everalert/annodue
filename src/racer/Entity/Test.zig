@@ -30,6 +30,8 @@ pub const SIZE: usize = e.EntitySize(.Test);
 pub const pPlayer: *?*Test = @ptrFromInt(0x4D78A8);
 pub const pPlayerAsSlice: *?*[SIZE]u8 = @ptrCast(pPlayer); // TODO: convert to many-item pointer
 
+pub const TUSKEN_BRAKE_CANCEL_SPEED_THRESHOLD: *f64 = @ptrFromInt(0x4AD918);
+
 // GAME TYPEDEFS
 
 // TODO: testing to assert entity size

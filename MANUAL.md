@@ -258,6 +258,8 @@ Configured under `[qol]`
 |`quick_restart_enable`       |`bool`|`off` |&nbsp;
 |`quick_race_menu_enable`     |`bool`|`off` |&nbsp;
 |`ms_timer_enable`            |`bool`|`off` |&nbsp;
+|`ms_timer_hud_enable`        |`bool`|`off` |Timer on the race HUD
+|`ms_timer_finish_enable`     |`bool`|`off` |Timers shown after finishing a race, before the results screen
 |`fps_limiter_enable`         |`bool`|`off` |&nbsp;
 |`fps_limiter_default`        |`u32` |`24`  |&nbsp;
 |`skip_planet_cutscenes`      |`bool`|`off` |&nbsp;

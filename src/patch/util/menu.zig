@@ -21,9 +21,9 @@ pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
 pub const MenuCallbackType = @import("menu_item.zig").MenuItemCallbackType;
 
 pub const Menu = extern struct {
-    const style_head = rt.MakeTextHeadStyle(.Small, false, null, .Center, .{rto.ToggleShadow}) catch "";
-    const style_item_on = rt.MakeTextHeadStyle(.Default, true, .Yellow, null, .{rto.ToggleShadow}) catch "";
-    const style_item_off = rt.MakeTextHeadStyle(.Default, true, .White, null, .{rto.ToggleShadow}) catch "";
+    const style_head = rt.hMakeTextHeadStyle(.Small, false, null, .Center, .{rto.ToggleShadow}) catch "";
+    const style_item_on = rt.hMakeTextHeadStyle(.Default, true, .Yellow, null, .{rto.ToggleShadow}) catch "";
+    const style_item_off = rt.hMakeTextHeadStyle(.Default, true, .White, null, .{rto.ToggleShadow}) catch "";
 
     idx: i32 = 0,
     wrap: bool = true,
@@ -99,7 +99,7 @@ pub const Menu = extern struct {
         const x2 = x1 + self.col_w;
         var y = self.y;
 
-        rt.DrawText(@divFloor(self.x, 2), @divFloor(y, 2), "{s}", .{
+        rt.hDrawText(@divFloor(self.x, 2), @divFloor(y, 2), "{s}", .{
             self.title,
         }, 0xFFFFFFFF, style_head) catch {};
         y += self.row_margin * 2;
@@ -113,13 +113,13 @@ pub const Menu = extern struct {
             y += item.padding.t;
             if (item.label) |label| blk: {
                 y += self.row_h;
-                rt.DrawText(x1, y, "{s}", .{label}, hl_c, hl_s) catch {};
+                rt.hDrawText(x1, y, "{s}", .{label}, hl_c, hl_s) catch {};
                 if (item.value == null) break :blk;
 
                 if (item.options) |o| {
-                    rt.DrawText(x2, y, "{s}", .{o[@intCast(item.rval())]}, hl_c, hl_s) catch {};
+                    rt.hDrawText(x2, y, "{s}", .{o[@intCast(item.rval())]}, hl_c, hl_s) catch {};
                 } else {
-                    rt.DrawText(x2, y, "{d}", .{item.value.?.*}, hl_c, hl_s) catch {};
+                    rt.hDrawText(x2, y, "{d}", .{item.value.?.*}, hl_c, hl_s) catch {};
                 }
             }
             y += item.padding.b;

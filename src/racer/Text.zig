@@ -39,31 +39,32 @@ const FONT = @import("Font.zig").FONT;
 
 // GAME FUNCTIONS
 
-pub const swrText_CreateEntry: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
-pub const swrText_CreateEntry1: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
-pub const swrText_CreateEntry2: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
-pub const swrText_DrawTime2: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
-pub const swrText_DrawTime3: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
+pub const fnCreateEntry: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8, font: i32, entry2: u32) callconv(.C) void = @ptrFromInt(0x4503E0);
+pub const fnCreateEntry1: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450530);
+pub const fnCreateEntry2: *const fn (x: i16, y: i16, r: u8, g: u8, b: u8, a: u8, str: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x4505C0);
+
+pub const fnDrawTime2: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450670);
+pub const fnDrawTime3: *const fn (x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: ?[*:0]const u8) callconv(.C) void = @ptrFromInt(0x450760);
 
 // FIXME: move to TextNotification.zig
-pub const swrText_NewNotification: *const fn (str: ?[*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
+pub const fnNewNotification: *const fn (str: ?[*:0]const u8, duration: f32) callconv(.C) void = @ptrFromInt(0x44FCE0);
 
-pub const swrText_Translate: *const fn (?[*:0]const u8) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x421360);
+pub const fnTranslate: *const fn (?[*:0]const u8) callconv(.C) ?[*:0]const u8 = @ptrFromInt(0x421360);
 
 // FIXME: move all to TextFormat.zig
-pub const RenderSetColor: *const fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void =
+pub const fnRenderSetColor: *const fn (r: u8, g: u8, b: u8, a: u8) callconv(.C) void =
     @ptrFromInt(0x42D950);
-pub const RenderSetPosition: *const fn (x: i16, y: i16) callconv(.C) void =
+pub const fnRenderSetPosition: *const fn (x: i16, y: i16) callconv(.C) void =
     @ptrFromInt(0x42D910);
-pub const RenderString: *const fn (str: ?[*:0]const u8) callconv(.C) void =
+pub const fnRenderString: *const fn (str: ?[*:0]const u8) callconv(.C) void =
     @ptrFromInt(0x42EC50);
-pub const GetStringWidthByFontIndex: *const fn (str: ?[*:0]const u8, font: u32) callconv(.C) i32 =
+pub const fnGetStringWidthByFontIndex: *const fn (str: ?[*:0]const u8, font: u32) callconv(.C) i32 =
     @ptrFromInt(0x42DE10);
-pub const GetStringWidth: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const fnGetStringWidth: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DE30);
-pub const GetStringHeight: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
+pub const fnGetStringHeight: *const fn (str: ?[*:0]const u8, font: *anyopaque) callconv(.C) i32 =
     @ptrFromInt(0x42DF70);
-pub const SetCurrentFont: *const fn (index: u32) callconv(.C) void =
+pub const fnSetCurrentFont: *const fn (index: u32) callconv(.C) void =
     @ptrFromInt(0x42D8D0);
 
 // GAME CONSTANTS
@@ -159,7 +160,7 @@ pub const TextStyleOpts = enum(u8) {
 };
 
 // TODO: not inline
-pub inline fn MakeTextHeadStyle(font: Font, font_hires: bool, color: ?Color, alignment: ?Alignment, opts: anytype) ![]const u8 {
+pub inline fn hMakeTextHeadStyle(font: Font, font_hires: bool, color: ?Color, alignment: ?Alignment, opts: anytype) ![]const u8 {
     var buf: [28]u8 = undefined;
 
     _ = try std.fmt.bufPrint(&buf, "~{s}{d}", .{
@@ -167,14 +168,14 @@ pub inline fn MakeTextHeadStyle(font: Font, font_hires: bool, color: ?Color, ali
         @intFromEnum(font),
     });
 
-    const style = comptime try MakeTextStyle(color, alignment, opts);
+    const style = comptime try hMakeTextStyle(color, alignment, opts);
     _ = try std.fmt.bufPrint(buf[3..], style, .{});
 
     return buf[0 .. 3 + style.len];
 }
 
 // TODO: not inline
-pub inline fn MakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype) ![]const u8 {
+pub inline fn hMakeTextStyle(color: ?Color, alignment: ?Alignment, opts: anytype) ![]const u8 {
     var buf: [24]u8 = undefined;
     var i: u32 = 0;
 
@@ -225,7 +226,7 @@ pub const TextDef = extern struct {
 
 /// format text in racer format, without forwarding to the engine for rendering
 /// result must be used before the next MakeText call, as the pointer will become stale quickly
-pub fn MakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !*TextDef {
+pub fn hMakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !*TextDef {
     const state = struct {
         var buf: [1015:0]u8 = undefined;
         var data: TextDef = std.mem.zeroes(TextDef);
@@ -242,10 +243,10 @@ pub fn MakeText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?
 
 /// format text in racer format, and send to engine text render queue
 /// resulting string must be within 127 characters to fit into engine buffer
-pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !void {
-    const text = try MakeText(x, y, fmt, args, rgba, style);
+pub fn hDrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?u32, style: ?[]const u8) !void {
+    const text = try hMakeText(x, y, fmt, args, rgba, style);
     std.debug.assert(std.mem.len(@as([*:0]u8, @ptrCast(&text.string))) <= 127);
-    swrText_CreateEntry1(
+    fnCreateEntry1(
         text.x,
         text.y,
         @as(u8, @truncate(text.color >> 24)),
@@ -256,7 +257,7 @@ pub fn DrawText(x: i16, y: i16, comptime fmt: []const u8, args: anytype, rgba: ?
     );
 }
 
-pub fn TextGetFontIndex(str: [*:0]const u8) u32 {
+pub fn hTextGetFontIndex(str: [*:0]const u8) u32 {
     var i: u32 = 0;
     while (str[i] != 0) : (i += 1) {
         if (str[i] == '~' and (str[i + 1] == 'f' or str[i + 1] == 'F'))
@@ -265,7 +266,7 @@ pub fn TextGetFontIndex(str: [*:0]const u8) u32 {
     return 0;
 }
 
-pub fn TextGetAlignment(str: [*:0]const u8) Alignment {
+pub fn hTextGetAlignment(str: [*:0]const u8) Alignment {
     var i: u32 = 0;
     while (str[i] != 0) : (i += 1) {
         if (str[i] == '~' and str[i + 1] == 'c')
@@ -276,12 +277,12 @@ pub fn TextGetAlignment(str: [*:0]const u8) Alignment {
     return .Left;
 }
 
-pub fn TextGetDimensions(str: [*:0]const u8) struct { w: i16, h: i16 } {
-    const font_idx = TextGetFontIndex(str);
+pub fn hTextGetDimensions(str: [*:0]const u8) struct { w: i16, h: i16 } {
+    const font_idx = hTextGetFontIndex(str);
     const font = apTextFont.*[font_idx];
     return .{
-        .w = @truncate(GetStringWidth(str, font)), // FIXME: crash
-        .h = @truncate(GetStringHeight(str, font)), // FIXME: crash
+        .w = @truncate(fnGetStringWidth(str, font)), // FIXME: crash
+        .h = @truncate(fnGetStringHeight(str, font)), // FIXME: crash
     };
 }
 
@@ -291,7 +292,7 @@ pub fn TextGetDimensions(str: [*:0]const u8) struct { w: i16, h: i16 } {
 /// based on swrText_DrawTime3_450760
 /// intended to generate functions compatible as a drop-in replacement at
 /// DrawTime2/DrawTime3 callsites, using as equivalent logic as possible
-pub fn DrawTimeNF(comptime decimal_places: u32) @TypeOf(swrText_DrawTime3) {
+pub fn hDrawTimeNF(comptime decimal_places: u32) @TypeOf(fnDrawTime3) {
     if (decimal_places > 9) @compileError("decimal_places must be less than 10");
 
     const s = struct {
@@ -306,7 +307,7 @@ pub fn DrawTimeNF(comptime decimal_places: u32) @TypeOf(swrText_DrawTime3) {
             break :blk std.fmt.comptimePrint("{{s}}{{d:0>2}}.{{d:0>{d}}}", .{decimal_places});
         };
 
-        fn DrawTimeN(x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void {
+        fn hDrawTimeN(x: i16, y: i16, time: f32, r: u8, g: u8, b: u8, a: u8, prefix: [*:0]const u8) callconv(.C) void {
             const mag_i: u32 = comptime std.math.powi(u32, 10, decimal_places) catch unreachable;
             const mag_f: f32 = comptime @as(f32, @floatFromInt(mag_i));
             const mag_half: f32 = comptime 1 / mag_f / 2;
@@ -341,9 +342,9 @@ pub fn DrawTimeNF(comptime decimal_places: u32) @TypeOf(swrText_DrawTime3) {
                 }
             }
 
-            swrText_CreateEntry1(x, y, r, g, b, a, &buf);
+            fnCreateEntry1(x, y, r, g, b, a, &buf);
         }
     };
 
-    return &s.DrawTimeN;
+    return &s.hDrawTimeN;
 }

@@ -200,19 +200,19 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
 
 // UTIL
 
-const style_practice_label = rt.MakeTextHeadStyle(.Default, true, .Yellow, .Right, .{rto.ToggleShadow}) catch "";
+const style_practice_label = rt.hMakeTextHeadStyle(.Default, true, .Yellow, .Right, .{rto.ToggleShadow}) catch "";
 
 fn DrawMenuPracticeModeLabel() void {
     _ = GLOBAL_FUNCTION.GDrawText(
         .SystemP,
-        rt.MakeText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch null,
+        rt.hMakeText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch null,
     );
 }
 
 fn DrawVersionString() void {
     _ = GLOBAL_FUNCTION.GDrawText(
         .System,
-        rt.MakeText(36, 480 - 24, "{s}", .{VERSION_STR}, 0xFFFFFFFF, null) catch null,
+        rt.hMakeText(36, 480 - 24, "{s}", .{VERSION_STR}, 0xFFFFFFFF, null) catch null,
     );
 }
 

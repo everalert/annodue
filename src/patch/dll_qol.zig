@@ -106,6 +106,8 @@ pub const panic = debug.annodue_panic;
 //   quick_restart_enable           bool
 //   quick_race_menu_enable         bool
 //   ms_timer_enable                bool
+//   ms_timer_hud_enable            bool
+//   ms_timer_finish_enable         bool
 //   fps_limiter_enable             bool
 //   default_racers                 u32     max 12
 //   default_laps                   u32     max 5
@@ -153,6 +155,8 @@ const QolState = struct {
     var h_s_default_camera: ?SettingHandle = null;
     var h_s_default_camera_auto: ?SettingHandle = null;
     var h_s_ms_timer: ?SettingHandle = null;
+    var h_s_ms_timer_hud: ?SettingHandle = null;
+    var h_s_ms_timer_finish: ?SettingHandle = null;
     var h_s_fps_limiter: ?SettingHandle = null;
     var h_s_skip_planet_cutscenes: ?SettingHandle = null;
     var h_s_skip_podium_cutscene: ?SettingHandle = null;
@@ -180,6 +184,8 @@ const QolState = struct {
     var s_default_camera: u32 = 3;
     var s_default_camera_auto: bool = false;
     var s_ms_timer: bool = false;
+    var s_ms_timer_hud: bool = false;
+    var s_ms_timer_finish: bool = false;
     var s_fps_limiter: bool = false;
     var s_skip_planet_cutscenes: bool = false;
     var s_skip_podium_cutscene: bool = false;
@@ -244,6 +250,10 @@ const QolState = struct {
             gf.ASettingOccupy(section, "default_camera_auto", .B, .{ .b = false }, &s_default_camera_auto, null);
         h_s_ms_timer =
             gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, &s_ms_timer, null);
+        h_s_ms_timer_hud =
+            gf.ASettingOccupy(section, "ms_timer_hud_enable", .B, .{ .b = false }, &s_ms_timer_hud, null);
+        h_s_ms_timer_finish =
+            gf.ASettingOccupy(section, "ms_timer_finish_enable", .B, .{ .b = false }, &s_ms_timer_finish, null);
         h_s_fps_limiter =
             gf.ASettingOccupy(section, "fps_limiter_enable", .B, .{ .b = false }, &s_fps_limiter, null);
         h_s_skip_planet_cutscenes =
@@ -334,56 +344,64 @@ const QolState = struct {
     fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
         var update_fast_countdown: bool = false;
 
-        for (changed, 0..len) |setting, _| {
-            const nlen: usize = std.mem.len(setting.name);
+        for (changed[0..len]) |*setting| {
+            const name = std.mem.span(setting.name);
 
-            if (nlen == 22 and std.mem.eql(u8, "quick_race_menu_enable", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "quick_race_menu_enable", name)) {
                 if (!s_quickrace) QuickRaceMenu.close();
                 continue;
             }
 
-            // FIXME: add these to deinit?
-            if (nlen == 15 and std.mem.eql(u8, "ms_timer_enable", setting.name[0..nlen])) {
-                PatchHudTimerMs(s_ms_timer);
+            if (std.mem.eql(u8, "ms_timer_enable", name)) {
+                PatchRaceTimerMsHud(s_ms_timer and s_ms_timer_hud);
+                PatchRaceTimerMsFinish(s_ms_timer and s_ms_timer_finish);
                 continue;
             }
-            if (nlen == 21 and std.mem.eql(u8, "skip_planet_cutscenes", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "ms_timer_hud_enable", name)) {
+                PatchRaceTimerMsHud(s_ms_timer and s_ms_timer_hud);
+                continue;
+            }
+            if (std.mem.eql(u8, "ms_timer_finish_enable", name)) {
+                PatchRaceTimerMsFinish(s_ms_timer and s_ms_timer_finish);
+                continue;
+            }
+            if (std.mem.eql(u8, "skip_planet_cutscenes", name)) {
                 PatchPlanetCutscenes(s_skip_planet_cutscenes);
                 continue;
             }
-            if (nlen == 20 and std.mem.eql(u8, "skip_podium_cutscene", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "skip_podium_cutscene", name)) {
                 PatchPodiumCutscene(s_skip_podium_cutscene);
                 continue;
             }
-            if (nlen == 18 and std.mem.eql(u8, "fix_viewport_edges", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "fix_viewport_edges", name)) {
                 PatchViewportEdges(s_fix_viewport_edges);
                 continue;
             }
-            if (nlen == 17 and std.mem.eql(u8, "run_in_background", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "run_in_background", name)) {
                 PatchWindowBackgroundActivity(s_run_in_background);
                 continue;
             }
-            if (nlen == 20 and std.mem.eql(u8, "trackselect_remember", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "trackselect_remember", name)) {
                 PatchTrackSelectEntry(s_trackselect_remember);
                 continue;
             }
-            if (nlen == 16 and std.mem.eql(u8, "trackselect_last", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "trackselect_last", name)) {
                 s_trackselect_last = if (setting.value.u > 24) 0 else setting.value.u;
                 continue;
             }
-            if (nlen == 15 and std.mem.eql(u8, "fast_navigation", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "fast_navigation", name)) {
                 PatchMenuNavigationSpeed(s_fast_navigation);
                 continue;
             }
 
-            if (nlen == 19 and std.mem.eql(u8, "fps_limiter_default", setting.name[0..nlen])) {
+            if (std.mem.eql(u8, "fps_limiter_default", name)) {
                 QuickRaceMenu.FpsTimer.SetPeriod(QuickRaceMenu.s_fps_default);
                 QuickRaceMenu.values.fps = @intCast(QuickRaceMenu.s_fps_default);
                 continue;
             }
 
-            if (nlen == 21 and std.mem.eql(u8, "fast_countdown_enable", setting.name[0..nlen]) or
-                nlen == 23 and std.mem.eql(u8, "fast_countdown_duration", setting.name[0..nlen]))
+            if (std.mem.eql(u8, "fast_countdown_enable", name) or
+                std.mem.eql(u8, "fast_countdown_duration", name))
             {
                 update_fast_countdown = true;
                 continue;
@@ -420,15 +438,18 @@ fn PatchCameraFKeys(enable: bool) void {
 
 // HUD TIMER MS
 
-// TODO: cleanup
-fn PatchHudTimerMs(enable: bool) void {
-    const draw_fn = if (enable) rt.swrText_DrawTime3 else rt.swrText_DrawTime2;
+fn PatchRaceTimerMsHud(enable: bool) void {
+    const draw_fn = if (enable) rt.fnDrawTime3 else rt.fnDrawTime2;
     // hudDrawRaceHud
     _ = x86.call(0x460BD3, @intFromPtr(draw_fn));
     _ = x86.call(0x460E6B, @intFromPtr(draw_fn));
     _ = x86.call(0x460ED9, @intFromPtr(draw_fn));
+}
+
+fn PatchRaceTimerMsFinish(enable: bool) void {
+    const draw_fn = if (enable) rt.fnDrawTime3 else rt.fnDrawTime2;
     // hudDrawRaceResults
-    const end_race_timer_offset: u8 = if (enable) 12 else 0;
+    const end_race_timer_offset: u8 = if (enable) 8 else 0;
     _ = x86.call(0x46252F, @intFromPtr(draw_fn));
     _ = x86.call(0x462660, @intFromPtr(draw_fn));
     _ = mem.write(0x4623D7, u8, end_race_timer_offset + 91);
@@ -929,17 +950,17 @@ const race = struct {
     }
 };
 
-const s_head = rt.MakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
+const s_head = rt.hMakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
 
 fn RenderRaceResultHeader(gf: *GlobalFn, i: i16, comptime fmt: []const u8, args: anytype) void {
-    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch null);
+    _ = gf.GDrawText(.Default, rt.hMakeText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch null);
 }
 
-const s_stat = rt.MakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
+const s_stat = rt.hMakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
 
 fn RenderRaceResultStat(gf: *GlobalFn, i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
-    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch null);
-    _ = gf.GDrawText(.Default, rt.MakeText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch null);
+    _ = gf.GDrawText(.Default, rt.hMakeText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch null);
+    _ = gf.GDrawText(.Default, rt.hMakeText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch null);
 }
 
 fn RenderRaceResultStatU(gf: *GlobalFn, i: i16, label: [*:0]const u8, value: u32) void {
@@ -955,8 +976,8 @@ fn RenderRaceResultStatTime(gf: *GlobalFn, i: i16, label: [*:0]const u8, time: f
     RenderRaceResultStat(gf, i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
 
-const s_upg_full = rt.MakeTextStyle(.Green, null, .{}) catch "";
-const s_upg_dmg = rt.MakeTextStyle(.Red, null, .{}) catch "";
+const s_upg_full = rt.hMakeTextStyle(.Green, null, .{}) catch "";
+const s_upg_dmg = rt.hMakeTextStyle(.Red, null, .{}) catch "";
 
 fn RenderRaceResultStatUpgrade(gf: *GlobalFn, i: i16, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat(gf, i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
@@ -1405,7 +1426,8 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 
     PatchCameraFKeys(false);
 
-    PatchHudTimerMs(false);
+    PatchRaceTimerMsHud(false);
+    PatchRaceTimerMsFinish(false);
     PatchPlanetCutscenes(false);
     PatchPodiumCutscene(false);
     PatchViewportEdges(false);
@@ -1692,12 +1714,12 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
                 var y: i16 = 305 + (5 - @as(i16, @intCast(jdge.*.Laps))) * line_height;
                 for (&rrd.pPlayer.*.?.time.lap) |t| {
                     if (t < 0) break;
-                    _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
+                    _ = gf.GDrawText(.Overlay, rt.hMakeText(x, y, "{X:0>8}", .{
                         @as(u32, @bitCast(t)),
                     }, color, null) catch null);
                     y += line_height;
                 }
-                _ = gf.GDrawText(.Overlay, rt.MakeText(x, y, "{X:0>8}", .{
+                _ = gf.GDrawText(.Overlay, rt.hMakeText(x, y, "{X:0>8}", .{
                     @as(u32, @bitCast(rrd.pPlayer.*.?.time.total)),
                 }, color, null) catch null);
             }

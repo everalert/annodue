@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`)
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
 - QOL: N64 Pitch input toggle (experimental) (accessible via Quick Race Menu)
+- QOL: Settings to toggle each millisecend timer location individually (`ms_timer_hud_enable` `ms_timer_finish_enable`)
 - Core: (temporarily disabled) Patch texture buffer size to allow custom tracks with large number of textures (settings: `texbuf_enable` `texbuf_size`, category: `core/GAssetBuffer`)
 - Backend(Core): Plugin Function version (`1`)
 - Backend(Core): Plugin Functions
@@ -63,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Overlay: Removed general practice mode restriction; practice mode now defined for individual components
 - QOL: More organized formatting of post-race stats
 - QOL: Quick Reset now auto-closes in-game pause menu
+- QOL: `ms_timer_enable` now acts as a global toggle for the millisecend timers
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util
 - Backend(Core): Global State version `5` to `8`
@@ -91,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Settings not saving when closing Quick Race Menu without loading race
 - QOL: Being able to stack race resets when a load is already queued
 - QOL: Fire finish timer counting any healed overheat for post-race stats
+- QOL: Millisecond timers on race finish misaligned with standard hundredths timers
 - QOL: Game not being returned to original code for some features when plugin unloads
 - Backend(ASettings): String settings not propagating an update when the start of the new string matched the whole old string
 

@@ -87,6 +87,6 @@ pub fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
         }
         const color: u32 = fl.flash_color(item.color, item.timer, ToastSystem.dur_flash) | a;
 
-        _ = gf.GDrawText(.System, rt.MakeText(4, 2 + y_off + ToastSystem.row_h * @as(i16, @intCast(i)), "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text"));
+        _ = gf.GDrawText(.System, rt.hMakeText(4, 2 + y_off + ToastSystem.row_h * @as(i16, @intCast(i)), "{s}", .{item.text}, color, null) catch @panic("failed to draw toast text"));
     }
 }

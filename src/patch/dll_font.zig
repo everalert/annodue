@@ -644,9 +644,9 @@ const FontState = struct {
         var x: i16 = 12;
         var y: i16 = 12;
 
-        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
+        rt.fnCreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
         y += 12;
-        rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, std.fmt.bufPrintZ(&buf, "~F4~3~s{s}", .{blk: {
+        rt.fnCreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, std.fmt.bufPrintZ(&buf, "~F4~3~s{s}", .{blk: {
             if (!FontsShowable()) break :blk "base font";
             break :blk if (!font_custom_active) &font_stock_custom.Name else &font_custom.Name;
         }}) catch null);
@@ -655,7 +655,7 @@ const FontState = struct {
         // only show fonts 2-7
         for (2..7) |i| {
             for (0..4) |j| {
-                rt.swrText_CreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[i][j]);
+                rt.fnCreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, &font_test_strings[i][j]);
                 y += if (i < 6) 11 else 28;
             }
             y += if (i < 5) 14 else 18;

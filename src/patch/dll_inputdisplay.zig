@@ -69,8 +69,8 @@ const InputDisplay = struct {
     var p_triangle: ?*rq.Sprite = null;
     var p_square: ?*rq.Sprite = null;
     var icons: [12]InputIcon = undefined;
-    const style_center = rt.MakeTextHeadStyle(.Small, true, null, .Center, .{rto.ToggleShadow}) catch "";
-    const style_left = rt.MakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
+    const style_center = rt.hMakeTextHeadStyle(.Small, true, null, .Center, .{rto.ToggleShadow}) catch "";
+    const style_left = rt.hMakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
     fn ReadInputs() void {
         analog = mem.read(@intFromPtr(ri.MAPPED_AXIS), @TypeOf(analog));
@@ -258,7 +258,7 @@ const InputDisplay = struct {
                 @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
             _ = gf.GDrawText(
                 .Overlay,
-                rt.MakeText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
+                rt.hMakeText(s.x + txo, s.y + @divFloor(s.h, 2) - 3, "{d:1.0}", .{
                     std.math.fabs(axis * 100),
                 }, col, style_center) catch null,
             );
@@ -291,7 +291,7 @@ const InputDisplay = struct {
                 @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
             _ = gf.GDrawText(
                 .Overlay,
-                rt.MakeText(s.x + 2, s.y + tyo, "{d:1.0}", .{
+                rt.hMakeText(s.x + 2, s.y + tyo, "{d:1.0}", .{
                     std.math.fabs(axis * 100),
                 }, col, style_left) catch null,
             );
@@ -328,7 +328,7 @@ const InputDisplay = struct {
                     @as(u32, @intFromFloat(nt.pow2(1 - rg.PAUSE_SCROLLINOUT.*) * 255));
                 _ = gf.GDrawText(
                     .Overlay,
-                    rt.MakeText(top.x + 8, top.y - 8, "{d:1.0}", .{
+                    rt.hMakeText(top.x + 8, top.y - 8, "{d:1.0}", .{
                         std.math.fabs(thrust * 100),
                     }, col, style_center) catch null,
                 );

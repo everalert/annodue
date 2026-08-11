@@ -1085,23 +1085,23 @@ fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void 
             (value.section.?.generation != section.?.generation or
             value.section.?.index != section.?.index)) continue;
 
-        _ = gf.GDrawText(.Debug, rt.MakeText(x_ref.*, y_ref.*, "{s}", .{value.name}, null, null) catch null);
+        _ = gf.GDrawText(.Debug, rt.hMakeText(x_ref.*, y_ref.*, "{s}", .{value.name}, null, null) catch null);
         _ = gf.GDrawText(.Debug, switch (value.value_type) {
-            .B => rt.MakeText(256, y_ref.*, "{any}", .{value.value.b}, null, null) catch null,
-            .F => rt.MakeText(256, y_ref.*, "{d:4.2}", .{value.value.f}, null, null) catch null,
-            .U => rt.MakeText(256, y_ref.*, "{d}", .{value.value.u}, null, null) catch null,
-            .I => rt.MakeText(256, y_ref.*, "{d}", .{value.value.i}, null, null) catch null,
-            else => rt.MakeText(256, y_ref.*, "{s}", .{value.value.str}, null, null) catch null,
+            .B => rt.hMakeText(256, y_ref.*, "{any}", .{value.value.b}, null, null) catch null,
+            .F => rt.hMakeText(256, y_ref.*, "{d:4.2}", .{value.value.f}, null, null) catch null,
+            .U => rt.hMakeText(256, y_ref.*, "{d}", .{value.value.u}, null, null) catch null,
+            .I => rt.hMakeText(256, y_ref.*, "{d}", .{value.value.i}, null, null) catch null,
+            else => rt.hMakeText(256, y_ref.*, "{s}", .{value.value.str}, null, null) catch null,
         });
         _ = gf.GDrawText(.Debug, switch (value.value_type) {
-            .B => rt.MakeText(312, y_ref.*, "{any}", .{value.value_default.b}, null, null) catch null,
-            .F => rt.MakeText(312, y_ref.*, "{d:4.2}", .{value.value_default.f}, null, null) catch null,
-            .U => rt.MakeText(312, y_ref.*, "{d}", .{value.value_default.u}, null, null) catch null,
-            .I => rt.MakeText(312, y_ref.*, "{d}", .{value.value_default.i}, null, null) catch null,
-            .Str => rt.MakeText(312, y_ref.*, "{s}", .{value.value_default.str}, null, null) catch null,
+            .B => rt.hMakeText(312, y_ref.*, "{any}", .{value.value_default.b}, null, null) catch null,
+            .F => rt.hMakeText(312, y_ref.*, "{d:4.2}", .{value.value_default.f}, null, null) catch null,
+            .U => rt.hMakeText(312, y_ref.*, "{d}", .{value.value_default.u}, null, null) catch null,
+            .I => rt.hMakeText(312, y_ref.*, "{d}", .{value.value_default.i}, null, null) catch null,
+            .Str => rt.hMakeText(312, y_ref.*, "{s}", .{value.value_default.str}, null, null) catch null,
             .None => null,
         });
-        _ = gf.GDrawText(.Debug, rt.MakeText(368, y_ref.*, "{s}", .{@tagName(value.value_type)}, null, null) catch null);
+        _ = gf.GDrawText(.Debug, rt.hMakeText(368, y_ref.*, "{s}", .{@tagName(value.value_type)}, null, null) catch null);
         y_ref.* += 10;
     }
 
@@ -1113,7 +1113,7 @@ fn drawSettings(gf: *GlobalFn, section: ?Handle, x_ref: *i16, y_ref: *i16) void 
             value.section.?.index != section.?.index)) continue;
 
         //y_ref.* += 4;
-        _ = gf.GDrawText(.Debug, rt.MakeText(x_ref.*, y_ref.*, "{s}", .{value.name}, null, null) catch null);
+        _ = gf.GDrawText(.Debug, rt.hMakeText(x_ref.*, y_ref.*, "{s}", .{value.name}, null, null) catch null);
         y_ref.* += 10;
 
         x_ref.* += 12;

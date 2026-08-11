@@ -348,16 +348,16 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
     if (gf.SRaceState() == .Racing and !gf.GHideRaceUIIsOn()) {
         _ = gf.GDrawText(
             .OverlayP,
-            rt.MakeText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch null,
+            rt.hMakeText(16, 480 - 16, "Fr {d}", .{state.rec_data.frame}, null, null) catch null,
         );
         _ = gf.GDrawText(
             .OverlayP,
-            rt.MakeText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch null,
+            rt.hMakeText(92, 480 - 16, "St {d}", .{state.load_frame}, null, null) catch null,
         );
         if (state.load_count > 0)
             _ = gf.GDrawText(
                 .OverlayP,
-                rt.MakeText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch null,
+                rt.hMakeText(168, 480 - 16, "Ld {d}", .{state.load_count}, null, null) catch null,
             );
     }
 }

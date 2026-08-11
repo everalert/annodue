@@ -140,7 +140,7 @@ const CustomTrigger = struct {
         if (s_notify_trigger) {
             var b: [127:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&b, "Trigger {d} activated", .{tr.Type}) catch {};
-            t.swrText_NewNotification(&b, 3.0);
+            t.fnNewNotification(&b, 3.0);
         }
 
         if (tr.Type < TRIGGER_LIMIT_GAME) {

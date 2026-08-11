@@ -137,14 +137,14 @@ const GDraw = struct {
             for (text_layers.items, text_data.items) |l, *t| {
                 if (l != layer) continue;
                 const color: u32 = if (t.color & 0xFF > 0) t.color else default_color;
-                rt.RenderSetColor(
+                rt.fnRenderSetColor(
                     @as(u8, @truncate(color >> 24)),
                     @as(u8, @truncate(color >> 16)),
                     @as(u8, @truncate(color >> 8)),
                     @as(u8, @truncate(color >> 0)),
                 );
-                rt.RenderSetPosition(t.x, t.y);
-                rt.RenderString(&t.string);
+                rt.fnRenderSetPosition(t.x, t.y);
+                rt.fnRenderString(&t.string);
             }
         }
     }
@@ -178,8 +178,8 @@ pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_
 
     GDraw.insertText(layer, text.?) catch return false;
 
-    const d = rt.TextGetDimensions(@ptrCast(&text.?.string));
-    const a = rt.TextGetAlignment(@ptrCast(&text.?.string));
+    const d = rt.hTextGetDimensions(@ptrCast(&text.?.string));
+    const a = rt.hTextGetAlignment(@ptrCast(&text.?.string));
     const offset_x = if (a == .Center) @divTrunc(-d.w, 2) else if (a == .Right) -d.w else 0;
     GDraw.insertRect(
         layer,

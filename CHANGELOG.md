@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Show true values of times on post-race screen (setting: `show_postrace_times_hex`)
 - QOL: Clear best times with hotkey on track detail screen (setting: `clear_records_enable`)
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
-- QOL: N64 Pitch input toggle (experimental) (accessible via Quick Race Menu)
+- QOL: N64 Pitch input toggle (experimental) (accessible via Quick Race Menu, active in Practice Mode only)
 - QOL: Settings to toggle each millisecend timer location individually (`ms_timer_hud_enable` `ms_timer_finish_enable`)
 - Core: (temporarily disabled) Patch texture buffer size to allow custom tracks with large number of textures (settings: `texbuf_enable` `texbuf_size`, category: `core/GAssetBuffer`)
 - Backend(Core): Plugin Function version (`1`)

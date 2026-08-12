@@ -92,7 +92,7 @@ pub const panic = debug.annodue_panic;
 // - feat: show true values of times on post-race screen, via the underlying hexadecimal number
 // - feat: show milliseconds on all timers
 // - feat: limit fps during races (configurable via quick race menu)
-// - feat: n64 pitch input toggle (experimental) (accessible via quick race menu)
+// - feat: n64 pitch input toggle (experimental) (accessible via quick race menu, active in practice mode only)
 // - feat: skip planet cutscene
 // - feat: skip podium cutscene
 // - feat: custom default number of racers
@@ -1157,15 +1157,16 @@ const QuickRaceMenu = extern struct {
             rrd.pPlayer.*.?.pFile.?.upgrade_hp[i] = @intCast(values.up_hp[i]);
         }
 
-        PatchN64Pitch(values.n64_pitch != 0);
-        values.n64_pitch_applied = values.n64_pitch;
+        values.n64_pitch_applied = @intFromBool(values.n64_pitch != 0 and gf.SPracticeMode());
+        PatchN64Pitch(values.n64_pitch_applied != 0);
 
         RestartRace(false);
         close();
     }
 
-    // TODO: repurpose to run every EventJdgeBegn, maybe add different init if
-    // that introduces issues with state loop
+    // TODO: repurpose to run every EventJdgeBegn (instead of just when manually
+    //  detecting we entered race mode), maybe add different init if that introduces
+    //  issues with state loop
     fn init() void {
         const hang = re.Manager.entity(.Hang, 0);
         values.vehicle = hang.VehiclePlayer;
@@ -1179,6 +1180,9 @@ const QuickRaceMenu = extern struct {
             values.up_lv[i] = rrd.pPlayer.*.?.pFile.?.upgrade_lv[i];
             values.up_hp[i] = rrd.pPlayer.*.?.pFile.?.upgrade_hp[i];
         }
+
+        values.n64_pitch_applied = @intFromBool(values.n64_pitch != 0 and gf.SPracticeMode());
+        PatchN64Pitch(values.n64_pitch_applied != 0);
 
         initialized = true;
     }
@@ -1395,9 +1399,10 @@ const QuickRaceMenu = extern struct {
     }
 
     fn CallbackN64Pitch(_: *Menu, _: *MenuItem) callconv(.C) bool {
-        if (values.n64_pitch != values.n64_pitch_applied) {
-            PatchN64Pitch(values.n64_pitch != 0);
-            values.n64_pitch_applied = values.n64_pitch;
+        const new_pitch: i32 = @intFromBool(values.n64_pitch != 0 and gf.SPracticeMode());
+        if (values.n64_pitch_applied != new_pitch) {
+            values.n64_pitch_applied = new_pitch;
+            PatchN64Pitch(values.n64_pitch_applied != 0);
         }
         return false;
     }

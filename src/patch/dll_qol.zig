@@ -19,6 +19,7 @@ const mi = @import("util/menu_item.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
+const bmem = @import("util/base/base_memory.zig");
 
 const rg = @import("racer").Global;
 const rti = @import("racer").Time;
@@ -1117,7 +1118,7 @@ const QuickRaceMenu = extern struct {
     fn init() void {
         const hang = re.Manager.entity(.Hang, 0);
         values.vehicle = hang.VehiclePlayer;
-        values.track = hang.Track;
+        values.track = hang.Track; // TODO: translation with logic based on QRM setting
         values.mirror = hang.Mirror;
         values.laps = hang.Laps;
         values.racers = hang.Racers;
@@ -1174,7 +1175,7 @@ const QuickRaceMenu = extern struct {
         mi.MenuItemSpacer(),
         mi.MenuItemList(&values.vehicle, "Vehicle", &rv.VehicleNames, true, CallbackVehicle),
         // FIXME: maybe change to menu order?
-        mi.MenuItemList(&values.track, "Track", &rtr.TracksById, true, CallbackTrack),
+        mi.MenuItemList(&values.track, "Track", &rtr.TrackNameById, true, CallbackTrack),
         mi.MenuItemSpacer(),
         mi.MenuItemList(&values.up_lv[0], rv.UpgradeNames[0], rv.PartNameS(0), false, CallbackUpgrade),
         mi.MenuItemList(&values.up_lv[1], rv.UpgradeNames[1], rv.PartNameS(1), false, CallbackUpgrade),
@@ -1232,21 +1233,13 @@ const QuickRaceMenu = extern struct {
         if (m.inputs.cb) |cb| {
             // scroll presets
             if (cb[INPUT_JUMP_LF](.JustOn)) {
-                values.fps = blk: {
-                    for (0..FpsPresets.len) |i| {
-                        const val = FpsPresets[FpsPresets.len - i - 1];
-                        if (val < values.fps) break :blk val;
-                    }
-                    break :blk MenuItems[0].min;
-                };
+                const i = bmem.lastIndexOfScalarSmaller(i32, &FpsPresets, values.fps);
+                values.fps = if (i) |ii| FpsPresets[ii] else MenuItems[0].min;
                 return true;
             }
             if (cb[INPUT_JUMP_RT](.JustOn)) {
-                values.fps = blk: {
-                    for (FpsPresets) |val|
-                        if (val > values.fps) break :blk val;
-                    break :blk MenuItems[0].max;
-                };
+                const i = bmem.indexOfScalarGreater(i32, &FpsPresets, values.fps);
+                values.fps = if (i) |ii| FpsPresets[ii] else MenuItems[0].max;
                 return true;
             }
 
@@ -1262,33 +1255,32 @@ const QuickRaceMenu = extern struct {
         return false;
     }
 
+    // TODO: test: wrapping favourites
+    // TODO: test: pressing jump/tab input actually goes to a favourite
+    // TODO: test: pressing jump/tab input scrolls to next pod if no favourites set
     // TODO: add color to vehicle names when they are favorited
     // TODO: implement this behaviour on normal vehicle select
     fn CallbackVehicle(m: *Menu) callconv(.C) bool {
         if (m.inputs.cb) |cb| {
             // scroll favorites
             if (cb[INPUT_JUMP_LF](.JustOn)) {
-                values.vehicle = blk: {
-                    var next: i32 = @mod(values.vehicle - 1, 23);
-                    if (s_favorite_vehicles & 0x7FFFFF == 0) break :blk next;
-                    while (true) {
-                        const next_bit: u32 = @as(u32, 1) << @intCast(next);
-                        if (s_favorite_vehicles & next_bit > 0) break :blk next;
-                        next = @mod(next - 1, 23);
-                    }
-                };
+                const bitmask = s_favorite_vehicles & 0x7FFFFF;
+                if (bitmask == 0) {
+                    values.vehicle = @mod(values.vehicle - 1, 23);
+                    return true;
+                }
+                const i = bmem.lastBitIndexOfSmaller(u32, bitmask, @intCast(values.vehicle));
+                values.vehicle = @intCast(i orelse (31 - @clz(bitmask)));
                 return true;
             }
             if (cb[INPUT_JUMP_RT](.JustOn)) {
-                values.vehicle = blk: {
-                    var next: i32 = @mod(values.vehicle + 1, 23);
-                    if (s_favorite_vehicles & 0x7FFFFF == 0) break :blk next;
-                    while (true) {
-                        const next_bit: u32 = @as(u32, 1) << @intCast(next);
-                        if (s_favorite_vehicles & next_bit > 0) break :blk next;
-                        next = @mod(next + 1, 23);
-                    }
-                };
+                const bitmask = s_favorite_vehicles & 0x7FFFFF;
+                if (bitmask == 0) {
+                    values.vehicle = @mod(values.vehicle + 1, 23);
+                    return true;
+                }
+                const i = bmem.bitIndexOfGreater(u32, bitmask, @intCast(values.vehicle));
+                values.vehicle = @intCast(i orelse @ctz(bitmask));
                 return true;
             }
 
@@ -1308,27 +1300,38 @@ const QuickRaceMenu = extern struct {
 
     // TODO: circuit-based presets, if/when circuit order added
     // TODO: highlight color changing depending on planet?
-    const TrackPresets = [_]i32{ 0, 2, 6, 9, 12, 16, 19, 22 };
+    const TrackPresetsPlanet = [_:0]i32{
+        rtr.THE_BOONTA_TRAINING_COURSE,
+        rtr.BEEDOS_WILD_RIDE,
+        rtr.AQUILARIS_CLASSIC,
+        rtr.SCRAPPERS_RUN,
+        rtr.BAROO_COAST,
+        rtr.MON_GAZZA_SPEEDWAY,
+        rtr.VENGEANCE,
+        rtr.MALASTARE_100,
+    };
+
+    const TrackPresetsCircuit = [_:0]i32{
+        rtr.TrackIdMenuMap[rtr.THE_BOONTA_TRAINING_COURSE],
+        rtr.TrackIdMenuMap[rtr.SUNKEN_CITY],
+        rtr.TrackIdMenuMap[rtr.SEBULBAS_LEGACY],
+        rtr.TrackIdMenuMap[rtr.ANDO_PRIME_CENTRUM],
+    };
+
+    var TrackPresets: []const i32 = &TrackPresetsPlanet;
+    var track_order_circuit: bool = false;
 
     fn CallbackTrack(m: *Menu) callconv(.C) bool {
         if (m.inputs.cb) |cb| {
             // scroll presets
             if (cb[INPUT_JUMP_LF](.JustOn)) {
-                values.track = blk: {
-                    for (0..TrackPresets.len) |i| {
-                        const val = TrackPresets[TrackPresets.len - i - 1];
-                        if (val < values.track) break :blk val;
-                    }
-                    break :blk comptime TrackPresets[TrackPresets.len - 1];
-                };
+                const i = bmem.lastIndexOfScalarSmaller(i32, TrackPresets, values.track);
+                values.track = TrackPresets[i orelse TrackPresets.len - 1];
                 return true;
             }
             if (cb[INPUT_JUMP_RT](.JustOn)) {
-                values.track = blk: {
-                    for (TrackPresets) |val|
-                        if (val > values.track) break :blk val;
-                    break :blk comptime TrackPresets[0];
-                };
+                const i = bmem.indexOfScalarGreater(i32, TrackPresets, values.track);
+                values.track = TrackPresets[i orelse 0];
                 return true;
             }
         }
@@ -1500,12 +1503,12 @@ export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
         var buf: [127:0]u8 = undefined;
         if (gf.InputGetKbRaw(.@"1").on()) {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 1, hang.Mirror != 0);
-            _ = std.fmt.bufPrintZ(&buf, "{s} Best Lap cleared", .{rtr.TracksById[hang.Track]}) catch return;
+            _ = std.fmt.bufPrintZ(&buf, "{s} Best Lap cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
             _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
         }
         if (gf.InputGetKbRaw(.@"3").on()) {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 3, hang.Mirror != 0);
-            _ = std.fmt.bufPrintZ(&buf, "{s} 3-Lap Record cleared", .{rtr.TracksById[hang.Track]}) catch return;
+            _ = std.fmt.bufPrintZ(&buf, "{s} 3-Lap Record cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
             _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
         }
     }

@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
-- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload` utils
+- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `base/base_memory` utils
 
 ### Changed
 

@@ -10,11 +10,13 @@ const ScrollControl = @import("scroll_control.zig").ScrollControl;
 const st = @import("active_state.zig");
 const input = @import("../core/input.zig");
 
+// FIXME: sentinel-terminated slice string type
+
 /// @return     whether or not to play sound effect
 pub const MenuItemCallbackType = *const fn (*Menu) callconv(.C) bool;
 
 pub const MenuItem = extern struct {
-    value: ?*i32 = null, // if null, item will be skipped when scrolling through menu
+    value: ?*i32 = null,
     label: ?[*:0]const u8 = null,
     options: ?[*]const [*:0]const u8 = null,
     min: i32 = 0,

@@ -1112,8 +1112,9 @@ const QuickRaceMenu = extern struct {
     var MenuItems = [_]m.MenuItem{
         m.MenuItemRange(&values.fps, "FPS", 10, 500, true, CallbackFps),
         m.MenuItemSpacer(),
+        // TODO: ability to scroll and toggle favourites on vehicle select too
         m.MenuItemList(&values.vehicle, "Vehicle", &rv.VehicleNames, true, CallbackVehicle),
-        // FIXME: maybe change to menu order?
+        // TODO: ability to group tracks by planet on track select too
         m.MenuItemList(&values.track, "Track", &rtr.TrackNameById, true, CallbackTrack),
         m.MenuItemSpacer(),
         m.MenuItemList(&values.up_lv[0], rv.UpgradeNames[0], rv.PartNameS(0), false, CallbackUpgrade),
@@ -1130,7 +1131,7 @@ const QuickRaceMenu = extern struct {
         m.MenuItemList(&values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true, null),
         //m.MenuItemList(&values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
         m.MenuItemSpacer(),
-        // FIXME: add toggle to ingame start race menu too
+        // TODO: add toggle to ingame start race menu too
         m.MenuItemToggle(&values.n64_pitch, "N64 Pitch", CallbackN64Pitch),
         m.MenuItemSpacer(),
         m.MenuItemButton("Race!", CallbackRaceButton),
@@ -1198,10 +1199,8 @@ const QuickRaceMenu = extern struct {
         menu_active.update(false);
     }
 
-    // FIXME: menu not opening bug when reloading plugin can probably be solved
-    //  by checking for inrace+!initialized here
     fn update() void {
-        if (gf.SInRace() == .JustOn)
+        if (gf.SInRace() == .JustOn or (gf.SInRace().on() and !initialized))
             init();
 
         if (!gf.SInRace().on() or !initialized) return;

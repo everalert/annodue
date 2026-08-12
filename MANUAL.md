@@ -228,19 +228,22 @@ Configured under `[overlay]`
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
-|Open                         |`Esc`     |`Start` |Hold or double-tap while unpaused
-|Close                        |`Esc`     |`B`     |&nbsp;
-|Navigate                     |`↑ ↓ ← →` |`D-Pad` |&nbsp;
-|Interact                     |`Enter`   |`A`     |Set FPS (in Practice Mode), toggle vehicle favorite, etc.
-|Quick Confirm                |`Space`   |`Start` |&nbsp;
-|All Upgrades OFF             |`Home`    |`LB`    |While highlighing any upgrade
-|All Upgrades MAX             |`End`     |`RB`    |While highlighing any upgrade
-|Scroll prev FPS preset       |`Home`    |`LB`    |&nbsp;
-|Scroll next FPS preset       |`End`     |`RB`    |&nbsp;
-|Scroll prev planet           |`Home`    |`LB`    |While highlighting `TRACK`
-|Scroll next planet           |`End`     |`RB`    |While highlighting `TRACK`
-|Scroll prev favorite vehicle |`Home`    |`LB`    |While highlighting `VEHICLE`
-|Scroll next favorite vehicle |`End`     |`RB`    |While highlighting `VEHICLE`
+|Open                      |`Esc`       |`Start`      |Hold or double-tap while unpaused
+|Close                     |`Esc`       |`B`          |&nbsp;
+|Navigate                  |`↑ ↓`       |`D-Up` `D-Dn`|&nbsp;
+|Scroll item options       |`← →`       |`D-Lf` `D-Rt`|&nbsp;
+|Tab-scroll item options   |`Home` `End`|`LB` `RB`    |&nbsp;
+|Interact                  |`Enter`     |`A`          |Special behavior depending on menu item
+|Quick Confirm             |`Space`     |`Start`      |"Race!" immediately from any menu item
+|All Upgrades OFF          |Tab-left    |Tab-left     |While selecting any upgrade
+|All Upgrades MAX          |Tab-right   |Tab-right    |While selecting any upgrade
+|Apply FPS immediately     |Interact    |Interact     |While selecting `FPS` (Practice Mode only)
+|Scroll FPS preset         |Tab-scroll  |Tab-scroll   |While selecting `FPS`
+|Swap track order          |Interact    |Interact     |While selecting `TRACK`
+|Scroll track by planet    |Tab-scroll  |Tab-scroll   |While selecting `TRACK` in `PLANET` order
+|Scroll track by circuit   |Tab-scroll  |Tab-scroll   |While selecting `TRACK` in `CIRCUIT` order
+|Toggle vehicle as favorite|Interact    |Interact     |While selecting `VEHICLE`
+|Scroll favorite vehicle   |Tab-scroll  |Tab-scroll   |While selecting `VEHICLE`
 
 ##### Other QOL Controls
 
@@ -288,6 +291,7 @@ Configured under `[qol]`
 |`show_postrace_times_hex`    |`bool`|`off` |&nbsp;
 |`clear_records_enable`       |`bool`|`off` |&nbsp;
 |`favorite_characters`        |`u32` |`0`   |bitfield where character id = nth bit
+|`menu_track_order`           |`str` |`0`   |`PLANET` or `CIRCUIT`
 
 ### Collision Viewer
 

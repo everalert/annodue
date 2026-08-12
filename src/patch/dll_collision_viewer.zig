@@ -17,9 +17,10 @@ const CollisionViewerState = c.CollisionViewerState;
 const debug = @import("core/Debug.zig");
 
 const timing = @import("util/timing.zig");
-const Menu = @import("util/menu.zig").Menu;
+const m = @import("util/menu.zig");
+const Menu = m.Menu;
+const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
-const mi = @import("util/menu_item.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
@@ -230,21 +231,21 @@ const QuickRaceMenu = extern struct {
         .col_w = 200,
     };
 
-    var QuickRaceMenuItems = [_]mi.MenuItem{
-        mi.MenuItemToggle(&QuickRaceMenu.item_enabled.input_converted, "Enable viewer", null),
-        mi.MenuItemToggle(&QuickRaceMenu.item_show_collision_mesh.input_converted, "Show collision mesh", null),
-        mi.MenuItemToggle(&QuickRaceMenu.item_show_visual_mesh.input_converted, "Show visual mesh", null),
-        mi.MenuItemToggle(&QuickRaceMenu.item_show_spline.input_converted, "Show spline", null),
-        mi.MenuItemList(&preset_index, "Preset", &preset_names, false, null),
-        mi.MenuItemSpacer(),
-        mi.MenuItemRange(&QuickRaceMenu.item_mesh_opacity.input_converted, "Collision mesh opacity", 0, 100, false, null),
-        mi.MenuItemRange(&QuickRaceMenu.item_mesh_brightness.input_converted, "Collision mesh brightness", 0, 100, false, null),
-        mi.MenuItemRange(&QuickRaceMenu.item_line_opacity.input_converted, "Collision line opacity", 0, 100, false, null),
-        mi.MenuItemRange(&QuickRaceMenu.item_line_brightness.input_converted, "Collision line brightness", 0, 100, false, null),
-        mi.MenuItemSpacer(),
-        mi.MenuItemToggle(&QuickRaceMenu.item_depth_test.input_converted, "Depth test", null),
-        mi.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces", null),
-        mi.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", -100, 100, false, MenuDepthBiasCallback),
+    var QuickRaceMenuItems = [_]m.MenuItem{
+        m.MenuItemToggle(&QuickRaceMenu.item_enabled.input_converted, "Enable viewer", null),
+        m.MenuItemToggle(&QuickRaceMenu.item_show_collision_mesh.input_converted, "Show collision mesh", null),
+        m.MenuItemToggle(&QuickRaceMenu.item_show_visual_mesh.input_converted, "Show visual mesh", null),
+        m.MenuItemToggle(&QuickRaceMenu.item_show_spline.input_converted, "Show spline", null),
+        m.MenuItemList(&preset_index, "Preset", &preset_names, false, null),
+        m.MenuItemSpacer(),
+        m.MenuItemRange(&QuickRaceMenu.item_mesh_opacity.input_converted, "Collision mesh opacity", 0, 100, false, null),
+        m.MenuItemRange(&QuickRaceMenu.item_mesh_brightness.input_converted, "Collision mesh brightness", 0, 100, false, null),
+        m.MenuItemRange(&QuickRaceMenu.item_line_opacity.input_converted, "Collision line opacity", 0, 100, false, null),
+        m.MenuItemRange(&QuickRaceMenu.item_line_brightness.input_converted, "Collision line brightness", 0, 100, false, null),
+        m.MenuItemSpacer(),
+        m.MenuItemToggle(&QuickRaceMenu.item_depth_test.input_converted, "Depth test", null),
+        m.MenuItemToggle(&QuickRaceMenu.item_cull_backfaces.input_converted, "Cull backfaces", null),
+        m.MenuItemRange(&QuickRaceMenu.item_depth_bias.input_converted, "Depth bias", -100, 100, false, MenuDepthBiasCallback),
     };
 
     var item_enabled = ConvertedMenuItem{ .input_bool = &state.enabled };
@@ -334,7 +335,7 @@ const QuickRaceMenu = extern struct {
     }
 };
 
-fn MenuDepthBiasCallback(_: *Menu) callconv(.C) bool {
+fn MenuDepthBiasCallback(_: *Menu, _: *MenuItem) callconv(.C) bool {
     if (AnnodueSettings.h_s_depth_bias) |h|
         QuickRaceMenu.gf.ASettingUpdate(h, .{ .i = @as(i32, @intFromFloat(state.depth_bias * 100.0)) });
     return false;

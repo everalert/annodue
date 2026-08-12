@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Underheat `autoreset_underheat_enable` `autoreset_underheat_delay`
     - Toggle auto-reset entirely with `autoreset_enable`
 - QOL: Track select remembers your selection when leaving menu, and between game sessions (settings: `trackselect_remember` `trackselect_last`)
+- QOL: Order tracks in Quick Race Menu by planet or circuit (setting: `menu_track_order`)
 - QOL: Fast menu navigation by removing input wait times (setting: `fast_navigation`)
 - QOL: Allow hat (D-PAD) input for menu navigation (setting: `dpad_navigation`)
 - QOL: Show true values of times on post-race screen (setting: `show_postrace_times_hex`)
@@ -71,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Core): Global Function version `29` to `32`
 - Backend(Core): Settings now also autosave on race reset
 - Backend(Core): All global state migrated to getter functions in Global Function API
+- Backent(Util): `menu_item` merged into `menu`
 
 ### Removed
 

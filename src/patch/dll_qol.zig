@@ -1,6 +1,8 @@
 const Self = @This();
 
 const std = @import("std");
+const assert = std.debug.assert;
+
 const w32 = @import("zigwin32");
 const ShowCursor = w32.ui.windows_and_messaging.ShowCursor;
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
@@ -13,9 +15,10 @@ const debug = @import("core/Debug.zig");
 
 const timing = @import("util/timing.zig");
 const spatial = @import("util/spatial.zig");
-const Menu = @import("util/menu.zig").Menu;
+const m = @import("util/menu.zig");
+const Menu = m.Menu;
+const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
-const mi = @import("util/menu_item.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const st = @import("util/active_state.zig");
@@ -59,20 +62,23 @@ pub const panic = debug.annodue_panic;
 // - feat: quick race menu
 //     - create a new race from inside a race
 //     - select pod, track, upgrade stack and other race settings
-//     - CONTROLS:                          keyboard        xinput
-//       Open                               Esc             Start           Hold or double-tap while unpaused
-//       Close                              Esc             B
-//       Navigate                           ↑↓→←            D-Pad
-//       Interact*                          Enter           A               Set FPS (in Practice Mode), toggle vehicle favorite, etc.
-//       Quick Confirm                      Space           Start
-//       All Upgrades MIN                   Home            LB              While highlighting any upgrade
-//       All Upgrades MAX                   End             RB              While highlighting any upgrade
-//       Scroll prev FPS preset             Home            LB
-//       Scroll next FPS preset             End             RB
-//       Scroll prev planet                 Home            LB              While highlighting TRACK
-//       Scroll next planet                 End             RB              While highlighting TRACK
-//       Scroll prev favorite vehicle       Home            LB              While highlighting VEHICLE
-//       Scroll next favorite vehicle       End             RB              While highlighting VEHICLE
+//     - CONTROLS:                          keyboard    xinput
+//       Open                               Esc         Start       Hold or double-tap while unpaused
+//       Close                              Esc         B
+//       Navigate                           ↑↓          D-Up, D-Dn
+//       Scroll item options                ←→          D-Lf, D-Rt
+//       Tab-scroll item options            Home, End   LB, RB
+//       Interact*                          Enter       A           Special behaviour depending on menu item
+//       Quick Confirm                      Space       Start       "Race!" immediately from any menu item
+//       All Upgrades MIN                   TAB-LEFT                While selecting any upgrade
+//       All Upgrades MAX                   TAB-RIGHT               While selecting any upgrade
+//       Apply FPS immediately              INTERACT                While selecting FPS (Practice Mode only)
+//       Scroll FPS preset                  TAB-SCROLL              While selecting FPS
+//       Swap track order                   INTERACT                While selecting TRACK
+//       Scroll track by planet             TAB-SCROLL              While selecting TRACK in PLANET order
+//       Scroll track by circuit            TAB-SCROLL              While selecting TRACK in CIRCUIT order
+//       Toggle vehicle as favorite         INTERACT                While selecting VEHICLE
+//       Scroll favorite vehicle            TAB-SCROLL              While selecting VEHICLE
 // - feat: post-race stats readout
 //     - tfps
 //     - full upgrade stack with healths
@@ -134,6 +140,7 @@ pub const panic = debug.annodue_panic;
 //   show_postrace_times_hex        bool
 //   clear_records_enable           bool
 //   favorite_characters            u32     bitfield where character id = nth bit
+//   menu_track_order               str     "PLANET" or "CIRCUIT"
 
 // TODO: dinput controls
 // TODO: setting for fps limiter default value
@@ -304,10 +311,15 @@ const QolState = struct {
         FastCountdown.h_s_duration =
             gf.ASettingOccupy(section, "fast_countdown_duration", .F, .{ .f = 1.0 }, &FastCountdown.s_duration, null);
 
+        // FIXME: figure out how to init without this; probably need later zig
+        //  version. also, is this even necessary if ASettingOccupy writes it?
+        _ = std.fmt.bufPrintZ(&QuickRaceMenu.s_menu_track_order, "PLANET", .{}) catch unreachable;
         QuickRaceMenu.h_s_fps_default =
             gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, &QuickRaceMenu.s_fps_default, null);
         QuickRaceMenu.h_s_favorite_vehicles =
             gf.ASettingOccupy(section, "favorite_vehicles", .U, .{ .u = 0 }, &QuickRaceMenu.s_favorite_vehicles, null);
+        QuickRaceMenu.h_s_menu_track_order =
+            gf.ASettingOccupy(section, "menu_track_order", .Str, .{ .str = "PLANET" }, &QuickRaceMenu.s_menu_track_order, null);
     }
 
     // TODO: setting to control whether default racers automatically updates
@@ -398,6 +410,13 @@ const QolState = struct {
             if (std.mem.eql(u8, "fps_limiter_default", name)) {
                 QuickRaceMenu.FpsTimer.SetPeriod(QuickRaceMenu.s_fps_default);
                 QuickRaceMenu.values.fps = @intCast(QuickRaceMenu.s_fps_default);
+                continue;
+            }
+            if (std.mem.eql(u8, "menu_track_order", name)) {
+                var buf: [64]u8 = undefined;
+                const s = std.ascii.upperString(&buf, std.mem.span(@as([*:0]const u8, &QuickRaceMenu.s_menu_track_order)));
+                const use_circuit_order = std.mem.eql(u8, "CIRCUIT", s);
+                QuickRaceMenu.set_track_order(use_circuit_order);
                 continue;
             }
 
@@ -999,8 +1018,11 @@ fn RenderRaceResultStatUpgrade(gf: *GlobalFn, i: i16, cat: u8, lv: u8, hp: u8) v
 const QuickRaceMenu = extern struct {
     var h_s_fps_default: ?SettingHandle = null;
     var h_s_favorite_vehicles: ?SettingHandle = null;
+    var h_s_menu_track_order: ?SettingHandle = null;
     var s_fps_default: u32 = 24;
     var s_favorite_vehicles: u32 = 0; // bitfield where vehicle id maps to nth bit
+    var s_menu_track_order: [63:0]u8 = std.mem.zeroes([63:0]u8);
+    var using_circuit_track_order: bool = false;
 
     const open_threshold: f32 = 0.75;
     var menu_active: st.ActiveState = .Off;
@@ -1051,8 +1073,8 @@ const QuickRaceMenu = extern struct {
 
     const INPUT_INTERACT = 0;
     const INPUT_CONFIRM = 1;
-    const INPUT_JUMP_LF = 2;
-    const INPUT_JUMP_RT = 3;
+    const INPUT_TAB_LF = 2;
+    const INPUT_TAB_RT = 3;
 
     fn get_input(comptime input: *MenuInput) InputGetFnType {
         const s = struct {
@@ -1087,6 +1109,33 @@ const QuickRaceMenu = extern struct {
         },
     };
 
+    var MenuItems = [_]m.MenuItem{
+        m.MenuItemRange(&values.fps, "FPS", 10, 500, true, CallbackFps),
+        m.MenuItemSpacer(),
+        m.MenuItemList(&values.vehicle, "Vehicle", &rv.VehicleNames, true, CallbackVehicle),
+        // FIXME: maybe change to menu order?
+        m.MenuItemList(&values.track, "Track", &rtr.TrackNameById, true, CallbackTrack),
+        m.MenuItemSpacer(),
+        m.MenuItemList(&values.up_lv[0], rv.UpgradeNames[0], rv.PartNameS(0), false, CallbackUpgrade),
+        m.MenuItemList(&values.up_lv[1], rv.UpgradeNames[1], rv.PartNameS(1), false, CallbackUpgrade),
+        m.MenuItemList(&values.up_lv[2], rv.UpgradeNames[2], rv.PartNameS(2), false, CallbackUpgrade),
+        m.MenuItemList(&values.up_lv[3], rv.UpgradeNames[3], rv.PartNameS(3), false, CallbackUpgrade),
+        m.MenuItemList(&values.up_lv[4], rv.UpgradeNames[4], rv.PartNameS(4), false, CallbackUpgrade),
+        m.MenuItemList(&values.up_lv[5], rv.UpgradeNames[5], rv.PartNameS(5), false, CallbackUpgrade),
+        m.MenuItemList(&values.up_lv[6], rv.UpgradeNames[6], rv.PartNameS(6), false, CallbackUpgrade),
+        m.MenuItemSpacer(),
+        m.MenuItemToggle(&values.mirror, "Mirror", null),
+        m.MenuItemRange(&values.laps, "Laps", 1, 5, true, null),
+        m.MenuItemRange(&values.racers, "Racers", 1, 12, true, null),
+        m.MenuItemList(&values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true, null),
+        //m.MenuItemList(&values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
+        m.MenuItemSpacer(),
+        // FIXME: add toggle to ingame start race menu too
+        m.MenuItemToggle(&values.n64_pitch, "N64 Pitch", CallbackN64Pitch),
+        m.MenuItemSpacer(),
+        m.MenuItemButton("Race!", CallbackRaceButton),
+    };
+
     fn load_race() void {
         if (h_s_fps_default) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
         if (QolState.h_s_default_laps) |h| gf.ASettingUpdate(h, .{ .u = @intCast(values.laps) });
@@ -1098,6 +1147,7 @@ const QuickRaceMenu = extern struct {
         var hang = re.Manager.entity(.Hang, 0);
         hang.VehiclePlayer = @intCast(values.vehicle);
         hang.Track = @intCast(values.track);
+        if (using_circuit_track_order) hang.Track = rtr.TrackMenuIdMap[hang.Track];
         hang.Circuit = rtr.TrackCircuitIdMap[@intCast(values.track)];
         hang.Mirror = @intCast(values.mirror);
         hang.AISpeed = @intCast(values.ai_speed + 1);
@@ -1118,7 +1168,7 @@ const QuickRaceMenu = extern struct {
     fn init() void {
         const hang = re.Manager.entity(.Hang, 0);
         values.vehicle = hang.VehiclePlayer;
-        values.track = hang.Track; // TODO: translation with logic based on QRM setting
+        values.track = if (using_circuit_track_order) rtr.TrackIdMenuMap[hang.Track] else hang.Track;
         values.mirror = hang.Mirror;
         values.laps = hang.Laps;
         values.racers = hang.Racers;
@@ -1148,6 +1198,8 @@ const QuickRaceMenu = extern struct {
         menu_active.update(false);
     }
 
+    // FIXME: menu not opening bug when reloading plugin can probably be solved
+    //  by checking for inrace+!initialized here
     fn update() void {
         if (gf.SInRace() == .JustOn)
             init();
@@ -1170,36 +1222,9 @@ const QuickRaceMenu = extern struct {
             return open();
     }
 
-    const MenuItems = [_]mi.MenuItem{
-        mi.MenuItemRange(&values.fps, "FPS", 10, 500, true, CallbackFps),
-        mi.MenuItemSpacer(),
-        mi.MenuItemList(&values.vehicle, "Vehicle", &rv.VehicleNames, true, CallbackVehicle),
-        // FIXME: maybe change to menu order?
-        mi.MenuItemList(&values.track, "Track", &rtr.TrackNameById, true, CallbackTrack),
-        mi.MenuItemSpacer(),
-        mi.MenuItemList(&values.up_lv[0], rv.UpgradeNames[0], rv.PartNameS(0), false, CallbackUpgrade),
-        mi.MenuItemList(&values.up_lv[1], rv.UpgradeNames[1], rv.PartNameS(1), false, CallbackUpgrade),
-        mi.MenuItemList(&values.up_lv[2], rv.UpgradeNames[2], rv.PartNameS(2), false, CallbackUpgrade),
-        mi.MenuItemList(&values.up_lv[3], rv.UpgradeNames[3], rv.PartNameS(3), false, CallbackUpgrade),
-        mi.MenuItemList(&values.up_lv[4], rv.UpgradeNames[4], rv.PartNameS(4), false, CallbackUpgrade),
-        mi.MenuItemList(&values.up_lv[5], rv.UpgradeNames[5], rv.PartNameS(5), false, CallbackUpgrade),
-        mi.MenuItemList(&values.up_lv[6], rv.UpgradeNames[6], rv.PartNameS(6), false, CallbackUpgrade),
-        mi.MenuItemSpacer(),
-        mi.MenuItemToggle(&values.mirror, "Mirror", null),
-        mi.MenuItemRange(&values.laps, "Laps", 1, 5, true, null),
-        mi.MenuItemRange(&values.racers, "Racers", 1, 12, true, null),
-        mi.MenuItemList(&values.ai_speed, "AI Speed", &[_][*:0]const u8{ "Slow", "Average", "Fast" }, true, null),
-        //mi.MenuItemList(&values.winnings_split, "Winnings", &[_][]const u8{ "Fair", "Skilled", "Winner Takes All" }, true),
-        mi.MenuItemSpacer(),
-        // FIXME: add toggle to ingame start race menu too
-        mi.MenuItemToggle(&values.n64_pitch, "N64 Pitch", CallbackN64Pitch),
-        mi.MenuItemSpacer(),
-        mi.MenuItemButton("Race!", CallbackRaceButton),
-    };
-
-    fn MainCallback(m: *Menu) callconv(.C) bool {
+    fn MainCallback(menu: *Menu) callconv(.C) bool {
         var result = false;
-        if (m.inputs.cb) |cb| {
+        if (menu.inputs.cb) |cb| {
             // confirm from anywhere
             if (cb[INPUT_CONFIRM](.JustOn) and menu_active == .On) {
                 load_race();
@@ -1209,15 +1234,15 @@ const QuickRaceMenu = extern struct {
         return result;
     }
 
-    fn CallbackUpgrade(m: *Menu) callconv(.C) bool {
-        if (m.inputs.cb) |cb| {
+    fn CallbackUpgrade(menu: *Menu, _: *MenuItem) callconv(.C) bool {
+        if (menu.inputs.cb) |cb| {
             // set all to NU
-            if (cb[INPUT_JUMP_LF](.JustOn)) {
+            if (cb[INPUT_TAB_LF](.JustOn)) {
                 values.up_lv = comptime [_]i32{0} ** 7;
                 return true;
             }
             // set all to MU
-            if (cb[INPUT_JUMP_RT](.JustOn)) {
+            if (cb[INPUT_TAB_RT](.JustOn)) {
                 values.up_lv = comptime [_]i32{5} ** 7;
                 return true;
             }
@@ -1229,17 +1254,17 @@ const QuickRaceMenu = extern struct {
     // TODO: user-defined preset, maybe
     const FpsPresets = [_]i32{ 24, 30, 48, 60, 120, 144, 165, 240, 360, 480 };
 
-    fn CallbackFps(m: *Menu) callconv(.C) bool {
-        if (m.inputs.cb) |cb| {
+    fn CallbackFps(menu: *Menu, item: *MenuItem) callconv(.C) bool {
+        if (menu.inputs.cb) |cb| {
             // scroll presets
-            if (cb[INPUT_JUMP_LF](.JustOn)) {
+            if (cb[INPUT_TAB_LF](.JustOn)) {
                 const i = bmem.lastIndexOfScalarSmaller(i32, &FpsPresets, values.fps);
-                values.fps = if (i) |ii| FpsPresets[ii] else MenuItems[0].min;
+                values.fps = if (i) |ii| FpsPresets[ii] else item.min;
                 return true;
             }
-            if (cb[INPUT_JUMP_RT](.JustOn)) {
+            if (cb[INPUT_TAB_RT](.JustOn)) {
                 const i = bmem.indexOfScalarGreater(i32, &FpsPresets, values.fps);
-                values.fps = if (i) |ii| FpsPresets[ii] else MenuItems[0].max;
+                values.fps = if (i) |ii| FpsPresets[ii] else item.max;
                 return true;
             }
 
@@ -1260,10 +1285,10 @@ const QuickRaceMenu = extern struct {
     // TODO: test: pressing jump/tab input scrolls to next pod if no favourites set
     // TODO: add color to vehicle names when they are favorited
     // TODO: implement this behaviour on normal vehicle select
-    fn CallbackVehicle(m: *Menu) callconv(.C) bool {
-        if (m.inputs.cb) |cb| {
+    fn CallbackVehicle(menu: *Menu, _: *MenuItem) callconv(.C) bool {
+        if (menu.inputs.cb) |cb| {
             // scroll favorites
-            if (cb[INPUT_JUMP_LF](.JustOn)) {
+            if (cb[INPUT_TAB_LF](.JustOn)) {
                 const bitmask = s_favorite_vehicles & 0x7FFFFF;
                 if (bitmask == 0) {
                     values.vehicle = @mod(values.vehicle - 1, 23);
@@ -1273,7 +1298,7 @@ const QuickRaceMenu = extern struct {
                 values.vehicle = @intCast(i orelse (31 - @clz(bitmask)));
                 return true;
             }
-            if (cb[INPUT_JUMP_RT](.JustOn)) {
+            if (cb[INPUT_TAB_RT](.JustOn)) {
                 const bitmask = s_favorite_vehicles & 0x7FFFFF;
                 if (bitmask == 0) {
                     values.vehicle = @mod(values.vehicle + 1, 23);
@@ -1319,26 +1344,58 @@ const QuickRaceMenu = extern struct {
     };
 
     var TrackPresets: []const i32 = &TrackPresetsPlanet;
-    var track_order_circuit: bool = false;
 
-    fn CallbackTrack(m: *Menu) callconv(.C) bool {
-        if (m.inputs.cb) |cb| {
+    fn set_track_order(circuit: bool) void {
+        if (circuit == using_circuit_track_order) return;
+        defer using_circuit_track_order = circuit;
+
+        // FIXME: more robust way of making sure we are referencing the
+        //  correct menu item
+        // at this point, we know we need to remap either way
+        const it: *MenuItem = &MenuItems[3];
+        assert(std.mem.eql(u8, "Track", std.mem.span(it.label.?)));
+        if (circuit) {
+            TrackPresets = &TrackPresetsCircuit;
+            values.track = rtr.TrackIdMenuMap[@intCast(values.track)];
+            it.options = &rtr.TrackNameByMenu;
+        } else {
+            TrackPresets = &TrackPresetsPlanet;
+            values.track = rtr.TrackMenuIdMap[@intCast(values.track)];
+            it.options = &rtr.TrackNameById;
+        }
+    }
+
+    fn CallbackTrack(menu: *Menu, _: *MenuItem) callconv(.C) bool {
+        if (menu.inputs.cb) |cb| {
             // scroll presets
-            if (cb[INPUT_JUMP_LF](.JustOn)) {
+            if (cb[INPUT_TAB_LF](.JustOn)) {
                 const i = bmem.lastIndexOfScalarSmaller(i32, TrackPresets, values.track);
                 values.track = TrackPresets[i orelse TrackPresets.len - 1];
                 return true;
             }
-            if (cb[INPUT_JUMP_RT](.JustOn)) {
+            if (cb[INPUT_TAB_RT](.JustOn)) {
                 const i = bmem.indexOfScalarGreater(i32, TrackPresets, values.track);
                 values.track = TrackPresets[i orelse 0];
                 return true;
+            }
+            if (cb[INPUT_INTERACT](.JustOn)) {
+                set_track_order(!using_circuit_track_order);
+
+                // 44 = sfx_vox_pdroid_h2.wav
+                // 45 = sfx_vox_pdroid_i1.wav
+                var sound_id: i16 = if (using_circuit_track_order) 44 else 45;
+                rso.swrSound_PlaySoundMacro(sound_id);
+
+                if (h_s_menu_track_order) |h|
+                    gf.ASettingUpdate(h, .{ .str = if (!using_circuit_track_order) "PLANET" else "CIRCUIT" });
+
+                return false;
             }
         }
         return false;
     }
 
-    fn CallbackN64Pitch(_: *Menu) callconv(.C) bool {
+    fn CallbackN64Pitch(_: *Menu, _: *MenuItem) callconv(.C) bool {
         if (values.n64_pitch != values.n64_pitch_applied) {
             PatchN64Pitch(values.n64_pitch != 0);
             values.n64_pitch_applied = values.n64_pitch;
@@ -1346,8 +1403,8 @@ const QuickRaceMenu = extern struct {
         return false;
     }
 
-    fn CallbackRaceButton(m: *Menu) callconv(.C) bool {
-        if (m.inputs.cb) |cb| {
+    fn CallbackRaceButton(menu: *Menu, _: *MenuItem) callconv(.C) bool {
+        if (menu.inputs.cb) |cb| {
             if (cb[INPUT_INTERACT](.JustOn)) {
                 load_race();
             }

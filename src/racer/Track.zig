@@ -88,7 +88,7 @@ pub const TrackNameById = [25][*:0]const u8{
 // FIXME: sentinel-terminated slice string type
 /// menu order id -> track name
 pub const TrackNameByMenu: [25][*:0]const u8 = blk: {
-    var map: [25][:0]const u8 = undefined;
+    var map: [25][*:0]const u8 = undefined;
     for (0..25) |i| map[i] = TrackNameById[TrackMenuIdMap[i]];
     break :blk map;
 };

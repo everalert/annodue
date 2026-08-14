@@ -1068,6 +1068,12 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 }
 
 pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
+    // create settings.ini very early, but late enough that all plugins/subsystems
+    // have had a chance to register their settings in either Init or InitLate
+    if (rti.FRAMECOUNT.* == 1)
+        ASettings.saveAuto() catch {};
+
+    // keep settings file updated through any load screen
     if (gf.SInRace().new() or (gf.SRaceStateNew() and gf.SRaceState() == .PreRace))
         ASettings.saveAuto() catch {};
 

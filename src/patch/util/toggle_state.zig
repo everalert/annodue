@@ -1,3 +1,5 @@
+const std = @import("std");
+
 /// Boolean state tracking that encodes whether or not the state changed during
 /// the most recent update. Used to differentiate behaviours based on new-ness
 /// of the state, such as clicking vs holding a button.
@@ -27,3 +29,27 @@ pub const ToggleState = enum(u8) {
         self.* = @enumFromInt(next | changed);
     }
 };
+
+test "ToggleState" {
+    var ts: ToggleState = .Off;
+
+    ts.update(true);
+    try std.testing.expect(ts == .JustOn);
+    try std.testing.expect(ts.on() == true);
+    try std.testing.expect(ts.new() == true);
+
+    ts.update(true);
+    try std.testing.expect(ts == .On);
+    try std.testing.expect(ts.on() == true);
+    try std.testing.expect(ts.new() == false);
+
+    ts.update(false);
+    try std.testing.expect(ts == .JustOff);
+    try std.testing.expect(ts.on() == false);
+    try std.testing.expect(ts.new() == true);
+
+    ts.update(false);
+    try std.testing.expect(ts == .Off);
+    try std.testing.expect(ts.on() == false);
+    try std.testing.expect(ts.new() == false);
+}

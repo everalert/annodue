@@ -5,14 +5,14 @@ const std = @import("std");
 const win32 = @import("zigwin32");
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
-const st = @import("active_state.zig");
+const st = @import("toggle_state.zig");
 const mem = @import("memory.zig");
 const input = @import("../core/input.zig");
 
 const r = @import("racer");
 const rt = r.Time;
 
-pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
+pub const InputGetFnType = *const fn (st.ToggleState) callconv(.C) bool;
 
 pub const ScrollControl = extern struct {
     scroll: f32 = 0,

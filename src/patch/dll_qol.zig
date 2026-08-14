@@ -21,7 +21,7 @@ const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
-const st = @import("util/active_state.zig");
+const st = @import("util/toggle_state.zig");
 const bmem = @import("util/base/base_memory.zig");
 
 const rg = @import("racer").Global;
@@ -226,7 +226,7 @@ const QolState = struct {
     var cam_prev: u32 = 0xFFFFFFFF;
     var cam_cman: ?*re.cMan.cMan = null;
 
-    var autoreset_dead: st.ActiveState = .Off;
+    var autoreset_dead: st.ToggleState = .Off;
     var autoreset_dead_timer: f32 = 0;
     var autoreset_fire_timer: f32 = 0;
     var autoreset_has_boost_charged: bool = false;
@@ -1025,7 +1025,7 @@ const QuickRaceMenu = extern struct {
     var using_circuit_track_order: bool = false;
 
     const open_threshold: f32 = 0.75;
-    var menu_active: st.ActiveState = .Off;
+    var menu_active: st.ToggleState = .Off;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
     var gf: *GlobalFn = undefined;
@@ -1050,7 +1050,7 @@ const QuickRaceMenu = extern struct {
     const MenuInput = extern struct {
         kb: VIRTUAL_KEY,
         xi: XINPUT_GAMEPAD_BUTTON_INDEX,
-        state: st.ActiveState = undefined,
+        state: st.ToggleState = undefined,
     };
 
     var inputs = [_]MenuInput{
@@ -1078,7 +1078,7 @@ const QuickRaceMenu = extern struct {
 
     fn get_input(comptime input: *MenuInput) InputGetFnType {
         const s = struct {
-            fn gi(i: st.ActiveState) callconv(.C) bool {
+            fn gi(i: st.ToggleState) callconv(.C) bool {
                 return input.state == i;
             }
         };

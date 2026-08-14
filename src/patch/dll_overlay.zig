@@ -17,7 +17,7 @@ const rti = @import("racer").Time;
 
 const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
-const ActiveState = @import("util/active_state.zig").ActiveState;
+const ToggleState = @import("util/toggle_state.zig").ToggleState;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -74,11 +74,11 @@ const Overlay = struct {
     var s_show_speed_raw: bool = true;
     var s_show_speed_offsets: bool = true;
 
-    var fast_state: ActiveState = .Off;
+    var fast_state: ToggleState = .Off;
     var fast_time: f32 = 0;
-    var slow_state: ActiveState = .Off;
+    var slow_state: ToggleState = .Off;
     var slow_time: f32 = 0;
-    var swst_state: ActiveState = .Off;
+    var swst_state: ToggleState = .Off;
     var swst_time: f32 = 0;
     var mfg_time: f32 = 0;
     var mfg_timing: bool = false;

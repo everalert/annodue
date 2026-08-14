@@ -12,7 +12,7 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 const debug = @import("core/Debug.zig");
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
-const st = @import("util/active_state.zig");
+const st = @import("util/toggle_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
@@ -140,11 +140,11 @@ const state = struct {
     var scrub_input_dec = scrub_input_dec_data.inputMap();
     var scrub_input_inc = scrub_input_inc_data.inputMap();
 
-    fn scrub_dec(s: st.ActiveState) callconv(.C) bool {
+    fn scrub_dec(s: st.ToggleState) callconv(.C) bool {
         return scrub_input_dec.gets() == s;
     }
 
-    fn scrub_inc(s: st.ActiveState) callconv(.C) bool {
+    fn scrub_inc(s: st.ToggleState) callconv(.C) bool {
         return scrub_input_inc.gets() == s;
     }
 

@@ -8,7 +8,7 @@ const core = @import("core.zig");
 const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 
 const fl = @import("../util/flash.zig");
-const st = @import("../util/active_state.zig");
+const st = @import("../util/toggle_state.zig");
 const nt = @import("../util/normalized_transform.zig");
 const mem = @import("../util/memory.zig");
 
@@ -93,7 +93,7 @@ pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
         const vis_time: f32 = 0.15;
         var start: ?u32 = null;
         var vis: f32 = 0;
-        var prac: st.ActiveState = .Off;
+        var prac: st.ToggleState = .Off;
     };
 
     f.prac.update(gf.SPracticeMode());
@@ -129,7 +129,7 @@ pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
 pub fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     const toggle_input: bool = gf.InputGetKb(.P, .JustOn);
 
-    // TODO: convert gs.practice_mode to ActiveState
+    // TODO: convert gs.practice_mode to ToggleState
     // TODO: queue toggling off for next reset from in race
     // TODO: disable toggling in race results screen
     if (toggle_input and

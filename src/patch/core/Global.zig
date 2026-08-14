@@ -15,8 +15,8 @@ const asettings = @import("ASettings.zig");
 const rterrain = @import("RTerrain.zig");
 const rtrigger = @import("RTrigger.zig");
 
-const st = @import("../util/active_state.zig");
-const ActiveState = st.ActiveState;
+const st = @import("../util/toggle_state.zig");
+const ToggleState = st.ToggleState;
 const xinput = @import("../util/xinput.zig");
 const dbg = @import("../util/debug.zig");
 const msg = @import("../util/message.zig");
@@ -88,7 +88,7 @@ fn SFPSAvg() callconv(.C) f32 {
     return GLOBAL_STATE.fps_avg;
 } // fps_avg
 
-fn SInRace() callconv(.C) ActiveState {
+fn SInRace() callconv(.C) ToggleState {
     return GLOBAL_STATE.in_race;
 } // in_race
 
@@ -104,27 +104,27 @@ fn SRaceStateNew() callconv(.C) bool {
     return GLOBAL_STATE.race_state_new;
 } // race_state_new
 
-fn SPlayerBoostCharging() callconv(.C) ActiveState {
+fn SPlayerBoostCharging() callconv(.C) ToggleState {
     return GLOBAL_STATE.player.boost_charging;
 } // player -> boost_charging
 
-fn SPlayerBoostReady() callconv(.C) ActiveState {
+fn SPlayerBoostReady() callconv(.C) ToggleState {
     return GLOBAL_STATE.player.boost_ready;
 } // player -> boost_ready
 
-fn SPlayerBoosting() callconv(.C) ActiveState {
+fn SPlayerBoosting() callconv(.C) ToggleState {
     return GLOBAL_STATE.player.boosting;
 } // player -> boosting
 
-fn SPlayerUnderheating() callconv(.C) ActiveState {
+fn SPlayerUnderheating() callconv(.C) ToggleState {
     return GLOBAL_STATE.player.underheating;
 } // player -> underheating
 
-fn SPlayerOverheating() callconv(.C) ActiveState {
+fn SPlayerOverheating() callconv(.C) ToggleState {
     return GLOBAL_STATE.player.overheating;
 } // player -> overheating
 
-fn SPlayerDead() callconv(.C) ActiveState {
+fn SPlayerDead() callconv(.C) ToggleState {
     return GLOBAL_STATE.player.dead;
 } // player -> dead
 

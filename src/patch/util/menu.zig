@@ -6,7 +6,7 @@ const w32 = @import("zigwin32");
 const w32kb = w32.ui.input.keyboard_and_mouse;
 
 const ScrollControl = @import("scroll_control.zig").ScrollControl;
-const st = @import("active_state.zig");
+const st = @import("toggle_state.zig");
 
 const r = @import("racer");
 const rt = r.Text;
@@ -17,7 +17,7 @@ const rto = rt.TextStyleOpts;
 // TODO: scrolling menu when the menu is too long to fit on screen
 // TODO: convert menus to GDraw (after core menu system impl)
 
-pub const InputGetFnType = *const fn (st.ActiveState) callconv(.C) bool;
+pub const InputGetFnType = *const fn (st.ToggleState) callconv(.C) bool;
 
 /// @return     whether or not to play sound effect
 pub const MenuCallbackType = *const fn (*Menu) callconv(.C) bool;

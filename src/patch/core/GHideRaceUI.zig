@@ -9,7 +9,7 @@ const rq = @import("racer").Quad;
 const rg = @import("racer").Global;
 
 const mem = @import("../util/memory.zig");
-const ActiveState = @import("../util/active_state.zig").ActiveState;
+const ToggleState = @import("../util/toggle_state.zig").ToggleState;
 
 // FIXME: resolve clashing with practice mode indicators (should not hide them
 // even when everything else is). also makes lighting effects disappear
@@ -19,7 +19,7 @@ pub const HideRaceUI = extern struct {
     var hidden: bool = false;
     var owner: ?u16 = null;
 
-    var paused: ActiveState = .On; // force .JustOff on first frame
+    var paused: ToggleState = .On; // force .JustOff on first frame
 
     pub fn hide(o: u16) bool {
         if (hidden or owner != null) return false;

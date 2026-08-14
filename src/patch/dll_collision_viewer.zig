@@ -23,7 +23,7 @@ const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
-const st = @import("util/active_state.zig");
+const st = @import("util/toggle_state.zig");
 
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
@@ -152,7 +152,7 @@ var preset_index: i32 = 0;
 const QuickRaceMenuInput = extern struct {
     kb: VIRTUAL_KEY,
     xi: XINPUT_GAMEPAD_BUTTON_INDEX,
-    state: st.ActiveState = undefined,
+    state: st.ToggleState = undefined,
 };
 
 const ConvertedMenuItem = struct {
@@ -193,7 +193,7 @@ const QuickRaceMenu = extern struct {
 
     fn get_input(comptime input: *QuickRaceMenuInput) InputGetFnType {
         const s = struct {
-            fn gi(i: st.ActiveState) callconv(.C) bool {
+            fn gi(i: st.ToggleState) callconv(.C) bool {
                 return input.state == i;
             }
         };

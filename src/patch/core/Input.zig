@@ -10,7 +10,7 @@ const RECT = w32.foundation.RECT;
 const HWND = w32.foundation.HWND;
 
 const xinput = @import("../util/xinput.zig");
-const st = @import("../util/active_state.zig");
+const st = @import("../util/toggle_state.zig");
 
 const rg = @import("racer").Global;
 
@@ -24,7 +24,7 @@ pub const INPUT_NEW: u8 = 0b10;
 // up stuff here so that util doesn't depend on core an../core/more
 
 const InputState = extern struct {
-    var kb: [256]st.ActiveState = std.mem.zeroes([256]st.ActiveState);
+    var kb: [256]st.ToggleState = std.mem.zeroes([256]st.ToggleState);
     var xbox_raw: xinput.XINPUT_GAMEPAD = std.mem.zeroInit(xinput.XINPUT_GAMEPAD, .{});
     var xbox: INPUT_XINPUT = std.mem.zeroInit(INPUT_XINPUT, .{});
     var mouse: INPUT_MOUSE = std.mem.zeroInit(INPUT_MOUSE, .{});
@@ -51,7 +51,7 @@ pub fn InputUpdateB(_: *GlobalFn) callconv(.C) void {
 // TODO: add 'dominant' field, as a way of communicating which device is 'active'
 pub const InputMap = struct {
     ptr: *anyopaque,
-    s_val: ?*st.ActiveState = null,
+    s_val: ?*st.ToggleState = null,
     f_val: ?*f32 = null,
     updateFn: *const fn (ptr: *anyopaque, gf: *GlobalFn) void,
 
@@ -59,7 +59,7 @@ pub const InputMap = struct {
         self.updateFn(self.ptr, gf);
     }
 
-    pub fn gets(self: *InputMap) st.ActiveState {
+    pub fn gets(self: *InputMap) st.ToggleState {
         return if (self.s_val) |v| v.* else .Off;
     }
 
@@ -107,7 +107,7 @@ pub const AxisInputMap = struct {
 pub const ButtonInputMap = struct {
     kb: ?w32kb.VIRTUAL_KEY = null,
     xi: ?XINPUT_GAMEPAD_BUTTON_INDEX = null,
-    state: st.ActiveState = .Off,
+    state: st.ToggleState = .Off,
 
     fn update(ptr: *anyopaque, gf: *GlobalFn) void {
         const self: *ButtonInputMap = @ptrCast(@alignCast(ptr));
@@ -130,7 +130,7 @@ pub const ButtonInputMap = struct {
 // XINPUT GAMEPAD
 
 pub const INPUT_XINPUT = extern struct {
-    Button: [std.enums.values(XINPUT_GAMEPAD_BUTTON_INDEX).len]st.ActiveState,
+    Button: [std.enums.values(XINPUT_GAMEPAD_BUTTON_INDEX).len]st.ToggleState,
     Axis: [std.enums.values(XINPUT_GAMEPAD_AXIS_INDEX).len]f32,
 };
 
@@ -181,7 +181,7 @@ pub fn update_xinput() callconv(.C) void {
     InputState.xbox.Axis[5] = @as(f32, @floatFromInt(InputState.xbox_raw.sThumbRY)) / 32767;
 }
 
-pub fn get_xinput_button(button: XINPUT_GAMEPAD_BUTTON_INDEX) callconv(.C) st.ActiveState {
+pub fn get_xinput_button(button: XINPUT_GAMEPAD_BUTTON_INDEX) callconv(.C) st.ToggleState {
     return InputState.xbox.Button[@intFromEnum(button)];
 }
 
@@ -204,11 +204,11 @@ pub fn update_kb() callconv(.C) void {
     }
 }
 
-pub fn get_kb_raw(keycode: w32kb.VIRTUAL_KEY) callconv(.C) st.ActiveState {
+pub fn get_kb_raw(keycode: w32kb.VIRTUAL_KEY) callconv(.C) st.ToggleState {
     return InputState.kb[@as(u8, @truncate(@intFromEnum(keycode)))];
 }
 
-pub fn get_kb(keycode: w32kb.VIRTUAL_KEY, state: st.ActiveState) callconv(.C) bool {
+pub fn get_kb(keycode: w32kb.VIRTUAL_KEY, state: st.ToggleState) callconv(.C) bool {
     return get_kb_raw(keycode) == state;
 }
 
@@ -235,7 +235,7 @@ pub const INPUT_MOUSE = extern struct {
     raw_d: POINT,
     //window: POINT,
     //window_d: POINT,
-    //window_in: st.ActiveState,
+    //window_in: st.ToggleState,
 };
 
 // FIXME: add window-relative coordinates to output in OS units, not 640x480
@@ -292,6 +292,6 @@ pub fn get_mouse_raw_d() callconv(.C) POINT {
 //    return InputState.mouse.window_d;
 //}
 
-//pub fn get_mouse_inside() callconv(.C) st.ActiveState {
+//pub fn get_mouse_inside() callconv(.C) st.ToggleState {
 //    return InputState.mouse.window_in;
 //}

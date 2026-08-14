@@ -7,7 +7,7 @@ const BOOL = w32.foundation.BOOL;
 const HWND = w32.foundation.HWND;
 const HINSTANCE = w32.foundation.HINSTANCE;
 
-const ActiveState = @import("../util/active_state.zig").ActiveState;
+const ToggleState = @import("../util/toggle_state.zig").ToggleState;
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 const HandleSOA = @import("../util/handle_map_soa.zig").Handle;
@@ -52,17 +52,17 @@ pub const GlobalState = extern struct {
     //fps: f32 = 0,
     fps_avg: f32 = 0,
 
-    in_race: ActiveState = .Off,
+    in_race: ToggleState = .Off,
     race_state: RaceState = .None,
     race_state_prev: RaceState = .None,
     race_state_new: bool = false,
     player: extern struct {
-        boosting: ActiveState = .Off,
-        boost_charging: ActiveState = .Off,
-        boost_ready: ActiveState = .Off,
-        underheating: ActiveState = .On,
-        overheating: ActiveState = .Off,
-        dead: ActiveState = .Off,
+        boosting: ToggleState = .Off,
+        boost_charging: ToggleState = .Off,
+        boost_ready: ToggleState = .Off,
+        underheating: ToggleState = .On,
+        overheating: ToggleState = .Off,
+        dead: ToggleState = .Off,
         deaths: u32 = 0,
     } = .{},
 };
@@ -99,13 +99,13 @@ pub const GlobalFunction = extern struct {
     ASettingSectionResetFile: *const fn (handle: Handle(u16)) callconv(.C) void,
     ASettingSectionClean: *const fn (handle: Handle(u16)) callconv(.C) void,
     // Input
-    InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ActiveState) callconv(.C) bool,
-    InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) callconv(.C) ActiveState,
+    InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ToggleState) callconv(.C) bool,
+    InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) callconv(.C) ToggleState,
     InputGetMouse: *const fn () callconv(.C) POINT,
     InputGetMouseDelta: *const fn () callconv(.C) POINT,
     InputLockMouse: *const fn () callconv(.C) void,
-    //InputGetMouseInWindow: *const fn () callconv(.C) ActiveState,
-    InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) callconv(.C) ActiveState,
+    //InputGetMouseInWindow: *const fn () callconv(.C) ToggleState,
+    InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) callconv(.C) ToggleState,
     InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) callconv(.C) f32,
     // Game
     GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) callconv(.C) bool,
@@ -142,16 +142,16 @@ pub const GlobalFunction = extern struct {
     SPracticeMode: *const fn () callconv(.C) bool, // practice_mode, WARN: some funcs write to this
     SWindowInForeground: *const fn () callconv(.C) bool, // window_in_foreground
     SFPSAvg: *const fn () callconv(.C) f32, // fps_avg
-    SInRace: *const fn () callconv(.C) ActiveState, // in_race
+    SInRace: *const fn () callconv(.C) ToggleState, // in_race
     SRaceState: *const fn () callconv(.C) RaceState, // race_state
     SRaceStatePrev: *const fn () callconv(.C) RaceState, // race_state_prev
     SRaceStateNew: *const fn () callconv(.C) bool, // race_state_new
-    SPlayerBoosting: *const fn () callconv(.C) ActiveState, // player -> boosting
-    SPlayerBoostCharging: *const fn () callconv(.C) ActiveState, // player -> boost_charging
-    SPlayerBoostReady: *const fn () callconv(.C) ActiveState, // player -> boost_ready
-    SPlayerUnderheating: *const fn () callconv(.C) ActiveState, // player -> underheating
-    SPlayerOverheating: *const fn () callconv(.C) ActiveState, // player -> overheating
-    SPlayerDead: *const fn () callconv(.C) ActiveState, // player -> dead
+    SPlayerBoosting: *const fn () callconv(.C) ToggleState, // player -> boosting
+    SPlayerBoostCharging: *const fn () callconv(.C) ToggleState, // player -> boost_charging
+    SPlayerBoostReady: *const fn () callconv(.C) ToggleState, // player -> boost_ready
+    SPlayerUnderheating: *const fn () callconv(.C) ToggleState, // player -> underheating
+    SPlayerOverheating: *const fn () callconv(.C) ToggleState, // player -> overheating
+    SPlayerDead: *const fn () callconv(.C) ToggleState, // player -> dead
     SPlayerDeaths: *const fn () callconv(.C) u32, // player -> deaths
 };
 

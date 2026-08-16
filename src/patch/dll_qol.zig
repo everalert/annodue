@@ -1188,6 +1188,7 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
+        gf.ASettingSaveAuto();
         rg.PAUSE_SCROLLINOUT.* = open_threshold;
         if (!gf.GFreezeOn()) return;
         //rf.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);

@@ -1073,8 +1073,8 @@ pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
     if (rti.FRAMECOUNT.* == 1)
         ASettings.saveAuto() catch {};
 
-    // keep settings file updated through any load screen
-    if (gf.SInRace().new() or (gf.SRaceStateNew() and gf.SRaceState() == .PreRace))
+    // keep settings file updated through any load or hang/race state transition
+    if (gf.SInRace().new() or gf.SRaceStateNew() or gf.SHangStateNew())
         ASettings.saveAuto() catch {};
 
     ASettings.hot_reload.Update(rti.TIMESTAMP.*);

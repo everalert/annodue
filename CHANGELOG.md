@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- `RenderSceneBeginA`
 	- `RenderSceneEndB`
 	- `RenderSceneEndA`
-- Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`
+- Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`, `hang_state`, `hang_state_prev`, `hang_state_new`
 - Backend(Core): Global functions `SPlayerBoostCharging`, `SPlayerBoostReady`
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
@@ -68,8 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: `ms_timer_enable` now acts as a global toggle for the millisecend timers
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util
-- Backend(Core): Global State version `5` to `8`
-- Backend(Core): Global Function version `29` to `32`
+- Backend(Core): Global State version `5` to `9`
+- Backend(Core): Global Function version `29` to `33`
 - Backend(Core): Settings now also autosave on race reset
 - Backend(Core): All global state migrated to getter functions in Global Function API
 - Backent(Util): `menu_item` merged into `menu`

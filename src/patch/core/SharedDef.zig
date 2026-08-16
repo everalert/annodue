@@ -27,8 +27,9 @@ const ModelTriggerDescription = r.Model.ModelTriggerDescription;
 const TextDef = r.Text.TextDef;
 
 pub const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
+pub const HangState = r.Entity.Hang.HangMenuScreen;
 
-pub const GLOBAL_STATE_VERSION = 8;
+pub const GLOBAL_STATE_VERSION = 9;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -56,6 +57,9 @@ pub const GlobalState = extern struct {
     race_state: RaceState = .None,
     race_state_prev: RaceState = .None,
     race_state_new: bool = false,
+    hang_state: HangState = .None,
+    hang_state_prev: HangState = .None,
+    hang_state_new: bool = false,
     player: extern struct {
         boosting: ToggleState = .Off,
         boost_charging: ToggleState = .Off,
@@ -67,7 +71,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 32;
+pub const GLOBAL_FUNCTION_VERSION = 33;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -146,6 +150,9 @@ pub const GlobalFunction = extern struct {
     SRaceState: *const fn () callconv(.C) RaceState, // race_state
     SRaceStatePrev: *const fn () callconv(.C) RaceState, // race_state_prev
     SRaceStateNew: *const fn () callconv(.C) bool, // race_state_new
+    SHangState: *const fn () callconv(.C) HangState, // hang_state
+    SHangStatePrev: *const fn () callconv(.C) HangState, // hang_state_prev
+    SHangStateNew: *const fn () callconv(.C) bool, // hang_state_new
     SPlayerBoosting: *const fn () callconv(.C) ToggleState, // player -> boosting
     SPlayerBoostCharging: *const fn () callconv(.C) ToggleState, // player -> boost_charging
     SPlayerBoostReady: *const fn () callconv(.C) ToggleState, // player -> boost_ready

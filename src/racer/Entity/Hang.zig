@@ -105,7 +105,7 @@ pub const Hang = extern struct {
     _unk_CF: u8, // possibly unused
 };
 
-const HangMenuScreen = enum(i32) {
+pub const HangMenuScreen = enum(i32) {
     None = -1,
     Legal = 0,
     Title = 1,
@@ -129,14 +129,14 @@ const HangMenuScreen = enum(i32) {
     _unk_19 = 19,
 };
 
-const HangRoom = enum(i32) {
+pub const HangRoom = enum(i32) {
     Shop = 0,
     Junkyard = 1,
     Hangar = 2,
     Cantina = 3,
 };
 
-const HangCameraState = enum(i32) {
+pub const HangCameraState = enum(i32) {
     None = -1,
     _unk_0 = 0,
     CounterBuyParts = 1,
@@ -193,7 +193,7 @@ const HangCameraState = enum(i32) {
 //    _unk_03,
 //};
 
-const JunkyardPart = extern struct {
+pub const JunkyardPart = extern struct {
     Category: i8,
     Level: u8,
     Health: u8,

@@ -292,7 +292,7 @@ const QuickRaceMenu = extern struct {
     }
 
     fn update() void {
-        if (gf.SInRace() == .JustOn)
+        if (gf.SInRace() == .JustOn or (gf.SInRace().on() and !initialized))
             init();
 
         if (!initialized or !gf.SPracticeMode() or !gf.SInRace().on()) {

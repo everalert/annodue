@@ -1604,8 +1604,13 @@ export fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
         QuickRaceMenu.update();
 }
 
+// FIXME: s_default_camera seems to be updated to the wrong value sometimes,
+//  possibly due to the auto post-race camera? unsure why but could be due to
+//  timing issues wrt the race state global function updating its data vs when
+//  the race state actually changes; i.e. it could be that the first frame of
+//  post-race camera is still counted as racing state
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
-// however, the text flushing DOES run on those frames, apparently from a different callsite
+//  however, the text flushing DOES run on those frames, apparently from a different callsite
 export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
     const jdge = re.Manager.entity(.Jdge, 0);

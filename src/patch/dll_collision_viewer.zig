@@ -279,6 +279,7 @@ const QuickRaceMenu = extern struct {
     }
 
     fn open() void {
+        gf.ASettingSaveAuto();
         if (!gf.GFreezeOn()) return;
         rs.swrSound_PlaySound(78, 6, 0.25, 1.0, 0);
         data.idx = 0;
@@ -286,13 +287,14 @@ const QuickRaceMenu = extern struct {
     }
 
     fn close() void {
+        gf.ASettingSaveAuto();
         if (!gf.GFreezeOff()) return;
         rs.swrSound_PlaySound(77, 6, 0.25, 1.0, 0);
         menu_active = false;
     }
 
     fn update() void {
-        if (gf.SInRace() == .JustOn)
+        if (gf.SInRace() == .JustOn or (gf.SInRace().on() and !initialized))
             init();
 
         if (!initialized or !gf.SPracticeMode() or !gf.SInRace().on()) {

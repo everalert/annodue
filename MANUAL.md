@@ -1,22 +1,62 @@
 # User Manual
 
-##### *Disclaimer*
+> [!WARNING]
+> Annodue is in early active development. Everything indicated in this document is 
+> volatile and subject to change, including overall structure and naming. Several 
+> major features are not yet implemented. In future updates, you may be required to 
+> redo your configuration if there are breaking changes to the settings format.
 
-*Annodue is in early active development. Everything indicated in this document is volatile and subject to change, including overall structure and naming. Several major features are not yet implemented. In future updates, you may be required to redo your configuration if there are breaking changes to the settings format.*
+### Key Information & Notes
 
-#### Key Information & Notes
+- Hold `Shift` while launching the game to run it in vanilla mode (no Annodue modifications).
+- Press `P` to toggle Practice Mode. 
+    - Features which change gameplay or provide an unfair information advantage
+  	  require Practice Mode to be in effect. See [features](#features) for details.
+    - Practice Mode can be toggled ON at any time. Practice Mode cannot be toggled
+      OFF during a race, except for before the countdown starts.
+- Control configuration is planned, but currently not possible. Similarly, DirectInput 
+  support for Annodue interactions is planned, but not yet implemented.
+- If you normally need to run a specific `dinput.dll` to prevent the game from 
+  crashing, you can place it in the `annodue` folder and the game will use it.
 
-Hold `Shift` while launching the game to run it in vanilla mode (no Annodue modifications).
+### Settings
 
-Press `P` to toggle Practice Mode. This mode is required to use certain features, and cannot be toggled off during a race.
+<!-- 
+	NOTE: candidates for Practice Mode restriction:
+		- QOL: Fast countdown timer
+		- QOL: F1-F4 camera input fix
+		- Cam7: General restriction
+		- Cam7: Teleport pod to camera
+		
+	NOTE: known Practice Mode restriction issues:
+		- QOL: some settings not being disabled if Practice Mode is toggled OFF before race countdown
+-->
 
-Control configuration is planned, but currently not possible. Similarly, DirectInput support is planned, but not yet implemented.
+> [!IMPORTANT]
+> Annodue does not ship with a settings file. To create a settings file, load the
+> game to the title screen after installing Annodue.
 
-If you normally need to run a specific `dinput.dll` to prevent the game from crashing, you can place it in the `annodue` folder and the game use it.
+- Settings can be changed by editing `annodue/settings.ini`.
+- Some settings will also be updated when using various features, so that the
+  effect is persistent across game sessions. See [features](#features) for details.
+- Generally, settings can be changed by editing the settings file while the game
+  is running, and the effect can be seen without restarting the game. Some exceptions
+  apply; see [features](#features) for details.
+- The settings file will be updated by Annodue at the following times:
+  	- When first reaching the title screen.
+  	- On loading screen transitions. When going between race and menu scenes, or
+  	  when restarting a race.
+  	- On menu transitions. For example, when selecting a vehicle and moving to the
+  	  track select.
+  	- On race state transitions. For example, when the camera sweep ends and the
+  	  countdown begins.
+  	- At special moments defined by plugins. See [features](#features) for details.
+- An in-game interface for editing settings is planned, but not yet implemented.
 
-Settings can be changed by editing `annodue/settings.ini`. Changes will be reflected in the game in realtime when you save this file, unless indicated otherwise below. In-game editing of settings is planned, but not yet implemented.
+#### Setting Types
 
-##### Setting Types
+Each setting uses a specific format. Refer to the following table to know how each 
+setting should be formatted.
 
 |Type|Possible Values|Note|
 |:---|:---|:---|
@@ -24,9 +64,11 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 |`u32` |`0` to `4294967295`|whole number
 |`i32` |`-2147483648` to `2147483647`|whole number
 |`f32` |any decimal number|rounded to 2 decimal places
-|`str` |any text up to 63 characters|individual setting may only accept specific strings
+|`str` |any ascii text up to 63 characters long|individual setting may only accept specific strings
 
-##### Global Settings
+#### Global Settings
+
+Top-level settings that do not belong to a specific feature group.
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
@@ -37,7 +79,7 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 
 ## Features
 
-##### Feature Summary
+#### Feature Summary
 
 - Plugin system (custom plugins disabled for now)
 - New game features
@@ -71,30 +113,44 @@ Settings can be changed by editing `annodue/settings.ini`. Changes will be refle
 
 ### Free Camera
 
-Usable both in race and in cantina. Controlling the camera will not override game inputs, meaning you can still drive around and navigate menus while in free look.
+Usable both in race and in cantina. Controlling the camera will not override game 
+inputs, meaning you can still drive around and navigate menus while in free look.
 
-##### Controls
+- FPS-style controls
+- Adjustable speed, smoothness and mouse sensitivity
+- Pan-and-orbit alternate mode
+- Planar movement alternate mode
+- Look at pod hotkey
+- Teleport pod to camera hotkey
+- Ability to disable race inputs while in free camera
+- Ability to disable UI while in free camera
+
+The following features affect saved settings during normal use:
+- Disabling race inputs: toggling with hotkey affects `default_disable_input` setting
+- Disabling UI: toggling with hotkey affects `default_hide_ui` setting
+
+#### Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
 |Toggle                 |`0`                 |`Back`     |&nbsp;
-|XY-move                |`W A S D`           |`L Stick`  |&nbsp;
-|XY-rotate              |`Mouse` or `↑ ↓ ← →`|`R Stick`  |&nbsp;
+|Move                   |`W A S D`           |`L Stick`  |&nbsp;
+|Look                   |`Mouse` or `↑ ↓ ← →`|`R Stick`  |&nbsp;
 |Z-move up              |`Space`             |`L Trigger`|&nbsp;
 |Z-move down            |`Shift`             |`R Trigger`|&nbsp;
-|movement up            |`E`                 |`RB`       |&nbsp;
-|movement down          |`Q`                 |`LB`       |up+down to return to default
-|rotation up            |`Z`                 |`RSB`      |&nbsp;
-|rotation down          |`C`                 |`LSB`      |up+down to return to default
-|damping                |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
-|toggle planar movement |`Tab`               |`B`        |&nbsp;
-|toggle hide ui         |`6`                 |&nbsp;     |&nbsp;
-|toggle disable input   |`7`                 |&nbsp;     |pod will not drive when on
-|pan and orbit mode     |`RCtrl`             |`X`        |hold
-|move pod to camera     |`Bksp`              |`X`        |hold while exiting free-cam
-|orient camera to pod   |`\`                 |&nbsp;     |will set rotation point to pod in pan/orbit mode
+|Movement speed up      |`E`                 |`RB`       |&nbsp;
+|Movement speed down    |`Q`                 |`LB`       |up+down to return to default
+|Rotation speed up      |`Z`                 |`RSB`      |&nbsp;
+|Rotation speed down    |`C`                 |`LSB`      |up+down to return to default
+|Damping                |`X`                 |`Y`        |hold to edit movement/rotation smoothness instead of speed
+|Toggle planar movement |`Tab`               |`B`        |&nbsp;
+|Toggle hiding UI       |`6`                 |&nbsp;     |&nbsp;
+|Toggle disabling input |`7`                 |&nbsp;     |pod will not drive when on
+|Pan-and-orbit mode     |`RCtrl`             |`X`        |hold
+|Move pod to camera     |`Bksp`              |`X`        |hold while exiting free-cam
+|Look at pod            |`\`                 |&nbsp;     |will set rotation point to pod in pan-and-orbit mode
 
-##### Settings
+#### Settings
 
 Configured under `[cam7]`
 
@@ -114,7 +170,7 @@ Configured under `[cam7]`
 |`default_move_smoothing`    |`u32` |`2`   |0 to 3
 |`default_rotation_speed`    |`u32` |`3`   |0 to 4
 |`default_rotation_smoothing`|`u32` |`0`   |0 to 3
-|`default_planar_movement`   |`bool`|`off` |movement is always level; turn off to move based on the view angle
+|`default_planar_movement`   |`bool`|`off` |movement is always level; turn off to allow vertical movement based on view angle
 |`default_hide_ui`           |`bool`|`off` |&nbsp;
 |`default_disable_input`     |`bool`|`off` |&nbsp;
 |`mouse_dpi`                 |`u32` |`1600`|reference for mouse sensitivity calculations; does not change mouse
@@ -122,13 +178,14 @@ Configured under `[cam7]`
 
 ### Savestates & Rewind
 
-*Usable in Practice Mode only*
+> [!IMPORTANT]
+> All features in this category are restricted to Practice Mode
 
 - Set and restore a save point to quickly retry parts of a track
 - Time delay when restoring a state, to help with getting your hand back in position in time
 - Freeze, rewind and scrub to any moment in the run
 
-##### Controls
+#### Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
@@ -138,24 +195,28 @@ Configured under `[cam7]`
 |Scrub Back       |`3`|`D-Left` |Hold to rewind
 |Scrub Forward    |`4`|`D-Right`|Hold to fast-forward
 
-##### Settings
+#### Settings
 
 Configurable under `[savestate]`
+
+> [!WARNING]
+> Setting `load_delay` too low can interfere with ability to enter scrub mode
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
 |`savestate_enable`|`bool`|`off`|&nbsp;
 |`load_delay`      |`u32` |`500`|Amount of time to delay restoring a savestate in milliseconds
 
-*Setting `load_delay` too low can interfere with ability to enter scrub mode*
-
 ### Input Display
 
 Simple input visualization during races. Shows inputs as they are after the game finishes device read merging and post-processing.
 
-##### Settings
+#### Settings
 
 Configurable under `[inputdisplay]`
+
+> [!NOTE]
+> Game considers screen to be 640x480 regardless of window size
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
@@ -163,22 +224,20 @@ Configurable under `[inputdisplay]`
 |`pos_x` |`i32` |`420`|Screen X-position
 |`pos_y` |`i32` |`432`|Screen Y-position
 
-*Game considers screen to be 640x480 regardless of window size*
-
 ### Overlay
 
-*Usable in Practice Mode only*
-
 - Show individual lap times during race
+- Show FPS readout, with simplified option
+
+The following additional features are available in Practice Mode:
 - Show time to overheat and underheat
 - Show death count
 - Show fall timer
 - Show MFG (bounce glitch) timer
-- Show FPS readout, with simplified option
 - Show detailed speed readout, with raw speed only option
 - Show speed effects from FAST, SLOW and SWST terrain
 
-##### Settings
+#### Settings
 Configured under `[overlay]`
 
 |Option|Type|Default|Note|
@@ -196,6 +255,9 @@ Configured under `[overlay]`
 
 ### Quality of Life
 
+> [!NOTE]
+> Opening and closing the Quick Race Menu will trigger a settings save.
+
 - Fix double mouse cursor
 - Patch Jinn Reeso and Cy Yunga cheats to also toggle off
 - Fix Cy Yunga cheat audio
@@ -204,13 +266,11 @@ Configured under `[overlay]`
 - Fix 1px gap on right and bottom of viewport when rendering sprites at the edge
     - This may cause the sprite to be clipped instead, depending on your resolution settings
 - Map controller `Start` to `Esc`
-- Race restart hotkey -- `Esc + Tab` or `Back + Start`
+- Race restart hotkey
 - Quick Race Menu
 - Post-race stats readout
 - Show true values of times on post-race screen, via the underlying hexadecimal number
 - Show milliseconds on all timers
-- Limit framerate during races (configurable via Quick Race Menu)
-- N64 Pitch input toggle (experimental) (accessible via Quick Race Menu, active in Practice Mode only)
 - Skip planet cutscenes
 - Skip podium cutscene
 - Custom default number of racers
@@ -220,11 +280,25 @@ Configured under `[overlay]`
 - Run game in background
 - Patch truguts cheat to give more truguts and have infinite uses
 - Auto-reset on missed first boost, underheat, engine fire and death
-- Track select remembers selection when leaving menu and between sessions
+- Remember track selection between game sessions, similar to vehicle selection
 - Fast menu navigation
-- Allow dpad input for menu navigation
+- Allow D-PAD input for menu navigation
+- Limit framerate during races (configurable via Quick Race Menu)
+- N64 Pitch input toggle (experimental) (accessible via Quick Race Menu)
 
-##### Quick Race Menu Controls
+The following features have Practice Mode limitations:
+- Limit framerate during races: actual FPS will only change when Practice Mode is OFF or the race is restarted
+- N64 Pitch input toggle: active in Practice Mode only
+
+The following features affect saved settings during normal use:
+- Custom default number of racers: changing number of racers in-game will affect the `default_racers` setting
+- Custom default number of laps: changing number of laps in-game will affect the `default_laps` setting
+- Custom default race camera: changing the race camera will affect the `default_camera` setting if `default_camera_auto` is `on`
+- Remember track selection: changing track selection in-game will affect the `trackselect_last` setting
+- Quick Race Menu: FPS limiter: applying a new FPS limit will affect the `fps_limiter_default` setting
+- Quick Race Menu: Favorite vehicles: toggling a vehicle favorite will affect the `favorite_characters` setting
+
+#### Quick Race Menu Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
@@ -245,14 +319,15 @@ Configured under `[overlay]`
 |Toggle vehicle as favorite|Interact    |Interact     |While selecting `VEHICLE`
 |Scroll favorite vehicle   |Tab-scroll  |Tab-scroll   |While selecting `VEHICLE`
 
-##### Other QOL Controls
+#### Other QOL Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
-|Clear track Best Lap     |`1+Backspace`|&nbsp;|On track detail screen
-|Clear track 3-Lap Record |`3+Backspace`|&nbsp;|On track detail screen
+|Clear track Best Lap     |`1+Backspace`|&nbsp;      |On track detail screen
+|Clear track 3-Lap Record |`3+Backspace`|&nbsp;      |On track detail screen
+|Race restart             |`Esc+Tab`    |`Back+Start`|&nbsp;
 
-##### Settings
+#### Settings
 
 Configured under `[qol]`
 
@@ -284,7 +359,7 @@ Configured under `[qol]`
 |`autoreset_firstboost_delay` |`f32` |`0.25`|time limit from when the first boost is ready
 |`autoreset_underheat_enable` |`bool`|`off` |&nbsp;
 |`autoreset_underheat_delay`  |`f32` |`3.00`|time limit per underheat
-|`trackselect_remember`       |`bool`|`off` |&nbsp;
+|`trackselect_remember`       |`bool`|`off` |apply `trackselect_last` to the track selection menu
 |`trackselect_last`           |`u32` |`0`   |0 to 24
 |`fast_navigation`            |`bool`|`off` |&nbsp;
 |`dpad_navigation`            |`bool`|`off` |&nbsp;
@@ -295,26 +370,29 @@ Configured under `[qol]`
 
 ### Collision Viewer
 
+> [!NOTE]
+> Opening and closing the Collision Viewer menu will trigger a settings save.
+
 Credit to ([tly000](https://github.com/tly000)) for plugin.
 
 - Visualize collision faces
 - Visualize collision mesh
 - Visualize spline
 
-##### Controls
+#### Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
 |Open/Close Menu      |`9`       |&nbsp; |&nbsp;
 |Toggle visualization |`8`       |&nbsp; |&nbsp;
 
-##### Settings
+#### Settings
 
 Configured under `[collisionviewer]`
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
-|`depth_bias`           |`i32`|`10`|correct misalignment between game and collision visuals
+|`depth_bias`           |`i32`|`10`|correct misalignment between game and collision visuals; this setting is updated when adjusting depth bias in the Collision Viewer menu
 
 ### Font
 
@@ -334,7 +412,7 @@ this will be configurable via an in-game menu.
 
 For information about creating custom fonts, see: `<game>/annodue/images/font-template`
 
-##### Controls
+#### Controls
 
 |Action|Keyboard|XInput|Note|
 |:---|:---|:---|:---|
@@ -344,7 +422,7 @@ For information about creating custom fonts, see: `<game>/annodue/images/font-te
 |Soft-toggle font system|`K` |&nbsp; |(disabled in release)
 |Soft-toggle user font  |`L` |&nbsp; |(disabled in release)
 
-##### Settings
+#### Settings
 
 Configurable under `[font]`
 
@@ -365,7 +443,7 @@ Configurable under `[font]`
 - (disabled) High-fidelity audio
 - (disabled) Load sprites from TGA
 
-##### Settings
+#### Settings
 
 Configurable under `[cosmetic]`
 
@@ -384,11 +462,12 @@ Configurable under `[cosmetic]`
 - Max upgrades in multiplayer
 - Patch GUID to prevent joined players using different multiplayer settings
 
-##### Settings
+#### Settings
 
 Configurable under `[multiplayer]`
 
-*All settings in this section require game restart to apply*
+> [!WARNING]
+> All settings in this section require game restart to apply
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
@@ -400,10 +479,10 @@ Configurable under `[multiplayer]`
 
 *Disabled in current release*
 
-- Patch DeathSpeedMin (minimum speed required to die from collision)
-- Patch DeathSpeedDrop (minimum speed loss in 1 frame to die from collision)
+- Patch `DeathSpeedMin` (minimum speed required to die from collision)
+- Patch `DeathSpeedDrop` (minimum speed loss in 1 frame to die from collision)
 
-##### Settings
+#### Settings
 
 Configurable under `[gameplay]`
 
@@ -419,7 +498,7 @@ Configurable under `[gameplay]`
 
 - Visualize matrices via hijacking debug spline markers
 
-##### Settings
+#### Settings
 
 Configurable under `[developer]`
 
@@ -432,7 +511,7 @@ Configurable under `[developer]`
 - System for plugin developers to implement custom track behaviours
 - Show race triggers via game notification system
 
-##### Settings
+#### Settings
 
 Configurable under `[core/RTrigger]`
 
@@ -442,13 +521,16 @@ Configurable under `[core/RTrigger]`
 
 ### Asset Buffer Patches
 
+*Disabled in current release*
+
 - Patches to enable loading larger amounts of data from asset files
 
-##### Settings
+#### Settings
 
 Configurable under `[core/GAssetBuffer]`
 
-*All settings in this section require game restart to apply*
+> [!WARNING]
+> All settings in this section require game restart to apply
 
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|

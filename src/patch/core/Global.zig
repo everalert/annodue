@@ -3,6 +3,7 @@ const Self = @This();
 const GlobalState = @import("SharedDef.zig").GlobalState;
 const GlobalFunction = @import("SharedDef.zig").GlobalFunction;
 const RaceState = @import("SharedDef.zig").RaceState;
+const HangState = @import("SharedDef.zig").HangState;
 
 const std = @import("std");
 
@@ -104,6 +105,18 @@ fn SRaceStateNew() callconv(.C) bool {
     return GLOBAL_STATE.race_state_new;
 } // race_state_new
 
+fn SHangState() callconv(.C) HangState {
+    return GLOBAL_STATE.hang_state;
+} // hang_state
+
+fn SHangStatePrev() callconv(.C) HangState {
+    return GLOBAL_STATE.hang_state_prev;
+} // hang_state_prev
+
+fn SHangStateNew() callconv(.C) bool {
+    return GLOBAL_STATE.hang_state_new;
+} // hang_state_new
+
 fn SPlayerBoostCharging() callconv(.C) ToggleState {
     return GLOBAL_STATE.player.boost_charging;
 } // player -> boost_charging
@@ -189,6 +202,9 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .SRaceState = &SRaceState,
     .SRaceStatePrev = &SRaceStatePrev,
     .SRaceStateNew = &SRaceStateNew,
+    .SHangState = &SHangState,
+    .SHangStatePrev = &SHangStatePrev,
+    .SHangStateNew = &SHangStateNew,
     .SPlayerBoosting = &SPlayerBoosting,
     .SPlayerBoostCharging = &SPlayerBoostCharging,
     .SPlayerBoostReady = &SPlayerBoostReady,
@@ -249,19 +265,27 @@ pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
 
     // FIXME: use jdge flags
     GLOBAL_STATE.race_state_prev = GLOBAL_STATE.race_state;
-    GLOBAL_STATE.race_state = blk: {
-        if (!GLOBAL_STATE.in_race.on()) break :blk .None;
-        if (rg.IN_RACE.* == 0) break :blk .PreRace; // i.e. in race scene?
-        // TODO: figure out how the engine knows to set these and use those instead
-        const flags1 = re.Test.pPlayer.*.?.flags1;
-        if (flags1.IN_COUNTDOWN) break :blk .Countdown;
-        const postrace: bool = !flags1.RACE_NOT_ENDED;
-        const show_stats: bool = re.Manager.entity(.Jdge, 0).Flags.RACE_STATE == .PostRace;
-        if (postrace and show_stats) break :blk .PostRace;
-        if (postrace) break :blk .PostRaceExiting;
-        break :blk .Racing;
-    };
+    GLOBAL_STATE.hang_state_prev = GLOBAL_STATE.hang_state;
+    if (GLOBAL_STATE.in_race.on()) {
+        GLOBAL_STATE.hang_state = .None;
+        GLOBAL_STATE.race_state = blk: {
+            if (rg.IN_RACE.* == 0) break :blk .PreRace; // i.e. in race scene?
+            // TODO: figure out how the engine knows to set these and use those instead
+            const flags1 = re.Test.pPlayer.*.?.flags1;
+            if (flags1.IN_COUNTDOWN) break :blk .Countdown;
+            const postrace: bool = !flags1.RACE_NOT_ENDED;
+            const show_stats: bool = re.Manager.entity(.Jdge, 0).Flags.RACE_STATE == .PostRace;
+            if (postrace and show_stats) break :blk .PostRace;
+            if (postrace) break :blk .PostRaceExiting;
+            break :blk .Racing;
+        };
+    } else {
+        GLOBAL_STATE.race_state = .None;
+        const hang = re.Manager.entity(.Hang, 0);
+        GLOBAL_STATE.hang_state = hang.MenuScreen;
+    }
     GLOBAL_STATE.race_state_new = GLOBAL_STATE.race_state != GLOBAL_STATE.race_state_prev;
+    GLOBAL_STATE.hang_state_new = GLOBAL_STATE.hang_state != GLOBAL_STATE.hang_state_prev;
 
     if (GLOBAL_STATE.race_state_new and GLOBAL_STATE.race_state == .PreRace) global_player_reset(&GLOBAL_STATE);
     if (GLOBAL_STATE.in_race.on()) global_player_update(&GLOBAL_STATE);

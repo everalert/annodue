@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> [!NOTE]
+> Items prefixed with `Backend` are oriented toward developers, and can be safely
+> ignored by general users.
+
 ## [Unreleased]
 
 ### Added
@@ -53,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- `RenderSceneBeginA`
 	- `RenderSceneEndB`
 	- `RenderSceneEndA`
-- Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`
-- Backend(Core): Global functions `SPlayerBoostCharging`, `SPlayerBoostReady`
+- Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`, `hang_state`, `hang_state_prev`, `hang_state_new`
+- Backend(Core): Global functions `SPlayerBoostCharging`, `SPlayerBoostReady`, `SHangState`, `SHangStatePrev`, `SHangStateNew`
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
@@ -66,11 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: More organized formatting of post-race stats
 - QOL: Quick Reset now auto-closes in-game pause menu
 - QOL: `ms_timer_enable` now acts as a global toggle for the millisecend timers
+- MANUAL: Added clearer explanation of settings usage and capabilities
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util
-- Backend(Core): Global State version `5` to `8`
-- Backend(Core): Global Function version `29` to `32`
-- Backend(Core): Settings now also autosave on race reset
+- Backend(Core): Global State version `5` to `9`
+- Backend(Core): Global Function version `29` to `33`
+- Backend(Core): Settings now also autosave on game load, race reset and during menu and race state transitions
 - Backend(Core): All global state migrated to getter functions in Global Function API
 - Backent(Util): `menu_item` merged into `menu`
 
@@ -92,13 +97,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core: Improved loading performance
 - Cam7: Mouse position locking when tabbing out with free cam active
 - Savestate: UI animation for engine status and minimap transition now recorded in savestate (some aspects of minimap still not recorded)
-- QOL: Settings not saving when closing Quick Race Menu without loading race
+- QOL: Settings not saving when opening or closing Quick Race Menu
 - QOL: Being able to stack race resets when a load is already queued
 - QOL: Fire finish timer counting any healed overheat for post-race stats
 - QOL: Millisecond timers on race finish misaligned with standard hundredths timers
 - QOL: Game not being returned to original code for some features when plugin unloads
+- QOL: Quick Race Menu not usable after reloading plugin while in a race until backing out to hangar
+- CollisionViewer: Settings not saving when opening or closing Collision Viewer menu
+- CollisionViewer: Collision Viewer menu not usable after reloading plugin while in a race until backing out to hangar
 - Backend(ASettings): String settings not propagating an update when the start of the new string matched the whole old string
-- Backend(QOL): Quick Race Menu not usable after reloading plugin while in a race until backing out to hangar
 
 ## [0.1.6] - 2024-08-11
 

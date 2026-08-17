@@ -4,13 +4,14 @@ const StackTrace = std.builtin.StackTrace;
 
 const global = @import("core/Global.zig");
 const hook = @import("core/Hook.zig");
-const allocator = @import("core/Allocator.zig");
+const allocator = @import("core/AMemory.zig");
 const debug = @import("core/Debug.zig");
 const asettings = @import("core/ASettings.zig");
 
 const msg = @import("util/message.zig");
+const MiB = @import("util/base/base_memory.zig").MiB;
 
-const patch_size: u32 = 4 * 1024 * 1024; // 4MB
+const patch_size = MiB(u32, 4);
 
 pub const panic = debug.annodue_panic;
 
@@ -18,13 +19,13 @@ pub const panic = debug.annodue_panic;
 
 export fn Init() void {
     if (!global.init()) return;
+    if (!allocator.Init()) @panic("failed to initialize memory");
 
     // init
 
-    const alloc = allocator.allocator();
-    const memory = alloc.alloc(u8, patch_size) catch @panic("failed to allocate main patch memory");
+    const memory = allocator.PermanentAlloc(patch_size);
     global.GLOBAL_STATE.patch_memory = @ptrCast(memory.ptr);
-    global.GLOBAL_STATE.patch_size = patch_size;
+    global.GLOBAL_STATE.patch_size = memory.len;
     global.GLOBAL_STATE.patch_offset = @intFromPtr(memory.ptr);
 
     // TODO: reimpl alloc in init fn args

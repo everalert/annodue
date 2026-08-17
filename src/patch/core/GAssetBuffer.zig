@@ -2,10 +2,11 @@ const std = @import("std");
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
-const coreAllocator = @import("Allocator.zig").allocator;
+const AMemory = @import("AMemory.zig");
 const Setting = @import("ASettings.zig").Setting;
 const SettingHandle = @import("ASettings.zig").Handle;
 
+const MiB = @import("../util/base/base_memory.zig").MiB;
 const x86 = @import("../util/x86.zig");
 const mem = @import("../util/memory.zig");
 const PPanic = @import("../util/debug.zig").PPanic;
@@ -54,11 +55,11 @@ const GAssetBuffer = struct {
         }
     }
 
+    // FIXME: will leak every settings update until ring deinit
     fn patch_texbuf() callconv(.C) void {
         const tex_count: u32 = @max(@max(s_texbuf_size, @as(*u32, @ptrFromInt(0xE9823C)).*), 1700);
-        texbuf_alloc = coreAllocator().alloc(u32, tex_count) catch |err|
-            PPanic("patch_texbuf: alloc: {s}", .{@errorName(err)});
-        //@memset(texbuf_alloc, 0);  // NOTE: seems to be unnecessary
+        var memory = AMemory.PermanentAllocZero(tex_count * 4);
+        texbuf_alloc = std.mem.bytesAsSlice(u32, memory);
 
         // patch TextureBuffer_LoadModelTexture (fn_447490)
         _ = mem.write(0x4474B1, u32, @intFromPtr(texbuf_alloc.ptr));

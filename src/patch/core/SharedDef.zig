@@ -71,10 +71,22 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 33;
+pub const GLOBAL_FUNCTION_VERSION = 34;
 
+// FIXME: including AMemory* sometimes crashes the game on launch, depending on
+//  the overall state of the code and which options are enabled (seemingly same
+//  problem as GAssetBuffer); need to figure this out BEFORE committing to dev
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
+    // Memory
+    /// get memory valid until deinit; null/0 if OOM
+    AMemoryGetPermanent: *const fn (size: u32) callconv(.C) ?*anyopaque,
+    /// get zero-ed memory valid until deinit; null/0 if OOM
+    AMemoryGetPermanentZero: *const fn (size: u32) callconv(.C) ?*anyopaque,
+    /// get memory valid until start of next frame; null/0 if OOM
+    AMemoryGetTemporary: *const fn (size: u32) callconv(.C) ?*anyopaque,
+    /// get zero-ed memory valid until start of next frame; null/0 if OOM
+    AMemoryGetTemporaryZero: *const fn (size: u32) callconv(.C) ?*anyopaque,
     // Settings
     ASettingSave: *const fn () callconv(.C) void,
     ASettingSaveAuto: *const fn () callconv(.C) void,

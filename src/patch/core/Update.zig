@@ -4,6 +4,7 @@ const http = std.http;
 const json = std.json;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 
 const BuildOptions = @import("BuildOptions");
 
@@ -15,7 +16,7 @@ const LocHeader = zzip.LocalFileHeader.Header;
 const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 
-const allocator = @import("Allocator.zig");
+const AMemory = @import("AMemory.zig");
 const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 const VERSION = app.VERSION;
@@ -30,6 +31,7 @@ const rg = r.Global;
 
 const msg = @import("../util/message.zig");
 const PPanic = @import("../util/debug.zig").PPanic;
+const MiB = @import("../util/base/base_memory.zig").MiB;
 
 // BUSINESS LOGIC
 
@@ -120,9 +122,11 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
     if (s.init or gf.STimestamp() + s.retry_delay < s.last_try) return;
     s.last_try = gf.STimestamp();
 
-    const alloc = allocator.allocator();
+    var memory = AMemory.TemporaryAlloc(MiB(u32, 16));
+    var scratch_fba = FixedBufferAllocator.init(memory);
+    var scratch_alloc = scratch_fba.allocator();
 
-    var update = Update.init(alloc);
+    var update = Update.init(scratch_alloc);
     defer update.deinit();
 
     // checking for update
@@ -131,7 +135,7 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
         //const api_url = "https://api.github.com/repos/everalert/annodue/releases/tags/{s}"; // for old ver
         const uri = std.Uri.parse(api_url) catch return;
 
-        var headers = std.http.Headers.init(alloc);
+        var headers = std.http.Headers.init(scratch_alloc);
         defer headers.deinit();
         headers.append("accept", "application/vnd.github+json") catch return;
         headers.append("x-github-api-version", "2022-11-28") catch return;
@@ -145,15 +149,15 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
         request.wait() catch return;
         if (request.response.status != .ok) return;
 
-        const body = request.reader().readAllAlloc(alloc, 1 << 31) catch return;
-        defer alloc.free(body);
+        const body = request.reader().readAllAlloc(scratch_alloc, 1 << 31) catch return;
+        defer scratch_alloc.free(body);
 
-        const parsed = json.parseFromSlice(json.Value, alloc, body, .{}) catch return;
+        const parsed = json.parseFromSlice(json.Value, scratch_alloc, body, .{}) catch return;
         defer parsed.deinit();
 
         // TODO: extra check + setting for opting in to debug releases?
         const tag = parsed.value.object.get("tag_name").?.string;
-        update.tag = alloc.dupe(u8, tag) catch return;
+        update.tag = scratch_alloc.dupe(u8, tag) catch return;
         const tag_ver = std.SemanticVersion.parse(update.tag.?) catch return;
         if (std.SemanticVersion.order(VERSION, tag_ver) != .lt) return;
 
@@ -172,7 +176,7 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
             if (!std.mem.eql(u8, state, "uploaded")) return; // we know we can't update now
 
             const url = asset.object.get("browser_download_url").?.string;
-            update.url = alloc.dupe(u8, url) catch return;
+            update.url = scratch_alloc.dupe(u8, url) catch return;
             update.size = asset.object.get("size").?.integer;
             break;
         }
@@ -180,11 +184,11 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
         if (update.url == null) return;
     }
 
-    updateToastAvailable(alloc, gf, update.tag.?);
+    updateToastAvailable(scratch_alloc, gf, update.tag.?);
 
     if (!UpdateState.s_auto_update) return;
 
-    updateApplyFromNetwork(alloc, &update) catch return;
+    updateApplyFromNetwork(scratch_alloc, &update) catch return;
 
     // -> notify user to restart game
     _ = w32wm.ShowCursor(1); // cursor fix
@@ -201,14 +205,16 @@ pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
             OnInitLate(gf);
 
         if (gf.InputGetKb(.J, .JustOn)) {
-            const alloc = allocator.allocator();
-            const fp = std.fmt.allocPrint(alloc, "{s}/{s}", .{ ANNODUE_PATH, "autoupdate.zip" }) catch return;
-            defer alloc.free(fp);
+            var memory = AMemory.TemporaryAlloc(MiB(u32, 16));
+            var scratch_fba = FixedBufferAllocator.init(memory);
+            var scratch_alloc = scratch_fba.allocator();
+            const fp = std.fmt.allocPrint(scratch_alloc, "{s}/{s}", .{ ANNODUE_PATH, "autoupdate.zip" }) catch return;
+            defer scratch_alloc.free(fp);
             const f = std.fs.cwd().openFile(fp, .{}) catch return;
             defer f.close();
-            const raw_data = f.readToEndAlloc(alloc, 1 << 31) catch return;
-            defer alloc.free(raw_data);
-            updateApplyFromZipData(alloc, raw_data) catch return;
+            const raw_data = f.readToEndAlloc(scratch_alloc, 1 << 31) catch return;
+            defer scratch_alloc.free(raw_data);
+            updateApplyFromZipData(scratch_alloc, raw_data) catch return;
         }
     }
 }

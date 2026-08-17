@@ -5,6 +5,8 @@ const BuildOptions = @import("BuildOptions");
 const std = @import("std");
 const SemVer = std.SemanticVersion;
 const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 const assert = std.debug.assert;
 
 const w32 = @import("zigwin32");
@@ -17,7 +19,7 @@ const FreeLibrary = w32.system.library_loader.FreeLibrary;
 const GetProcAddress = w32.system.library_loader.GetProcAddress;
 
 const core = @import("core.zig");
-const CoreAllocator = core.Allocator;
+const AMemory = core.AMemory;
 const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
 
@@ -29,6 +31,8 @@ const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
 const dbg = @import("../util/debug.zig");
+
+const MiB = @import("../util/base/base_memory.zig").MiB;
 
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
@@ -211,6 +215,9 @@ pub const PluginState = struct {
 
     var h_s_hot_reload: ?SettingHandle = null;
     var s_hot_reload: bool = true;
+
+    var scratch_fba: FixedBufferAllocator = undefined;
+    var scratch_alloc: Allocator = undefined;
 
     const PLUGIN_MAX = 64;
     const HotReloadPluginHandle = u32;
@@ -431,11 +438,13 @@ pub fn init() void {
     defer assert(PluginState.plugins_count == std.mem.count(bool, &PluginState.plugins_used, &.{true}));
     defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
 
-    const alloc = CoreAllocator.allocator();
     std.fs.cwd().makePath("./annodue/tmp/plugin") catch
         @panic("failed to create temp plugin directory");
 
-    PluginState.core = ArrayList(Plugin).init(alloc);
+    var memory = AMemory.PermanentAlloc(MiB(u32, 4));
+    PluginState.scratch_fba = FixedBufferAllocator.init(memory);
+    PluginState.scratch_alloc = PluginState.scratch_fba.allocator();
+    PluginState.core = ArrayList(Plugin).init(PluginState.scratch_alloc);
 
     var p: *Plugin = undefined;
 

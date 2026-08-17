@@ -2,12 +2,14 @@ const std = @import("std");
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
 
-const coreAllocator = @import("Allocator.zig").allocator;
+const AMemory = @import("AMemory.zig");
 
+const MiB = @import("../util/base/base_memory.zig").MiB;
 const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
@@ -52,11 +54,16 @@ const GDraw = struct {
     var rect_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
     var rect_sprite: ?*rq.Sprite = null;
 
-    pub fn init(allocator: Allocator) !void {
-        text_data = try ArrayList(GDrawTextDef).initCapacity(allocator, 128);
-        text_layers = try ArrayList(GDrawLayer).initCapacity(allocator, 128);
-        rect_data = try ArrayList(GDrawRectDef).initCapacity(allocator, 32);
-        rect_layers = try ArrayList(GDrawLayer).initCapacity(allocator, 32);
+    var scratch_fba: FixedBufferAllocator = undefined;
+    var scratch_alloc: Allocator = undefined;
+
+    pub fn init(buf: []u8) !void {
+        scratch_fba = FixedBufferAllocator.init(buf);
+        scratch_alloc = scratch_fba.allocator();
+        text_data = try ArrayList(GDrawTextDef).initCapacity(scratch_alloc, 128);
+        text_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 128);
+        rect_data = try ArrayList(GDrawRectDef).initCapacity(scratch_alloc, 32);
+        rect_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 32);
     }
 
     pub fn deinit() void {
@@ -229,7 +236,8 @@ pub fn GDrawRectBdr(
 // HOOKS
 
 pub fn OnInit(_: *GlobalFn) callconv(.C) void {
-    GDraw.init(coreAllocator()) catch @panic("GDraw init failed");
+    var memory = AMemory.PermanentAlloc(MiB(u32, 2));
+    GDraw.init(memory) catch @panic("GDraw init failed");
 }
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}

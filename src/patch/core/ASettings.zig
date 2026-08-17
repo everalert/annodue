@@ -1,25 +1,27 @@
 const std = @import("std");
 
 const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
+const EnumSet = std.EnumSet;
+const bufPrintZ = std.fmt.bufPrintZ;
 const assert = std.debug.assert;
 
 const ini = @import("zigini");
 const w32f = @import("zigwin32").foundation;
 
-const EnumSet = std.EnumSet;
-const Allocator = std.mem.Allocator;
-const bufPrintZ = std.fmt.bufPrintZ;
-
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const workingOwner = @import("Hook.zig").PluginState.workingOwner;
 const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
-const coreAllocator = @import("Allocator.zig").allocator;
+const AMemory = @import("AMemory.zig");
 
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
 const SparseIndex = @import("../util/handle_map.zig").SparseIndex(u16);
 pub const Handle = @import("../util/handle_map.zig").Handle(u16);
 pub const NullHandle = Handle.getNull();
+
+const MiB = @import("../util/base/base_memory.zig").MiB;
 
 const HotReloadSettingsHandle = u32;
 const HotReloadSettings = @import("../util/hot_reload.zig").HotReload(HotReloadSettingsHandle, 1);
@@ -295,18 +297,24 @@ pub const ASettings = struct {
     var s_save_auto: bool = true;
     var s_save_defaults: bool = true;
 
+    var scratch_fba: FixedBufferAllocator = undefined;
+    var scratch_alloc: Allocator = undefined;
+
     const Flags = enum(u32) {
         AutoSave,
     };
 
-    pub fn init(alloc: Allocator) void {
-        data_sections = HandleMap(Section, u16).init(alloc);
-        data_settings = HandleMap(Setting, u16).init(alloc);
-        section_update_queue = ArrayList(ASettingSent).init(alloc);
+    pub fn init(buf: []u8) void {
+        scratch_fba = FixedBufferAllocator.init(buf);
+        scratch_alloc = scratch_fba.allocator();
 
-        HotReloadSettings.Init(&ASettings.hot_reload, ASettings.load, ASettings.unload);
-        ASettings.hot_reload.CheckDelay = 250;
-        ASettings.hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
+        data_sections = HandleMap(Section, u16).init(scratch_alloc);
+        data_settings = HandleMap(Setting, u16).init(scratch_alloc);
+        section_update_queue = ArrayList(ASettingSent).init(scratch_alloc);
+
+        HotReloadSettings.Init(&hot_reload, load, unload);
+        hot_reload.CheckDelay = 250;
+        hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
     }
 
     pub fn deinit() void {
@@ -756,7 +764,7 @@ pub const ASettings = struct {
             return false; // TODO: should be true or false? no effect in current logic tho
         }
 
-        ASettings.iniRead(coreAllocator(), filepath) catch return false;
+        ASettings.iniRead(ASettings.scratch_alloc, filepath) catch return false;
 
         file_exists = true;
         return true;
@@ -878,8 +886,8 @@ pub const ASettings = struct {
 // GLOBAL
 
 pub fn init() !void {
-    const alloc = coreAllocator();
-    ASettings.init(alloc);
+    var memory = AMemory.PermanentAlloc(MiB(u32, 2));
+    ASettings.init(memory);
 
     ASettings.h_s_settings_version =
         try ASettings.settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);

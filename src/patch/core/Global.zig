@@ -13,6 +13,7 @@ const hide_race_ui = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const asettings = @import("ASettings.zig");
+const AMemory = @import("AMemory.zig");
 const rterrain = @import("RTerrain.zig");
 const rtrigger = @import("RTrigger.zig");
 
@@ -148,6 +149,11 @@ fn SPlayerDeaths() callconv(.C) u32 {
 // GLOBAL FUNCTIONS
 
 pub var GLOBAL_FUNCTION: GlobalFunction = .{
+    // Memory
+    .AMemoryGetPermanent = &AMemory.AMemoryGetPermanent,
+    .AMemoryGetPermanentZero = &AMemory.AMemoryGetPermanentZero,
+    .AMemoryGetTemporary = &AMemory.AMemoryGetTemporary,
+    .AMemoryGetTemporaryZero = &AMemory.AMemoryGetTemporaryZero,
     // Settings
     .ASettingSave = &asettings.ASave,
     .ASettingSaveAuto = &asettings.ASaveAuto,

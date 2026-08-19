@@ -119,9 +119,8 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const debug = @import("core/Debug.zig");
+const debug = @import("util/base/base_debug.zig");
 
-const PPanic = @import("util/debug.zig").PPanic;
 const cf = @import("util/color_format.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
@@ -691,7 +690,7 @@ fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []con
     { // MAIN FILE
         const filename = std.fmt.bufPrint(&buf, "{s}.csv", .{filename_stem}) catch unreachable;
         const file = std.fs.cwd().createFile(filename, .{}) catch |e|
-            PPanic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
+            std.debug.panic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
         defer file.close();
         //var file_bw = std.io.bufferedWriter(file.writer());
         const file_w = file.writer();
@@ -719,7 +718,7 @@ fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []con
     if (font._5C_glyphs) |glyphs| {
         const filename = std.fmt.bufPrint(&buf, "{s}_g.csv", .{filename_stem}) catch unreachable;
         const file = std.fs.cwd().createFile(filename, .{}) catch |e|
-            PPanic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
+            std.debug.panic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
         defer file.close();
         const file_w = file.writer();
 
@@ -740,7 +739,7 @@ fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []con
     if (font._60_glyphs_ext) |glyphs| {
         const filename = std.fmt.bufPrint(&buf, "{s}_ge.csv", .{filename_stem}) catch unreachable;
         const file = std.fs.cwd().createFile(filename, .{}) catch |e|
-            PPanic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
+            std.debug.panic("(DumpFontDefToCSV) create file: {s}", .{@errorName(e)});
         defer file.close();
         const file_w = file.writer();
 
@@ -764,7 +763,7 @@ fn DumpFontGlyphMapToCSV(filename_stem: []const u8) void {
     { // KEYS
         const filename = std.fmt.bufPrint(&buf, "{s}_k.csv", .{filename_stem}) catch unreachable;
         const file = std.fs.cwd().createFile(filename, .{}) catch |e|
-            PPanic("(DumpFontGlyphMapToCSV) create file: {s}", .{@errorName(e)});
+            std.debug.panic("(DumpFontGlyphMapToCSV) create file: {s}", .{@errorName(e)});
         defer file.close();
         const file_w = file.writer();
 
@@ -777,7 +776,7 @@ fn DumpFontGlyphMapToCSV(filename_stem: []const u8) void {
     { // VALUES
         const filename = std.fmt.bufPrint(&buf, "{s}_v.csv", .{filename_stem}) catch unreachable;
         const file = std.fs.cwd().createFile(filename, .{}) catch |e|
-            PPanic("(DumpFontGlyphMapToCSV) create file: {s}", .{@errorName(e)});
+            std.debug.panic("(DumpFontGlyphMapToCSV) create file: {s}", .{@errorName(e)});
         defer file.close();
         const file_w = file.writer();
 
@@ -840,15 +839,15 @@ fn DumpGrey8toTGA(pixels: []const u8, width: u16, height: u16, filename: []const
     assert(std.mem.endsWith(u8, filename, ".tga"));
 
     const file = std.fs.cwd().createFile(filename, .{}) catch |e|
-        PPanic("(DumpGrey8toTGA) create file: {s}", .{@errorName(e)});
+        std.debug.panic("(DumpGrey8toTGA) create file: {s}", .{@errorName(e)});
     defer file.close();
     var file_bw = std.io.bufferedWriter(file.writer());
     const file_w = file_bw.writer();
     defer _ = file_bw.flush() catch |e|
-        PPanic("(DumpGrey8toTGA) flush: {s}", .{@errorName(e)});
+        std.debug.panic("(DumpGrey8toTGA) flush: {s}", .{@errorName(e)});
 
     TGA.WriteGrey8(file_w, pixels, width, height) catch |e|
-        PPanic("(DumpGrey8toTGA) write tga: {s}", .{@errorName(e)});
+        std.debug.panic("(DumpGrey8toTGA) write tga: {s}", .{@errorName(e)});
 }
 
 /// dumps pixel contents of a GIF file to an ARGB4444 pixel buffer, converting
@@ -1577,7 +1576,7 @@ const CustomFont = struct {
     fn GlyphsFromBin(self: *CustomFont, data: []const u8) void {
         var data_fbs = std.io.fixedBufferStream(data);
         self.GlyphBinDeserialize(data_fbs.reader()) catch |e|
-            PPanic("(GlyphsFromBin) deserialize glyphs: {s}", .{@errorName(e)});
+            std.debug.panic("(GlyphsFromBin) deserialize glyphs: {s}", .{@errorName(e)});
 
         for (&self.Fonts, &self.Glyphs) |*f, *g| {
             f._5C_glyphs = if (g.StdSize == 0) null else &g.Std;

@@ -29,8 +29,8 @@ const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
-const dbg = @import("../util/debug.zig");
 const apih = @import("../util/api/api_helper.zig");
+const debug = @import("../util/base/base_debug.zig");
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
@@ -484,7 +484,7 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
                 comptime if (!@hasDecl(decl, "OnInit") or
                     !@hasDecl(decl, "OnInitLate") or
                     !@hasDecl(decl, "OnDeinit"))
-                    dbg.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
+                    debug.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
             }
         }
         if (this_p) |plug| {

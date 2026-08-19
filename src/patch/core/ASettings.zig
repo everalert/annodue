@@ -26,14 +26,9 @@ const MiB = @import("../util/base/base_memory.zig").MiB;
 const HotReloadSettingsHandle = u32;
 const HotReloadSettings = @import("../util/hot_reload.zig").HotReload(HotReloadSettingsHandle, 1);
 
-const PPanic = @import("../util/debug.zig").PPanic;
-
 const r = @import("racer");
 const rt = r.Text;
 const rti = r.Time;
-
-// FIXME: remove, for testing
-const dbg = @import("../util/debug.zig");
 
 // TODO: add global st/fn ptrs to fnOnChange defs?
 // TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
@@ -385,7 +380,7 @@ pub const ASettings = struct {
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
             if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
@@ -571,7 +566,7 @@ pub const ASettings = struct {
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
             if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
@@ -814,7 +809,7 @@ pub const ASettings = struct {
         defer file.close();
         var file_bw = std.io.bufferedWriter(file.writer());
         defer _ = file_bw.flush() catch |e|
-            PPanic("(ASettings) [save] write buffer flush: {s}", .{@errorName(e)});
+            std.debug.panic("ASettings(save): write buffer flush: {s}", .{@errorName(e)});
         const file_w = file_bw.writer();
 
         try iniWrite(file_w);

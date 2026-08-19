@@ -20,7 +20,6 @@ const rtrigger = @import("RTrigger.zig");
 const st = @import("../util/toggle_state.zig");
 const ToggleState = st.ToggleState;
 const xinput = @import("../util/xinput.zig");
-const dbg = @import("../util/debug.zig");
 const msg = @import("../util/message.zig");
 const mem = @import("../util/memory.zig");
 

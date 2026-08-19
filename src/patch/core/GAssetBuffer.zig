@@ -9,7 +9,6 @@ const SettingHandle = @import("ASettings.zig").Handle;
 const MiB = @import("../util/base/base_memory.zig").MiB;
 const x86 = @import("../util/x86.zig");
 const mem = @import("../util/memory.zig");
-const PPanic = @import("../util/debug.zig").PPanic;
 
 const ra = @import("racer").Asset;
 

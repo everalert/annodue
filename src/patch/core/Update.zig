@@ -30,7 +30,6 @@ const rg = r.Global;
 
 const msg = @import("../util/message.zig");
 const apih = @import("../util/api/api_helper.zig");
-const PPanic = @import("../util/debug.zig").PPanic;
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
 // BUSINESS LOGIC
@@ -307,7 +306,7 @@ fn updateApplyFromZipData(gpa: Allocator, raw_data: []const u8) !void {
         defer out.close();
         var out_bw = std.io.bufferedWriter(out.writer());
         defer _ = out_bw.flush() catch |e|
-            PPanic("(Update) [updateApplyFromZipData] write buffer flush: {s}", .{@errorName(e)});
+            std.debug.panic("Update(updateApplyFromZipData): write buffer flush: {s}", .{@errorName(e)});
         lf.compression.uncompress(gpa, data, out_bw.writer(), df.crc32) catch |e| return e;
     }
 }

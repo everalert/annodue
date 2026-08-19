@@ -21,9 +21,6 @@ pub const Toast = @import("Toast.zig");
 pub const Update = @import("Update.zig");
 pub const Testing = @import("Testing.zig");
 
-// this stuff was inside core before making this file, but didn't have any hook stuff
-//pub const Debug = @import("Debug.zig");
-
 // FIXME: GAssetBuffer disabled because it was crashing due to unchecked undefined
 //  behaviour related to something to do with the hot_reload implementation used
 //  in ASettings; keeps breaking for seemingly no reason so must come back to this

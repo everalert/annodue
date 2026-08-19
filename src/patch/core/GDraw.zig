@@ -11,7 +11,6 @@ const workingOwnerIsSystem = @import("AHook.zig").PluginState.workingOwnerIsSyst
 
 const apih = @import("../util/api/api_helper.zig");
 const MiB = @import("../util/base/base_memory.zig").MiB;
-const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
 const rt = r.Text;

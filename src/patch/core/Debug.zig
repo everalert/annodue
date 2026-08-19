@@ -1,4 +1,8 @@
 const std = @import("std");
+const ArenaAllocator = std.heap.ArenaAllocator;
+const DebugInfo = std.debug.DebugInfo;
+const StackIterator = std.debug.StackIterator;
+
 const builtin = @import("builtin");
 const StackTrace = std.builtin.StackTrace;
 
@@ -12,7 +16,7 @@ const ANNODUE_VER = @import("../appinfo.zig").VERSION_STR;
 // to make it write during a crash
 pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_addr: ?usize) noreturn {
     @setCold(true);
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var arena = ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const alloc = arena.allocator();
 
@@ -36,7 +40,7 @@ pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_
     if (comptime builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
         _ = file.write("\nSTACK TRACE:\n") catch
             @panic("failed to write crashlog stack trace header");
-        var di = std.debug.DebugInfo.init(alloc) catch
+        var di = DebugInfo.init(alloc) catch
             @panic("failed to init debuginfo during panic");
         const tty = std.io.tty.detectConfig(file);
         std.debug.writeCurrentStackTrace(file.writer(), &di, tty, @returnAddress()) catch
@@ -45,7 +49,7 @@ pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_
 
     _ = file.write("\nRETURN TRACE:\n") catch
         @panic("failed to write crashlog return trace header");
-    var it = std.debug.StackIterator.init(@returnAddress(), null);
+    var it = StackIterator.init(@returnAddress(), null);
     while (it.next()) |addr| {
         const trace_str = std.fmt.allocPrint(alloc, "0x{X:0>8}\n", .{addr}) catch
             @panic("failed to format crashlog return trace address");

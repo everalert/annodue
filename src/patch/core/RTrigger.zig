@@ -8,13 +8,13 @@ const BOOL = w32.foundation.BOOL;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
-const workingOwner = @import("Hook.zig").PluginState.workingOwner;
-const AMemory = @import("AMemory.zig");
+const workingOwner = @import("AHook.zig").PluginState.workingOwner;
 
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
 const Setting = @import("ASettings.zig").ASettingSent;
 
+const apih = @import("../util/api/api_helper.zig");
 const MiB = @import("../util/base/base_memory.zig").MiB;
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
@@ -59,6 +59,8 @@ const TNullHandle = THandle.getNull();
 const TRIGGER_LIMIT_GAME: usize = 1 << 10;
 const TRIGGER_LIMIT_INTERNAL: usize = 1 << 12;
 const TRIGGER_LIMIT_USER: usize = (1 << 16) - 1;
+
+const PATCH_BUFFER_SIZE = MiB(u32, 2);
 
 // TODO: SOA implementation of handle values, to accommodate data that is run through
 // in groups like this
@@ -205,17 +207,20 @@ const CustomTrigger = struct {
     // - original fn may need to be called manually if you do non-dynamic stuff
     //fn hookDoEntityCreate(_: *Trig) callconv(.C) void {}
 
-    const StateBuf = struct {
-        var init: [32]u8 = undefined;
-        var destroy: [32]u8 = undefined;
-        var update: [48]u8 = undefined;
-    };
+    var state_init: []u8 = &.{};
+    var state_destroy: []u8 = &.{};
+    var state_update: []u8 = &.{};
 
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
     // fine since it has the same pattern as destroy; may also want save_esi on destroy
     pub fn init(buf: []u8) void {
         scratch_fba = FixedBufferAllocator.init(buf);
         scratch_alloc = scratch_fba.allocator();
+
+        // if these fail, input buf size was insufficient
+        state_init = scratch_alloc.create([32]u8) catch unreachable;
+        state_destroy = scratch_alloc.create([32]u8) catch unreachable;
+        state_update = scratch_alloc.create([48]u8) catch unreachable;
 
         var d: x86.Detour = undefined;
         data = THandleMap.init(scratch_alloc);
@@ -226,19 +231,19 @@ const CustomTrigger = struct {
         _ = x86.call(0x476E80, @intFromPtr(&hookTrigger));
 
         // init
-        d.Start(0x47D397, 0x47D3A0, &StateBuf.init);
+        d.Start(0x47D397, 0x47D3A0, state_init);
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookInit), &[_]x86.PushSrc{ .{ .r32 = .esi }, .{ .r32 = .ebp } });
         d.End();
 
         // destroy
-        d.Start(0x47C4D9, 0x47C4E0, &StateBuf.destroy);
+        d.Start(0x47C4D9, 0x47C4E0, state_destroy);
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookDestroy), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.CMP(d.addr, .esi, 0x08, .imm, 0x1F5);
         d.End();
 
         // update
-        d.Start(0x47C51B, 0x47C520, &StateBuf.update);
+        d.Start(0x47C51B, 0x47C520, state_update);
         d.addr = x86.reg_save(d.addr, .eax, .ebp); // TODO: is this detour meant to replace a function body?
         d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
         d.addr = x86.reg_restore(d.addr, .eax, .ebp);
@@ -309,7 +314,7 @@ pub fn RReleaseAll() callconv(.C) void {
 // HOOKS
 
 pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
-    var memory = AMemory.PermanentAlloc(MiB(u32, 2));
+    var memory = apih.AMemoryGetPermanentT(gf, [PATCH_BUFFER_SIZE]u8) orelse @panic("RTrigger: API OutOfMemory");
     CustomTrigger.init(memory);
     CustomTrigger.settingsInit(gf);
 }

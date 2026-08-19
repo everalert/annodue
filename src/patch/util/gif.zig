@@ -155,11 +155,11 @@ pub const ImageDescriptor = struct {
 /// @pixels     Writer to output the pixels to
 /// @w          image width output
 /// @h          image height output
-pub fn Read(allocator: Allocator, stream: anytype, pixels: anytype, w: *u16, h: *u16) !void {
+pub fn Read(gpa: Allocator, stream: anytype, pixels: anytype, w: *u16, h: *u16) !void {
     var gif = std.mem.zeroes(GIF);
-    try ReadHead(&gif, allocator, stream);
-    defer if (gif.GlobalColorTable) |gct| allocator.free(gct);
-    try ReadBody(&gif, allocator, stream, pixels);
+    try ReadHead(&gif, gpa, stream);
+    defer if (gif.GlobalColorTable) |gct| gpa.free(gct);
+    try ReadBody(&gif, gpa, stream, pixels);
     w.* = gif.CanvasW;
     h.* = gif.CanvasH;
 }
@@ -175,7 +175,7 @@ pub fn Read(allocator: Allocator, stream: anytype, pixels: anytype, w: *u16, h: 
 /// -- header may be reused for subsequent gif streams without zeroing; global
 ///    color table can be shared across streams in this way (see gif89a spec)
 /// -- function will free existing GlobalColorTable allocation if necessary
-pub fn ReadHead(self: *GIF, allocator: Allocator, reader: anytype) !void {
+pub fn ReadHead(self: *GIF, gpa: Allocator, reader: anytype) !void {
     var buf: [6]u8 = undefined;
     _ = try reader.read(&buf);
     self.Version = null;
@@ -207,9 +207,9 @@ pub fn ReadHead(self: *GIF, allocator: Allocator, reader: anytype) !void {
 
     if (self.PackedField.bGlobalColorTable) {
         if (self.GlobalColorTable) |gct|
-            allocator.free(gct);
+            gpa.free(gct);
         const len = @as(usize, 1) << (@as(u4, @intCast(self.PackedField.ColorTableSize)) + 1);
-        self.GlobalColorTable = try allocator.alloc(RGB, len);
+        self.GlobalColorTable = try gpa.alloc(RGB, len);
         var gct_slice = std.mem.sliceAsBytes(self.GlobalColorTable.?);
         log.debug("ReadMetadata :: gct len = {d}", .{len});
         log.debug("ReadMetadata :: gct_slice.len = {d}", .{gct_slice.len});
@@ -224,14 +224,14 @@ pub fn ReadHead(self: *GIF, allocator: Allocator, reader: anytype) !void {
 // TODO: option to process image blocks as part of the main canvas (i.e. how the
 // spec says to)??? rather than whatever i'm supposed to do to "normally" process
 // the image data while ignoring the canvas thing
-pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer: anytype) !void {
+pub fn ReadBody(self: *const GIF, gpa: Allocator, reader: anytype, writer: anytype) !void {
     const pre = "ReadBody :: ";
     var sbr_buf: [255]u8 = undefined;
     var sbr = MakeSubBlockReader(reader);
     const sbr_r = sbr.reader();
 
-    var canvas: []RGBA = try allocator.alloc(RGBA, @as(u32, self.CanvasW) * self.CanvasH);
-    defer allocator.free(canvas);
+    var canvas: []RGBA = try gpa.alloc(RGBA, @as(u32, self.CanvasW) * self.CanvasH);
+    defer gpa.free(canvas);
     var cw = ColorWriter.Init(canvas, self);
     cw.ClearCanvas(); // ignore background color
     //cw.FillBackground(); // TODO: option to use the background color (but default ignore)
@@ -284,16 +284,16 @@ pub fn ReadBody(self: *const GIF, allocator: Allocator, reader: anytype, writer:
                 if (idsc.PackedField.bLocalColorTable) {
                     log.debug(pre ++ " Parsing Local Color Table", .{});
                     const len = @as(usize, 1) << (@as(u4, @intCast(idsc.PackedField.ColorTableSize)) + 1);
-                    local_color_table = try allocator.alloc(RGB, len);
+                    local_color_table = try gpa.alloc(RGB, len);
                     _ = try reader.read(std.mem.sliceAsBytes(local_color_table.?));
                 }
-                defer if (local_color_table) |lct| allocator.free(lct);
+                defer if (local_color_table) |lct| gpa.free(lct);
 
                 // TODO: add option for "default" color table fallback instead of error
                 log.debug(pre ++ " Parsing Image Data", .{});
                 sbr.reset();
                 try cw.StartImage(local_color_table, &idsc);
-                var lzw = MakeDecodeLZW(allocator, sbr_r, cw.writer());
+                var lzw = MakeDecodeLZW(gpa, sbr_r, cw.writer());
                 defer lzw.Deinit();
                 const lzw_min_code_size = try reader.readByte();
                 log.debug(pre ++ "  MinCodeSize = {d}", .{lzw_min_code_size});
@@ -860,11 +860,11 @@ pub fn DecodeLZW(
         table_code_clr: TableCodeType = 0,
         table_code_eoi: TableCodeType = 0,
 
-        pub fn Init(allocator: Allocator, reader: ReaderType, writer: WriterType) LZW {
+        pub fn Init(gpa: Allocator, reader: ReaderType, writer: WriterType) LZW {
             return .{
                 .reader = reader,
                 .writer = writer,
-                .table = std.AutoArrayHashMap(TableCodeType, TableItem).init(allocator),
+                .table = std.AutoArrayHashMap(TableCodeType, TableItem).init(gpa),
             };
         }
 
@@ -1010,11 +1010,11 @@ pub fn DecodeLZW(
 }
 
 pub fn MakeDecodeLZW(
-    allocator: Allocator,
+    gpa: Allocator,
     reader: anytype,
     writer: anytype,
 ) DecodeLZW(@TypeOf(reader), @TypeOf(writer)) {
-    return DecodeLZW(@TypeOf(reader), @TypeOf(writer)).Init(allocator, reader, writer);
+    return DecodeLZW(@TypeOf(reader), @TypeOf(writer)).Init(gpa, reader, writer);
 }
 
 // FIXME: add test cases for InvalidCodeSize, StopCodeNotFound, MaxCodeSizeExceeded

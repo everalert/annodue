@@ -48,6 +48,9 @@ const GAssetBuffer = struct {
 
         // patch TextureBuffer_Init (fn_447420)
         if (s_texbuf_enable) {
+            // FIXME: `texbuf_init_det` referring to uninitialized static memory
+            //  is probably the cause of instability, should try allocating the
+            //  memory at runtime instead (ref: RTrigger was same issue)
             d.Start(0x447471, 0x44748D, &texbuf_init_det);
             d.addr = x86.call(d.addr, @intFromPtr(&patch_texbuf));
             d.addr = x86.cdecl_call(d.addr, @intFromPtr(ra.Block_Close), &[_]x86.PushSrc{.{ .imm32 = 3 }});

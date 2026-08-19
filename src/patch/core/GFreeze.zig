@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
-const workingOwner = @import("Hook.zig").PluginState.workingOwner;
+const workingOwner = @import("AHook.zig").PluginState.workingOwner;
 
 const mem = @import("../util/memory.zig");
 

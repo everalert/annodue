@@ -121,12 +121,14 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const debug = @import("core/Debug.zig");
 
+const PPanic = @import("util/debug.zig").PPanic;
 const cf = @import("util/color_format.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
-const PPanic = @import("util/debug.zig").PPanic;
 const TGA = @import("util/tga.zig");
 const GIF = @import("util/gif.zig");
+const apih = @import("util/api/api_helper.zig");
+const MiB = @import("util/base/base_memory.zig").MiB;
 const HotReloadFontHandle = u32;
 const HotReloadFont = @import("util/hot_reload.zig").HotReload(HotReloadFontHandle, 1);
 
@@ -178,8 +180,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    // TODO: fonts_initialized asserted throughout, must fail here or just not
+    //  patch the text clipping bug; latter preferable?
+    text_clip_fix_buf = apih.AMemoryGetPermanentT(gf, [128]u8) orelse return;
+
+    FontState.gf = gf;
     FontState.FontsInit();
-    FontState.SettingsInit(gf); // after `FontsInit` because it may call `FontsEnable`
+    FontState.SettingsInit(); // after `FontsInit` because it may call `FontsEnable`
 }
 
 export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
@@ -266,15 +273,6 @@ const FontState = struct {
 
     var font_reloader: HotReloadFont = undefined;
 
-    // FIXME: these are getting used and abused, need to be careful about using
-    //  this memory while calling stuff that may also use (i.e. reset) it; maybe
-    //  impl arena memory as annodue api
-    var font_load_fba: FixedBufferAllocator = undefined;
-    var font_load_arena: ArenaAllocator = undefined;
-
-    // TODO: memory-efficient GIF/LZW implementation -> small buffer
-    var font_load_scratch: [48 * 1024 * 1024]u8 = undefined;
-
     var dump_fonts_done: bool = false;
     var fonts_initialized: bool = false;
 
@@ -307,6 +305,12 @@ const FontState = struct {
     /// dev-only toggle/override for disabling user font
     var toggle_custom: bool = true;
 
+    // FIXME: need to stop doing this
+    var gf: *GlobalFn = undefined;
+
+    // TODO: memory-efficient GIF/LZW implementation -> small buffer
+    const SCRATCH_SIZE = MiB(u32, 48);
+
     //---------------------------------
     // settings
 
@@ -322,7 +326,7 @@ const FontState = struct {
 
     const DEFAULT_FONT = "STOCK";
 
-    pub fn SettingsInit(gf: *GlobalFn) void {
+    pub fn SettingsInit() void {
         // TODO: investigate way to set s_font at comptime after upgrading zig ver
         @memcpy(s_font[0..DEFAULT_FONT.len], DEFAULT_FONT);
 
@@ -370,9 +374,6 @@ const FontState = struct {
         if (fonts_initialized) return;
         defer fonts_initialized = true;
 
-        font_load_fba = FixedBufferAllocator.init(&font_load_scratch);
-        font_load_arena = ArenaAllocator.init(font_load_fba.allocator());
-
         font_reloader.Init(FontLoadCallback, FontUnloadCallback);
         font_reloader.CheckDelay = 250;
 
@@ -406,8 +407,6 @@ const FontState = struct {
 
         if (font_custom_tracked)
             font_reloader.UntrackFile(&font_reloader.FileList[0].Path);
-
-        font_load_arena.deinit();
 
         // return to default values
         fonts_active = true;
@@ -482,12 +481,15 @@ const FontState = struct {
     fn FontStockLoad() void {
         if (font_stock_custom_loaded) return;
 
-        _ = font_load_arena.reset(.retain_capacity);
-        const alloc = font_load_arena.allocator();
+        var scratch_buf = apih.AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse return;
+        var scratch_fba = FixedBufferAllocator.init(scratch_buf);
+
+        var stock_custom_fbs = std.io.fixedBufferStream(@embedFile("embed/font_stock.gif"));
 
         // NOTE: embedded gif should not fail, if load crashes it is programmer error
-        var stock_custom_fbs = std.io.fixedBufferStream(@embedFile("embed/font_stock.gif"));
-        font_stock_custom.FixedToCustom(alloc, "stock fixed", stock_custom_fbs.reader()) catch unreachable;
+        const alloc = scratch_fba.allocator();
+        const reader = stock_custom_fbs.reader();
+        font_stock_custom.FixedToCustom(alloc, "stock fixed", reader) catch unreachable;
         font_stock_custom_loaded = true;
     }
 
@@ -519,8 +521,9 @@ const FontState = struct {
                 },
             };
 
-            _ = font_load_arena.reset(.retain_capacity);
-            const alloc = font_load_arena.allocator();
+            var scratch_buf = apih.AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse break :blk;
+            var scratch_fba = FixedBufferAllocator.init(scratch_buf);
+            const alloc = scratch_fba.allocator();
             const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
 
             // LoadCallback will call FontCustomLoad and set the font, and backup to STOCK if needed
@@ -553,8 +556,12 @@ const FontState = struct {
             FontSet(f);
         }
 
-        _ = font_load_arena.reset(.retain_capacity);
-        FontCustomLoad(font_load_arena.allocator(), name) catch {
+        // TODO: determine what happens if this fails; won't load stock, so only
+        //  falls back to stock if it was already loaded?
+        var scratch_buf = apih.AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse return false;
+        var scratch_fba = FixedBufferAllocator.init(scratch_buf);
+        const alloc = scratch_fba.allocator();
+        FontCustomLoad(alloc, name) catch {
             // don't call FontCustomActivate here; the only time we change what
             // we "want" to show is when the user manually changes the setting
             // and triggers FontLoadAndSet
@@ -573,28 +580,32 @@ const FontState = struct {
     /// dump stock font data embedded in game
     pub fn FontDump() void {
         dump_fonts_done = true;
-        var font: [5][0x2000]u8 = undefined;
 
-        ExtractRawFontPagesToGrey8(&font);
-        DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0.tga");
-        DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1.tga");
-        DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2.tga");
-        DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3.tga");
-        DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4.tga");
+        blk: {
+            var font = apih.AMemoryGetTemporaryT(gf, [5][0x2000]u8) orelse break :blk;
+            ExtractRawFontPagesToGrey8(font);
+            DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0.tga");
+            DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1.tga");
+            DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2.tga");
+            DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3.tga");
+            DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4.tga");
+        }
 
         // TODO: resolve or filter out garbage glyph defs polluting templates
         // TODO: draw each glyph as a separate image, to account for overlaps?
-        font = std.mem.zeroes([5][0x2000]u8);
-        DrawGlyphRegions(&[_][]rf.GLYPH{ rf.aFontGlyphs0, rf.aFontGlyphs0Ext }, &[_][]u8{ &font[0], &font[1], &font[2] }, 64, 128);
-        DrawGlyphRegions(&[_][]rf.GLYPH{rf.aFontGlyphs1}, &[_][]u8{&font[2]}, 64, 128);
-        DrawGlyphRegions(&[_][]rf.GLYPH{rf.aFontGlyphs2}, &[_][]u8{&font[2]}, 64, 128);
-        DrawGlyphRegions(&[_][]rf.GLYPH{ rf.aFontGlyphs3, rf.aFontGlyphs3Ext }, &[_][]u8{&font[3]}, 64, 128);
-        DrawGlyphRegions(&[_][]rf.GLYPH{ rf.aFontGlyphs4, rf.aFontGlyphs4Ext }, &[_][]u8{&font[4]}, 64, 128);
-        DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0_mask.tga");
-        DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1_mask.tga");
-        DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2_mask.tga");
-        DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3_mask.tga");
-        DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4_mask.tga");
+        blk: {
+            var font = apih.AMemoryGetTemporaryZeroT(gf, [5][0x2000]u8) orelse break :blk;
+            DrawGlyphRegions(&[_][]rf.GLYPH{ rf.aFontGlyphs0, rf.aFontGlyphs0Ext }, &[_][]u8{ &font[0], &font[1], &font[2] }, 64, 128);
+            DrawGlyphRegions(&[_][]rf.GLYPH{rf.aFontGlyphs1}, &[_][]u8{&font[2]}, 64, 128);
+            DrawGlyphRegions(&[_][]rf.GLYPH{rf.aFontGlyphs2}, &[_][]u8{&font[2]}, 64, 128);
+            DrawGlyphRegions(&[_][]rf.GLYPH{ rf.aFontGlyphs3, rf.aFontGlyphs3Ext }, &[_][]u8{&font[3]}, 64, 128);
+            DrawGlyphRegions(&[_][]rf.GLYPH{ rf.aFontGlyphs4, rf.aFontGlyphs4Ext }, &[_][]u8{&font[4]}, 64, 128);
+            DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0_mask.tga");
+            DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1_mask.tga");
+            DumpGrey8toTGA(&font[2], 64, 128, "annodue/developer/fontraw2_mask.tga");
+            DumpGrey8toTGA(&font[3], 64, 128, "annodue/developer/fontraw3_mask.tga");
+            DumpGrey8toTGA(&font[4], 64, 128, "annodue/developer/fontraw4_mask.tga");
+        }
 
         DumpFontDefToCSV(&rf.aFontDef[0], 62, 15, "annodue/developer/fontdata0");
         DumpFontDefToCSV(&rf.aFontDef[1], 27, 0, "annodue/developer/fontdata1");
@@ -640,13 +651,13 @@ const FontState = struct {
     //  'nice', but need to rework GDrawText api first
     /// testing display showing all(?) font glyphs
     pub fn ShowFontTest() void {
-        var buf: [255:0]u8 = undefined;
+        var buf = apih.AMemoryGetTemporaryZeroT(gf, [255:0]u8) orelse return;
         var x: i16 = 12;
         var y: i16 = 12;
 
         rt.fnCreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, "~F0~3~sFONT TEST");
         y += 12;
-        rt.fnCreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, std.fmt.bufPrintZ(&buf, "~F4~3~s{s}", .{blk: {
+        rt.fnCreateEntry1(x, y, 0xFF, 0xFF, 0xFF, 0xFF, std.fmt.bufPrintZ(buf, "~F4~3~s{s}", .{blk: {
             if (!FontsShowable()) break :blk "base font";
             break :blk if (!font_custom_active) &font_stock_custom.Name else &font_custom.Name;
         }}) catch null);
@@ -674,6 +685,7 @@ const FontState = struct {
 //  reason, even with defer-closing everything serially in advance??? so we use
 //  non-buffered for now; also, same issue with glyph map dump
 fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []const u8) void {
+    // FIXME: get temp memory from annodue api
     var buf: [2048]u8 = undefined;
 
     { // MAIN FILE
@@ -746,6 +758,7 @@ fn DumpFontDefToCSV(font: *rf.FONT, g1_len: u8, g2_len: u8, filename_stem: []con
 }
 
 fn DumpFontGlyphMapToCSV(filename_stem: []const u8) void {
+    // FIXME: get temp memory from annodue api
     var buf: [2048]u8 = undefined;
 
     { // KEYS
@@ -885,7 +898,7 @@ fn EndsWithLowerString(comptime ext: []const u8, str: []const u8) bool {
 //------------------------------------------------------------------------------
 // text clipping bugfix
 
-var text_clip_fix_buf = std.mem.zeroes([128]u8);
+var text_clip_fix_buf: *[128]u8 = undefined;
 
 // TODO: impl as settings toggle? to api-match other "bugfix toggles"
 // TODO: document the bug somewhere; also may be an idea to document all the
@@ -923,7 +936,7 @@ var text_clip_fix_buf = std.mem.zeroes([128]u8);
 fn PatchTextClippingBug(apply: bool) void {
     if (apply) {
         var d: x86.Detour = undefined;
-        d.Start(0x42DD08, 0x42DD8A, &text_clip_fix_buf);
+        d.Start(0x42DD08, 0x42DD8A, text_clip_fix_buf);
         defer d.End();
 
         // get stable reference to esp, while storing ebp on the stack.

@@ -8,12 +8,16 @@
 const Arena = @This();
 
 // TODO: platform-agnostic implementation
-// TODO: impl arena interface for greater zig compatibility
+// TODO: debug ft such as asan poisoning unused committed range after SizeUsed changes
 // TODO: confirm tests via running package tests from build script (zigwin32 not
 //  conveniently available when testing standalone)
+// TODO: maybe align addresses when pushing, not in advance. this way there could
+//  be an option for the user to specify the alignment they want, and it would
+//  play more nicely with std allocator impl
 
 const std = @import("std");
 const builtin = @import("builtin");
+const StdAllocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
 const POINTER_ALIGNMENT = builtin.target.maxIntAlignment();
@@ -34,7 +38,7 @@ const VirtualAlloc = w32.system.memory.VirtualAlloc;
 const VirtualFree = w32.system.memory.VirtualFree;
 const GetSystemInfo = w32.system.system_information.GetSystemInfo;
 
-Memory: ?*anyopaque,
+pMemory: ?*anyopaque,
 SizeReserved: usize,
 SizeCommitted: usize,
 SizeUsed: usize,
@@ -57,7 +61,7 @@ pub fn Init(size: usize, commit_increment: usize) ?Arena {
     var alloc = VirtualAlloc(null, size_res, MEM_RESERVE, PAGE_NOACCESS) orelse return null;
 
     return Arena{
-        .Memory = alloc,
+        .pMemory = alloc,
         .SizeReserved = size_res,
         .SizeCommitted = 0,
         .SizeUsed = 0,
@@ -68,7 +72,7 @@ pub fn Init(size: usize, commit_increment: usize) ?Arena {
 
 /// releases reserved memory and invalidates arena
 pub fn Deinit(self: *Arena) void {
-    _ = VirtualFree(self.Memory, 0, MEM_RELEASE);
+    _ = VirtualFree(self.pMemory, 0, MEM_RELEASE);
     self.* = std.mem.zeroes(Arena);
 }
 
@@ -83,11 +87,11 @@ pub fn Push(self: *Arena, size: usize) []u8 {
 
     if (size_used_next > self.SizeCommitted) {
         const size_committed_next = RoundIntUp(usize, size_used_next, self.CommitIncrement);
-        _ = VirtualAlloc(self.Memory, size_committed_next, MEM_COMMIT, PAGE_READWRITE) orelse return &.{};
+        _ = VirtualAlloc(self.pMemory, size_committed_next, MEM_COMMIT, PAGE_READWRITE) orelse return &.{};
         self.SizeCommitted = size_committed_next;
     }
 
-    const pointer = @intFromPtr(self.Memory.?) + self.SizeUsed;
+    const pointer = @intFromPtr(self.pMemory.?) + self.SizeUsed;
     self.SizeUsed += size_alloc;
     self.SizeUsedMax = @max(self.SizeUsedMax, self.SizeUsed);
 
@@ -121,21 +125,65 @@ pub fn Reset(self: *Arena) void {
 /// decommit committed memory, leaving at least @size bytes committed, and leaving
 /// at least @size bytes pushed. does not release memory.
 pub fn ResetTo(self: *Arena, size: usize) void {
-    assert(self.Memory != null);
+    assert(self.pMemory != null);
     assert(size <= self.SizeCommitted);
     defer assert(self.SizeUsed <= self.SizeCommitted);
 
     const size_committed_next = RoundIntUp(usize, size, self.CommitIncrement);
     const size_decommit = self.SizeReserved - size_committed_next;
-    const pointer = @intFromPtr(self.Memory.?) + size_committed_next;
+    const pointer = @intFromPtr(self.pMemory.?) + size_committed_next;
 
     _ = VirtualFree(@ptrFromInt(pointer), size_decommit, MEM_DECOMMIT);
     self.SizeCommitted = size_committed_next;
     self.PopTo(size);
 }
 
+pub fn Allocator(self: *Arena) StdAllocator {
+    return StdAllocator{
+        .ptr = self,
+        .vtable = &StdAllocator.VTable{
+            .alloc = AllocatorAlloc,
+            .resize = AllocatorResize,
+            .free = AllocatorFree,
+        },
+    };
+}
+
+// TODO: support log2_ptr_align
+fn AllocatorAlloc(ctx: *anyopaque, n: usize, _: u8, _: usize) ?[*]u8 {
+    const self: *Arena = @ptrCast(@alignCast(ctx));
+    var mem = self.Push(n);
+    return if (mem.len == n) mem.ptr else null;
+}
+
+// TODO: support full range of resize actions. missing: expanding if last alloc,
+//  maybe shrinking if non-last (unsure atm and neither relevant to my usage)
+fn AllocatorResize(ctx: *anyopaque, buf: []u8, _: u8, new_len: usize, _: usize) bool {
+    const self: *Arena = @ptrCast(@alignCast(ctx));
+
+    const buf_len_aligned = RoundIntUp(usize, buf.len, POINTER_ALIGNMENT);
+    const buf_end = @intFromPtr(buf.ptr) + buf_len_aligned;
+    const b_last_alloc = if (self.pMemory) |mem| buf_end == @intFromPtr(mem) + self.SizeUsed else false;
+
+    if (!b_last_alloc or new_len > buf.len) return false;
+
+    self.PopTo(self.SizeUsed - buf_len_aligned + new_len);
+    return true;
+}
+
+fn AllocatorFree(ctx: *anyopaque, buf: []u8, _: u8, _: usize) void {
+    const self: *Arena = @ptrCast(@alignCast(ctx));
+
+    const buf_len_aligned = RoundIntUp(usize, buf.len, POINTER_ALIGNMENT);
+    const buf_end = @intFromPtr(buf.ptr) + buf_len_aligned;
+    const b_last_alloc = if (self.pMemory) |mem| buf_end == @intFromPtr(mem) + self.SizeUsed else false;
+
+    if (b_last_alloc) self.PopTo(self.SizeUsed - buf_len_aligned);
+}
+
 // TODO: tests for page size
 // TODO: tests for allocation granularity
+// TODO: tests for std allocator impl
 test {
     const size_res = MiB(usize, 10);
     const size_inc = MiB(usize, 1);
@@ -144,6 +192,7 @@ test {
     const size_mem3 = size_res;
 
     var arena = Arena.Init(size_res, size_inc) orelse return error.OutOfMemory;
+    try std.testing.expect(arena.pMemory != null);
     try std.testing.expect(arena.SizeReserved == size_res);
     try std.testing.expect(arena.SizeCommitted == 0);
 
@@ -180,7 +229,7 @@ test {
 
     // releasing memory
     arena.Deinit();
-    try std.testing.expect(arena.Memory == null);
+    try std.testing.expect(arena.pMemory == null);
     try std.testing.expect(arena.SizeUsed == 0);
     try std.testing.expect(arena.SizeCommitted == 0);
     try std.testing.expect(arena.SizeReserved == 0);

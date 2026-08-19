@@ -51,5 +51,5 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 // HOOKS
 
 export fn EarlyEngineUpdateA(_: *GlobalFn) callconv(.C) void {
-    //_ = gf.GDrawText(.Default, rt.MakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
+    //_ = gf.GDrawText(.Default, rt.hMakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
 }

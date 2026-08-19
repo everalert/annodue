@@ -16,7 +16,6 @@ const LocHeader = zzip.LocalFileHeader.Header;
 const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 
-const AMemory = @import("AMemory.zig");
 const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 const VERSION = app.VERSION;
@@ -30,6 +29,7 @@ const rt = r.Text;
 const rg = r.Global;
 
 const msg = @import("../util/message.zig");
+const apih = @import("../util/api/api_helper.zig");
 const PPanic = @import("../util/debug.zig").PPanic;
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
@@ -53,6 +53,8 @@ const UpdateState = struct {
 // zip files, as per the zipfile spec; meaning this (the extractor), the packager
 // and zzip all need to be updated
 
+const SCRATCH_BUFFER_SIZE = MiB(u32, 16);
+
 const ANNODUE_PATH = if (BuildOptions.BUILD_MODE == .Release) "." else "annodue/tmp/updatetest";
 
 // NOTE: update this list with each new version
@@ -73,10 +75,10 @@ const Update = struct {
     url: ?[]const u8 = null,
     size: i64 = undefined,
 
-    fn init(alloc: Allocator) Self {
+    fn init(gpa: Allocator) Self {
         return .{
-            .client = http.Client{ .allocator = alloc },
-            .alloc = alloc,
+            .client = http.Client{ .allocator = gpa },
+            .alloc = gpa,
         };
     }
 
@@ -91,9 +93,9 @@ const Update = struct {
 // FIXME: do we even need AnnodueUpdateTagEF struct?
 const UPDATE_TAG_EXTRA_FIELD_ID: u16 = 0x5055; // UP
 
-fn updateToastAvailable(alloc: Allocator, gf: *GlobalFn, ver: []const u8) void {
-    const new_update_text = std.fmt.allocPrintZ(alloc, "Update Available: {s}", .{ver}) catch return;
-    defer alloc.free(new_update_text);
+fn updateToastAvailable(gpa: Allocator, gf: *GlobalFn, ver: []const u8) void {
+    const new_update_text = std.fmt.allocPrintZ(gpa, "Update Available: {s}", .{ver}) catch return;
+    defer gpa.free(new_update_text);
     _ = gf.ToastNew(new_update_text, rt.ColorRGB.Red.rgba(0));
 }
 
@@ -122,7 +124,7 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
     if (s.init or gf.STimestamp() + s.retry_delay < s.last_try) return;
     s.last_try = gf.STimestamp();
 
-    var memory = AMemory.TemporaryAlloc(MiB(u32, 16));
+    var memory = apih.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse return;
     var scratch_fba = FixedBufferAllocator.init(memory);
     var scratch_alloc = scratch_fba.allocator();
 
@@ -204,8 +206,8 @@ pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
         if (gf.InputGetKb(.U, .JustOn))
             OnInitLate(gf);
 
-        if (gf.InputGetKb(.J, .JustOn)) {
-            var memory = AMemory.TemporaryAlloc(MiB(u32, 16));
+        if (gf.InputGetKb(.J, .JustOn)) blk: {
+            var memory = apih.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse break :blk;
             var scratch_fba = FixedBufferAllocator.init(memory);
             var scratch_alloc = scratch_fba.allocator();
             const fp = std.fmt.allocPrint(scratch_alloc, "{s}/{s}", .{ ANNODUE_PATH, "autoupdate.zip" }) catch return;
@@ -222,12 +224,12 @@ pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
 // FIXME: below should be the last piece before github releases test.
 // final review and test update process with local file instead of download.
 // don't forget to update version in global.zig before compiling for github.
-fn updateApplyFromNetwork(alloc: Allocator, update: *Update) !void {
+fn updateApplyFromNetwork(gpa: Allocator, update: *Update) !void {
     // -> download update.zip from the release
     while (true) {
         const uri = std.Uri.parse(update.url.?) catch |e| return e;
 
-        var headers = std.http.Headers.init(alloc);
+        var headers = std.http.Headers.init(gpa);
         defer headers.deinit();
         headers.append("accept", "application/octet-stream") catch |e| return e;
 
@@ -242,15 +244,15 @@ fn updateApplyFromNetwork(alloc: Allocator, update: *Update) !void {
         // future: same file as release zip, annodue-<semver>.zip
         //    packed files use extra field to identify which to extract
         if (request.response.status == .ok) {
-            const raw_data = request.reader().readAllAlloc(alloc, 1 << 31) catch |e| return e;
-            defer alloc.free(raw_data);
+            const raw_data = request.reader().readAllAlloc(gpa, 1 << 31) catch |e| return e;
+            defer gpa.free(raw_data);
 
             // -> verify download succeeded/packed data is valid somehow?
             // TODO: confirm if anything (else?) even needs to be done at this point to
             // know that the data was properly received
             if (update.size != raw_data.len) return error.InvalidHttpDataSize;
 
-            return updateApplyFromZipData(alloc, raw_data);
+            return updateApplyFromZipData(gpa, raw_data);
         }
 
         if (request.response.status == .found) {
@@ -270,12 +272,12 @@ fn updateApplyFromNetwork(alloc: Allocator, update: *Update) !void {
 // finding a valid update version (impl after 0.1.0 release)
 // FIXME: (ZZIP) impl zip unpacking changes (slash correction) into zzip lib
 // FIXME: (ZZIP) impl a decent canned way of doing this into zzip lib
-fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
+fn updateApplyFromZipData(gpa: Allocator, raw_data: []const u8) !void {
     // -> delete relevant files in file system
     // TODO: maybe don't delete in future; depends on plugin ecosystem
     for (DELETE_ITEMS) |path| {
-        const p = std.fmt.allocPrintZ(alloc, "{s}/{s}", .{ ANNODUE_PATH, path }) catch |e| return e;
-        defer alloc.free(p);
+        const p = std.fmt.allocPrintZ(gpa, "{s}/{s}", .{ ANNODUE_PATH, path }) catch |e| return e;
+        defer gpa.free(p);
         std.fs.cwd().deleteTree(p) catch |e| return e;
     }
 
@@ -296,16 +298,16 @@ fn updateApplyFromZipData(alloc: Allocator, raw_data: []const u8) !void {
         const data = raw_data[data_off .. data_off + lf.size_compressed];
 
         // TODO: make some kind of comptime assurance that it will be a particular kind of slash
-        const fp = std.fmt.allocPrint(alloc, "{s}/{s}", .{ ANNODUE_PATH, lf.filename }) catch return;
+        const fp = std.fmt.allocPrint(gpa, "{s}/{s}", .{ ANNODUE_PATH, lf.filename }) catch return;
         if (std.mem.lastIndexOf(u8, fp, "/")) |end|
             std.fs.cwd().makePath(fp[0..end]) catch |e| return e;
 
-        defer alloc.free(fp);
+        defer gpa.free(fp);
         const out = std.fs.cwd().createFile(fp, .{}) catch |e| return e;
         defer out.close();
         var out_bw = std.io.bufferedWriter(out.writer());
         defer _ = out_bw.flush() catch |e|
             PPanic("(Update) [updateApplyFromZipData] write buffer flush: {s}", .{@errorName(e)});
-        lf.compression.uncompress(alloc, data, out_bw.writer(), df.crc32) catch |e| return e;
+        lf.compression.uncompress(gpa, data, out_bw.writer(), df.crc32) catch |e| return e;
     }
 }

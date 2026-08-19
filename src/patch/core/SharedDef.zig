@@ -29,7 +29,7 @@ const TextDef = r.Text.TextDef;
 pub const RaceState = enum(u8) { None, PreRace, Countdown, Racing, PostRace, PostRaceExiting };
 pub const HangState = r.Entity.Hang.HangMenuScreen;
 
-pub const GLOBAL_STATE_VERSION = 9;
+pub const GLOBAL_STATE_VERSION = 10;
 
 // TODO: move all references to patch_memory to use internal allocator; add
 // allocator interface to GlobalFunction
@@ -39,12 +39,7 @@ pub const GLOBAL_STATE_VERSION = 9;
 //   list of stuff to update when it's made:
 //     inputdisplay, practice mode vis, spare camstates used
 pub const GlobalState = extern struct {
-    patch_memory: [*]u8 = undefined,
-    patch_size: usize = undefined,
-    patch_offset: usize = undefined,
-
     init_late_passed: bool = false,
-
     practice_mode: bool = false,
 
     window_in_foreground: bool = true,

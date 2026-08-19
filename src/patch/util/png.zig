@@ -76,7 +76,7 @@ ColorType: ColorType,
 // data, to allow the caller to setup for things like extracting the image palette
 // before the data, displaying adam7 progressive images, etc.
 
-pub fn Read(alloc: Allocator, reader: anytype) !void {
+pub fn Read(gpa: Allocator, reader: anytype) !void {
     const CT = Chunk(@TypeOf(reader));
 
     // FIXME: this would work better in zig 0.13, because zlib decompress is a reader-writer
@@ -84,11 +84,11 @@ pub fn Read(alloc: Allocator, reader: anytype) !void {
     // - renew fifo writer each IDAT block
     // - main point of this is to decouple the IDAT block from the zlib
     //   decompressor so that multiple chunks can be used on it
-    var data_buf = ArrayList(u8).init(alloc);
+    var data_buf = ArrayList(u8).init(gpa);
     defer data_buf.deinit();
     const data_buf_w = data_buf.writer();
-    var data_fifo_buf: []u8 = try alloc.alloc(u8, 256);
-    defer alloc.free(data_fifo_buf);
+    var data_fifo_buf: []u8 = try gpa.alloc(u8, 256);
+    defer gpa.free(data_fifo_buf);
     var data_fifo = LinearFifo(u8, .Slice).init(data_fifo_buf);
     defer data_fifo.deinit();
     // lazy init this because the backing reader needs to already have the zlib
@@ -97,7 +97,7 @@ pub fn Read(alloc: Allocator, reader: anytype) !void {
     var data_zlib: zlib.DecompressStream(@TypeOf(data_fifo.reader())) = undefined;
     defer if (data_zlib_initialized) data_zlib.deinit();
 
-    var filter_buf = ArrayList(u8).init(alloc);
+    var filter_buf = ArrayList(u8).init(gpa);
     defer filter_buf.deinit();
     const filter_buf_w = filter_buf.writer();
 
@@ -177,7 +177,7 @@ pub fn Read(alloc: Allocator, reader: anytype) !void {
                         while (data_fifo.readableLength() >= 4) {
                             if (!data_zlib_initialized) {
                                 data_zlib_initialized = true;
-                                data_zlib = try zlib.decompressStream(alloc, data_fifo.reader());
+                                data_zlib = try zlib.decompressStream(gpa, data_fifo.reader());
                             }
                             const data_zlib_r = data_zlib.reader();
 

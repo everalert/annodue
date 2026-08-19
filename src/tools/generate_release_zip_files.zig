@@ -180,33 +180,33 @@ pub fn main() !void {
     }));
 }
 
-fn appendFileToFile(alloc: Allocator, z: *Zip, dir: *const Dir, path: []const u8) !void {
+fn appendFileToFile(gpa: Allocator, z: *Zip, dir: *const Dir, path: []const u8) !void {
     const file = try dir.openFile(path, .{});
     defer file.close();
-    const raw_data = try file.readToEndAlloc(alloc, 1 << 31);
-    var zipfile = try makeZipFile(alloc, raw_data, path);
+    const raw_data = try file.readToEndAlloc(gpa, 1 << 31);
+    var zipfile = try makeZipFile(gpa, raw_data, path);
     //var zipfile = try File.init(alloc, path, path); // instead of all of above
 
-    var ets = try alloc.create(ExtendedTimestampEF);
+    var ets = try gpa.create(ExtendedTimestampEF);
     try ets.updateFromFile(&file, false);
     try zipfile.extra_fields.append(ets.extraField());
     try z.files.append(zipfile);
 }
 
-fn appendDataToFile(alloc: Allocator, z: *Zip, data: []const u8, path: []const u8) !void {
-    var zipfile = try makeZipFile(alloc, data, path);
+fn appendDataToFile(gpa: Allocator, z: *Zip, data: []const u8, path: []const u8) !void {
+    var zipfile = try makeZipFile(gpa, data, path);
     try z.files.append(zipfile);
 }
 
-fn makeZipFile(alloc: Allocator, data: []const u8, path: []const u8) !File {
+fn makeZipFile(gpa: Allocator, data: []const u8, path: []const u8) !File {
     return .{
-        .allocator = alloc,
+        .allocator = gpa,
         .ver_made_by = .{ .spec = .@"2.0" },
         .ver_min = .{ .spec = .@"2.0" },
         .crc32 = Crc32.hash(data),
         .filename = path,
         .raw_data = data,
-        .extra_fields = ArrayList(ExtraField).init(alloc),
+        .extra_fields = ArrayList(ExtraField).init(gpa),
         .compression = .Deflate,
     };
 }

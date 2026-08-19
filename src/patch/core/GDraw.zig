@@ -5,10 +5,11 @@ const Allocator = std.mem.Allocator;
 const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
-const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
+// FIXME: ?? should these ownership checks not be in some api? not necessarily
+//  the public api but at least organized
+const workingOwnerIsSystem = @import("AHook.zig").PluginState.workingOwnerIsSystem;
 
-const AMemory = @import("AMemory.zig");
-
+const apih = @import("../util/api/api_helper.zig");
 const MiB = @import("../util/base/base_memory.zig").MiB;
 const PPanic = @import("../util/debug.zig").PPanic;
 
@@ -19,6 +20,8 @@ const TextDef = rt.TextDef;
 const ResetMaterial = r.Quad.ResetMaterial;
 
 pub const GDRAW_VERSION = 4;
+
+const PATCH_BUFFER_SIZE = MiB(u32, 2);
 
 // NOTE: anything above around 256 characters seems pointless even with excessive formatting
 // characters, but may be worth reconsidering down the line if e.g. higher res viewport
@@ -235,9 +238,9 @@ pub fn GDrawRectBdr(
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {
-    var memory = AMemory.PermanentAlloc(MiB(u32, 2));
-    GDraw.init(memory) catch @panic("GDraw init failed");
+pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    var memory = apih.AMemoryGetPermanentT(gf, [PATCH_BUFFER_SIZE]u8) orelse @panic("GDraw: API OutOfMemory");
+    GDraw.init(memory) catch |e| std.debug.panic("GDraw: {s}", .{@errorName(e)});
 }
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}

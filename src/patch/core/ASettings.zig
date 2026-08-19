@@ -12,8 +12,8 @@ const w32f = @import("zigwin32").foundation;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
-const workingOwner = @import("Hook.zig").PluginState.workingOwner;
-const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
+const workingOwner = @import("AHook.zig").PluginState.workingOwner;
+const workingOwnerIsSystem = @import("AHook.zig").PluginState.workingOwnerIsSystem;
 const AMemory = @import("AMemory.zig");
 
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
@@ -79,6 +79,8 @@ const DEFAULT_ID = 0xFFFF;
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";
 const FILENAME_ACTIVE = FILENAME;
+
+const SCRATCH_BUFFER_SIZE = MiB(u32, 2);
 
 pub const ParentHandle = extern struct {
     generation: u16,
@@ -701,14 +703,14 @@ pub const ASettings = struct {
 
     // TODO: convert to reader to match iniWrite?
     /// read ini-formatted settings from file
-    pub fn iniRead(alloc: Allocator, filename: []const u8) !void {
+    pub fn iniRead(gpa: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
         //var file_br = std.io.bufferedReader(file.reader());
         //const file_r = file_br.reader();
         const file_r = file.reader();
 
-        var parser = ini.parse(alloc, file_r);
+        var parser = ini.parse(gpa, file_r);
         defer parser.deinit();
 
         var sec_handle: ?Handle = null;
@@ -885,8 +887,8 @@ pub const ASettings = struct {
 
 // GLOBAL
 
-pub fn init() !void {
-    var memory = AMemory.PermanentAlloc(MiB(u32, 2));
+pub fn init(arena_perm: Allocator, _: Allocator) !void {
+    var memory = try arena_perm.create([SCRATCH_BUFFER_SIZE]u8);
     ASettings.init(memory);
 
     ASettings.h_s_settings_version =

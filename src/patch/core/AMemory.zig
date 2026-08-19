@@ -1,4 +1,5 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
 const app = @import("../appinfo.zig");
@@ -6,9 +7,11 @@ const GlobalFn = app.GLOBAL_FUNCTION;
 
 const BaseArena = @import("../util/base/base_arena.zig");
 const MiB = @import("../util/base/base_memory.zig").MiB;
+const KiB = @import("../util/base/base_memory.zig").KiB;
 
 const SIZE_PERMANENT = MiB(u32, 512);
 const SIZE_TEMPORARY = MiB(u32, 512);
+const SIZE_INCREMENT = MiB(u32, 4);
 
 pub const AllocatorState = struct {
     var Initialized: bool = false;
@@ -19,8 +22,9 @@ pub const AllocatorState = struct {
 // TODO: migrate this to OnInit after restructuring annodue and it can be guaranteed
 //  that this OnInit is run before any dependencies
 pub fn Init() bool {
-    AllocatorState.ArenaPermanent = BaseArena.Init(SIZE_PERMANENT, MiB(u32, 4)) orelse return false;
-    AllocatorState.ArenaTemporary = BaseArena.Init(SIZE_TEMPORARY, MiB(u32, 4)) orelse return false;
+    if (AllocatorState.Initialized) return true;
+    AllocatorState.ArenaPermanent = BaseArena.Init(SIZE_PERMANENT, SIZE_INCREMENT) orelse return false;
+    AllocatorState.ArenaTemporary = BaseArena.Init(SIZE_TEMPORARY, SIZE_INCREMENT) orelse return false;
     AllocatorState.Initialized = true;
     return true;
 }
@@ -33,24 +37,31 @@ pub fn Deinit() void {
     AllocatorState.ArenaTemporary.Reset();
 }
 
-// TODO: deprecate after restructuring annodue such that API can always be used
-pub fn PermanentAlloc(size: u32) []u8 {
-    return AllocatorState.ArenaPermanent.Push(size);
+pub fn PermanentAllocator() Allocator {
+    assert(AllocatorState.Initialized);
+    return AllocatorState.ArenaPermanent.Allocator();
 }
 
-// TODO: deprecate after restructuring annodue such that API can always be used
-pub fn PermanentAllocZero(size: u32) []u8 {
-    return AllocatorState.ArenaPermanent.PushZero(size);
+pub fn TemporaryAllocator() Allocator {
+    assert(AllocatorState.Initialized);
+    return AllocatorState.ArenaTemporary.Allocator();
 }
 
-// TODO: deprecate after restructuring annodue such that API can always be used
-pub fn TemporaryAlloc(size: u32) []u8 {
-    return AllocatorState.ArenaTemporary.Push(size);
+//------------------------------------------------------------------------------
+// annodue hooks
+
+pub fn OnInit(_: *GlobalFn) callconv(.C) void {
+    //if (!AllocatorState.Init()) @panic("AMemory(OnInit): OutOfMemory");
 }
 
-// TODO: deprecate after restructuring annodue such that API can always be used
-pub fn TemporaryAllocZero(size: u32) []u8 {
-    return AllocatorState.ArenaTemporary.PushZero(size);
+pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+    //AllocatorState.Deinit();
+}
+
+pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
+    AllocatorState.ArenaTemporary.Pop();
 }
 
 //------------------------------------------------------------------------------
@@ -61,6 +72,9 @@ pub fn TemporaryAllocZero(size: u32) []u8 {
 //  this memory in waves based on the "ring" the caller is in. for example, the
 //  permanent memory used by a user plugin would be popped when the entire user
 //  plugin "ring" is deinitialized, such as when batch reloading all plugins
+// TODO: will need to enforce AMemoryGetPermanent/AMemoryGetPermanentZero usage
+//  is only during init phases (inits for foundation, each ring and each plugin
+//  layer), in order to guarantee that memory is not rugswept during deinit phases
 
 /// allocate memory that is valid until end of caller lifetime
 pub fn AMemoryGetPermanent(size: u32) callconv(.C) ?*anyopaque {
@@ -88,22 +102,4 @@ pub fn AMemoryGetTemporaryZero(size: u32) callconv(.C) ?*anyopaque {
     assert(AllocatorState.Initialized);
     var memory = AllocatorState.ArenaTemporary.PushZero(size);
     return if (memory.len == size) memory.ptr else null;
-}
-
-//------------------------------------------------------------------------------
-// annodue hooks
-
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {
-    if (!AllocatorState.Initialized)
-        if (!Init()) @panic("failed to initialize AMemory");
-}
-
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
-
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
-    Deinit();
-}
-
-pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
-    AllocatorState.ArenaTemporary.Pop();
 }

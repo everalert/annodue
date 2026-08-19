@@ -3,7 +3,7 @@ const std = @import("std");
 const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 const GLOBAL_STATE = &@import("Global.zig").GLOBAL_STATE;
-const workingOwner = @import("Hook.zig").PluginState.workingOwner;
+const workingOwner = @import("AHook.zig").PluginState.workingOwner;
 
 const rq = @import("racer").Quad;
 const rg = @import("racer").Global;

@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
+const GeneralPurposeAllocator = std.heap.GeneralPurposeAllocator;
 const allocPrint = std.fmt.allocPrint;
 const assert = std.debug.assert;
 
@@ -59,8 +60,8 @@ pub fn TemporalCompressor(
         last_framecount: usize = 0,
 
         // FIXME: remove gpa/alloc, do some kind of core integration instead
-        gpa: ?std.heap.GeneralPurposeAllocator(.{}) = null,
-        alloc: ?std.mem.Allocator = null,
+        gpa: ?GeneralPurposeAllocator(.{}) = null,
+        alloc: ?Allocator = null,
         memory: []u8 = undefined,
         raw_offsets: [*]u8 = undefined,
         raw_headers: [*]u8 = undefined,
@@ -334,7 +335,7 @@ pub fn TemporalCompressor(
         };
 
         // TODO: strategy pattern thing for the actual compress step (diffing two frames into an output)
-        pub fn calcPotential(alloc: Allocator, writer: anytype, opts: TestSettings) !void {
+        pub fn calcPotential(gpa: Allocator, writer: anytype, opts: TestSettings) !void {
             assert(opts.compression != .none);
             assert(opts.frame_size % opts.item_size == 0);
 
@@ -346,7 +347,7 @@ pub fn TemporalCompressor(
             if (opts.headers) return error.CompressedInputNotSupported;
 
             // TODO: remove arena here, i.e. let caller decide if they will pass in an arena
-            var arena = std.heap.ArenaAllocator.init(alloc);
+            var arena = std.heap.ArenaAllocator.init(gpa);
             defer arena.deinit();
             var arena_a = arena.allocator();
 
@@ -427,8 +428,8 @@ pub fn TemporalCompressor(
                         var run_len: usize = 0;
                         var len: usize = 0;
                         var is_same: bool = true;
-                        var last = try alloc.alloc(u8, opts.item_size);
-                        defer alloc.free(last);
+                        var last = try gpa.alloc(u8, opts.item_size);
+                        defer gpa.free(last);
                         @memset(last, 0x00);
                         var total_runs: usize = 0;
                         var max_run_len: usize = 0;
@@ -477,8 +478,8 @@ pub fn TemporalCompressor(
                         var run_type: enum(u8) { none, same, dif } = .none;
                         var len: usize = 0;
                         var is_same: bool = true;
-                        var last = try alloc.alloc(u8, opts.item_size);
-                        defer alloc.free(last);
+                        var last = try gpa.alloc(u8, opts.item_size);
+                        defer gpa.free(last);
                         @memset(last, 0x00);
 
                         var total_runs: usize = 0;

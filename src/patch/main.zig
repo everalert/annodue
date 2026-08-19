@@ -1,44 +1,35 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const StackTrace = std.builtin.StackTrace;
 
 const global = @import("core/Global.zig");
-const hook = @import("core/Hook.zig");
-const allocator = @import("core/AMemory.zig");
+const AHook = @import("core/AHook.zig");
+const AMemory = @import("core/AMemory.zig");
 const debug = @import("core/Debug.zig");
-const asettings = @import("core/ASettings.zig");
+const ASettings = @import("core/ASettings.zig");
 
 const msg = @import("util/message.zig");
 const MiB = @import("util/base/base_memory.zig").MiB;
 
-const patch_size = MiB(u32, 4);
-
 pub const panic = debug.annodue_panic;
 
-// DO THE THING!!!
-
 export fn Init() void {
+    // TODO: maybe this should be re-characterized to reflect that it's just
+    // checking whether or not to cancel loading annodue
     if (!global.init()) return;
-    if (!allocator.Init()) @panic("failed to initialize memory");
 
     // init
 
-    const memory = allocator.PermanentAlloc(patch_size);
-    global.GLOBAL_STATE.patch_memory = @ptrCast(memory.ptr);
-    global.GLOBAL_STATE.patch_size = memory.len;
-    global.GLOBAL_STATE.patch_offset = @intFromPtr(memory.ptr);
+    if (!AMemory.Init()) @panic("Init(AMemory): OutOfMemory");
+    const arena_perm = AMemory.PermanentAllocator();
+    const arena_temp = AMemory.TemporaryAllocator();
 
     // TODO: reimpl alloc in init fn args
-    asettings.init() catch {};
-    hook.init();
+    ASettings.init(arena_perm, arena_temp) catch |e|
+        std.debug.panic("Init(ASettings): {s}", .{@errorName(e)});
 
-    // debug
-
-    if (false) {
-        msg.Message("{s}", .{global.VersionStr}, "Patching SWE1R...", .{});
-    }
+    AHook.init(arena_perm, arena_temp) catch |e|
+        std.debug.panic("Init(AHook): {s}", .{@errorName(e)});
 }
 
 export fn Deinit() void {
-    asettings.deinit() catch {};
+    ASettings.deinit() catch {};
 }

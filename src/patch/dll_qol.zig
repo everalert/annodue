@@ -23,6 +23,7 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const st = @import("util/toggle_state.zig");
 const bmem = @import("util/base/base_memory.zig");
+const apih = @import("util/api/api_helper.zig");
 
 const rg = @import("racer").Global;
 const rti = @import("racer").Time;
@@ -222,7 +223,7 @@ const QolState = struct {
     var input_unpause = input_unpause_data.inputMap();
     var input_quickstart = input_quickstart_data.inputMap();
 
-    var fcam_buf: [32]u8 = undefined;
+    var fcam_buf: []u8 = &.{};
     var cam_prev: u32 = 0xFFFFFFFF;
     var cam_cman: ?*re.cMan.cMan = null;
 
@@ -413,8 +414,9 @@ const QolState = struct {
                 continue;
             }
             if (std.mem.eql(u8, "menu_track_order", name)) {
-                var buf: [64]u8 = undefined;
-                const s = std.ascii.upperString(&buf, std.mem.span(@as([*:0]const u8, &QuickRaceMenu.s_menu_track_order)));
+                // FIXME: uhh... (also handle nullptr case properly)
+                var buf = apih.AMemoryGetTemporaryT(QuickRaceMenu.gf, [64]u8) orelse continue;
+                const s = std.ascii.upperString(buf, std.mem.span(@as([*:0]const u8, &QuickRaceMenu.s_menu_track_order)));
                 const use_circuit_order = std.mem.eql(u8, "CIRCUIT", s);
                 QuickRaceMenu.set_track_order(use_circuit_order);
                 continue;
@@ -447,7 +449,7 @@ const fcam_src_asm = [7]u8{
 fn PatchCameraFKeys(enable: bool) void {
     if (enable) {
         var d: x86.Detour = undefined;
-        d.Start(0x451D64, 0x451D6B, &QolState.fcam_buf);
+        d.Start(0x451D64, 0x451D6B, QolState.fcam_buf);
         d.addr = mem.write_bytes(d.addr, &fcam_src_asm);
         d.addr = mem.write_bytes(d.addr, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }); // mov [eax+80], ecx
         d.End();
@@ -691,7 +693,7 @@ fn CallbackTrackSelectEntry() callconv(.C) void {
 
 // FAST MENU NAVIGATION
 
-var nav_asm: [96]u8 = undefined;
+var nav_asm: []u8 = &.{};
 
 fn PatchMenuNavigationSpeed(enable: bool) void {
     var off: u32 = 0;
@@ -1453,6 +1455,10 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: keep at top
     QuickRaceMenu.gf = gf;
 
+    // FIXME: handle nullptr cases properly
+    nav_asm = apih.AMemoryGetPermanentT(gf, [96]u8) orelse @panic("QOL(nav_asm): API OutOfMemory");
+    QolState.fcam_buf = apih.AMemoryGetPermanentT(gf, [32]u8) orelse @panic("QOL(fcam_buf): API OutOfMemory");
+
     _ = ShowCursor(0); // cursor fix
     QolState.settingsInit(gf);
 
@@ -1562,16 +1568,17 @@ export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
 
     // FIXME: convert to mapped inputs
     if (QolState.s_clear_records_enable and gf.InputGetKbRaw(.BACK) == .JustOn) {
-        var buf: [127:0]u8 = undefined;
-        if (gf.InputGetKbRaw(.@"1").on()) {
+        if (gf.InputGetKbRaw(.@"1").on()) blk: {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 1, hang.Mirror != 0);
-            _ = std.fmt.bufPrintZ(&buf, "{s} Best Lap cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
-            _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
+            var buf = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
+            _ = std.fmt.bufPrintZ(buf, "{s} Best Lap cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
+            _ = gf.ToastNew(buf, rt.ColorRGB.Red.rgba(0));
         }
-        if (gf.InputGetKbRaw(.@"3").on()) {
+        if (gf.InputGetKbRaw(.@"3").on()) blk: {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 3, hang.Mirror != 0);
-            _ = std.fmt.bufPrintZ(&buf, "{s} 3-Lap Record cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
-            _ = gf.ToastNew(&buf, rt.ColorRGB.Red.rgba(0));
+            var buf = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
+            _ = std.fmt.bufPrintZ(buf, "{s} 3-Lap Record cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
+            _ = gf.ToastNew(buf, rt.ColorRGB.Red.rgba(0));
         }
     }
 }

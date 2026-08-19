@@ -71,11 +71,11 @@ pub fn HandleMap(comptime T: type, comptime I: type) type {
         sparse_indices: ArrayList(SparseIndex(I)),
         next: I,
 
-        pub fn init(allocator: Allocator) Self {
+        pub fn init(gpa: Allocator) Self {
             return .{
-                .handles = ArrayList(Handle(I)).init(allocator),
-                .values = ArrayList(T).init(allocator),
-                .sparse_indices = ArrayList(SparseIndex(I)).init(allocator),
+                .handles = ArrayList(Handle(I)).init(gpa),
+                .values = ArrayList(T).init(gpa),
+                .sparse_indices = ArrayList(SparseIndex(I)).init(gpa),
                 .next = 0,
             };
         }

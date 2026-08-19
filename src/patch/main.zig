@@ -1,43 +1,35 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const StackTrace = std.builtin.StackTrace;
 
 const global = @import("core/Global.zig");
-const hook = @import("core/Hook.zig");
-const allocator = @import("core/Allocator.zig");
-const debug = @import("core/Debug.zig");
-const asettings = @import("core/ASettings.zig");
+const AHook = @import("core/AHook.zig");
+const AMemory = @import("core/AMemory.zig");
+const ASettings = @import("core/ASettings.zig");
 
 const msg = @import("util/message.zig");
+const dbg = @import("util/base/base_debug.zig");
+const MiB = @import("util/base/base_memory.zig").MiB;
 
-const patch_size: u32 = 4 * 1024 * 1024; // 4MB
-
-pub const panic = debug.annodue_panic;
-
-// DO THE THING!!!
+pub const panic = dbg.annodue_panic;
 
 export fn Init() void {
+    // TODO: maybe this should be re-characterized to reflect that it's just
+    // checking whether or not to cancel loading annodue
     if (!global.init()) return;
 
     // init
 
-    const alloc = allocator.allocator();
-    const memory = alloc.alloc(u8, patch_size) catch @panic("failed to allocate main patch memory");
-    global.GLOBAL_STATE.patch_memory = @ptrCast(memory.ptr);
-    global.GLOBAL_STATE.patch_size = patch_size;
-    global.GLOBAL_STATE.patch_offset = @intFromPtr(memory.ptr);
+    if (!AMemory.Init()) @panic("Init(AMemory): OutOfMemory");
+    const arena_perm = AMemory.PermanentAllocator();
+    const arena_temp = AMemory.TemporaryAllocator();
 
     // TODO: reimpl alloc in init fn args
-    asettings.init() catch {};
-    hook.init();
+    ASettings.init(arena_perm, arena_temp) catch |e|
+        std.debug.panic("Init(ASettings): {s}", .{@errorName(e)});
 
-    // debug
-
-    if (false) {
-        msg.Message("{s}", .{global.VersionStr}, "Patching SWE1R...", .{});
-    }
+    AHook.init(arena_perm, arena_temp) catch |e|
+        std.debug.panic("Init(AHook): {s}", .{@errorName(e)});
 }
 
 export fn Deinit() void {
-    asettings.deinit() catch {};
+    ASettings.deinit() catch {};
 }

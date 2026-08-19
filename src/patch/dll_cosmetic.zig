@@ -7,12 +7,11 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const debug = @import("core/Debug.zig");
+const debug = @import("util/base/base_debug.zig");
 
 const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
-const PPanic = @import("util/debug.zig").PPanic;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -25,10 +24,6 @@ const r3 = @import("racer").@"3D";
 
 // TODO: passthrough to annodue's panic via global function vtable; same for logging
 pub const panic = debug.annodue_panic;
-
-// FIXME: remove, for testing
-const dbg = @import("util/debug.zig");
-const rd = @import("racer").Debug;
 
 // FEATURES
 // - Rotating rainbow colors for race UI elements: top values, top labels, speedo

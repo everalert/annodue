@@ -6,6 +6,43 @@ const assert = std.debug.assert;
 //  would mean still returning null if there are no bits set in the source mask.
 //  usecase: dll_qol.QuickRaceMenu.CallbackVehicle
 
+//------------------------------------------------------------------------------
+// size conversion
+
+pub fn KiB(comptime T: type, n: T) T {
+    assert(n > 0);
+    return n << 10;
+}
+
+pub fn MiB(comptime T: type, n: T) T {
+    assert(n > 0);
+    return n << 20;
+}
+
+pub fn GiB(comptime T: type, n: T) T {
+    assert(n > 0);
+    return n << 30;
+}
+
+pub fn TiB(comptime T: type, n: T) T {
+    assert(n > 0);
+    return n << 40;
+}
+
+test "size conversion" {
+    try std.testing.expect(1024 == KiB(u64, 1));
+    try std.testing.expect(10240 == KiB(u64, 10));
+    try std.testing.expect(1048576 == MiB(u64, 1));
+    try std.testing.expect(10485760 == MiB(u64, 10));
+    try std.testing.expect(1073741824 == GiB(u64, 1));
+    try std.testing.expect(10737418240 == GiB(u64, 10));
+    try std.testing.expect(1099511627776 == TiB(u64, 1));
+    try std.testing.expect(10995116277760 == TiB(u64, 10));
+}
+
+//------------------------------------------------------------------------------
+// search functions
+
 /// Linear search for the first index of a greater scalar value inside a slice.
 pub fn indexOfScalarGreater(comptime T: type, slice: []const T, value: T) ?usize {
     return indexOfScalarGreaterPos(T, slice, 0, value);

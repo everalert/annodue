@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const IterableDir = std.fs.IterableDir;
 const SemVer = std.SemanticVersion;
 const appinfo = @import("src/patch/appinfo.zig");
 
@@ -17,15 +18,15 @@ const appinfo = @import("src/patch/appinfo.zig");
 // example release build command
 // zig build release -Doptimize=ReleaseSafe -Drop="F:\Projects\swe1r\annodue\.release"
 
-fn allocFmtSemVer(alloc: Allocator, ver: *const SemVer) ![]u8 {
+fn allocFmtSemVer(gpa: Allocator, ver: *const SemVer) ![]u8 {
     if (ver.pre) |pre|
-        return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}-{s}", .{ ver.major, ver.minor, ver.patch, pre });
+        return try std.fmt.allocPrint(gpa, "{d}.{d}.{d}-{s}", .{ ver.major, ver.minor, ver.patch, pre });
 
-    return try std.fmt.allocPrint(alloc, "{d}.{d}.{d}", .{ ver.major, ver.minor, ver.patch });
+    return try std.fmt.allocPrint(gpa, "{d}.{d}.{d}", .{ ver.major, ver.minor, ver.patch });
 }
 
-fn getDirSize(allocator: std.mem.Allocator, d: std.fs.IterableDir) f32 {
-    var dir_walker: ?std.fs.IterableDir.Walker = d.walk(allocator) catch null;
+fn getDirSize(gpa: Allocator, d: IterableDir) f32 {
+    var dir_walker: ?IterableDir.Walker = d.walk(gpa) catch null;
     var total: usize = 0;
     if (dir_walker) |*w| {
         defer w.deinit();
@@ -39,8 +40,7 @@ fn getDirSize(allocator: std.mem.Allocator, d: std.fs.IterableDir) f32 {
 }
 
 pub fn build(b: *std.Build) void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+    var arena = std.heap.ArenaAllocator.init(b.allocator);
     defer arena.deinit();
     const alloc = arena.allocator();
 
@@ -390,13 +390,13 @@ pub fn build(b: *std.Build) void {
     blk: {
         var cache_dir = b.cache_root.handle.openIterableDir("", .{}) catch break :blk;
         defer cache_dir.close();
-        output_size += getDirSize(gpa.allocator(), cache_dir);
+        output_size += getDirSize(alloc, cache_dir);
         //std.debug.print("cache dir size: {d:4.2} MiB\n", .{size});
     }
     blk: {
         var install_dir = std.fs.openIterableDirAbsolute(b.install_path, .{}) catch break :blk;
         defer install_dir.close();
-        output_size += getDirSize(gpa.allocator(), install_dir);
+        output_size += getDirSize(alloc, install_dir);
         //std.debug.print("install dir size: {d:4.2} MiB\n", .{size});
     }
     const output_limit: f32 = 500;

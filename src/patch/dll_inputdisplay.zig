@@ -7,10 +7,9 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const debug = @import("core/Debug.zig");
+const debug = @import("util/base/base_debug.zig");
 
 const nt = @import("util/normalized_transform.zig");
-const dbg = @import("util/debug.zig");
 const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 

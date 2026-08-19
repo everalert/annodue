@@ -5,6 +5,8 @@ const BuildOptions = @import("BuildOptions");
 const std = @import("std");
 const SemVer = std.SemanticVersion;
 const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 const assert = std.debug.assert;
 
 const w32 = @import("zigwin32");
@@ -17,7 +19,6 @@ const FreeLibrary = w32.system.library_loader.FreeLibrary;
 const GetProcAddress = w32.system.library_loader.GetProcAddress;
 
 const core = @import("core.zig");
-const CoreAllocator = core.Allocator;
 const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
 
@@ -28,7 +29,10 @@ const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
 const mem = @import("../util/memory.zig");
-const dbg = @import("../util/debug.zig");
+const apih = @import("../util/api/api_helper.zig");
+const debug = @import("../util/base/base_debug.zig");
+
+const MiB = @import("../util/base/base_memory.zig").MiB;
 
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
@@ -44,8 +48,8 @@ const plugin_hashes_data = @embedFile("hashfile");
 const plugin_hashes_len: u32 = (plugin_hashes_data.len - 4) / 64;
 const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAsValue([plugin_hashes_len][64]u8, plugin_hashes_data[4..]);
 
-// TODO: figure out exactly where the patch gets executed on load (i.e. where
-// the 'early init' happens), for documentation purposes
+// NOTE: currently, "early init" happens at 0x48540B (call DirectInputCreateA);
+//  this is planned to change to top of WinMain with new dinput hooking method
 // TODO: change "global function" nomenclature to "API function" project-wide
 
 // TODO: pull out plugin-related defs to separate module, so that it can be
@@ -199,18 +203,24 @@ const PluginExportFn = enum(u32) {
 // TODO: owner range limiting
 pub const PluginState = struct {
     var core: ArrayList(Plugin) = undefined;
+    var core_fba: FixedBufferAllocator = undefined;
+
     var plugins: [PLUGIN_MAX]Plugin = undefined;
     var plugins_used: [PLUGIN_MAX]bool = std.mem.zeroes([PLUGIN_MAX]bool);
     var plugins_count: u32 = 0;
     var plugins_toast: [PLUGIN_MAX]HotReloadPluginHandle = undefined;
     var plugins_toast_count: u32 = 0;
     var plugins_reloader: HotReloadPlugin = undefined;
+
     var owners_core: u16 = 0x0000;
     var owners_user: u16 = 0x0800;
     var working_owner: u16 = 0;
 
     var h_s_hot_reload: ?SettingHandle = null;
     var s_hot_reload: bool = true;
+
+    var arena_perm: Allocator = undefined;
+    var arena_temp: Allocator = undefined;
 
     const PLUGIN_MAX = 64;
     const HotReloadPluginHandle = u32;
@@ -291,15 +301,15 @@ pub const PluginState = struct {
             return result;
         }
 
-        var buf_tmp: [MAX_PATH_SENTINEL:0]u8 = undefined;
+        var buf_tmp = PluginState.arena_temp.create([MAX_PATH_SENTINEL:0]u8) catch return result;
         const filename_no_ext = filename[0 .. filename.len - 4];
-        _ = std.fmt.bufPrintZ(&buf_tmp, "./annodue/tmp/plugin/{s}.tmp.dll", .{filename_no_ext}) catch
+        _ = std.fmt.bufPrintZ(buf_tmp, "./annodue/tmp/plugin/{s}.tmp.dll", .{filename_no_ext}) catch
             return result;
 
         // now we ball
 
-        _ = CopyFileA(filepath, &buf_tmp, 0);
-        p.Handle = LoadLibraryA(&buf_tmp);
+        _ = CopyFileA(filepath, buf_tmp, 0);
+        p.Handle = LoadLibraryA(buf_tmp);
         // NOTE: handled by hot_reload; maybe add LoadTime to hot_reload as a way of
         //  differentiating successful loads with file checks
         //p.WriteTime = fd1.ftLastWriteTime;
@@ -427,15 +437,26 @@ fn getFileSha512(filename: []u8) ![Sha512.digest_length]u8 {
 
 // SETUP
 
-pub fn init() void {
+const CORE_BUFFER_SIZE = MiB(u32, 4);
+
+const PATCH_BUFFER_SIZE = MiB(u32, 4);
+var patch_buf: []u8 = &.{};
+var patch_off: u32 = 0;
+
+pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
     defer assert(PluginState.plugins_count == std.mem.count(bool, &PluginState.plugins_used, &.{true}));
     defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
 
-    const alloc = CoreAllocator.allocator();
-    std.fs.cwd().makePath("./annodue/tmp/plugin") catch
-        @panic("failed to create temp plugin directory");
+    PluginState.arena_perm = arena_perm;
+    PluginState.arena_temp = arena_temp;
 
-    PluginState.core = ArrayList(Plugin).init(alloc);
+    try std.fs.cwd().makePath("./annodue/tmp/plugin");
+
+    // FIXME: core_fba probably not necessary? need to generally rethink memory
+    //  here and for plugins anyway
+    var core_mem = try arena_perm.create([CORE_BUFFER_SIZE]u8);
+    PluginState.core_fba = FixedBufferAllocator.init(core_mem);
+    PluginState.core = ArrayList(Plugin).init(PluginState.core_fba.allocator());
 
     var p: *Plugin = undefined;
 
@@ -453,7 +474,8 @@ pub fn init() void {
         inline for (fn_fields) |ff| {
             if (@hasDecl(decl, @tagName(ff))) {
                 if (this_p == null) {
-                    p = PluginState.core.addOne() catch @panic("failed to add core plugin to arraylist");
+                    p = PluginState.core.addOne() catch |e|
+                        std.debug.panic("AHook(Init): {s}(CoreArray)", .{@errorName(e)});
                     p.* = std.mem.zeroInit(Plugin, .{});
                     this_p = p;
                 }
@@ -462,7 +484,7 @@ pub fn init() void {
                 comptime if (!@hasDecl(decl, "OnInit") or
                     !@hasDecl(decl, "OnInitLate") or
                     !@hasDecl(decl, "OnDeinit"))
-                    dbg.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
+                    debug.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
             }
         }
         if (this_p) |plug| {
@@ -491,8 +513,8 @@ pub fn init() void {
         defer assert(PluginState.plugins_count <= PluginState.PLUGIN_MAX);
         defer dir.close();
 
-        var buf_path = std.mem.zeroes([MAX_PATH_SENTINEL:0]u8);
-        var buf_ext: [4]u8 = undefined;
+        var buf_path = try arena_temp.create([MAX_PATH_SENTINEL:0]u8);
+        var buf_ext = try arena_temp.create([4]u8);
 
         var it_dir = dir.iterate();
         while (it_dir.next() catch null) |file| {
@@ -500,36 +522,38 @@ pub fn init() void {
             if (file.kind != .file) continue;
 
             if (file.name.len < 4) continue; // minimum length for extension
-            _ = std.ascii.lowerString(&buf_ext, file.name[file.name.len - 4 ..]);
-            if (!std.mem.endsWith(u8, ".dll", &buf_ext)) continue;
+            _ = std.ascii.lowerString(buf_ext, file.name[file.name.len - 4 ..]);
+            if (!std.mem.endsWith(u8, ".dll", buf_ext)) continue;
 
-            _ = std.fmt.bufPrintZ(&buf_path, "./annodue/plugin/{s}", .{file.name}) catch continue;
+            _ = std.fmt.bufPrintZ(buf_path, "./annodue/plugin/{s}", .{file.name}) catch continue;
 
             const handle = PluginState.plugins_count;
             PluginState.plugins[handle] = std.mem.zeroInit(Plugin, .{});
 
             PluginState.plugins_used[handle] = true;
             PluginState.plugins_count += 1;
-            _ = PluginState.plugins_reloader.TrackFile(&buf_path, handle);
+            _ = PluginState.plugins_reloader.TrackFile(buf_path, handle);
         }
     }
 
     // hooking game
 
-    var off = GLOBAL_STATE.patch_offset;
-    off = HookGameSetup(off);
-    off = HookGameLoop(off);
-    off = HookEngineUpdate(off);
-    off = HookInputUpdate(off);
-    off = HookTimerUpdate(off);
-    off = HookInitRaceQuads(off);
-    off = HookInitHangQuads(off);
-    //off = HookGameEnd(off);
-    off = HookTextRender(off);
-    off = HookMenuDrawing(off);
-    off = HookSceneBeginEnd(off);
-    //off = HookLoadSprite(off);
-    GLOBAL_STATE.patch_offset = off;
+    patch_buf = try arena_perm.create([PATCH_BUFFER_SIZE]u8);
+    patch_off = @intFromPtr(patch_buf.ptr);
+    defer assert(patch_off <= @intFromPtr(patch_buf.ptr) + patch_buf.len);
+
+    patch_off = HookGameSetup(patch_off);
+    patch_off = HookGameLoop(patch_off);
+    patch_off = HookEngineUpdate(patch_off);
+    patch_off = HookInputUpdate(patch_off);
+    patch_off = HookTimerUpdate(patch_off);
+    patch_off = HookInitRaceQuads(patch_off);
+    patch_off = HookInitHangQuads(patch_off);
+    //patch_off = HookGameEnd(patch_off);
+    patch_off = HookTextRender(patch_off);
+    patch_off = HookMenuDrawing(patch_off);
+    patch_off = HookSceneBeginEnd(patch_off);
+    //patch_off = HookLoadSprite(patch_off);
 }
 
 // HOOKS
@@ -544,19 +568,19 @@ pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
-    if (PluginState.s_hot_reload) {
+    if (PluginState.s_hot_reload) blk: {
         PluginState.plugins_reloader.Update(rti.TIMESTAMP.*);
 
-        var buf_toast: [127:0]u8 = undefined;
+        defer PluginState.plugins_toast_count = 0;
+        var buf_toast = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
         for (0..PluginState.plugins_toast_count) |i| {
             const handle = PluginState.plugins_toast[i];
             assert(PluginState.plugins_used[handle]);
 
             const p: *const Plugin = &PluginState.plugins[handle];
-            _ = std.fmt.bufPrintZ(&buf_toast, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch continue;
-            _ = gf.ToastNew(&buf_toast, r.Text.ColorRGB.Green.rgba(0));
+            _ = std.fmt.bufPrintZ(buf_toast, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch continue;
+            _ = gf.ToastNew(buf_toast, r.Text.ColorRGB.Green.rgba(0));
         }
-        PluginState.plugins_toast_count = 0;
     }
 }
 

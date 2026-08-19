@@ -521,9 +521,8 @@ Configurable under `[core/RTrigger]`
 
 ### Asset Buffer Patches
 
-*Disabled in current release*
-
 - Patches to enable loading larger amounts of data from asset files
+- NOTE: Changing the actual amount of memory available for loading assets is not yet implemented
 
 #### Settings
 
@@ -535,4 +534,4 @@ Configurable under `[core/GAssetBuffer]`
 |Option|Type|Default|Note|
 |:---|:---|:---|:---|
 |`texbuf_enable`|`bool`|`off`|&nbsp;
-|`texbuf_size`|`u32`|`5120`|Number of textures loadable from TextureBlock; 1700 is equivalent to unpatched
+|`texbuf_size`|`u32`|`5120`|Expanded TextureBlock texture limit (`1700..8192`)

@@ -14,7 +14,7 @@ const c = @cImport({
 const CollisionViewerSettings = c.CollisionViewerSettings;
 const CollisionViewerState = c.CollisionViewerState;
 
-const debug = @import("core/Debug.zig");
+const debug = @import("util/base/base_debug.zig");
 
 const timing = @import("util/timing.zig");
 const m = @import("util/menu.zig");

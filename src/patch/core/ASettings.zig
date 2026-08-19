@@ -1,37 +1,34 @@
 const std = @import("std");
 
 const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
+const EnumSet = std.EnumSet;
+const bufPrintZ = std.fmt.bufPrintZ;
 const assert = std.debug.assert;
 
 const ini = @import("zigini");
 const w32f = @import("zigwin32").foundation;
 
-const EnumSet = std.EnumSet;
-const Allocator = std.mem.Allocator;
-const bufPrintZ = std.fmt.bufPrintZ;
-
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
-const workingOwner = @import("Hook.zig").PluginState.workingOwner;
-const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
-const coreAllocator = @import("Allocator.zig").allocator;
+const workingOwner = @import("AHook.zig").PluginState.workingOwner;
+const workingOwnerIsSystem = @import("AHook.zig").PluginState.workingOwnerIsSystem;
+const AMemory = @import("AMemory.zig");
 
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
 const SparseIndex = @import("../util/handle_map.zig").SparseIndex(u16);
 pub const Handle = @import("../util/handle_map.zig").Handle(u16);
 pub const NullHandle = Handle.getNull();
 
+const MiB = @import("../util/base/base_memory.zig").MiB;
+
 const HotReloadSettingsHandle = u32;
 const HotReloadSettings = @import("../util/hot_reload.zig").HotReload(HotReloadSettingsHandle, 1);
-
-const PPanic = @import("../util/debug.zig").PPanic;
 
 const r = @import("racer");
 const rt = r.Text;
 const rti = r.Time;
-
-// FIXME: remove, for testing
-const dbg = @import("../util/debug.zig");
 
 // TODO: add global st/fn ptrs to fnOnChange defs?
 // TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
@@ -77,6 +74,8 @@ const DEFAULT_ID = 0xFFFF;
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";
 const FILENAME_ACTIVE = FILENAME;
+
+const SCRATCH_BUFFER_SIZE = MiB(u32, 2);
 
 pub const ParentHandle = extern struct {
     generation: u16,
@@ -295,18 +294,24 @@ pub const ASettings = struct {
     var s_save_auto: bool = true;
     var s_save_defaults: bool = true;
 
+    var scratch_fba: FixedBufferAllocator = undefined;
+    var scratch_alloc: Allocator = undefined;
+
     const Flags = enum(u32) {
         AutoSave,
     };
 
-    pub fn init(alloc: Allocator) void {
-        data_sections = HandleMap(Section, u16).init(alloc);
-        data_settings = HandleMap(Setting, u16).init(alloc);
-        section_update_queue = ArrayList(ASettingSent).init(alloc);
+    pub fn init(buf: []u8) void {
+        scratch_fba = FixedBufferAllocator.init(buf);
+        scratch_alloc = scratch_fba.allocator();
 
-        HotReloadSettings.Init(&ASettings.hot_reload, ASettings.load, ASettings.unload);
-        ASettings.hot_reload.CheckDelay = 250;
-        ASettings.hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
+        data_sections = HandleMap(Section, u16).init(scratch_alloc);
+        data_settings = HandleMap(Setting, u16).init(scratch_alloc);
+        section_update_queue = ArrayList(ASettingSent).init(scratch_alloc);
+
+        HotReloadSettings.Init(&hot_reload, load, unload);
+        hot_reload.CheckDelay = 250;
+        hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
     }
 
     pub fn deinit() void {
@@ -375,7 +380,7 @@ pub const ASettings = struct {
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
             if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
@@ -561,7 +566,7 @@ pub const ASettings = struct {
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) PPanic("owners must match - owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
             if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
@@ -693,14 +698,14 @@ pub const ASettings = struct {
 
     // TODO: convert to reader to match iniWrite?
     /// read ini-formatted settings from file
-    pub fn iniRead(alloc: Allocator, filename: []const u8) !void {
+    pub fn iniRead(gpa: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
         //var file_br = std.io.bufferedReader(file.reader());
         //const file_r = file_br.reader();
         const file_r = file.reader();
 
-        var parser = ini.parse(alloc, file_r);
+        var parser = ini.parse(gpa, file_r);
         defer parser.deinit();
 
         var sec_handle: ?Handle = null;
@@ -756,7 +761,7 @@ pub const ASettings = struct {
             return false; // TODO: should be true or false? no effect in current logic tho
         }
 
-        ASettings.iniRead(coreAllocator(), filepath) catch return false;
+        ASettings.iniRead(ASettings.scratch_alloc, filepath) catch return false;
 
         file_exists = true;
         return true;
@@ -804,7 +809,7 @@ pub const ASettings = struct {
         defer file.close();
         var file_bw = std.io.bufferedWriter(file.writer());
         defer _ = file_bw.flush() catch |e|
-            PPanic("(ASettings) [save] write buffer flush: {s}", .{@errorName(e)});
+            std.debug.panic("ASettings(save): write buffer flush: {s}", .{@errorName(e)});
         const file_w = file_bw.writer();
 
         try iniWrite(file_w);
@@ -877,9 +882,9 @@ pub const ASettings = struct {
 
 // GLOBAL
 
-pub fn init() !void {
-    const alloc = coreAllocator();
-    ASettings.init(alloc);
+pub fn init(arena_perm: Allocator, _: Allocator) !void {
+    var memory = try arena_perm.create([SCRATCH_BUFFER_SIZE]u8);
+    ASettings.init(memory);
 
     ASettings.h_s_settings_version =
         try ASettings.settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &ASettings.s_settings_version, null);

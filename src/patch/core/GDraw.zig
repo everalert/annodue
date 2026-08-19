@@ -2,13 +2,15 @@ const std = @import("std");
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
+const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
-const workingOwnerIsSystem = @import("Hook.zig").PluginState.workingOwnerIsSystem;
+// FIXME: ?? should these ownership checks not be in some api? not necessarily
+//  the public api but at least organized
+const workingOwnerIsSystem = @import("AHook.zig").PluginState.workingOwnerIsSystem;
 
-const coreAllocator = @import("Allocator.zig").allocator;
-
-const PPanic = @import("../util/debug.zig").PPanic;
+const apih = @import("../util/api/api_helper.zig");
+const MiB = @import("../util/base/base_memory.zig").MiB;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -17,6 +19,8 @@ const TextDef = rt.TextDef;
 const ResetMaterial = r.Quad.ResetMaterial;
 
 pub const GDRAW_VERSION = 4;
+
+const PATCH_BUFFER_SIZE = MiB(u32, 2);
 
 // NOTE: anything above around 256 characters seems pointless even with excessive formatting
 // characters, but may be worth reconsidering down the line if e.g. higher res viewport
@@ -52,11 +56,16 @@ const GDraw = struct {
     var rect_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
     var rect_sprite: ?*rq.Sprite = null;
 
-    pub fn init(allocator: Allocator) !void {
-        text_data = try ArrayList(GDrawTextDef).initCapacity(allocator, 128);
-        text_layers = try ArrayList(GDrawLayer).initCapacity(allocator, 128);
-        rect_data = try ArrayList(GDrawRectDef).initCapacity(allocator, 32);
-        rect_layers = try ArrayList(GDrawLayer).initCapacity(allocator, 32);
+    var scratch_fba: FixedBufferAllocator = undefined;
+    var scratch_alloc: Allocator = undefined;
+
+    pub fn init(buf: []u8) !void {
+        scratch_fba = FixedBufferAllocator.init(buf);
+        scratch_alloc = scratch_fba.allocator();
+        text_data = try ArrayList(GDrawTextDef).initCapacity(scratch_alloc, 128);
+        text_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 128);
+        rect_data = try ArrayList(GDrawRectDef).initCapacity(scratch_alloc, 32);
+        rect_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 32);
     }
 
     pub fn deinit() void {
@@ -228,8 +237,9 @@ pub fn GDrawRectBdr(
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {
-    GDraw.init(coreAllocator()) catch @panic("GDraw init failed");
+pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    var memory = apih.AMemoryGetPermanentT(gf, [PATCH_BUFFER_SIZE]u8) orelse @panic("GDraw: API OutOfMemory");
+    GDraw.init(memory) catch |e| std.debug.panic("GDraw: {s}", .{@errorName(e)});
 }
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}

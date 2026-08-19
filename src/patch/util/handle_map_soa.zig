@@ -69,13 +69,13 @@ pub fn HandleMapSOA(comptime T: type, comptime I: type) type {
         next: I,
         alloc: Allocator,
 
-        pub fn init(allocator: Allocator) Self {
+        pub fn init(gpa: Allocator) Self {
             return .{
-                .handles = ArrayList(Handle(I)).init(allocator),
+                .handles = ArrayList(Handle(I)).init(gpa),
                 .values = .{},
-                .sparse_indices = ArrayList(SparseIndex(I)).init(allocator),
+                .sparse_indices = ArrayList(SparseIndex(I)).init(gpa),
                 .next = 0,
-                .alloc = allocator,
+                .alloc = gpa,
             };
         }
 

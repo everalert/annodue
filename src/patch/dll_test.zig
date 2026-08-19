@@ -4,7 +4,7 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const debug = @import("core/Debug.zig");
+const debug = @import("util/base/base_debug.zig");
 
 const msg = @import("util/message.zig");
 
@@ -51,5 +51,5 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 // HOOKS
 
 export fn EarlyEngineUpdateA(_: *GlobalFn) callconv(.C) void {
-    //_ = gf.GDrawText(.Default, rt.MakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
+    //_ = gf.GDrawText(.Default, rt.hMakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
 }

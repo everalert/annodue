@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
-const GeneralPurposeAllocator = std.heap.GeneralPurposeAllocator;
 const allocPrint = std.fmt.allocPrint;
 const assert = std.debug.assert;
 
@@ -26,7 +25,6 @@ pub fn TemporalCompressor(
     comptime layer_size: isize,
     comptime layer_depth: isize,
 ) type {
-    const memory_size: usize = 1024 * 1024 * 64; // 64MB
     const ItemType: type = @Type(.{ .Int = .{ .signedness = .unsigned, .bits = 8 * item_size } });
 
     const layer_widths: [layer_depth]usize = widths: {
@@ -36,10 +34,8 @@ pub fn TemporalCompressor(
         break :widths widths;
     };
 
-    const dflt_frames: usize = 60 * 60 * 8; // 8min @ 60fps
-
     return struct {
-        const Self = @This();
+        const TemporalCompressorT = @This();
 
         sources: []DataPoint = undefined,
 
@@ -59,9 +55,6 @@ pub fn TemporalCompressor(
         frame_size: usize = 0,
         last_framecount: usize = 0,
 
-        // FIXME: remove gpa/alloc, do some kind of core integration instead
-        gpa: ?GeneralPurposeAllocator(.{}) = null,
-        alloc: ?Allocator = null,
         memory: []u8 = undefined,
         raw_offsets: [*]u8 = undefined,
         raw_headers: [*]u8 = undefined,
@@ -72,8 +65,13 @@ pub fn TemporalCompressor(
         layer_indexes: [layer_depth + 1]usize = undefined,
         layer_index_count: usize = undefined,
 
-        // TODO: take in allocator, sources slice
-        pub fn init(self: *Self) void {
+        // TODO: some kind of help for benchmarking so you know whether you hit
+        //  the frame limit or memory limit first
+        // TODO: test/bench suite with real data to profile different gameplay
+        //  scenarios (solo, with AI, very long races, etc.)
+        // TODO: take sources slice
+        // TODO: version that takes allocator instead of buf?
+        pub fn init(self: *TemporalCompressorT, buf: []u8, max_frames: usize) void {
             assert(!self.initialized);
             defer self.initialized = true;
 
@@ -83,7 +81,7 @@ pub fn TemporalCompressor(
             self.header_size = std.math.divCeil(usize, self.frame_size, item_size * 8) catch
                 @panic("failed to calculate header size");
 
-            self.frames = dflt_frames;
+            self.frames = max_frames;
             self.offsets_off = 0;
             self.offsets_size = self.frames * item_size;
             self.headers_off = 0 + self.offsets_size;
@@ -92,13 +90,8 @@ pub fn TemporalCompressor(
             self.stage_items = self.frame_size / item_size;
             self.data_off = self.stage_off + self.frame_size * 2;
 
-            // allocate
-
-            self.gpa = std.heap.GeneralPurposeAllocator(.{}){};
-            self.alloc = self.gpa.?.allocator();
-            self.memory = self.alloc.?.alloc(u8, memory_size) catch
-                @panic("failed to allocate memory for savestate/rewind");
-            @memset(self.memory[0..memory_size], 0x00);
+            self.memory = buf;
+            @memset(self.memory, 0);
 
             self.raw_offsets = self.memory.ptr + self.offsets_off;
             self.raw_headers = self.memory.ptr + self.headers_off;
@@ -107,26 +100,19 @@ pub fn TemporalCompressor(
             self.offsets = @as([*]usize, @ptrCast(@alignCast(self.memory.ptr + self.offsets_off)))[0..self.frames];
         }
 
-        pub fn deinit(self: *Self) void {
+        pub fn deinit(self: *TemporalCompressorT) void {
             if (!self.initialized) return;
             defer self.initialized = false;
-
-            if (self.alloc) |a| a.free(self.memory);
-            if (self.gpa) |_| switch (self.gpa.?.deinit()) {
-                .leak => @panic("leak detected when deinitializing savestate/rewind"),
-                else => {},
-            };
-
             self.reset();
         }
 
-        pub fn reset(self: *Self) void {
+        pub fn reset(self: *TemporalCompressorT) void {
             if (self.frame == 0) return;
             self.frame = 0;
             self.frame_total = 0;
         }
 
-        pub fn canSave(self: *Self) bool {
+        pub fn canSave(self: *TemporalCompressorT) bool {
             assert(self.initialized);
             const space_ok: bool = @intFromPtr(self.memory.ptr + self.memory.len) -
                 @intFromPtr(self.data) - self.offsets[self.frame] >= self.frame_size;
@@ -135,7 +121,7 @@ pub fn TemporalCompressor(
         }
 
         /// configure offsets of each source, and set total size
-        fn mapSources(self: *Self) void {
+        fn mapSources(self: *TemporalCompressorT) void {
             var offset: usize = 0;
             for (self.sources) |*source| {
                 assert(source.data != null);
@@ -146,13 +132,13 @@ pub fn TemporalCompressor(
             self.frame_size = offset;
         }
 
-        inline fn getHeader(self: *Self, index: usize) []u8 {
+        inline fn getHeader(self: *TemporalCompressorT, index: usize) []u8 {
             assert(index < self.frames);
             const base = index * self.header_size;
             return self.raw_headers[base .. base + self.header_size];
         }
 
-        inline fn getStage(self: *Self, index: usize) []ItemType {
+        inline fn getStage(self: *TemporalCompressorT, index: usize) []ItemType {
             assert(index < 2);
             const base = index * self.stage_items;
             return @as([*]ItemType, @ptrCast(@alignCast(self.raw_stage)))[base .. base + self.stage_items];
@@ -161,7 +147,7 @@ pub fn TemporalCompressor(
         // TODO: rework this to eliminate edge cases where depth should be >0, e.g. first handful of frames
         /// get number of compression layers deep the frame at given index is
         /// @index      frame to target
-        fn getDepth(_: *Self, index: usize) usize {
+        fn getDepth(_: *TemporalCompressorT, index: usize) usize {
             var depth: usize = layer_depth;
             var depth_test: usize = index;
             while (depth_test % layer_size == 0 and depth > 0) : (depth -= 1)
@@ -171,7 +157,7 @@ pub fn TemporalCompressor(
 
         /// update list of compression tree indexes with those for frame at given index
         /// @index      frame to target
-        fn setLayerIndexes(self: *Self, index: usize) void {
+        fn setLayerIndexes(self: *TemporalCompressorT, index: usize) void {
             self.layer_index_count = 0;
             var last_base: usize = 0;
             for (layer_widths) |w| {
@@ -195,7 +181,7 @@ pub fn TemporalCompressor(
         /// decode frame into stage 0
         /// @index      frame to decode
         /// @skip_last  don't decode last layer in chain, used to set basis for new encode
-        pub fn decode(self: *Self, index: usize, skip_last: bool) void {
+        pub fn decode(self: *TemporalCompressorT, index: usize, skip_last: bool) void {
             assert(self.initialized);
 
             @memcpy(self.raw_stage[0..self.frame_size], self.data[0..self.frame_size]);
@@ -222,7 +208,7 @@ pub fn TemporalCompressor(
 
         // FIXME: in future, probably can skip the first step each new frame, because
         // the most recent frame would already be in stage1 from last time
-        pub fn save(self: *Self, framecount: usize) void {
+        pub fn save(self: *TemporalCompressorT, framecount: usize) void {
             assert(self.initialized);
 
             self.last_framecount = framecount;
@@ -260,7 +246,7 @@ pub fn TemporalCompressor(
             self.offsets[self.frame] = self.offsets[self.frame - 1] + data_size;
         }
 
-        pub fn restore(self: *Self, index: usize) void {
+        pub fn restore(self: *TemporalCompressorT, index: usize) void {
             assert(self.initialized);
 
             self.decode(index, false);
@@ -289,7 +275,7 @@ pub fn TemporalCompressor(
         // TODO: writing only specific sources
         // TODO: custom starting frame
         /// dump raw data to file, useful for gathering test data
-        pub fn write(self: *Self, writer: anytype, opts: WriteSettings) !void {
+        pub fn write(self: *TemporalCompressorT, writer: anytype, opts: WriteSettings) !void {
             assert(self.initialized);
             // TODO: double-check idiomatic way of verifying arbitrary passed-in writers, following rejected
             //assert(@hasField(writer, "context"));

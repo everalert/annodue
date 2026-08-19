@@ -1,6 +1,7 @@
 pub const Self = @This();
 
 const std = @import("std");
+const assert = std.debug.assert;
 
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
@@ -18,6 +19,8 @@ const msg = @import("util/message.zig");
 const mem = @import("util/memory.zig");
 const TemporalCompressor = @import("util/temporal_compression.zig").TemporalCompressor;
 const TDataPoint = @import("util/temporal_compression.zig").DataPoint;
+const apih = @import("util/api/api_helper.zig");
+const MiB = @import("util/base/base_memory.zig").MiB;
 
 const rg = @import("racer").Global;
 const rin = @import("racer").Input;
@@ -80,6 +83,9 @@ pub const panic = debug.annodue_panic;
 
 const PLUGIN_NAME: [*:0]const u8 = "Savestate";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
+
+const SAVESTATE_BUFFER_SIZE = MiB(u32, 64);
+const SAVESTATE_FRAME_MAX = 60 * 60 * 8; // 8min @ 60fps
 
 const LoadState = enum(u32) {
     Recording,
@@ -275,10 +281,11 @@ fn UpdateState(gf: *GlobalFn) void {
     if (!state.updateable(gf)) return;
 
     if (!state.initialized) {
-        defer state.initialized = true;
+        var memory = apih.AMemoryGetPermanentT(gf, [SAVESTATE_BUFFER_SIZE]u8) orelse return;
         state.reset();
-        state.rec_data.sources = state.rec_sources[0..];
-        state.rec_data.init();
+        state.rec_data.sources = &state.rec_sources;
+        state.rec_data.init(memory, SAVESTATE_FRAME_MAX);
+        state.initialized = true;
     }
 
     if (gf.SRaceStateNew() and gf.SRaceState() == .PreRace)

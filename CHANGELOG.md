@@ -50,7 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
 - QOL: N64 Pitch input toggle (experimental) (accessible via Quick Race Menu, active in Practice Mode only)
 - QOL: Settings to toggle each millisecend timer location individually (`ms_timer_hud_enable` `ms_timer_finish_enable`)
-- Core: Increase number of textures supported by TextureBlock (settings: `texbuf_enable` `texbuf_size`, category: `core/GAssetBuffer`)
+- Core: GAssetBuffer
+    - settings category: `core/GAssetBuffer`
+    - Increase number of textures supported by TextureBlock (settings: `texbuf_enable` `texbuf_size`)
 - Backend(Core): Plugin Function version (`1`)
 - Backend(Core): Plugin Functions
 	- `RenderSceneBeginB`
@@ -58,11 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- `RenderSceneEndB`
 	- `RenderSceneEndA`
 - Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`, `hang_state`, `hang_state_prev`, `hang_state_new`
-- Backend(Core): Global functions `SPlayerBoostCharging`, `SPlayerBoostReady`, `SHangState`, `SHangStatePrev`, `SHangStateNew`
+- Backend(Core): Global functions `AMemoryGetPermanent`, `AMemoryGetPermanentZero`, `AMemoryGetTemporary`, `AMemoryGetTemporaryZero`, `SPlayerBoostCharging`, `SPlayerBoostReady`, `SHangState`, `SHangStatePrev`, `SHangStateNew`
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
-- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `base/base_memory` utils
+- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `api/api_helper`, `base/base_memory`, `base/base_arena`, `base/base_math` utils
 
 ### Changed
 
@@ -73,11 +75,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MANUAL: Added clearer explanation of settings usage and capabilities
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util
-- Backend(Core): Global State version `5` to `9`
-- Backend(Core): Global Function version `29` to `33`
+- Backend(Core): Global State version `5` to `10`
+- Backend(Core): Global Function version `29` to `34`
 - Backend(Core): Settings now also autosave on game load, race reset and during menu and race state transitions
 - Backend(Core): All global state migrated to getter functions in Global Function API
-- Backent(Util): `menu_item` merged into `menu`
+- Backend(Core): Hook renamed to AHook
+- Backend(Core): Replaced Allocator with AMemory
+    - Arena-based memory accessible both internally and to plugins
+    - All memory management migrated to this system project-wide
+- Backend(Util): `menu_item` merged into `menu`
+- Backend(Util): `core/Debug` and `util/debug` merged into `util/base/base_debug`
+- Backend(Util): `temporal_compressor` now takes an external buffer for memory and has user define frame cap
 
 ### Removed
 

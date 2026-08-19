@@ -68,9 +68,6 @@ pub const GlobalState = extern struct {
 
 pub const GLOBAL_FUNCTION_VERSION = 34;
 
-// FIXME: including AMemory* sometimes crashes the game on launch, depending on
-//  the overall state of the code and which options are enabled (seemingly same
-//  problem as GAssetBuffer); need to figure this out BEFORE committing to dev
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
     // Memory

@@ -21,12 +21,8 @@ pub const Toast = @import("Toast.zig");
 pub const Update = @import("Update.zig");
 pub const Testing = @import("Testing.zig");
 
-// FIXME: GAssetBuffer disabled because it was crashing due to unchecked undefined
-//  behaviour related to something to do with the hot_reload implementation used
-//  in ASettings; keeps breaking for seemingly no reason so must come back to this
-//  and figure it out
 // plugin-facing 'game' functions
-//pub const GAssetBuffer = @import("GAssetBuffer.zig");
+pub const GAssetBuffer = @import("GAssetBuffer.zig");
 pub const Draw = @import("GDraw.zig");
 pub const Freeze = @import("GFreeze.zig");
 pub const HideRaceUI = @import("GHideRaceUI.zig");

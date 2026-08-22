@@ -17,10 +17,7 @@ const Arena = @This();
 
 const std = @import("std");
 const builtin = @import("builtin");
-const StdAllocator = std.mem.Allocator;
 const assert = std.debug.assert;
-
-const POINTER_ALIGNMENT = builtin.target.maxIntAlignment();
 
 const RoundIntUp = @import("base_math.zig").RoundIntUp;
 const KiB = @import("base_memory.zig").KiB;
@@ -37,6 +34,8 @@ const PAGE_READWRITE = w32.system.memory.PAGE_PROTECTION_FLAGS{ .PAGE_READWRITE 
 const VirtualAlloc = w32.system.memory.VirtualAlloc;
 const VirtualFree = w32.system.memory.VirtualFree;
 const GetSystemInfo = w32.system.system_information.GetSystemInfo;
+
+const POINTER_ALIGNMENT = builtin.target.maxIntAlignment();
 
 pMemory: ?*anyopaque,
 SizeReserved: usize,
@@ -122,6 +121,12 @@ pub fn Reset(self: *Arena) void {
     self.ResetTo(0);
 }
 
+/// decommit committed memory, leaving at least the currently used bytes committed.
+/// does not release memory.
+pub fn ResetAuto(self: *Arena) void {
+    self.ResetTo(self.SizeUsed);
+}
+
 /// decommit committed memory, leaving at least @size bytes committed, and leaving
 /// at least @size bytes pushed. does not release memory.
 pub fn ResetTo(self: *Arena, size: usize) void {
@@ -138,10 +143,17 @@ pub fn ResetTo(self: *Arena, size: usize) void {
     self.PopTo(size);
 }
 
-pub fn Allocator(self: *Arena) StdAllocator {
-    return StdAllocator{
+//------------------------------------------------------------------------------
+// zig allocator interface
+
+// TODO: assert false in AllocatorResize and AllocatorFree; need to check first
+//  if it's not common for downstream allocators to use these pathologically, such
+//  as the various std allocators that take a child allocator
+
+pub fn Allocator(self: *Arena) std.mem.Allocator {
+    return std.mem.Allocator{
         .ptr = self,
-        .vtable = &StdAllocator.VTable{
+        .vtable = &std.mem.Allocator.VTable{
             .alloc = AllocatorAlloc,
             .resize = AllocatorResize,
             .free = AllocatorFree,
@@ -149,37 +161,25 @@ pub fn Allocator(self: *Arena) StdAllocator {
     };
 }
 
-// TODO: support log2_ptr_align
+// TODO: ?? support log2_ptr_align?
 fn AllocatorAlloc(ctx: *anyopaque, n: usize, _: u8, _: usize) ?[*]u8 {
     const self: *Arena = @ptrCast(@alignCast(ctx));
     var mem = self.Push(n);
     return if (mem.len == n) mem.ptr else null;
 }
 
-// TODO: support full range of resize actions. missing: expanding if last alloc,
-//  maybe shrinking if non-last (unsure atm and neither relevant to my usage)
-fn AllocatorResize(ctx: *anyopaque, buf: []u8, _: u8, new_len: usize, _: usize) bool {
-    const self: *Arena = @ptrCast(@alignCast(ctx));
-
-    const buf_len_aligned = RoundIntUp(usize, buf.len, POINTER_ALIGNMENT);
-    const buf_end = @intFromPtr(buf.ptr) + buf_len_aligned;
-    const b_last_alloc = if (self.pMemory) |mem| buf_end == @intFromPtr(mem) + self.SizeUsed else false;
-
-    if (!b_last_alloc or new_len > buf.len) return false;
-
-    self.PopTo(self.SizeUsed - buf_len_aligned + new_len);
-    return true;
+fn AllocatorResize(ctx: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
+    _ = @as(*Arena, @ptrCast(@alignCast(ctx)));
+    return false; // you are using this wrong
 }
 
-fn AllocatorFree(ctx: *anyopaque, buf: []u8, _: u8, _: usize) void {
-    const self: *Arena = @ptrCast(@alignCast(ctx));
-
-    const buf_len_aligned = RoundIntUp(usize, buf.len, POINTER_ALIGNMENT);
-    const buf_end = @intFromPtr(buf.ptr) + buf_len_aligned;
-    const b_last_alloc = if (self.pMemory) |mem| buf_end == @intFromPtr(mem) + self.SizeUsed else false;
-
-    if (b_last_alloc) self.PopTo(self.SizeUsed - buf_len_aligned);
+fn AllocatorFree(ctx: *anyopaque, _: []u8, _: u8, _: usize) void {
+    _ = @as(*Arena, @ptrCast(@alignCast(ctx)));
+    return {}; // you are using this wrong
 }
+
+//------------------------------------------------------------------------------
+// tests
 
 // TODO: tests for page size
 // TODO: tests for allocation granularity

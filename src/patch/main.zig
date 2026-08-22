@@ -5,7 +5,6 @@ const AHook = @import("core/AHook.zig");
 const AMemory = @import("core/AMemory.zig");
 const ASettings = @import("core/ASettings.zig");
 
-const msg = @import("util/message.zig");
 const dbg = @import("util/base/base_debug.zig");
 const MiB = @import("util/base/base_memory.zig").MiB;
 

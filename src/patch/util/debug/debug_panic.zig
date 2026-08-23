@@ -9,7 +9,7 @@
 //!      seems to mess with acquisition more than usual with zig and pdb files
 //!   2) we want to be able to generate a stacktrace in release builds (at least
 //!      until 1.0.0), where the debug info and source are simply not available
-//!      where the exe expects them to be.
+//!      where the exe expects them to be
 //!
 //! use by placing a definition similar to the following in the module root:
 //! `pub const panic = debug_panic.PanicFromContext(module_name, pdb_path.pdb);`
@@ -20,8 +20,8 @@ const Panic = @This();
 
 // TODO: print line contents, probably by embedding source
 //  see https://andrewkelley.me/post/zig-stack-traces-kernel-panic-bare-bones-os.html
-// TODO: if we normally write to file while logging, do we need to do anything extra here
-//  to make it write during a crash
+// TODO: if we normally write to file for normal logs, do we need to do anything
+//  extra here to make it write during a crash?
 // TODO: revise error handling; not sure there is much point to panicking in the
 //  panic handler or whatever
 // TODO: decide if we need to alert user to check crashlog.txt

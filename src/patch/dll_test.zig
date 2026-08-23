@@ -48,9 +48,9 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 
-export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
-    if (gf.InputGetKb(.J, .JustOn)) std.debug.assert(false); // does nothing in ReleaseFast, ReleaseSmall
-    if (gf.InputGetKb(.F, .JustOn)) @panic("panic test");
+export fn EarlyEngineUpdateA(_: *GlobalFn) callconv(.C) void {
+    //if (gf.InputGetKb(.J, .JustOn)) std.debug.assert(false); // does nothing in ReleaseFast, ReleaseSmall
+    //if (gf.InputGetKb(.F, .JustOn)) @panic("panic test");
 
     //_ = gf.GDrawText(.Default, rt.hMakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
 }

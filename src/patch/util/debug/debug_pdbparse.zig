@@ -1,3 +1,8 @@
+//! PDB debug info processing via win32 api
+//!
+//! primarily used to assist with getting stacktrace info, due to instability for
+//! our usecase using the zig default panic handler
+//!
 //! adapted and expanded from:
 //! https://gist.github.com/BOT-Man-JL/9206a62b067f4c3a84da57bd3ba04a97
 const PDBParse = @This();

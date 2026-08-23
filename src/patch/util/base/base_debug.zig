@@ -15,50 +15,49 @@ const AllocConsole = w32.system.console.AllocConsole;
 const GetConsoleWindow = w32.system.console.GetConsoleWindow;
 const WriteConsoleA = w32.system.console.WriteConsoleA;
 
+const PDBParse = @import("../debug/debug_pdbparse.zig");
+const PDBLineInfo = PDBParse.LineInfo;
+
 const rg = @import("racer").Global;
 
 const ANNODUE_VER = @import("../../appinfo.zig").VERSION_STR;
 
 //------------------------------------------------------------------------------
 // custom panic handler
-// TODO: integrate custom pdb parser that holds pdb data in memory
 
-// FIXME: should there be unreachable in here?
+// TODO: print line contents, probably by embedding source
+//  see https://andrewkelley.me/post/zig-stack-traces-kernel-panic-bare-bones-os.html
 // TODO: if we normally write to file while logging, do we need to do anything extra here
-// to make it write during a crash
+//  to make it write during a crash
+// TODO: revise error handling; not sure there is much point to panicking in the
+//  panic handler or whatever
+// TODO: decide if we need to alert user to check crashlog.txt
+
 pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_addr: ?usize) noreturn {
     if (builtin.os.tag != .windows) @compileError("only windows supported");
     @setCold(true);
 
-    var arena = ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const alloc = arena.allocator();
-    _ = alloc;
-
+    // TODO: add buffered writer if possible; so far doing so caused transitive error
     const file = std.fs.cwd().createFile("annodue/crashlog.txt", .{}) catch
         @panic("failed to create crashlog.txt");
     defer file.close();
     const writer = file.writer();
-    // TODO: add buffered writer if possible; using below code and changing write
-    // references to use "file_w" causes transitive error during compilation
-    //var file_bw = std.io.bufferedWriter(file.writer());
-    //defer file_bw.flush();
-    //var file_w = file_bw.writer();
 
-    writer.print("{s}\n\n{s: <16}{s}\n{s: <16}{d}\n\n", .{
-        ANNODUE_VER, "MESSAGE:", message, "TIMESTAMP:", std.time.milliTimestamp(),
+    writer.print("{s}\n\n{s: <14}{s}\n{s: <14}{d}\n\n", .{
+        ANNODUE_VER, "MESSAGE", message, "TIMESTAMP", std.time.milliTimestamp(),
     }) catch @panic("failed to write crashlog header");
 
-    // TODO: switch on whether or not debug info is stripped, not build mode
-    // TODO: get this writing things correctly, not sure if pdb needed
-    // see https://andrewkelley.me/post/zig-stack-traces-kernel-panic-bare-bones-os.html
-    //if (comptime (builtin.mode == .Debug or builtin.mode == .ReleaseSafe)) {
-    //    _ = writer.write("\nSTACK TRACE\n") catch @panic("failed to write crashlog stack trace header");
-    //    var di = DebugInfo.init(alloc) catch @panic("failed to init debuginfo during panic");
-    //    const tty = std.io.tty.detectConfig(file);
-    //    std.debug.writeCurrentStackTrace(writer, &di, tty, ret_addr orelse @returnAddress) catch
-    //        @panic("failed to write stack trace to crashlog");
-    //}
+    // TODO: take file path as input of some kind, probably by comptime function
+    // TODO: print module name or pdb name or something in output (after taking
+    //  such info as comptime input), to help narrow down where the panic happens
+    var pdb = PDBParse.Init("annodue/annodue.pdb", null);
+    defer _ = if (pdb) |pdb2| pdb2.Deinit();
+    var line: PDBLineInfo = undefined;
+
+    // TODO: start trace print at correct address; maybe just use StackIterator
+    //  here if it's observed that the output is basically the same, since that
+    //  seems to also include a deeper trace
+    // currently starts at walkStackWindows -> annodue_panic -> stuff we're actually interested in
     blk: {
         _ = writer.write("STACK TRACE\n\n") catch break :blk;
         defer _ = writer.write("\n") catch {};
@@ -66,79 +65,40 @@ pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_
         _ = std.debug.getContext(&context);
         var addr_buf: [1024]usize = undefined;
         const addr_n = std.debug.walkStackWindows(addr_buf[0..], &context);
-        for (addr_buf[0..addr_n]) |addr|
-            writer.print("0x{X:0>8}\n", .{addr}) catch break :blk;
+        for (addr_buf[0..addr_n]) |addr| {
+            if (pdb != null and pdb.?.GetLineInfo(addr, &line)) blk2: {
+                _ = writer.print(
+                    "0x{X:0>8}    {s: <23}  in {s}:{d}:{d}\n",
+                    .{ addr, line.SymbolName[0..line.SymbolNameLen], line.FileName[0..line.FileNameLen], line.LineNumber, line.LineDisplacement },
+                ) catch break :blk2;
+                continue;
+            }
+            _ = writer.print("0x{X:0>8}    (unknown)\n", .{addr}) catch continue;
+        }
     }
 
+    // TODO: revise the necessity of this; seems to be basically the same as what
+    //  stacktrace would be if it started the right address. for now, keep an eye
+    //  on the output and if no variance to stacktrace is observed after a while
+    //  then ditch it
     blk: {
         _ = writer.write("RETURN TRACE\n\n") catch break :blk;
         defer _ = writer.write("\n") catch {};
         var it = StackIterator.init(ret_addr orelse @returnAddress(), null);
-        while (it.next()) |addr|
-            writer.print("0x{X:0>8}\n", .{addr}) catch break :blk;
+        while (it.next()) |addr| {
+            if (pdb != null and pdb.?.GetLineInfo(addr, &line)) blk2: {
+                _ = writer.print(
+                    "0x{X:0>8}    {s: <23}  in {s}:{d}:{d}\n",
+                    .{ addr, line.SymbolName[0..line.SymbolNameLen], line.FileName[0..line.FileNameLen], line.LineNumber, line.LineDisplacement },
+                ) catch break :blk2;
+                continue;
+            }
+            _ = writer.print("0x{X:0>8}    (unknown)\n", .{addr}) catch continue;
+        }
     }
-
-    // TODO: decide if we need to alert user to check crashlog.txt
-    //msg.Message("{s}", .{global.VersionStr}, "Panic\n{s}", .{message});
 
     std.builtin.default_panic(message, error_return_trace, ret_addr);
 }
-
-// NOTE: output style experimentation
-//Annodue 0.1.6.573
-//
-//MESSAGE:        panic test
-//TIMESTAMP:      1787436603326
-//
-//STACK TRACE
-//
-//<filepath>:<symbol_name>(L<line>) 0x6584AF16+0x20/0x4C(42%)
-//<filepath>:<symbol_name>(L<line>) 0x65831AA5+0x20/0x4C(42%)
-//<filepath>:<symbol_name>(L<line>) 0x658426AF+0x20/0x4C(42%)
-//<filepath>:<symbol_name>(L<line>) 0x6588F825+0x20/0x4C(42%)
-//
-//RETURN TRACE
-//
-//<filepath>:<symbol_name>@0x658426AF+0x20/0x4C(42%)
-//<filepath>:<symbol_name>@0x6588F825+0x20/0x4C(42%)
-//<filepath>:<symbol_name>@0x18B5816A+0x20/0x4C(42%)
-//<filepath>:<symbol_name>@0x084D8BEC+0x20/0x4C(42%)
-//
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig: RegIndex @ 0x4CE080(+0x08/0x15:38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig: RegIndex @ 0x4CE080(+38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig(248): RegIndex @ 0x4CE080(+38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex @ 0x4CE080(+38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex @ 0x4CE080(+0x08:38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex @ 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig(248): RegIndex @ 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:L248: RegIndex @ 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig: RegIndex @ 248:0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:0x4CE080+0x08(38%): RegIndex
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248+???:0x4CE080+0x08(38%): RegIndex
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig in RegIndex@248 :: 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig in RegIndex(248) :: 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex at 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: 0x4CE080 + 0x08(38%) in RegIndex
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex at 0x4CE080 + 0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:RegIndex at 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex at 0x4CE080+0x08(38%)
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: 0x4CE080+0x08(38%) in RegIndex
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: 0x4CE088 in RegIndex(38%)
-//0x4CE088 RegIndex in F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16: 0x4CE088 in RegIndex
-//0x4CE088: F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16 in RegIndex
-//(0x4CE088) F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16 in RegIndex
-//0x4CE088 in RegIndex at F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
-//[0x4CE088] RegIndex @ F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
-//(0x4CE088) RegIndex @ F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
-//0x4CE088  RegIndex at F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
-//
-//4CE080
-//21
-//SymTagFunction
-//RegIndex
-//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig
-//248
 
 //------------------------------------------------------------------------------
 // NOTE: migrated from old util/debug.zig

@@ -26,7 +26,8 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_developer", "annodue/plugin/plugin_developer.pdb");
 
 // FEATURES
 // - Visualize 4x4 matrices via hijacking spline markers

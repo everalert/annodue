@@ -20,7 +20,8 @@ const rt = @import("racer").Text;
 const rf = @import("racer").Font;
 const r3 = @import("racer").@"3D";
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_cosmetic", "annodue/plugin/plugin_cosmetic.pdb");
 
 // FEATURES
 // - Rotating rainbow colors for race UI elements: top values, top labels, speedo

@@ -12,7 +12,8 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_gameplaytweak", "annodue/plugin/plugin_gameplaytweak.pdb");
 
 // FEATURES
 // - Patch DeathSpeedMin (minimum speed required to die from collision)

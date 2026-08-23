@@ -7,7 +7,8 @@ const ASettings = @import("core/ASettings.zig");
 
 const MiB = @import("util/base/base_memory.zig").MiB;
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("annodue", "annodue/annodue.pdb");
 
 export fn Init() void {
     // TODO: maybe this should be re-characterized to reflect that it's just

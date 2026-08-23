@@ -12,7 +12,8 @@ const x86 = @import("util/x86.zig");
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_multiplayer", "annodue/plugin/plugin_multiplayer.pdb");
 
 // FEATURES
 // - Disable multiplayer collisions

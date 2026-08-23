@@ -20,7 +20,8 @@ const ToggleState = @import("util/toggle_state.zig").ToggleState;
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_overlay", "annodue/plugin/plugin_overlay.pdb");
 
 // Usable in Practice Mode only
 

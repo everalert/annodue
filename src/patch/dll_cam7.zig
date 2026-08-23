@@ -32,7 +32,8 @@ const nt = @import("util/normalized_transform.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_cam7", "annodue/plugin/plugin_cam7.pdb");
 
 // Named after Camera 7 in Trackmania
 

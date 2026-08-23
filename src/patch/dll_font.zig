@@ -138,7 +138,8 @@ const rf = @import("racer").Font;
 const r3 = @import("racer").@"3D";
 const rti = @import("racer").Time;
 
-pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_font", "annodue/plugin/plugin_font.pdb");
 
 // TODO: possibly remove, possibly not, basically just here to shut up logging
 //  from gif.zig; see std.log comments for details/usage

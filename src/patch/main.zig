@@ -5,10 +5,9 @@ const AHook = @import("core/AHook.zig");
 const AMemory = @import("core/AMemory.zig");
 const ASettings = @import("core/ASettings.zig");
 
-const dbg = @import("util/base/base_debug.zig");
 const MiB = @import("util/base/base_memory.zig").MiB;
 
-pub const panic = dbg.annodue_panic;
+pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
 
 export fn Init() void {
     // TODO: maybe this should be re-characterized to reflect that it's just

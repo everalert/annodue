@@ -119,8 +119,6 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const debug = @import("util/base/base_debug.zig");
-
 const cf = @import("util/color_format.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
@@ -140,8 +138,7 @@ const rf = @import("racer").Font;
 const r3 = @import("racer").@"3D";
 const rti = @import("racer").Time;
 
-// TODO: passthrough to annodue's panic via global function vtable; same for logging
-pub const panic = debug.annodue_panic;
+pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
 
 // TODO: possibly remove, possibly not, basically just here to shut up logging
 //  from gif.zig; see std.log comments for details/usage

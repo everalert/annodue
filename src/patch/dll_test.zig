@@ -4,8 +4,6 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const debug = @import("util/base/base_debug.zig");
-
 const msg = @import("util/message.zig");
 
 const r = @import("racer");
@@ -15,8 +13,7 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-// TODO: passthrough to annodue's panic via global function vtable; same for logging
-pub const panic = debug.annodue_panic;
+pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
 
 // FEATURES
 // -

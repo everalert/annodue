@@ -24,7 +24,7 @@ const SymGetSymFromAddr64 = w32.system.diagnostics.debug.SymGetSymFromAddr64;
 const SymUnloadModule64 = w32.system.diagnostics.debug.SymUnloadModule64;
 const SymCleanup = w32.system.diagnostics.debug.SymCleanup;
 
-const ModuleBaseAddress = @import("../base/base_debug.zig").ModuleBaseAddress;
+const ModuleBaseAddress = @import("debug.zig").ModuleBaseAddress;
 const RoundIntUp = @import("../base/base_math.zig").RoundIntUp;
 
 const PARSER_HANDLE: HANDLE = @ptrFromInt(0x493);

@@ -9,8 +9,6 @@ const POINT = w32.foundation.POINT;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
-const debug = @import("util/base/base_debug.zig");
-
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const SettingHandle = @import("core/ASettings.zig").Handle;
@@ -34,8 +32,7 @@ const nt = @import("util/normalized_transform.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-// TODO: passthrough to annodue's panic via global function vtable; same for logging
-pub const panic = debug.annodue_panic;
+pub const panic = @import("util/debug/debug_panic.zig").annodue_panic;
 
 // Named after Camera 7 in Trackmania
 

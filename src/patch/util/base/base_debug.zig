@@ -27,46 +27,55 @@ const ANNODUE_VER = @import("../../appinfo.zig").VERSION_STR;
 // TODO: if we normally write to file while logging, do we need to do anything extra here
 // to make it write during a crash
 pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_addr: ?usize) noreturn {
+    if (builtin.os.tag != .windows) @compileError("only windows supported");
     @setCold(true);
+
     var arena = ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const alloc = arena.allocator();
+    _ = alloc;
 
     const file = std.fs.cwd().createFile("annodue/crashlog.txt", .{}) catch
         @panic("failed to create crashlog.txt");
     defer file.close();
+    const writer = file.writer();
     // TODO: add buffered writer if possible; using below code and changing write
     // references to use "file_w" causes transitive error during compilation
     //var file_bw = std.io.bufferedWriter(file.writer());
     //defer file_bw.flush();
     //var file_w = file_bw.writer();
 
-    const head = std.fmt.allocPrint(alloc, "{s}\n{s: <16}{s}\n{s: <16}{d}\n", .{
+    writer.print("{s}\n\n{s: <16}{s}\n{s: <16}{d}\n\n", .{
         ANNODUE_VER, "MESSAGE:", message, "TIMESTAMP:", std.time.milliTimestamp(),
-    }) catch @panic("failed to format crashlog header");
-    _ = file.write(head) catch
-        @panic("failed to write crashlog header");
+    }) catch @panic("failed to write crashlog header");
 
+    // TODO: switch on whether or not debug info is stripped, not build mode
     // TODO: get this writing things correctly, not sure if pdb needed
     // see https://andrewkelley.me/post/zig-stack-traces-kernel-panic-bare-bones-os.html
-    if (comptime builtin.mode == .Debug or builtin.mode == .ReleaseSafe) {
-        _ = file.write("\nSTACK TRACE:\n") catch
-            @panic("failed to write crashlog stack trace header");
-        var di = DebugInfo.init(alloc) catch
-            @panic("failed to init debuginfo during panic");
-        const tty = std.io.tty.detectConfig(file);
-        std.debug.writeCurrentStackTrace(file.writer(), &di, tty, @returnAddress()) catch
-            @panic("failed to write stack trace to crashlog");
+    //if (comptime (builtin.mode == .Debug or builtin.mode == .ReleaseSafe)) {
+    //    _ = writer.write("\nSTACK TRACE\n") catch @panic("failed to write crashlog stack trace header");
+    //    var di = DebugInfo.init(alloc) catch @panic("failed to init debuginfo during panic");
+    //    const tty = std.io.tty.detectConfig(file);
+    //    std.debug.writeCurrentStackTrace(writer, &di, tty, ret_addr orelse @returnAddress) catch
+    //        @panic("failed to write stack trace to crashlog");
+    //}
+    blk: {
+        _ = writer.write("STACK TRACE\n\n") catch break :blk;
+        defer _ = writer.write("\n") catch {};
+        var context: std.debug.ThreadContext = undefined;
+        _ = std.debug.getContext(&context);
+        var addr_buf: [1024]usize = undefined;
+        const addr_n = std.debug.walkStackWindows(addr_buf[0..], &context);
+        for (addr_buf[0..addr_n]) |addr|
+            writer.print("0x{X:0>8}\n", .{addr}) catch break :blk;
     }
 
-    _ = file.write("\nRETURN TRACE:\n") catch
-        @panic("failed to write crashlog return trace header");
-    var it = StackIterator.init(@returnAddress(), null);
-    while (it.next()) |addr| {
-        const trace_str = std.fmt.allocPrint(alloc, "0x{X:0>8}\n", .{addr}) catch
-            @panic("failed to format crashlog return trace address");
-        _ = file.write(trace_str) catch
-            @panic("failed to write return trace address to crashlog");
+    blk: {
+        _ = writer.write("RETURN TRACE\n\n") catch break :blk;
+        defer _ = writer.write("\n") catch {};
+        var it = StackIterator.init(ret_addr orelse @returnAddress(), null);
+        while (it.next()) |addr|
+            writer.print("0x{X:0>8}\n", .{addr}) catch break :blk;
     }
 
     // TODO: decide if we need to alert user to check crashlog.txt
@@ -74,6 +83,62 @@ pub fn annodue_panic(message: []const u8, error_return_trace: ?*StackTrace, ret_
 
     std.builtin.default_panic(message, error_return_trace, ret_addr);
 }
+
+// NOTE: output style experimentation
+//Annodue 0.1.6.573
+//
+//MESSAGE:        panic test
+//TIMESTAMP:      1787436603326
+//
+//STACK TRACE
+//
+//<filepath>:<symbol_name>(L<line>) 0x6584AF16+0x20/0x4C(42%)
+//<filepath>:<symbol_name>(L<line>) 0x65831AA5+0x20/0x4C(42%)
+//<filepath>:<symbol_name>(L<line>) 0x658426AF+0x20/0x4C(42%)
+//<filepath>:<symbol_name>(L<line>) 0x6588F825+0x20/0x4C(42%)
+//
+//RETURN TRACE
+//
+//<filepath>:<symbol_name>@0x658426AF+0x20/0x4C(42%)
+//<filepath>:<symbol_name>@0x6588F825+0x20/0x4C(42%)
+//<filepath>:<symbol_name>@0x18B5816A+0x20/0x4C(42%)
+//<filepath>:<symbol_name>@0x084D8BEC+0x20/0x4C(42%)
+//
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig: RegIndex @ 0x4CE080(+0x08/0x15:38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig: RegIndex @ 0x4CE080(+38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig(248): RegIndex @ 0x4CE080(+38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex @ 0x4CE080(+38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex @ 0x4CE080(+0x08:38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex @ 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig(248): RegIndex @ 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:L248: RegIndex @ 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig: RegIndex @ 248:0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:0x4CE080+0x08(38%): RegIndex
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248+???:0x4CE080+0x08(38%): RegIndex
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig in RegIndex@248 :: 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig in RegIndex(248) :: 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex at 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: 0x4CE080 + 0x08(38%) in RegIndex
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex at 0x4CE080 + 0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:RegIndex at 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: RegIndex at 0x4CE080+0x08(38%)
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: 0x4CE080+0x08(38%) in RegIndex
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248: 0x4CE088 in RegIndex(38%)
+//0x4CE088 RegIndex in F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16: 0x4CE088 in RegIndex
+//0x4CE088: F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16 in RegIndex
+//(0x4CE088) F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16 in RegIndex
+//0x4CE088 in RegIndex at F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
+//[0x4CE088] RegIndex @ F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
+//(0x4CE088) RegIndex @ F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
+//0x4CE088  RegIndex at F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig:248:16
+//
+//4CE080
+//21
+//SymTagFunction
+//RegIndex
+//F:\Projects\swe1r\annodue\code\src\patch\util\x86.zig
+//248
 
 //------------------------------------------------------------------------------
 // NOTE: migrated from old util/debug.zig

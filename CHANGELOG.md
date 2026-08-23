@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
-- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `api/api_helper`, `base/base_memory`, `base/base_arena`, `base/base_math` utils
+- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `api/api_helper`, `base/base_memory`, `base/base_arena`, `base/base_math`, `debug/debug_pdbparse` utils
 
 ### Changed
 
@@ -84,7 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Arena-based memory accessible both internally and to plugins
     - All memory management migrated to this system project-wide
 - Backend(Util): `menu_item` merged into `menu`
-- Backend(Util): `core/Debug` and `util/debug` merged into `util/base/base_debug`
+- Backend(Util): `core/Debug` and `util/debug` merged into `util/debug/*`
+- Backend(Util): Reworked custom panic handler to manually process PDB files
 - Backend(Util): `temporal_compressor` now takes an external buffer for memory and has user define frame cap
 
 ### Removed
@@ -103,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Core: Improved loading performance
+- Core: Crash handler should now actually dump useful info
 - Cam7: Mouse position locking when tabbing out with free cam active
 - Savestate: UI animation for engine status and minimap transition now recorded in savestate (some aspects of minimap still not recorded)
 - QOL: Settings not saving when opening or closing Quick Race Menu

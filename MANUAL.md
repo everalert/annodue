@@ -77,6 +77,12 @@ Top-level settings that do not belong to a specific feature group.
 |`AUTO_UPDATE`           |`bool`|`on`|&nbsp;
 |`PLUGIN_HOT_RELOAD`     |`bool`|`on`|&nbsp;
 
+### Crashes
+
+> [!IMPORTANT]
+> Annodue may crash occasionally due to unforeseen bugs. When this happens, check
+> the `annodue` folder for `crashlog.txt` and let me know!
+
 ## Features
 
 #### Feature Summary

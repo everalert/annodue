@@ -330,14 +330,16 @@ pub fn build(b: *std.Build) void {
             single_plugin_step.dependOn(&dll_install.step);
 
         var bufo = std.fmt.allocPrint(alloc, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
+        var bufop = std.fmt.allocPrint(alloc, "-Fplugin_{s}.pdb", .{plugin.name}) catch continue;
         if (DEV_MODE and copypath != null)
             hotcopy_move_files_plugin.addArg(bufo);
+        hotcopy_move_files_plugin.addArg(bufop);
         if (plugin.to_hash)
             generate_safe_plugin_hash_file_plugin.addArg(bufo);
 
         var dll_release = b.addInstallArtifact(dll, .{
             .dest_dir = .{ .override = .{ .custom = "release/annodue/plugin" } },
-            .pdb_dir = .disabled,
+            .pdb_dir = .{ .override = .{ .custom = "release/annodue/plugin" } },
             .implib_dir = .disabled,
         });
         if (plugin.to_hash and zip_step != null) zip_step.?.dependOn(&dll_release.step);
@@ -372,12 +374,13 @@ pub fn build(b: *std.Build) void {
 
     if (DEV_MODE and copypath != null) {
         hotcopy_move_files_core.addArg("-Fannodue.dll");
+        hotcopy_move_files_core.addArg("-Fannodue.pdb");
         hotcopy_move_files.step.dependOn(&core_install.step);
     }
 
     var core_release = b.addInstallArtifact(core, .{
         .dest_dir = .{ .override = .{ .custom = "release/annodue" } },
-        .pdb_dir = .disabled,
+        .pdb_dir = .{ .override = .{ .custom = "release/annodue" } },
         .implib_dir = .disabled,
     });
     if (zip_step != null) zip_step.?.dependOn(&core_release.step);

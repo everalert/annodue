@@ -14,8 +14,6 @@ const c = @cImport({
 const CollisionViewerSettings = c.CollisionViewerSettings;
 const CollisionViewerState = c.CollisionViewerState;
 
-const debug = @import("util/base/base_debug.zig");
-
 const timing = @import("util/timing.zig");
 const m = @import("util/menu.zig");
 const Menu = m.Menu;
@@ -33,6 +31,9 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
 const rs = @import("racer").Sound;
+
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_collision_viewer", "annodue/plugin/plugin_collision_viewer.pdb");
 
 extern fn init_collision_viewer(cvs: *CollisionViewerState) callconv(.C) void;
 extern fn deinit_collision_viewer() callconv(.C) void;

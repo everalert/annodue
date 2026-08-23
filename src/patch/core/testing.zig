@@ -3,6 +3,8 @@ const std = @import("std");
 const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 
+const pdbparse = @import("../util/debug/debug_pdbparse.zig");
+
 // HOOK FUNCTIONS
 
 pub fn OnInit(_: *GlobalFn) callconv(.C) void {}

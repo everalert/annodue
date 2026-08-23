@@ -10,8 +10,6 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const debug = @import("util/base/base_debug.zig");
-
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const st = @import("util/toggle_state.zig");
 const scroll = @import("util/scroll_control.zig");
@@ -37,8 +35,8 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
-// TODO: passthrough to annodue's panic via global function vtable; same for logging
-pub const panic = debug.annodue_panic;
+const debug_panic = @import("util/debug/debug_panic.zig");
+pub const panic = debug_panic.PanicFromContext("plugin_savestate", "annodue/plugin/plugin_savestate.pdb");
 
 // Usable in Practice Mode only
 

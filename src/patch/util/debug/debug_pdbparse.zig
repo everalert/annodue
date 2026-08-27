@@ -49,6 +49,10 @@ pub fn Init(pdb: [:0]const u8, handle: ?HANDLE) ?PDBParse {
         .BaseAddress = ModuleBaseAddress(),
     };
 
+    // TODO: ?? store options and restore them on deinit, or some other form of
+    //  good citizenry? according to MSDN, setting the options is per application
+    //  run, so setting the options here permanently changes them until app close;
+    //  this also means it might be a bad idea to assume what we get is OK too
     var opts = SymGetOptions();
     opts &= ~w32.system.diagnostics.debug.SYMOPT_DEFERRED_LOADS;
     opts |= w32.system.diagnostics.debug.SYMOPT_LOAD_LINES;
@@ -59,14 +63,13 @@ pub fn Init(pdb: [:0]const u8, handle: ?HANDLE) ?PDBParse {
 
     // TODO: do something with error message?
     if (FALSE == SymInitialize(parser.Handle, null, FALSE))
-        //std.debug.panic("SymInitialize: {s}", .{@tagName(GetLastError())});
         return null;
 
     // TODO: do something with error message?
     if (FALSE == SymLoadModule64(parser.Handle, null, pdb, null, parser.BaseAddress, 0x7FFFFFFF)) blk: {
         const e = GetLastError();
         if (e == .NO_ERROR) break :blk; // zigwin32 NO_ERROR == ERROR_SUCCESS
-        //std.debug.panic("SymLoadModule64: {s}", .{@tagName(e)});
+        _ = SymCleanup(parser.Handle); // TODO: errdefer this?
         return null;
     }
 
@@ -86,7 +89,6 @@ pub fn GetLineInfo(self: *const PDBParse, address: usize, out: *LineInfo) bool {
 
     // TODO: do something with error message?
     if (FALSE == SymGetLineFromAddr64(self.Handle, address, &line_disp, &line))
-        //std.debug.panic("SymGetLineFromAddr64: {s} ({X:0>8})\n", .{ @tagName(GetLastError()), address });
         return false;
 
     const SYM_ALIGNMENT = @alignOf(IMAGEHLP_SYMBOL64);
@@ -99,7 +101,6 @@ pub fn GetLineInfo(self: *const PDBParse, address: usize, out: *LineInfo) bool {
 
     // TODO: do something with error message?
     if (FALSE == SymGetSymFromAddr64(self.Handle, address, &sym_disp, sym))
-        //std.debug.panic("SymGetSymFromAddr64: {s} ({X:0>8})\n", .{ @tagName(GetLastError()), address });
         return false;
 
     out.* = LineInfo.Init();

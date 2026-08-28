@@ -113,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Millisecond timers on race finish misaligned with standard hundredths timers
 - QOL: Game not being returned to original code for some features when plugin unloads
 - QOL: Quick Race Menu not usable after reloading plugin while in a race until backing out to hangar
+- QOL: Quick Race Menu causing crash when running game credits due to assuming presence of player data
 - CollisionViewer: Settings not saving when opening or closing Collision Viewer menu
 - CollisionViewer: Collision Viewer menu not usable after reloading plugin while in a race until backing out to hangar
 - Backend(ASettings): String settings not propagating an update when the start of the new string matched the whole old string

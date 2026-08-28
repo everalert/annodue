@@ -1168,6 +1168,11 @@ const QuickRaceMenu = extern struct {
     //  detecting we entered race mode), maybe add different init if that introduces
     //  issues with state loop
     fn init() void {
+        // FIXME: use a proper method to detect whether we are in a race that is
+        //  actually playable. this line is here to filter out "race" loads that
+        //  are cutscenes, such as the credits
+        if (rrd.pPlayer.* == null) return;
+
         const hang = re.Manager.entity(.Hang, 0);
         values.vehicle = hang.VehiclePlayer;
         values.track = if (using_circuit_track_order) rtr.TrackIdMenuMap[hang.Track] else hang.Track;
@@ -1176,7 +1181,7 @@ const QuickRaceMenu = extern struct {
         values.racers = hang.Racers;
         values.ai_speed = hang.AISpeed - 1;
         //values.ai_speed = hang.Winnings;
-        for (0..7) |i| {
+        for (0..7) |i| { // not memcpy because type mismatch
             values.up_lv[i] = rrd.pPlayer.*.?.pFile.?.upgrade_lv[i];
             values.up_hp[i] = rrd.pPlayer.*.?.pFile.?.upgrade_hp[i];
         }

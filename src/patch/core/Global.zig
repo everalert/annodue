@@ -16,6 +16,7 @@ const asettings = @import("ASettings.zig");
 const AMemory = @import("AMemory.zig");
 const rterrain = @import("RTerrain.zig");
 const rtrigger = @import("RTrigger.zig");
+const raddress = @import("RAddress.zig");
 
 const st = @import("../util/toggle_state.zig");
 const ToggleState = st.ToggleState;
@@ -192,6 +193,14 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
     // Resources
+    .RAddressRangeAvailable = &raddress.RAddressRangeAvailable,
+    .RAddressRangeReserve = &raddress.RAddressRangeReserve,
+    .RAddressRangeRelease = &raddress.RAddressRangeRelease,
+    .RAddressRangeRead = &raddress.RAddressRangeRead,
+    .RAddressRangeWrite = &raddress.RAddressRangeWrite,
+    .RAddressRangeWriteSt = &raddress.RAddressRangeWriteSt,
+    .RAddressRangeWriteEd = &raddress.RAddressRangeWriteEd,
+    .RAddressRangeRestore = &raddress.RAddressRangeRestore,
     .RTerrainRequest = &rterrain.RRequest,
     .RTerrainRelease = &rterrain.RRelease,
     .RTerrainReleaseAll = &rterrain.RReleaseAll,

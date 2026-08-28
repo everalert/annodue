@@ -38,6 +38,9 @@ const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
 const Setting = @import("ASettings.zig").ASettingSent;
 
+// FIXME: anything using this should be moved to api Init; waiting on better core arch
+const RAddress = @import("RAddress.zig");
+
 const r = @import("racer");
 const reh = r.Entity.Hang;
 const rti = r.Time;
@@ -597,6 +600,7 @@ fn HookGameSetup(memory: usize) usize {
 // GAME LOOP
 
 fn HookGameLoop(memory: usize) usize {
+    _ = RAddress.RAddressRangeReserve(0x49CE2A, 0x49CE2F); // TODO: save handle
     return hook.intercept_call(
         memory,
         0x49CE2A,

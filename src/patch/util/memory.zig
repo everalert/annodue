@@ -59,6 +59,7 @@ pub fn read(offset: usize, comptime T: type) T {
     return data[0];
 }
 
+// FIXME: slice instead of ptr+len
 pub fn read_bytes(offset: usize, ptr_out: ?*anyopaque, len: usize) void {
     const addr: [*]u8 = @ptrFromInt(offset);
     const data: []u8 = @as([*]u8, @ptrCast(ptr_out))[0..len];

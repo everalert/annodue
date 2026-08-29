@@ -37,7 +37,7 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
 
     const call_target: usize = addr_from_call(addr_detour + off_call);
     var scratch: [DETOUR_LIMIT]u8 = undefined;
-    mem.read_bytes(addr_detour, &scratch, len);
+    mem.read_bytes(addr_detour, scratch[0..len]);
 
     const off_hook: usize = x86.jmp_rel(addr_detour, off);
     _ = x86.nop_until(off_hook, addr_detour + len);
@@ -60,7 +60,7 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
     assert(len <= DETOUR_LIMIT);
 
     var scratch: [DETOUR_LIMIT]u8 = undefined;
-    mem.read_bytes(addr, &scratch, len); // make copy of original asm
+    mem.read_bytes(addr, scratch[0..len]); // make copy of original asm
 
     var off: usize = memory;
 

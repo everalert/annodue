@@ -155,7 +155,7 @@ const RangeManager = struct {
 
         const memo_st = address - RACER_IMAGE_BASE;
         const memo_ed = end - RACER_IMAGE_BASE;
-        mem.read_bytes(address, &self.GameMemory[memo_st], memo_ed - memo_st);
+        mem.read_bytes(address, self.GameMemory[memo_st..memo_ed]);
 
         return RangeHandle.Init(range.Address, range.Generation);
     }
@@ -198,7 +198,7 @@ const RangeManager = struct {
 
         if (!RangeValid(address, end)) return false;
 
-        mem.read_bytes(address, buffer.ptr, buffer.len);
+        mem.read_bytes(address, buffer);
         return true;
     }
 

@@ -33,6 +33,8 @@ const GetLastError = w32.foundation.GetLastError;
 // FIXME: change x86 api to use unsafe versions (i.e. make it more convenient
 //  for users to use RAddress api/easier to find bad usage)
 // FIXME: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection or smth)
+// FIXME: technically a memory range might not have read rights? so read_* should
+//  also set VirtualProtect and have "unsafe" versions?
 
 pub fn write(offset: usize, comptime T: type, value: T) usize {
     if (@bitSizeOf(T) == 0) return offset;
@@ -85,10 +87,8 @@ pub fn read(offset: usize, comptime T: type) T {
     return data[0];
 }
 
-// FIXME: slice instead of ptr+len
-pub fn read_bytes(offset: usize, ptr_out: ?*anyopaque, len: usize) void {
+pub fn read_bytes(offset: usize, data: []u8) void {
     const addr: [*]u8 = @ptrFromInt(offset);
-    const data: []u8 = @as([*]u8, @ptrCast(ptr_out))[0..len];
     @memcpy(data, addr);
 }
 

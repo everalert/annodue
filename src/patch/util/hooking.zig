@@ -1,6 +1,7 @@
 pub const Self = @This();
 
 const std = @import("std");
+const assert = std.debug.assert;
 
 const mem = @import("memory.zig");
 const x86 = @import("x86.zig");
@@ -20,13 +21,17 @@ pub fn addr_from_call(src_call: usize) usize {
 // TODO: version that only detours a CALL (5 bytes) with JMP, for simplicity
 // NOTE: assumes no relative shenanigans are in the detoured range other than
 // the intercepted CALL
+/// detours an instruction sequence, executing up to two new function calls with
+/// the original instructions in between, then returning the instruction pointer
+/// to the address after the original instruction sequence. assumes the original
+/// instructions are safe to execute verbatim when relocated.
 /// @addr_detour    the starting address of the sequence of instructions to replace
 /// @off_call       the number of bytes after @addr_detour where the CALL instruction to replace is
 /// @len            the total length of the sequence of instructions to replace
 pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
-    std.debug.assert(len >= 5);
-    std.debug.assert(len <= DETOUR_LIMIT);
-    std.debug.assert(off_call <= len - 5);
+    assert(len >= 5);
+    assert(len <= DETOUR_LIMIT);
+    assert(off_call <= len - 5);
 
     var off: usize = memory;
 
@@ -51,8 +56,8 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
 /// reroute asm without hooking a function body or callsite, while inserting
 /// before/after functions
 pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
-    std.debug.assert(len >= 5);
-    std.debug.assert(len <= DETOUR_LIMIT);
+    assert(len >= 5);
+    assert(len <= DETOUR_LIMIT);
 
     var scratch: [DETOUR_LIMIT]u8 = undefined;
     mem.read_bytes(addr, &scratch, len); // make copy of original asm
@@ -73,7 +78,7 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
 
 /// @addr    address of the original RETN instruction; requires 4 trailing NOPs
 pub fn detour_retn(memory: usize, addr: usize, dest: *const fn () void) usize {
-    std.debug.assert(std.mem.eql(u8, @as(*[5]u8, @ptrFromInt(addr)), &[5]u8{ 0xC3, 0x90, 0x90, 0x90, 0x90 }));
+    assert(std.mem.eql(u8, @as(*[5]u8, @ptrFromInt(addr)), &[5]u8{ 0xC3, 0x90, 0x90, 0x90, 0x90 }));
 
     var off: usize = memory;
 

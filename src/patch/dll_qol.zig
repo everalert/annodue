@@ -43,6 +43,8 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
+const AddressRangeHandle = @import("core/RAddress.zig").RangeHandleOpaque;
+
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_qol", "annodue/plugin/plugin_qol.pdb");
 
@@ -514,12 +516,15 @@ fn PatchPodiumCutscene(enable: bool) void {
 //  the scaling routine altogether
 /// experimental patch enabling the greater pitch input range used by N64
 fn PatchN64Pitch(enable: bool) void {
+    const h = if (QuickRaceMenu.h_ar_n64_pitch) |h| h else return;
+
     if (enable) {
-        _ = mem.write(@intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
-        _ = mem.write(@intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
+        if (!QuickRaceMenu.gf.RAddressRangeWriteSt(h)) return;
+        defer QuickRaceMenu.gf.RAddressRangeWriteEd(h);
+        _ = mem.write_unsafe(@intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
+        _ = mem.write_unsafe(@intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
     } else {
-        _ = mem.write(@intFromPtr(ri.PITCH_SCALE_MAX), u32, 0x3F4CCCCD); // +0.8
-        _ = mem.write(@intFromPtr(ri.PITCH_SCALE_MIN), u32, 0xBF4CCCCD); // -0.8
+        QuickRaceMenu.gf.RAddressRangeRestore(h);
     }
 }
 
@@ -1024,6 +1029,10 @@ const QuickRaceMenu = extern struct {
     var s_menu_track_order: [63:0]u8 = std.mem.zeroes([63:0]u8);
     var using_circuit_track_order: bool = false;
 
+    var h_ar_n64_pitch: ?AddressRangeHandle = null;
+    const ar_n64_pitch_st = @intFromPtr(ri.PITCH_SCALE_MAX);
+    const ar_n64_pitch_ed = ar_n64_pitch_st + 8;
+
     const open_threshold: f32 = 0.75;
     var menu_active: st.ToggleState = .Off;
     var initialized: bool = false;
@@ -1458,6 +1467,10 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: keep at top
     QuickRaceMenu.gf = gf;
 
+    // TODO: use available+reserve helper
+    if (gf.RAddressRangeAvailable(QuickRaceMenu.ar_n64_pitch_st, QuickRaceMenu.ar_n64_pitch_ed))
+        QuickRaceMenu.h_ar_n64_pitch = gf.RAddressRangeReserve(QuickRaceMenu.ar_n64_pitch_st, QuickRaceMenu.ar_n64_pitch_ed);
+
     // FIXME: handle nullptr cases properly
     nav_asm = apih.AMemoryGetPermanentT(gf, [96]u8) orelse @panic("QOL(nav_asm): API OutOfMemory");
     QolState.fcam_buf = apih.AMemoryGetPermanentT(gf, [32]u8) orelse @panic("QOL(fcam_buf): API OutOfMemory");
@@ -1488,10 +1501,12 @@ export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.FpsTimer.End();
     QuickRaceMenu.close();
     PatchN64Pitch(false);
+    // FIXME: remove, will be automatic once RAddress fully implemented
+    if (QuickRaceMenu.h_ar_n64_pitch) |h| gf.RAddressRangeRelease(h);
 
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);

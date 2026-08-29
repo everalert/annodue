@@ -1094,6 +1094,7 @@ pub fn call(write_at: usize, fn_addr: usize) usize {
     addr = mem.write(addr, i32, @as(i32, @bitCast(fn_addr)) - (@as(i32, @bitCast(addr)) + 4));
     return addr;
 }
+
 pub fn call_rm32(write_at: usize, fn_addr: usize) usize {
     var addr = write_at;
     addr = mem.write(addr, u8, 0xFF);

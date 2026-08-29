@@ -32,6 +32,11 @@ export fn Init() void {
 
     // ring 2
 
+    // TODO: API should be initialized separately (very early ring, possibly ring 0
+    //  if it can be done with no subsystem dependencies) to the hooking and loading
+    //  plugins/core; most init should happen during normal API OnInit as subsystems
+    //  are individually "loaded" into the API, manually importing modules to gain
+    //  access to API functions should be basically nonexistent after API is initialized
     AHook.init(arena_perm, arena_temp) catch |e|
         std.debug.panic("Init(AHook): {s}", .{@errorName(e)});
 }

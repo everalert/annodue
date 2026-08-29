@@ -6,6 +6,7 @@ const panic = std.debug.panic;
 const w32 = @import("zigwin32");
 const PAGE_PROTECTION_FLAGS = w32.system.memory.PAGE_PROTECTION_FLAGS;
 const PAGE_EXECUTE_READWRITE = w32.system.memory.PAGE_EXECUTE_READWRITE;
+const FALSE = w32.zig.FALSE;
 const VirtualProtect = w32.system.memory.VirtualProtect;
 const GetLastError = w32.foundation.GetLastError;
 
@@ -28,6 +29,11 @@ const GetLastError = w32.foundation.GetLastError;
 // NOTE: mod r/m table here
 // https://www.cs.uaf.edu/2016/fall/cs301/lecture/09_28_machinecode.html
 
+// FIXME: rework write* stuff to be named better (unsafe/unprotected is weirdge)
+// FIXME: change x86 api to use unsafe versions (i.e. make it more convenient
+//  for users to use RAddress api/easier to find bad usage)
+// FIXME: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection or smth)
+
 pub fn write(offset: usize, comptime T: type, value: T) usize {
     if (@bitSizeOf(T) == 0) return offset;
     const addr: [*]align(1) u8 = @ptrFromInt(offset);
@@ -45,10 +51,30 @@ pub fn write_bytes(offset: usize, data: []const u8) usize {
 
 fn write_unprotected(dst: [*]u8, src: []const u8) void {
     var protect: PAGE_PROTECTION_FLAGS = undefined;
-    if (0 == VirtualProtect(dst, src.len, PAGE_EXECUTE_READWRITE, &protect))
-        panic("(write_unprotected) failed to set PAGE_EXECUTE_READWRITE: {s}", .{@tagName(GetLastError())});
-    defer _ = if (0 == VirtualProtect(dst, src.len, protect, &protect))
-        panic("(write_unprotected) failed to restore page protection: {s}", .{@tagName(GetLastError())});
+    if (FALSE == VirtualProtect(dst, src.len, PAGE_EXECUTE_READWRITE, &protect))
+        panic("write_unprotected: VirtualProtect(set): {s}", .{@tagName(GetLastError())});
+    defer _ = if (FALSE == VirtualProtect(dst, src.len, protect, &protect))
+        panic("write_unprotected: VirtualProtect(restore): {s}", .{@tagName(GetLastError())});
+    @memcpy(dst, src);
+}
+
+pub fn write_unsafe(offset: usize, comptime T: type, value: T) usize {
+    if (@bitSizeOf(T) == 0) return offset;
+    const addr: [*]align(1) u8 = @ptrFromInt(offset);
+    const data: []const u8 = @as([*]const u8, @ptrCast(&value))[0..@sizeOf(T)];
+    write_assume_safe(addr, data);
+    return offset + @sizeOf(T);
+}
+
+pub fn write_bytes_unsafe(offset: usize, data: []const u8) usize {
+    if (data.len == 0) return offset;
+    const addr: [*]align(1) u8 = @ptrFromInt(offset);
+    write_assume_safe(addr, data);
+    return offset + data.len;
+}
+
+/// write while assuming that the memory already has write permissions
+fn write_assume_safe(dst: [*]u8, src: []const u8) void {
     @memcpy(dst, src);
 }
 

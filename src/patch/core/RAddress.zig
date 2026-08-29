@@ -167,12 +167,14 @@ const RangeManager = struct {
         const range_i = self.RangeIndex(handle) orelse return;
         var range = self.RangeList.get(range_i);
 
-        const memo_st = range.Address;
-        const memo_ed = range.AddressEnd;
-        _ = self.RangeWriteBuffer(handle, range.Address, self.GameMemory[memo_st..memo_ed]);
+        if (self.RangeWriteSt(handle)) {
+            defer self.RangeWriteEd(handle);
+            const memo_st = range.Address;
+            const memo_ed = range.AddressEnd;
+            @memcpy(@as([*]u8, @ptrFromInt(range.Address)), self.GameMemory[memo_st..memo_ed]);
+        }
 
         range.Address = 0;
-        range.Flags = std.mem.zeroes(Range.Flags);
         range.Generation += 1;
         self.RangeList.set(range_i, range);
     }
@@ -182,9 +184,13 @@ const RangeManager = struct {
         assert(self.RangeWriting == null);
 
         const range = self.RangeGet(handle) orelse return;
-        const memo_st = range.Address;
-        const memo_ed = range.AddressEnd;
-        _ = self.RangeWriteBuffer(handle, range.Address, self.GameMemory[memo_st..memo_ed]);
+
+        if (self.RangeWriteSt(handle)) {
+            defer self.RangeWriteEd(handle);
+            const memo_st = range.Address;
+            const memo_ed = range.AddressEnd;
+            @memcpy(@as([*]u8, @ptrFromInt(range.Address)), self.GameMemory[memo_st..memo_ed]);
+        }
     }
 
     pub fn RangeRead(address: u24, end: u24, buffer: []u8) bool {
@@ -229,16 +235,9 @@ const RangeManager = struct {
         self.RangeWriting = null;
     }
 
-    pub fn RangeWriteBuffer(self: *RangeManager, handle: RangeHandle, addr: u24, buf: []const u8) bool {
-        assert(self.RangeWriting == null);
-
-        if (!self.RangeWriteSt(handle)) return false;
-        defer self.RangeWriteEd(handle);
-
+    pub fn RangeContainsRange(self: *RangeManager, handle: RangeHandle, addr_st: u24, addr_ed: u24) bool {
         const range = self.RangeGet(handle) orelse return false;
-        if (addr < range.Address or addr + buf.len > range.AddressEnd) return false;
-        @memcpy(@as([*]u8, @ptrFromInt(addr)), buf);
-        return true;
+        return addr_st >= range.Address and addr_ed <= range.AddressEnd;
     }
 };
 
@@ -370,12 +369,6 @@ pub fn RAddressRangeRead(address: u32, end: u32, buffer: ?[*]u8) callconv(.C) bo
     return RangeManager.RangeRead(@truncate(address), @truncate(end), buf_sl);
 }
 
-pub fn RAddressRangeWriteBuffer(handle: RangeHandleOpaque, addr: u32, buf: ?[*]const u8, len: u32) callconv(.C) bool {
-    assert(AddressState.Initialized);
-    if (buf == null) return false;
-    return AddressState.Manager.RangeWriteBuffer(@bitCast(handle), @truncate(addr), buf.?[0..len]);
-}
-
 pub fn RAddressRangeWriteSt(handle: RangeHandleOpaque) callconv(.C) bool {
     assert(AddressState.Initialized);
     return AddressState.Manager.RangeWriteSt(@bitCast(handle));
@@ -389,6 +382,12 @@ pub fn RAddressRangeWriteEd(handle: RangeHandleOpaque) callconv(.C) void {
 pub fn RAddressRangeRestore(handle: RangeHandleOpaque) callconv(.C) void {
     assert(AddressState.Initialized);
     AddressState.Manager.RangeRestore(@bitCast(handle));
+}
+
+pub fn RAddressRangeContainsRange(handle: RangeHandleOpaque, addr_st: u32, addr_ed: u32) callconv(.C) bool {
+    assert(AddressState.Initialized);
+    assert(RangeManager.RangeValid(addr_st, addr_ed));
+    return AddressState.Manager.RangeContainsRange(@bitCast(handle), @truncate(addr_st), @truncate(addr_ed));
 }
 
 // update the memoized copy of the address range with the current contents

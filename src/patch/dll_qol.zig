@@ -516,15 +516,13 @@ fn PatchPodiumCutscene(enable: bool) void {
 //  the scaling routine altogether
 /// experimental patch enabling the greater pitch input range used by N64
 fn PatchN64Pitch(enable: bool) void {
-    const h = if (QuickRaceMenu.h_ar_n64_pitch) |h| h else return;
-
     if (enable) {
-        if (!QuickRaceMenu.gf.RAddressRangeWriteSt(h)) return;
-        defer QuickRaceMenu.gf.RAddressRangeWriteEd(h);
+        if (!QuickRaceMenu.gf.RAddressRangeWriteSt(QuickRaceMenu.h_ar_n64_pitch)) return;
+        defer QuickRaceMenu.gf.RAddressRangeWriteEd(QuickRaceMenu.h_ar_n64_pitch);
         _ = mem.write_unsafe(@intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
         _ = mem.write_unsafe(@intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
     } else {
-        QuickRaceMenu.gf.RAddressRangeRestore(h);
+        QuickRaceMenu.gf.RAddressRangeRestore(QuickRaceMenu.h_ar_n64_pitch);
     }
 }
 
@@ -1029,7 +1027,7 @@ const QuickRaceMenu = extern struct {
     var s_menu_track_order: [63:0]u8 = std.mem.zeroes([63:0]u8);
     var using_circuit_track_order: bool = false;
 
-    var h_ar_n64_pitch: ?AddressRangeHandle = null;
+    var h_ar_n64_pitch: AddressRangeHandle = 0;
     const ar_n64_pitch_st = @intFromPtr(ri.PITCH_SCALE_MAX);
     const ar_n64_pitch_ed = ar_n64_pitch_st + 8;
 
@@ -1467,9 +1465,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: keep at top
     QuickRaceMenu.gf = gf;
 
-    // TODO: use available+reserve helper
-    if (gf.RAddressRangeAvailable(QuickRaceMenu.ar_n64_pitch_st, QuickRaceMenu.ar_n64_pitch_ed))
-        QuickRaceMenu.h_ar_n64_pitch = gf.RAddressRangeReserve(QuickRaceMenu.ar_n64_pitch_st, QuickRaceMenu.ar_n64_pitch_ed);
+    _ = apih.RAddressRangeReserveIfAvailable(gf, QuickRaceMenu.ar_n64_pitch_st, QuickRaceMenu.ar_n64_pitch_ed, &QuickRaceMenu.h_ar_n64_pitch);
 
     // FIXME: handle nullptr cases properly
     nav_asm = apih.AMemoryGetPermanentT(gf, [96]u8) orelse @panic("QOL(nav_asm): API OutOfMemory");
@@ -1506,7 +1502,7 @@ export fn OnDeinit(gf: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.close();
     PatchN64Pitch(false);
     // FIXME: remove, will be automatic once RAddress fully implemented
-    if (QuickRaceMenu.h_ar_n64_pitch) |h| gf.RAddressRangeRelease(h);
+    gf.RAddressRangeRelease(QuickRaceMenu.h_ar_n64_pitch);
 
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);

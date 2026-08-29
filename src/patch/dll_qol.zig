@@ -516,13 +516,12 @@ fn PatchPodiumCutscene(enable: bool) void {
 //  the scaling routine altogether
 /// experimental patch enabling the greater pitch input range used by N64
 fn PatchN64Pitch(enable: bool) void {
+    const handle = QuickRaceMenu.h_ar_n64_pitch;
     if (enable) {
-        if (!QuickRaceMenu.gf.RAddressRangeWriteSt(QuickRaceMenu.h_ar_n64_pitch)) return;
-        defer QuickRaceMenu.gf.RAddressRangeWriteEd(QuickRaceMenu.h_ar_n64_pitch);
-        _ = mem.write_unsafe(@intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
-        _ = mem.write_unsafe(@intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
+        _ = apih.RAddressRangeWrite(QuickRaceMenu.gf, handle, @intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
+        _ = apih.RAddressRangeWrite(QuickRaceMenu.gf, handle, @intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
     } else {
-        QuickRaceMenu.gf.RAddressRangeRestore(QuickRaceMenu.h_ar_n64_pitch);
+        QuickRaceMenu.gf.RAddressRangeRestore(handle);
     }
 }
 

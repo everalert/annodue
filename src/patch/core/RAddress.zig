@@ -169,8 +169,8 @@ const RangeManager = struct {
 
         if (self.RangeWriteSt(handle)) {
             defer self.RangeWriteEd(handle);
-            const memo_st = range.Address;
-            const memo_ed = range.AddressEnd;
+            const memo_st = range.Address - RACER_IMAGE_BASE;
+            const memo_ed = range.AddressEnd - RACER_IMAGE_BASE;
             @memcpy(@as([*]u8, @ptrFromInt(range.Address)), self.GameMemory[memo_st..memo_ed]);
         }
 
@@ -187,8 +187,8 @@ const RangeManager = struct {
 
         if (self.RangeWriteSt(handle)) {
             defer self.RangeWriteEd(handle);
-            const memo_st = range.Address;
-            const memo_ed = range.AddressEnd;
+            const memo_st = range.Address - RACER_IMAGE_BASE;
+            const memo_ed = range.AddressEnd - RACER_IMAGE_BASE;
             @memcpy(@as([*]u8, @ptrFromInt(range.Address)), self.GameMemory[memo_st..memo_ed]);
         }
     }

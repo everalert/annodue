@@ -18,7 +18,7 @@ const ASettingSent = @import("ASettings.zig").ASettingSent;
 const ASetting = @import("ASettings.zig").Setting;
 const ASettingSection = @import("ASettings.zig").Section;
 const GDrawLayer = @import("GDraw.zig").GDrawLayer;
-const RAddressHandle = @import("RAddress.zig").AddressHandleOpaque;
+const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
@@ -32,8 +32,6 @@ pub const HangState = r.Entity.Hang.HangMenuScreen;
 
 pub const GLOBAL_STATE_VERSION = 10;
 
-// TODO: move all references to patch_memory to use internal allocator; add
-// allocator interface to GlobalFunction
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
 // TODO: add index of currently consumed loaded tga IDs, since they are arbitrarily assigned
 //   also, some kind of interface plugins can use to avoid clashes

@@ -1,6 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+const api = @import("api.zig");
+
 const GlobalFn = @import("../../core/SharedDef.zig").GlobalFunction;
 
 //------------------------------------------------------------------------------
@@ -25,9 +27,8 @@ pub inline fn AMemoryGetTemporaryZeroT(gf: *GlobalFn, comptime T: type) ?*T {
 //------------------------------------------------------------------------------
 // RAddress
 
-// TODO: migrate api defs to libannodue and import this def instead of redefining it here
-pub const RAddressHandle = u32;
-pub const RADDRESS_HANDLE_NULL = 0;
+pub const RAddressHandle = api.RAddressHandle;
+pub const RADDRESS_HANDLE_NULL = api.RADDRESS_HANDLE_NULL;
 
 /// returns `true` if range was reserved and its handle written to @handle_out
 pub fn RAddressRangeReserveIfAvailable(gf: *GlobalFn, addr_st: u32, addr_ed: u32) RAddressHandle {

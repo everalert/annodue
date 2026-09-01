@@ -43,9 +43,8 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-// FIXME: import from libannodue api (needs: impl migration to libannodue), also
-//  import RADDRESS_HANDLE_NULL
-const RAddressHandle = @import("core/RAddress.zig").AddressHandleOpaque;
+const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
+const RADDRESS_HANDLE_NULL = @import("util/api/api.zig").RADDRESS_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_qol", "annodue/plugin/plugin_qol.pdb");
@@ -519,7 +518,7 @@ fn PatchPodiumCutscene(enable: bool) void {
 /// experimental patch enabling the greater pitch input range used by N64
 fn PatchN64Pitch(enable: bool) void {
     const handle = QuickRaceMenu.h_ar_n64_pitch;
-    if (handle == 0) return; // FIXME: use RADDRESS_HANDLE_NULL
+    if (handle == RADDRESS_HANDLE_NULL) return;
 
     if (enable) {
         _ = apih.RAddressRangeWrite(QuickRaceMenu.gf, handle, @intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
@@ -1030,7 +1029,7 @@ const QuickRaceMenu = extern struct {
     var s_menu_track_order: [63:0]u8 = std.mem.zeroes([63:0]u8);
     var using_circuit_track_order: bool = false;
 
-    var h_ar_n64_pitch: RAddressHandle = 0; // FIXME: use RADDRESS_HANDLE_NULL
+    var h_ar_n64_pitch: RAddressHandle = RADDRESS_HANDLE_NULL;
     const ar_n64_pitch_st = @intFromPtr(ri.PITCH_SCALE_MAX);
     const ar_n64_pitch_ed = ar_n64_pitch_st + 8;
 

@@ -45,7 +45,7 @@ const Setting = @import("core/ASettings.zig").ASettingSent;
 
 // FIXME: import from libannodue api (needs: impl migration to libannodue), also
 //  import RADDRESS_HANDLE_NULL
-const RAddressHandle = @import("core/RAddress.zig").RangeHandleOpaque;
+const RAddressHandle = @import("core/RAddress.zig").AddressHandleOpaque;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_qol", "annodue/plugin/plugin_qol.pdb");

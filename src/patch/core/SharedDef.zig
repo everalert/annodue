@@ -18,7 +18,7 @@ const ASettingSent = @import("ASettings.zig").ASettingSent;
 const ASetting = @import("ASettings.zig").Setting;
 const ASettingSection = @import("ASettings.zig").Section;
 const GDrawLayer = @import("GDraw.zig").GDrawLayer;
-const RAddressRangeHandle = @import("RAddress.zig").RangeHandleOpaque;
+const RAddressHandle = @import("RAddress.zig").AddressHandleOpaque;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
@@ -131,13 +131,13 @@ pub const GlobalFunction = extern struct {
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources
     RAddressRangeAvailable: *const fn (address: u32, end: u32) callconv(.C) bool,
-    RAddressRangeReserve: *const fn (address: u32, end: u32) callconv(.C) RAddressRangeHandle,
-    RAddressRangeRelease: *const fn (handle: RAddressRangeHandle) callconv(.C) void,
-    RAddressRangeRestore: *const fn (handle: RAddressRangeHandle) callconv(.C) void,
+    RAddressRangeReserve: *const fn (address: u32, end: u32) callconv(.C) RAddressHandle,
+    RAddressRangeRelease: *const fn (handle: RAddressHandle) callconv(.C) void,
+    RAddressRangeRestore: *const fn (handle: RAddressHandle) callconv(.C) void,
     RAddressRangeRead: *const fn (address: u32, end: u32, buf: ?[*]u8) callconv(.C) bool,
-    RAddressRangeWriteSt: *const fn (handle: RAddressRangeHandle) callconv(.C) bool,
-    RAddressRangeWriteEd: *const fn (handle: RAddressRangeHandle) callconv(.C) void,
-    RAddressRangeContainsRange: *const fn (handle: RAddressRangeHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool,
+    RAddressRangeWriteSt: *const fn (handle: RAddressHandle) callconv(.C) bool,
+    RAddressRangeWriteEd: *const fn (handle: RAddressHandle) callconv(.C) void,
+    RAddressRangeContainsRange: *const fn (handle: RAddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool,
     RTerrainRequest: *const fn (
         bit: u16,
         group: u16,

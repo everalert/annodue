@@ -20,7 +20,15 @@ const GetLastError = w32.foundation.GetLastError;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
-const mem = @import("../util/memory.zig");
+// FIXME: this will return OWNER_CORE_NULL outside of plugin execution context,
+//  which may happen in early stages of annodue init. in such cases, the address
+//  handle cannot be released by owner id and will only be released manually or
+//  by RAddress deinit. for now we can't avoid this in some cases because AHook
+//  is in a transitional state, but once annodue api init is moved outside of
+//  AHook then we will depend on the api foundation layer and should no longer
+//  accept null owners. also, the api should be setup to tell use the owner id
+//  directly, so we don't have to do this import at all
+const workingOwner = @import("AHook.zig").PluginState.workingOwner;
 
 const RACER_IMAGE_SIZE = @import("racer").Meta.IMAGE_SIZE;
 const RACER_IMAGE_BASE = @import("racer").Meta.IMAGE_BASE;
@@ -59,6 +67,7 @@ const RangeManager = struct {
     /// storage for original contents of an address range at reserve time
     GameMemory: []u8, // size: 0xAD0000
 
+    AddressCount: u24,
     AddressList: MultiArrayList(AddressRange),
     /// current address range open for writing. only one range can be writing at
     /// a time, to avoid page permission write conflicts
@@ -77,6 +86,7 @@ const RangeManager = struct {
         man.AddressWriting = AddressHandle.Zero;
         man.AddressList = .{};
         man.AddressList.ensureTotalCapacity(arena_perm, LIST_CAPACITY) catch return null;
+        man.AddressCount = 0;
 
         // reserve index 0 for null object
         const range_null = man.AddressList.addOneAssumeCapacity();
@@ -115,6 +125,12 @@ const RangeManager = struct {
         return self.GameMemory[memo_st..memo_ed];
     }
 
+    fn RangeIndexHandle(self: *const RangeManager, index: u24) AddressHandle {
+        if (index >= self.AddressList.len) return AddressHandle.Zero;
+        if (!self.AddressList.items(.Flags)[index].Used) return AddressHandle.Zero;
+        return AddressHandle.Init(index, self.AddressList.items(.Generation)[index]);
+    }
+
     // TODO: merge with RangeReserve? output handle via ptr and return bool whether
     //  the range was actually reserved
     // NOTE: does not check for slot availability, because the plan is to simply
@@ -143,7 +159,7 @@ const RangeManager = struct {
         return true;
     }
 
-    pub fn RangeReserve(self: *RangeManager, addr_st: u24, addr_ed: u24) AddressHandle {
+    pub fn RangeReserve(self: *RangeManager, addr_st: u24, addr_ed: u24, owner: u16) AddressHandle {
         if (!RangeValid(addr_st, addr_ed)) return AddressHandle.Zero;
         if (!self.RangeAvailable(addr_st, addr_ed)) return AddressHandle.Zero;
 
@@ -166,9 +182,12 @@ const RangeManager = struct {
         range.AddressSt = addr_st;
         range.AddressEd = addr_ed;
         range.Flags = .{ .Used = true, .Section = RangeSection(addr_st, addr_ed).? };
+        range.Owner = owner;
         self.AddressList.set(range_i, range);
 
-        mem.read_bytes(addr_st, self.RangeGameMemorySlice(&range));
+        self.AddressCount += 1;
+
+        @memcpy(self.RangeGameMemorySlice(&range), @as([*]u8, @ptrFromInt(addr_st)));
 
         return AddressHandle.Init(@truncate(range_i), range.Generation);
     }
@@ -186,6 +205,20 @@ const RangeManager = struct {
 
         range.Flags.Used = false;
         self.AddressList.set(handle.Index, range);
+
+        self.AddressCount -= 1;
+    }
+
+    pub fn RangeReleaseOwner(self: *RangeManager, owner: u16) void {
+        assert(self.AddressWriting.IsNull());
+
+        const owners = self.AddressList.items(.Owner);
+        const flags = self.AddressList.items(.Flags);
+        for (owners, flags, 0..) |o, f, i| {
+            if (owner != o or !f.Used) continue;
+            const handle = self.RangeIndexHandle(@truncate(i));
+            self.RangeRelease(handle);
+        }
     }
 
     /// return original contents to memory range
@@ -205,7 +238,7 @@ const RangeManager = struct {
 
         if (!RangeValid(addr_st, addr_ed)) return false;
 
-        mem.read_bytes(addr_st, buffer);
+        @memcpy(buffer, @as([*]u8, @ptrFromInt(addr_st)));
         return true;
     }
 
@@ -237,12 +270,14 @@ const RangeManager = struct {
         var protect: PAGE_PROTECTION_FLAGS = undefined;
         const range_len = range.AddressEd - range.AddressSt;
         const range_protect = RACER_SECTIONS[range.Flags.Section].flags;
-        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, range_protect, &protect)) return;
+        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, range_protect, &protect))
+            return;
 
         self.AddressWriting = AddressHandle.Zero;
     }
 
     pub fn RangeContainsRange(self: *RangeManager, handle: AddressHandle, addr_st: u24, addr_ed: u24) bool {
+        if (!RangeValid(addr_st, addr_ed)) return false;
         const range = self.RangeGet(handle) orelse return false;
         return addr_st >= range.AddressSt and addr_ed <= range.AddressEd;
     }
@@ -262,39 +297,37 @@ const AddressRange = struct {
     Generation: u8,
     AddressSt: u24,
     AddressEd: u24,
-    Flags: Flags,
+    Flags: AddressFlags,
     Owner: u16,
-
-    const Flags = packed struct(u8) {
-        Used: bool,
-        Section: u2,
-        _: u5 = 0,
-    };
-
-    const Handle = packed struct(u32) {
-        Index: u24,
-        Generation: u8,
-
-        const MAX_GENERATION = std.math.maxInt(u8);
-
-        // TODO: decl literal, after zig version upgrade
-        const Zero = Handle{ .Index = 0, .Generation = 0 };
-
-        pub fn Init(idx: u24, gen: u8) Handle {
-            return .{ .Index = idx, .Generation = gen };
-        }
-
-        pub fn Eql(handle: Handle, other: Handle) bool {
-            return @as(u32, @bitCast(handle)) == @as(u32, @bitCast(other));
-        }
-
-        pub fn IsNull(handle: Handle) bool {
-            return handle.Eql(Zero);
-        }
-    };
 };
 
-const AddressHandle = AddressRange.Handle;
+const AddressFlags = packed struct(u8) {
+    Used: bool,
+    Section: u2,
+    _: u5 = 0,
+};
+
+const AddressHandle = packed struct(u32) {
+    Index: u24,
+    Generation: u8,
+
+    const MAX_GENERATION = std.math.maxInt(u8);
+
+    // TODO: decl literal, after zig version upgrade
+    const Zero = AddressHandle{ .Index = 0, .Generation = 0 };
+
+    pub fn Init(idx: u24, gen: u8) AddressHandle {
+        return .{ .Index = idx, .Generation = gen };
+    }
+
+    pub fn Eql(handle: AddressHandle, other: AddressHandle) bool {
+        return @as(u32, @bitCast(handle)) == @as(u32, @bitCast(other));
+    }
+
+    pub fn IsNull(handle: AddressHandle) bool {
+        return handle.Eql(Zero);
+    }
+};
 
 pub const AddressHandleOpaque = u32;
 pub const ADDRESS_HANDLE_OPAQUE_NULL: AddressHandleOpaque = 0;
@@ -342,7 +375,7 @@ pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
     const handle = AddressState.Manager.AddressWriting;
     if (!handle.IsNull()) {
-        const range = AddressState.Manager.RangeGet(AddressState.Manager.AddressWriting) orelse panic(
+        const range = AddressState.Manager.RangeGet(handle) orelse panic(
             "RAddress: range handle {X:0>8} closed with write mode left dangling",
             .{@as(AddressHandleOpaque, @bitCast(handle))},
         );
@@ -352,6 +385,10 @@ pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
             .{ range.AddressSt, range.AddressEd },
         );
     }
+}
+
+pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
+    AddressState.Manager.RangeReleaseOwner(owner);
 }
 
 //------------------------------------------------------------------------------
@@ -366,7 +403,7 @@ pub fn RAddressRangeAvailable(addr_st: u32, addr_ed: u32) callconv(.C) bool {
 pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHandleOpaque {
     assert(AddressState.Initialized);
     assert(RangeManager.RangeValid(addr_st, addr_ed));
-    const handle = AddressState.Manager.RangeReserve(@truncate(addr_st), @truncate(addr_ed));
+    const handle = AddressState.Manager.RangeReserve(@truncate(addr_st), @truncate(addr_ed), workingOwner());
     if (handle.IsNull()) panic(
         "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} cannot be reserved",
         .{ addr_st, addr_ed },

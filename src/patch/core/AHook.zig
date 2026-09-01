@@ -215,14 +215,12 @@ pub const PluginState = struct {
     var plugins_toast_count: u32 = 0;
     var plugins_reloader: HotReloadPlugin = undefined;
 
-    var owners_core: u16 = 0x0000;
-    var owners_user: u16 = 0x0800;
-    // FIXME: this could be ref'd outside of callback context, in which case it
-    //  will contain the most recent context's owner, not the owner of whoever
-    //  is making the ref. for now, should make sure to restore it to some "null"
-    //  value at the end of every plugin callback context, or track whether we
-    //  are in a plugin context and return a special value if not
+    const OWNER_CORE_NULL = 0x0000;
+    const OWNER_USER_NULL = 0x0800;
+    var owners_core: u16 = OWNER_CORE_NULL;
+    var owners_user: u16 = OWNER_USER_NULL;
     var working_owner: u16 = 0;
+    var b_owner_context: bool = false;
 
     var h_s_hot_reload: ?SettingHandle = null;
     var s_hot_reload: bool = true;
@@ -235,11 +233,11 @@ pub const PluginState = struct {
     const HotReloadPlugin = hot_reload.HotReload(HotReloadPluginHandle, PLUGIN_MAX);
 
     pub fn workingOwner() u16 {
-        return working_owner;
+        return if (b_owner_context) working_owner else OWNER_CORE_NULL;
     }
 
     pub fn workingOwnerIsSystem() bool {
-        return working_owner < 0x0800;
+        return workingOwner() < OWNER_USER_NULL;
     }
 
     /// callback for Plugin hot_reload impl; the file given is assumed to be newer
@@ -346,11 +344,14 @@ pub const PluginState = struct {
             return result;
         }
 
-        p.OwnerId = PluginState.owners_user;
+        PluginState.b_owner_context = true;
+        defer PluginState.b_owner_context = false;
+
         PluginState.owners_user += 1;
-        PluginState.working_owner = p.OwnerId;
+        PluginState.working_owner = PluginState.owners_user;
+        p.OwnerId = PluginState.owners_user;
         p.OnInit.?(GLOBAL_FUNCTION);
-        PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
+        PluginFnOnPluginInit(.OnPluginInitA, PluginState.workingOwner());
         if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_FUNCTION);
         p.Initialized = true;
 
@@ -362,12 +363,15 @@ pub const PluginState = struct {
 pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
         fn callback() void {
+            PluginState.b_owner_context = true;
+            defer PluginState.b_owner_context = false;
+
             for (PluginState.core.items) |p| {
                 PluginState.working_owner = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| {
                     f(GLOBAL_FUNCTION);
                     switch (ex) {
-                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.workingOwner()),
                         else => {},
                     }
                 }
@@ -379,7 +383,7 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
                 if (@field(p, @tagName(ex))) |f| {
                     f(GLOBAL_FUNCTION);
                     switch (ex) {
-                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.workingOwner()),
                         else => {},
                     }
                 }
@@ -391,15 +395,18 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
 
 //// TODO: generalize for OnPluginInit etc.
 //fn PluginFnOnPluginDeinit(owner: u16) void {
+//    PluginState.b_owner_context = true;
+//    defer PluginState.b_owner_context = false;
+
 //    for (PluginState.core.items) |p| {
 //        if (p.OwnerId == owner) continue;
 //        PluginState.working_owner = p.OwnerId;
-//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(PluginState.workingOwner());
 //    }
 //    for (PluginState.plugin.items) |p| {
 //        if (p.OwnerId == owner) continue;
 //        PluginState.working_owner = p.OwnerId;
-//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
+//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(PluginState.workingOwner());
 //    }
 //}
 pub fn PluginFnOnPluginInit(comptime ex: PluginExportFn, owner: u16) void {
@@ -407,16 +414,19 @@ pub fn PluginFnOnPluginInit(comptime ex: PluginExportFn, owner: u16) void {
         ex != .OnPluginInitLateA and
         ex != .OnPluginDeinitA) @compileError("invalid plugin export fn");
 
+    PluginState.b_owner_context = true;
+    defer PluginState.b_owner_context = false;
+
     for (PluginState.core.items) |p| {
         if (p.OwnerId == owner) continue;
         PluginState.working_owner = p.OwnerId;
-        if (@field(p, @tagName(ex))) |f| f(owner);
+        if (@field(p, @tagName(ex))) |f| f(PluginState.workingOwner());
     }
     // TODO: system to allow any plugin to act on any other plugin's init-ing safely
     //for (PluginState.plugin.items) |p| {
     //    if (p.OwnerId == owner) continue;
     //    PluginState.working_owner = p.OwnerId;
-    //    if (@field(p, @tagName(ex))) |f| f(owner);
+    //    if (@field(p, @tagName(ex))) |f| f(PluginState.workingOwner());
     //}
 }
 
@@ -452,8 +462,12 @@ var patch_buf: []u8 = &.{};
 var patch_off: u32 = 0;
 
 pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
+    PluginState.b_owner_context = true;
+    defer PluginState.b_owner_context = false;
     defer assert(PluginState.plugins_count == std.mem.count(bool, &PluginState.plugins_used, &.{true}));
     defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
+    defer assert(PluginState.owners_core < PluginState.OWNER_USER_NULL);
+    //defer assert(PluginState.owners_user < 0x10000); // TODO: ensure owners_user can't overflow
 
     PluginState.arena_perm = arena_perm;
     PluginState.arena_temp = arena_temp;
@@ -496,11 +510,11 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
             }
         }
         if (this_p) |plug| {
-            plug.OwnerId = PluginState.owners_core;
             PluginState.owners_core += 1;
-            PluginState.working_owner = plug.OwnerId;
+            PluginState.working_owner = PluginState.owners_core;
+            plug.OwnerId = PluginState.owners_core;
             plug.OnInit.?(GLOBAL_FUNCTION);
-            PluginFnOnPluginInit(.OnPluginInitA, PluginState.working_owner);
+            PluginFnOnPluginInit(.OnPluginInitA, PluginState.workingOwner());
         }
     }
 

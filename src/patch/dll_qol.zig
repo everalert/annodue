@@ -1500,12 +1500,10 @@ export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnDeinit(gf: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     QuickRaceMenu.FpsTimer.End();
     QuickRaceMenu.close();
     PatchN64Pitch(false);
-    // FIXME: remove, will be automatic once RAddress fully implemented
-    gf.RAddressRangeRelease(QuickRaceMenu.h_ar_n64_pitch);
 
     PatchJinnReesoCheat(false);
     PatchCyYungaCheat(false);

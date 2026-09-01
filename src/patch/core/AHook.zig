@@ -217,6 +217,11 @@ pub const PluginState = struct {
 
     var owners_core: u16 = 0x0000;
     var owners_user: u16 = 0x0800;
+    // FIXME: this could be ref'd outside of callback context, in which case it
+    //  will contain the most recent context's owner, not the owner of whoever
+    //  is making the ref. for now, should make sure to restore it to some "null"
+    //  value at the end of every plugin callback context, or track whether we
+    //  are in a plugin context and return a special value if not
     var working_owner: u16 = 0;
 
     var h_s_hot_reload: ?SettingHandle = null;

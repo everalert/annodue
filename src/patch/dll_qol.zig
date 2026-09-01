@@ -43,7 +43,9 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-const AddressRangeHandle = @import("core/RAddress.zig").RangeHandleOpaque;
+// FIXME: import from libannodue api (needs: impl migration to libannodue), also
+//  import RADDRESS_HANDLE_NULL
+const RAddressHandle = @import("core/RAddress.zig").RangeHandleOpaque;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_qol", "annodue/plugin/plugin_qol.pdb");
@@ -517,6 +519,8 @@ fn PatchPodiumCutscene(enable: bool) void {
 /// experimental patch enabling the greater pitch input range used by N64
 fn PatchN64Pitch(enable: bool) void {
     const handle = QuickRaceMenu.h_ar_n64_pitch;
+    if (handle == 0) return; // FIXME: use RADDRESS_HANDLE_NULL
+
     if (enable) {
         _ = apih.RAddressRangeWrite(QuickRaceMenu.gf, handle, @intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
         _ = apih.RAddressRangeWrite(QuickRaceMenu.gf, handle, @intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
@@ -1026,7 +1030,7 @@ const QuickRaceMenu = extern struct {
     var s_menu_track_order: [63:0]u8 = std.mem.zeroes([63:0]u8);
     var using_circuit_track_order: bool = false;
 
-    var h_ar_n64_pitch: AddressRangeHandle = 0;
+    var h_ar_n64_pitch: RAddressHandle = 0; // FIXME: use RADDRESS_HANDLE_NULL
     const ar_n64_pitch_st = @intFromPtr(ri.PITCH_SCALE_MAX);
     const ar_n64_pitch_ed = ar_n64_pitch_st + 8;
 
@@ -1464,7 +1468,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // NOTE: keep at top
     QuickRaceMenu.gf = gf;
 
-    _ = apih.RAddressRangeReserveIfAvailable(gf, QuickRaceMenu.ar_n64_pitch_st, QuickRaceMenu.ar_n64_pitch_ed, &QuickRaceMenu.h_ar_n64_pitch);
+    QuickRaceMenu.h_ar_n64_pitch = apih.RAddressRangeReserveIfAvailable(gf, QuickRaceMenu.ar_n64_pitch_st, QuickRaceMenu.ar_n64_pitch_ed);
 
     // FIXME: handle nullptr cases properly
     nav_asm = apih.AMemoryGetPermanentT(gf, [96]u8) orelse @panic("QOL(nav_asm): API OutOfMemory");

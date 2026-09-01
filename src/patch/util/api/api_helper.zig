@@ -26,16 +26,16 @@ pub inline fn AMemoryGetTemporaryZeroT(gf: *GlobalFn, comptime T: type) ?*T {
 // RAddress
 
 // TODO: migrate api defs to libannodue and import this def instead of redefining it here
-const RAddressRangeHandle = u32;
+pub const RAddressHandle = u32;
+pub const RADDRESS_HANDLE_NULL = 0;
 
 /// returns `true` if range was reserved and its handle written to @handle_out
-pub fn RAddressRangeReserveIfAvailable(gf: *GlobalFn, addr_st: u32, addr_ed: u32, handle_out: *RAddressRangeHandle) bool {
-    if (!gf.RAddressRangeAvailable(addr_st, addr_ed)) return false;
-    handle_out.* = gf.RAddressRangeReserve(addr_st, addr_ed);
-    return true;
+pub fn RAddressRangeReserveIfAvailable(gf: *GlobalFn, addr_st: u32, addr_ed: u32) RAddressHandle {
+    const b_available = gf.RAddressRangeAvailable(addr_st, addr_ed);
+    return if (b_available) gf.RAddressRangeReserve(addr_st, addr_ed) else RADDRESS_HANDLE_NULL;
 }
 
-pub fn RAddressRangeWrite(gf: *GlobalFn, handle: RAddressRangeHandle, addr: u32, comptime T: type, val: T) bool {
+pub fn RAddressRangeWrite(gf: *GlobalFn, handle: RAddressHandle, addr: u32, comptime T: type, val: T) bool {
     assert(gf.RAddressRangeContainsRange(handle, addr, addr + @sizeOf(T)));
     if (!gf.RAddressRangeWriteSt(handle)) return false;
     defer gf.RAddressRangeWriteEd(handle);
@@ -45,7 +45,7 @@ pub fn RAddressRangeWrite(gf: *GlobalFn, handle: RAddressRangeHandle, addr: u32,
     return true;
 }
 
-pub fn RAddressRangeWriteBytes(gf: *GlobalFn, handle: RAddressRangeHandle, addr: u32, buf: []const u8) bool {
+pub fn RAddressRangeWriteBytes(gf: *GlobalFn, handle: RAddressHandle, addr: u32, buf: []const u8) bool {
     assert(gf.RAddressRangeContainsRange(handle, addr, addr + buf.len));
     if (!gf.RAddressRangeWriteSt(handle)) return false;
     defer gf.RAddressRangeWriteEd(handle);

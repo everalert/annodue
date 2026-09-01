@@ -48,58 +48,71 @@ const RACER_SECTIONS = blk: {
 // TODO: range entries need to be associated with a plugin, so they can auto-release
 //  when the plugin deinits. also: impl the auto-release
 // TODO: clean up util/memory and migrate to a "real" libannodue location/section
+// TODO: ?? consider bitfield for tracking reserved memory as an optimization over
+//  searching the whole reserve list for 1D collisions; probably not a perf concern
+//  right now, but could be with a lot of live reservations
 
 const RangeManager = struct {
     ArenaPerm: Allocator,
     ArenaTemp: Allocator,
 
     /// storage for original contents of an address range at reserve time
-    GameMemory: []u8,
+    GameMemory: []u8, // size: 0xAD0000
 
     RangeList: MultiArrayList(Range),
-    RangeWriting: ?RangeHandle,
+    /// current address range open for writing. only one range can be writing at
+    /// a time, to avoid page permission write conflicts
+    RangeWriting: RangeHandle,
 
     // FIXME: idk but this is still 11K entries...
     const LIST_CAPACITY = RACER_IMAGE_SIZE / 1024;
+    const SIZE_MEMORY_GAME = RACER_IMAGE_SIZE;
 
     pub fn Init(arena_perm: Allocator, arena_temp: Allocator) ?RangeManager {
         var man: RangeManager = undefined;
+
         man.ArenaPerm = arena_perm;
         man.ArenaTemp = arena_temp;
-        man.GameMemory = arena_perm.alloc(u8, RACER_IMAGE_SIZE) catch return null;
+        man.GameMemory = arena_perm.alloc(u8, SIZE_MEMORY_GAME) catch return null;
+        man.RangeWriting = RangeHandle.Zero;
         man.RangeList = .{};
         man.RangeList.ensureTotalCapacity(arena_perm, LIST_CAPACITY) catch return null;
-        man.RangeWriting = null;
+
+        // reserve index 0 for null object
+        const range_null = man.RangeList.addOneAssumeCapacity();
+        man.RangeList.set(range_null, std.mem.zeroes(Range));
+
         return man;
     }
 
-    // NOTE: u32 so it can be be used to check full 32-bit address range
-    fn RangeValid(address: u32, end: u32) bool {
-        const b_section_ok = RangeSection(address, end) != null;
-        return (end > address) and b_section_ok;
+    fn HandleValid(self: *const RangeManager, handle: RangeHandle) bool {
+        if (handle.Index >= self.RangeList.len) return false;
+        const range = self.RangeList.get(handle.Index);
+        const b_gen_ok = handle.Generation == range.Generation;
+        const b_use_ok = range.Flags.Used; // always false for null object
+        return b_gen_ok and b_use_ok; // b_idx_ok implicit
     }
 
-    fn RangeSection(address: u32, end: u32) ?u2 {
+    // NOTE: u32 so it can be be used to check full 32-bit address range
+    fn RangeValid(addr_st: u32, addr_ed: u32) bool {
+        const b_section_ok = RangeSection(addr_st, addr_ed) != null;
+        return (addr_ed > addr_st) and b_section_ok;
+    }
+
+    fn RangeSection(addr_st: u32, addr_ed: u32) ?u2 {
         for (RACER_SECTIONS, 0..) |section, i|
-            if (address >= section.addr_st and end <= section.addr_ed) return @intCast(i);
+            if (addr_st >= section.addr_st and addr_ed <= section.addr_ed) return @intCast(i);
         return null;
     }
 
-    fn RangeIndex(self: *const RangeManager, handle: RangeHandle) ?u32 {
-        const slice = self.RangeList.slice();
-        const generation = slice.items(.Generation);
-        const address_st = slice.items(.Address);
-
-        for (generation, address_st, 0..) |gen, st, i| {
-            if (st == handle.Address and gen == handle.Generation) return i;
-        }
-
-        return null; // handle doesn't exist
+    fn RangeGet(self: *const RangeManager, handle: RangeHandle) ?Range {
+        return if (self.HandleValid(handle)) self.RangeList.get(handle.Index) else null;
     }
 
-    fn RangeGet(self: *const RangeManager, handle: RangeHandle) ?Range {
-        const index = self.RangeIndex(handle) orelse return null;
-        return self.RangeList.get(index);
+    fn RangeGameMemorySlice(self: *const RangeManager, range: *const Range) []u8 {
+        const memo_st = range.AddressSt - RACER_IMAGE_BASE;
+        const memo_ed = range.AddressEd - RACER_IMAGE_BASE;
+        return self.GameMemory[memo_st..memo_ed];
     }
 
     // TODO: merge with RangeReserve? output handle via ptr and return bool whether
@@ -108,19 +121,20 @@ const RangeManager = struct {
     //  not have that be an issue
     /// checks whether a range is able to be reserved (it doesn't collide with
     /// existing reserved ranges)
-    pub fn RangeAvailable(self: *const RangeManager, address: u24, end: u24) bool {
-        if (!RangeValid(address, end)) return false;
+    pub fn RangeAvailable(self: *const RangeManager, addr_st: u24, addr_ed: u24) bool {
+        if (!RangeValid(addr_st, addr_ed)) return false;
 
         const slice = self.RangeList.slice();
-        const address_st = slice.items(.Address);
-        const address_ed = slice.items(.AddressEnd);
+        const address_st = slice.items(.AddressSt);
+        const address_ed = slice.items(.AddressEd);
+        const flags = slice.items(.Flags);
 
-        for (address_st, address_ed) |st, ed| {
-            if (st == 0) continue; // slot not in use
-            if (CollisionStrict1D(u24, address, end, st, ed)) {
+        for (address_st, address_ed, flags) |st, ed, f| {
+            if (!f.Used) continue;
+            if (CollisionStrict1D(u24, addr_st, addr_ed, st, ed)) {
                 std.log.warn(
                     "RangeAvailable: range {X:0>6}..{X:0>6} collided with {X:0>6}..{X:0>6}",
-                    .{ address, end, st, ed },
+                    .{ addr_st, addr_ed, st, ed },
                 );
                 return false;
             }
@@ -129,17 +143,17 @@ const RangeManager = struct {
         return true;
     }
 
-    pub fn RangeReserve(self: *RangeManager, address: u24, end: u24) ?RangeHandle {
-        if (!RangeValid(address, end)) return null;
-        if (!self.RangeAvailable(address, end)) return null;
+    pub fn RangeReserve(self: *RangeManager, addr_st: u24, addr_ed: u24) RangeHandle {
+        if (!RangeValid(addr_st, addr_ed)) return RangeHandle.Zero;
+        if (!self.RangeAvailable(addr_st, addr_ed)) return RangeHandle.Zero;
 
         const range_i: u32 = blk: {
             const slice = self.RangeList.slice();
             const generation = slice.items(.Generation);
-            const address_st = slice.items(.Address);
+            const flags = slice.items(.Flags);
 
-            for (generation, address_st, 0..) |gen, st, i| {
-                if (RangeHandle.Available(st, gen)) break :blk i;
+            for (generation[1..], flags[1..], 1..) |gen, f, i| {
+                if (gen < RangeHandle.MAX_GENERATION and !f.Used) break :blk i;
             }
 
             const i = self.RangeList.addOneAssumeCapacity();
@@ -148,57 +162,50 @@ const RangeManager = struct {
         };
 
         var range = self.RangeList.get(range_i);
-        range.Address = address;
-        range.AddressEnd = end;
-        range.Flags = .{ .Section = RangeSection(address, end).? };
+        range.Generation += 1;
+        range.AddressSt = addr_st;
+        range.AddressEd = addr_ed;
+        range.Flags = .{ .Used = true, .Section = RangeSection(addr_st, addr_ed).? };
         self.RangeList.set(range_i, range);
 
-        const memo_st = address - RACER_IMAGE_BASE;
-        const memo_ed = end - RACER_IMAGE_BASE;
-        mem.read_bytes(address, self.GameMemory[memo_st..memo_ed]);
+        mem.read_bytes(addr_st, self.RangeGameMemorySlice(&range));
 
-        return RangeHandle.Init(range.Address, range.Generation);
+        return RangeHandle.Init(@truncate(range_i), range.Generation);
     }
 
     /// release an address range, restoring its original contents
     pub fn RangeRelease(self: *RangeManager, handle: RangeHandle) void {
-        assert(self.RangeWriting == null);
+        assert(self.RangeWriting.IsNull());
 
-        const range_i = self.RangeIndex(handle) orelse return;
-        var range = self.RangeList.get(range_i);
+        var range = self.RangeGet(handle) orelse return;
 
         if (self.RangeWriteSt(handle)) {
             defer self.RangeWriteEd(handle);
-            const memo_st = range.Address - RACER_IMAGE_BASE;
-            const memo_ed = range.AddressEnd - RACER_IMAGE_BASE;
-            @memcpy(@as([*]u8, @ptrFromInt(range.Address)), self.GameMemory[memo_st..memo_ed]);
+            @memcpy(@as([*]u8, @ptrFromInt(range.AddressSt)), self.RangeGameMemorySlice(&range));
         }
 
-        range.Address = 0;
-        range.Generation += 1;
-        self.RangeList.set(range_i, range);
+        range.Flags.Used = false;
+        self.RangeList.set(handle.Index, range);
     }
 
     /// return original contents to memory range
     pub fn RangeRestore(self: *RangeManager, handle: RangeHandle) void {
-        assert(self.RangeWriting == null);
+        assert(self.RangeWriting.IsNull());
 
         const range = self.RangeGet(handle) orelse return;
 
         if (self.RangeWriteSt(handle)) {
             defer self.RangeWriteEd(handle);
-            const memo_st = range.Address - RACER_IMAGE_BASE;
-            const memo_ed = range.AddressEnd - RACER_IMAGE_BASE;
-            @memcpy(@as([*]u8, @ptrFromInt(range.Address)), self.GameMemory[memo_st..memo_ed]);
+            @memcpy(@as([*]u8, @ptrFromInt(range.AddressSt)), self.RangeGameMemorySlice(&range));
         }
     }
 
-    pub fn RangeRead(address: u24, end: u24, buffer: []u8) bool {
-        assert(end - address == buffer.len);
+    pub fn RangeRead(addr_st: u24, addr_ed: u24, buffer: []u8) bool {
+        assert(addr_ed - addr_st == buffer.len);
 
-        if (!RangeValid(address, end)) return false;
+        if (!RangeValid(addr_st, addr_ed)) return false;
 
-        mem.read_bytes(address, buffer);
+        mem.read_bytes(addr_st, buffer);
         return true;
     }
 
@@ -208,13 +215,13 @@ const RangeManager = struct {
     ///  - close the range by end of plugin callback scope
     ///  - not have any range open during range reserve, release or restore operations
     pub fn RangeWriteSt(self: *RangeManager, handle: RangeHandle) bool {
-        if (self.RangeWriting) |_| return false; // already writing
+        if (!self.RangeWriting.IsNull()) return false; // already writing
 
         const range = self.RangeGet(handle) orelse return false; // handle invalid
 
         var protect: PAGE_PROTECTION_FLAGS = undefined;
-        const range_len = range.AddressEnd - range.Address;
-        if (FALSE == VirtualProtect(@ptrFromInt(range.Address), range_len, PAGE_EXECUTE_READWRITE, &protect))
+        const range_len = range.AddressEd - range.AddressSt;
+        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, PAGE_EXECUTE_READWRITE, &protect))
             return false;
 
         self.RangeWriting = handle;
@@ -223,21 +230,21 @@ const RangeManager = struct {
 
     /// closes an address range for writing and restores its normal permissions.
     pub fn RangeWriteEd(self: *RangeManager, handle: RangeHandle) void {
-        if (self.RangeWriting == null or !handle.Eql(self.RangeWriting.?)) return; // handle not writing
+        if (self.RangeWriting.IsNull() or !handle.Eql(self.RangeWriting)) return; // handle not writing
 
         const range = self.RangeGet(handle) orelse return; // handle invalid
 
         var protect: PAGE_PROTECTION_FLAGS = undefined;
-        const range_len = range.AddressEnd - range.Address;
+        const range_len = range.AddressEd - range.AddressSt;
         const range_protect = RACER_SECTIONS[range.Flags.Section].flags;
-        if (FALSE == VirtualProtect(@ptrFromInt(range.Address), range_len, range_protect, &protect)) return;
+        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, range_protect, &protect)) return;
 
-        self.RangeWriting = null;
+        self.RangeWriting = RangeHandle.Zero;
     }
 
     pub fn RangeContainsRange(self: *RangeManager, handle: RangeHandle, addr_st: u24, addr_ed: u24) bool {
         const range = self.RangeGet(handle) orelse return false;
-        return addr_st >= range.Address and addr_ed <= range.AddressEnd;
+        return addr_st >= range.AddressSt and addr_ed <= range.AddressEd;
     }
 };
 
@@ -251,31 +258,38 @@ pub fn Init(arena_perm: Allocator, arena_temp: Allocator) void {
     AddressState.Initialized = true;
 }
 
-const Range = packed struct {
-    Address: u24,
-    AddressEnd: u24,
+const Range = struct {
     Generation: u8,
+    AddressSt: u24,
+    AddressEd: u24,
     Flags: Flags,
+    Owner: u16,
 
     const Flags = packed struct(u8) {
+        Used: bool,
         Section: u2,
-        _: u6 = 0,
+        _: u5 = 0,
     };
 
     const Handle = packed struct(u32) {
-        Address: u24,
+        Index: u24,
         Generation: u8,
 
-        pub fn Init(addr: u24, gen: u8) Handle {
-            return .{ .Address = addr, .Generation = gen };
-        }
+        const MAX_GENERATION = std.math.maxInt(u8);
 
-        pub fn Available(addr: u24, gen: u8) bool {
-            return addr == 0 and gen < std.math.maxInt(@TypeOf(gen));
+        // TODO: decl literal, after zig version upgrade
+        const Zero = Handle{ .Index = 0, .Generation = 0 };
+
+        pub fn Init(idx: u24, gen: u8) Handle {
+            return .{ .Index = idx, .Generation = gen };
         }
 
         pub fn Eql(handle: Handle, other: Handle) bool {
-            return handle.Address == other.Address and handle.Generation == other.Generation;
+            return @as(u32, @bitCast(handle)) == @as(u32, @bitCast(other));
+        }
+
+        pub fn IsNull(handle: Handle) bool {
+            return handle.Eql(Zero);
         }
     };
 };
@@ -324,15 +338,16 @@ pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
-    if (AddressState.Manager.RangeWriting) |handle| {
-        const range = AddressState.Manager.RangeGet(handle) orelse panic(
+    const handle = AddressState.Manager.RangeWriting;
+    if (!handle.IsNull()) {
+        const range = AddressState.Manager.RangeGet(AddressState.Manager.RangeWriting) orelse panic(
             "RAddress: range handle {X:0>8} closed with write mode left dangling",
             .{@as(RangeHandleOpaque, @bitCast(handle))},
         );
 
         panic(
             "RAddress: range {X:0>6}..{X:0>6} write mode left dangling",
-            .{ range.Address, range.AddressEnd },
+            .{ range.AddressSt, range.AddressEd },
         );
     }
 }
@@ -340,20 +355,21 @@ pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
 //------------------------------------------------------------------------------
 // annodue api
 
-pub fn RAddressRangeAvailable(address: u32, end: u32) callconv(.C) bool {
+pub fn RAddressRangeAvailable(addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(RangeManager.RangeValid(address, end));
-    return AddressState.Manager.RangeAvailable(@truncate(address), @truncate(end));
+    assert(RangeManager.RangeValid(addr_st, addr_ed));
+    return AddressState.Manager.RangeAvailable(@truncate(addr_st), @truncate(addr_ed));
 }
 
-pub fn RAddressRangeReserve(address: u32, end: u32) callconv(.C) RangeHandleOpaque {
+pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) RangeHandleOpaque {
     assert(AddressState.Initialized);
-    assert(RangeManager.RangeValid(address, end));
-    const handle = AddressState.Manager.RangeReserve(@truncate(address), @truncate(end));
-    if (handle) |h| return @bitCast(h) else panic(
+    assert(RangeManager.RangeValid(addr_st, addr_ed));
+    const handle = AddressState.Manager.RangeReserve(@truncate(addr_st), @truncate(addr_ed));
+    if (handle.IsNull()) panic(
         "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} cannot be reserved",
-        .{ address, end },
+        .{ addr_st, addr_ed },
     );
+    return @bitCast(handle);
 }
 
 pub fn RAddressRangeRelease(handle: RangeHandleOpaque) callconv(.C) void {
@@ -361,12 +377,12 @@ pub fn RAddressRangeRelease(handle: RangeHandleOpaque) callconv(.C) void {
     AddressState.Manager.RangeRelease(@bitCast(handle));
 }
 
-pub fn RAddressRangeRead(address: u32, end: u32, buffer: ?[*]u8) callconv(.C) bool {
+pub fn RAddressRangeRead(addr_st: u32, addr_ed: u32, buffer: ?[*]u8) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(RangeManager.RangeValid(address, end));
+    assert(RangeManager.RangeValid(addr_st, addr_ed));
     if (buffer == null) return false;
-    const buf_sl = buffer.?[0 .. end - address];
-    return RangeManager.RangeRead(@truncate(address), @truncate(end), buf_sl);
+    const buf_sl = buffer.?[0 .. addr_ed - addr_st];
+    return RangeManager.RangeRead(@truncate(addr_st), @truncate(addr_ed), buf_sl);
 }
 
 pub fn RAddressRangeWriteSt(handle: RangeHandleOpaque) callconv(.C) bool {

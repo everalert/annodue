@@ -16,27 +16,6 @@ const GetLastError = w32.foundation.GetLastError;
 
 const RoundIntUp = @import("../base/base_math.zig").RoundIntUp;
 
-const RACER_IMAGE_SIZE = @import("racer").Meta.IMAGE_SIZE;
-const RACER_IMAGE_BASE = @import("racer").Meta.IMAGE_BASE;
-const RACER_IMAGE_END = @import("racer").Meta.IMAGE_END;
-
-const RacerSectionInfo = struct {
-    addr_st: u32,
-    addr_ed: u32,
-    flags: PAGE_PROTECTION_FLAGS,
-};
-
-const RACER_SECTIONS = blk: {
-    const section_data = @import("racer").Meta.SECTIONS;
-    var sections: [section_data.len]RacerSectionInfo = undefined;
-    for (section_data, 0..) |s, i| sections[i] = .{
-        .addr_st = s[1],
-        .addr_ed = s[1] + s[2],
-        .flags = @bitCast(s[3]),
-    };
-    break :blk sections;
-};
-
 // TODO: RangeReleaseByRef to release with pre-knowledge of which AddressListNode
 //  and index the range is at, to prevent having to constantly iterate over
 //  the loop. also need RangeRefByIndex/RangeRefByHandle, and to update any
@@ -48,329 +27,375 @@ const RACER_SECTIONS = blk: {
 //  searching the whole reserve list for 1D collisions; probably not a perf concern
 //  right now, but could be with a lot of live reservations
 
-pub const RangeManager = struct {
-    ArenaPerm: Allocator,
-    ArenaTemp: Allocator,
+pub const AddressHandleOpaque = u32;
+pub const ADDRESS_HANDLE_OPAQUE_NULL: AddressHandleOpaque = 0;
 
-    /// storage for original contents of an address range at reserve time
-    GameMemory: []u8, // size: 0xAD0000
+pub const RangeManagerOpts = struct {
+    ListCapacity: comptime_int,
+    MemorySize: comptime_int = RACER_IMAGE_SIZE,
+    MemoryBase: comptime_int = RACER_IMAGE_BASE,
+    MemorySections: []const SectionInfo = &RACER_SECTIONS,
 
-    AddressCount: u24,
-    AddressCountMax: u24, // TODO: track peak count for profiling purposes
-
-    AddressListHead: *AddressListNode,
-    AddressListTail: *AddressListNode,
-    AddressListCount: u16,
-    AddressListCountMax: u16, // TODO: track peak count for profiling purposes
-    /// the highest index assignable given the currently set of list nodes
-    AddressIndexMax: u24,
-
-    /// current address range open for writing. only one range can be writing at
-    /// a time, to avoid page permission write conflicts
-    AddressWriting: AddressHandle,
-
-    const LIST_CAPACITY = 1024;
-    const LIST_CAPACITY_LAST = (RACER_IMAGE_SIZE + 1) % LIST_COUNT_MAX; // +1 to account for null object
-    const LIST_COUNT_MAX = RoundIntUp(comptime_int, RACER_IMAGE_SIZE + 1, LIST_CAPACITY) / LIST_CAPACITY;
-
-    pub fn Init(arena_perm: Allocator, arena_temp: Allocator) ?RangeManager {
-        const p_game_memory = arena_perm.alloc(u8, RACER_IMAGE_SIZE) catch return null;
-        const p_list_head = arena_perm.create(AddressListNode) catch return null;
-
-        var man = RangeManager{
-            .ArenaPerm = arena_perm,
-            .ArenaTemp = arena_temp,
-            .GameMemory = p_game_memory,
-            .AddressListHead = p_list_head,
-            .AddressListTail = p_list_head,
-            .AddressIndexMax = LIST_CAPACITY,
-            .AddressCount = 0, // FIXME: should this just count 1 and include the null obj?
-            .AddressCountMax = 0,
-            .AddressListCount = 1,
-            .AddressListCountMax = 1,
-            .AddressWriting = AddressHandle.Zero,
+    const RACER_IMAGE_SIZE = @import("racer").Meta.IMAGE_SIZE;
+    const RACER_IMAGE_BASE = @import("racer").Meta.IMAGE_BASE;
+    const RACER_SECTIONS = blk: {
+        const section_data = @import("racer").Meta.SECTIONS;
+        var sections: [section_data.len]SectionInfo = undefined;
+        for (section_data, 0..) |s, i| sections[i] = .{
+            .addr_st = s[1],
+            .addr_ed = s[1] + s[2],
+            .flags = @bitCast(s[3]),
         };
+        break :blk sections;
+    };
 
-        man.AddressListHead.* = .{
-            .Data = .{},
-            .Prev = null,
-            .Next = null,
-            .Head = man.AddressListHead,
+    pub fn RacerOpts(comptime list_capacity: comptime_int) RangeManagerOpts {
+        return RangeManagerOpts{
+            .ListCapacity = list_capacity,
+            .MemorySize = RACER_IMAGE_SIZE,
+            .MemoryBase = RACER_IMAGE_BASE,
+            .MemorySections = &RACER_SECTIONS,
         };
-        man.AddressListHead.Data.setCapacity(arena_perm, LIST_CAPACITY) catch return null;
-
-        // reserve index 0 for null object
-        const range_null = man.AddressListTail.Data.addOneAssumeCapacity();
-        man.AddressListTail.Data.set(range_null, std.mem.zeroes(AddressRange));
-
-        return man;
     }
+};
 
-    // TODO: complementary RangeNew that gets an unused slot and creates a new
-    //  slot and address list node as necessary
-    fn AddressListNodeNew(self: *RangeManager) ?*AddressListNode {
-        assert(self.AddressListCount < LIST_COUNT_MAX);
-        assert((self.AddressIndexMax + 1) % LIST_CAPACITY == 0);
+pub fn RangeManager(comptime opts: RangeManagerOpts) type {
+    return struct {
+        const RangeManagerT = @This();
 
-        const b_final_list = self.AddressListCount + 1 == LIST_COUNT_MAX;
-        const new_capacity: u24 = if (b_final_list) LIST_CAPACITY_LAST else LIST_CAPACITY;
+        ArenaPerm: Allocator,
+        ArenaTemp: Allocator,
 
-        var new_list = self.ArenaPerm.create(AddressListNode) catch return null;
-        new_list.Data = .{};
-        new_list.Data.setCapacity(self.ArenaPerm, new_capacity) catch return null;
-        new_list.Head = self.AddressListHead;
-        new_list.Prev = self.AddressListTail;
-        new_list.Next = null;
+        /// storage for original contents of an address range at reserve time
+        GameMemory: []u8,
 
-        self.AddressIndexMax += new_capacity;
-        self.AddressListTail.Next = new_list;
-        self.AddressListTail = new_list;
-        self.AddressListCount += 1;
+        AddressCount: u24,
+        AddressCountMax: u24, // TODO: track peak count for profiling purposes
 
-        return new_list;
-    }
+        AddressListHead: *AddressListNode,
+        AddressListTail: *AddressListNode,
+        AddressListCount: u16,
+        AddressListCountMax: u16, // TODO: track peak count for profiling purposes
+        /// the highest index assignable given the current set of list nodes
+        AddressIndexMax: u24,
 
-    fn HandleValid(self: *const RangeManager, handle: AddressHandle) bool {
-        if (handle.Index > self.AddressIndexMax) return false;
-        const range = self.RangeGetByIndex(handle.Index) orelse return false;
-        const b_gen_ok = handle.Generation == range.Generation;
-        const b_use_ok = range.Flags.Used; // always false for null object
-        return b_gen_ok and b_use_ok; // b_idx_ok implicit
-    }
+        /// current address range open for writing. only one range can be writing at
+        /// a time, to avoid page permission write conflicts
+        AddressWriting: AddressHandle,
 
-    fn RangeSection(addr_st: u32, addr_ed: u32) ?u2 {
-        for (RACER_SECTIONS, 0..) |section, i|
-            if (addr_st >= section.addr_st and addr_ed <= section.addr_ed) return @intCast(i);
-        return null;
-    }
+        const IMAGE_SIZE = opts.MemorySize;
+        const IMAGE_BASE = opts.MemoryBase;
+        const IMAGE_SECTIONS = opts.MemorySections;
 
-    // NOTE: u32 so it can be be used to check full 32-bit address range
-    pub fn RangeValid(addr_st: u32, addr_ed: u32) bool {
-        const b_section_ok = RangeSection(addr_st, addr_ed) != null;
-        return (addr_ed > addr_st) and b_section_ok;
-    }
+        const LIST_CAPACITY = opts.MemorySize;
+        const LIST_CAPACITY_LAST = (IMAGE_SIZE + 1) % LIST_COUNT_MAX; // +1 to account for null object
+        const LIST_COUNT_MAX = RoundIntUp(comptime_int, IMAGE_SIZE + 1, LIST_CAPACITY) / LIST_CAPACITY;
 
-    fn RangeRefByHandle(self: *const RangeManager, handle: AddressHandle) ?AddressRef {
-        const ref = self.RangeRefByIndex(handle.Index) orelse return null;
-        const real_handle = self.RangeHandleByRef(ref);
-        return if (handle.Eql(real_handle)) ref else null;
-    }
+        pub fn Init(arena_perm: Allocator, arena_temp: Allocator) ?RangeManagerT {
+            const p_game_memory = arena_perm.alloc(u8, IMAGE_SIZE) catch return null;
+            const p_list_head = arena_perm.create(AddressListNode) catch return null;
 
-    fn RangeRefByIndex(self: *const RangeManager, index: u24) ?AddressRef {
-        const list_index = index / LIST_CAPACITY;
-        const p_list = if (list_index + 1 == self.AddressListCount) self.AddressListTail else blk: {
-            var p = self.AddressListHead;
-            for (0..list_index) |_| p = p.Next orelse return null;
-            break :blk p;
-        };
-        return AddressRef{ .Node = p_list, .Index = index };
-    }
+            var man = RangeManagerT{
+                .ArenaPerm = arena_perm,
+                .ArenaTemp = arena_temp,
+                .GameMemory = p_game_memory,
+                .AddressListHead = p_list_head,
+                .AddressListTail = p_list_head,
+                .AddressIndexMax = LIST_CAPACITY,
+                .AddressCount = 0, // FIXME: should this just count 1 and include the null obj?
+                .AddressCountMax = 0,
+                .AddressListCount = 1,
+                .AddressListCountMax = 1,
+                .AddressWriting = AddressHandle.Zero,
+            };
 
-    fn RangeGetByRef(self: *const RangeManager, ref: AddressRef) ?AddressRange {
-        assert(ref.Node.Head == self.AddressListHead);
-        const range = ref.Node.Data.get(ref.Index % LIST_CAPACITY);
-        return if (range.Flags.Used) range else null;
-    }
+            man.AddressListHead.* = .{
+                .Data = .{},
+                .Prev = null,
+                .Next = null,
+                .Head = man.AddressListHead,
+            };
+            man.AddressListHead.Data.setCapacity(arena_perm, LIST_CAPACITY) catch return null;
 
-    fn RangeSetByRef(self: *const RangeManager, ref: AddressRef, data: AddressRange) void {
-        assert(ref.Node.Head == self.AddressListHead);
-        ref.Node.Data.set(ref.Index % LIST_CAPACITY, data);
-    }
+            // reserve index 0 for null object
+            const range_null = man.AddressListTail.Data.addOneAssumeCapacity();
+            man.AddressListTail.Data.set(range_null, std.mem.zeroes(AddressRange));
 
-    fn RangeGetByIndex(self: *const RangeManager, index: u24) ?AddressRange {
-        const ref = self.RangeRefByIndex(index) orelse return null;
-        return self.RangeGetByRef(ref);
-    }
-
-    pub fn RangeGetByHandle(self: *const RangeManager, handle: AddressHandle) ?AddressRange {
-        return if (self.HandleValid(handle)) self.RangeGetByIndex(handle.Index) else null;
-    }
-
-    fn RangeHandleByRef(self: *const RangeManager, ref: AddressRef) AddressHandle {
-        const range = self.RangeGetByRef(ref) orelse return AddressHandle.Zero;
-        if (!range.Flags.Used) return AddressHandle.Zero;
-        return AddressHandle.Init(ref.Index, range.Generation);
-    }
-
-    fn RangeHandleByIndex(self: *const RangeManager, index: u24) AddressHandle {
-        const range = self.RangeGetByIndex(index) orelse return AddressHandle.Zero;
-        if (!range.Flags.Used) return AddressHandle.Zero;
-        return AddressHandle.Init(index, range.Generation);
-    }
-
-    fn RangeGameMemorySlice(self: *const RangeManager, range: *const AddressRange) []u8 {
-        const memo_st = range.AddressSt - RACER_IMAGE_BASE;
-        const memo_ed = range.AddressEd - RACER_IMAGE_BASE;
-        return self.GameMemory[memo_st..memo_ed];
-    }
-
-    /// checks that a range does not collide with existing reserved ranges
-    pub fn RangeAvailable(self: *const RangeManager, addr_st: u24, addr_ed: u24) bool {
-        if (!RangeValid(addr_st, addr_ed)) return false;
-
-        var p_list = self.AddressListHead;
-        while (true) : (p_list = p_list.Next orelse break) {
-            for (
-                p_list.Data.items(.AddressSt),
-                p_list.Data.items(.AddressEd),
-                p_list.Data.items(.Flags),
-            ) |st, ed, f| {
-                if (!f.Used) continue;
-                if (CollisionStrict1D(u24, addr_st, addr_ed, st, ed)) return false;
-            }
+            return man;
         }
 
-        return true;
-    }
+        // TODO: complementary RangeNew that gets an unused slot and creates a new
+        //  slot and address list node as necessary
+        fn AddressListNodeNew(self: *RangeManagerT) ?*AddressListNode {
+            assert(self.AddressListCount < LIST_COUNT_MAX);
+            assert((self.AddressIndexMax + 1) % LIST_CAPACITY == 0);
 
-    pub fn RangeReserve(self: *RangeManager, addr_st: u24, addr_ed: u24, owner: u16) AddressHandle {
-        if (!RangeValid(addr_st, addr_ed)) return AddressHandle.Zero;
-        if (!self.RangeAvailable(addr_st, addr_ed)) return AddressHandle.Zero;
+            const b_final_list = self.AddressListCount + 1 == LIST_COUNT_MAX;
+            const new_capacity: u24 = if (b_final_list) LIST_CAPACITY_LAST else LIST_CAPACITY;
 
-        const range_i: u32 = blk: {
+            var new_list = self.ArenaPerm.create(AddressListNode) catch return null;
+            new_list.Data = .{};
+            new_list.Data.setCapacity(self.ArenaPerm, new_capacity) catch return null;
+            new_list.Head = self.AddressListHead;
+            new_list.Prev = self.AddressListTail;
+            new_list.Next = null;
+
+            self.AddressIndexMax += new_capacity;
+            self.AddressListTail.Next = new_list;
+            self.AddressListTail = new_list;
+            self.AddressListCount += 1;
+
+            return new_list;
+        }
+
+        fn HandleValid(self: *const RangeManagerT, handle: AddressHandle) bool {
+            if (handle.Index > self.AddressIndexMax) return false;
+            const range = self.RangeGetByIndex(handle.Index) orelse return false;
+            const b_gen_ok = handle.Generation == range.Generation;
+            const b_use_ok = range.Flags.Used; // always false for null object
+            return b_gen_ok and b_use_ok; // b_idx_ok implicit
+        }
+
+        fn RangeSection(addr_st: u32, addr_ed: u32) ?u2 {
+            for (IMAGE_SECTIONS, 0..) |section, i|
+                if (addr_st >= section.addr_st and addr_ed <= section.addr_ed) return @intCast(i);
+            return null;
+        }
+
+        // NOTE: u32 so it can be be used to check full 32-bit address range
+        pub fn RangeValid(addr_st: u32, addr_ed: u32) bool {
+            const b_section_ok = RangeSection(addr_st, addr_ed) != null;
+            return (addr_ed > addr_st) and b_section_ok;
+        }
+
+        fn RangeRefByHandle(self: *const RangeManagerT, handle: AddressHandle) ?AddressRef {
+            const ref = self.RangeRefByIndex(handle.Index) orelse return null;
+            const real_handle = self.RangeHandleByRef(ref);
+            return if (handle.Eql(real_handle)) ref else null;
+        }
+
+        fn RangeRefByIndex(self: *const RangeManagerT, index: u24) ?AddressRef {
+            const list_index = index / LIST_CAPACITY;
+            const p_list = if (list_index + 1 == self.AddressListCount) self.AddressListTail else blk: {
+                var p = self.AddressListHead;
+                for (0..list_index) |_| p = p.Next orelse return null;
+                break :blk p;
+            };
+            return AddressRef{ .Node = p_list, .Index = index };
+        }
+
+        fn RangeGetByRef(self: *const RangeManagerT, ref: AddressRef) ?AddressRange {
+            assert(ref.Node.Head == self.AddressListHead);
+            const range = ref.Node.Data.get(ref.Index % LIST_CAPACITY);
+            return if (range.Flags.Used) range else null;
+        }
+
+        fn RangeSetByRef(self: *const RangeManagerT, ref: AddressRef, data: AddressRange) void {
+            assert(ref.Node.Head == self.AddressListHead);
+            ref.Node.Data.set(ref.Index % LIST_CAPACITY, data);
+        }
+
+        fn RangeGetByIndex(self: *const RangeManagerT, index: u24) ?AddressRange {
+            const ref = self.RangeRefByIndex(index) orelse return null;
+            return self.RangeGetByRef(ref);
+        }
+
+        pub fn RangeGetByHandle(self: *const RangeManagerT, handle: AddressHandle) ?AddressRange {
+            return if (self.HandleValid(handle)) self.RangeGetByIndex(handle.Index) else null;
+        }
+
+        fn RangeHandleByRef(self: *const RangeManagerT, ref: AddressRef) AddressHandle {
+            const range = self.RangeGetByRef(ref) orelse return AddressHandle.Zero;
+            if (!range.Flags.Used) return AddressHandle.Zero;
+            return AddressHandle.Init(ref.Index, range.Generation);
+        }
+
+        fn RangeHandleByIndex(self: *const RangeManagerT, index: u24) AddressHandle {
+            const range = self.RangeGetByIndex(index) orelse return AddressHandle.Zero;
+            if (!range.Flags.Used) return AddressHandle.Zero;
+            return AddressHandle.Init(index, range.Generation);
+        }
+
+        fn RangeGameMemorySlice(self: *const RangeManagerT, range: *const AddressRange) []u8 {
+            const memo_st = range.AddressSt - IMAGE_BASE;
+            const memo_ed = range.AddressEd - IMAGE_BASE;
+            return self.GameMemory[memo_st..memo_ed];
+        }
+
+        /// checks that a range does not collide with existing reserved ranges
+        pub fn RangeAvailable(self: *const RangeManagerT, addr_st: u24, addr_ed: u24) bool {
+            if (!RangeValid(addr_st, addr_ed)) return false;
+
             var p_list = self.AddressListHead;
-            var i_start: usize = 1; // skip null object
             while (true) : (p_list = p_list.Next orelse break) {
                 for (
-                    p_list.Data.items(.Generation)[i_start..],
-                    p_list.Data.items(.Flags)[i_start..],
-                    i_start..,
-                ) |gen, f, i| {
-                    if (gen < AddressHandle.MAX_GENERATION and !f.Used) break :blk i;
+                    p_list.Data.items(.AddressSt),
+                    p_list.Data.items(.AddressEd),
+                    p_list.Data.items(.Flags),
+                ) |st, ed, f| {
+                    if (!f.Used) continue;
+                    if (CollisionStrict1D(u24, addr_st, addr_ed, st, ed)) return false;
+                }
+            }
+
+            return true;
+        }
+
+        pub fn RangeReserve(self: *RangeManagerT, addr_st: u24, addr_ed: u24, owner: u16) AddressHandle {
+            if (!RangeValid(addr_st, addr_ed)) return AddressHandle.Zero;
+            if (!self.RangeAvailable(addr_st, addr_ed)) return AddressHandle.Zero;
+
+            const range_i: u32 = blk: {
+                var p_list = self.AddressListHead;
+                var i_start: usize = 1; // skip null object
+                while (true) : (p_list = p_list.Next orelse break) {
+                    for (
+                        p_list.Data.items(.Generation)[i_start..],
+                        p_list.Data.items(.Flags)[i_start..],
+                        i_start..,
+                    ) |gen, f, i| {
+                        if (gen < AddressHandle.MAX_GENERATION and !f.Used) break :blk i;
+                    }
+
+                    i_start = 0;
                 }
 
-                i_start = 0;
-            }
+                if (p_list.Data.len == p_list.Data.capacity) {
+                    if (self.AddressListCount == LIST_COUNT_MAX) return AddressHandle.Zero;
+                    p_list = self.AddressListNodeNew() orelse return AddressHandle.Zero;
+                }
 
-            if (p_list.Data.len == p_list.Data.capacity) {
-                if (self.AddressListCount == LIST_COUNT_MAX) return AddressHandle.Zero;
-                p_list = self.AddressListNodeNew() orelse return AddressHandle.Zero;
-            }
+                const i = p_list.Data.addOneAssumeCapacity();
+                p_list.Data.set(i, std.mem.zeroes(AddressRange));
+                break :blk i;
+            };
 
-            const i = p_list.Data.addOneAssumeCapacity();
-            p_list.Data.set(i, std.mem.zeroes(AddressRange));
-            break :blk i;
-        };
+            var range = self.AddressListTail.Data.get(range_i);
+            range.Generation += 1;
+            range.AddressSt = addr_st;
+            range.AddressEd = addr_ed;
+            range.Flags = .{ .Used = true, .Section = RangeSection(addr_st, addr_ed).? };
+            range.Owner = owner;
+            self.AddressListTail.Data.set(range_i, range);
 
-        var range = self.AddressListTail.Data.get(range_i);
-        range.Generation += 1;
-        range.AddressSt = addr_st;
-        range.AddressEd = addr_ed;
-        range.Flags = .{ .Used = true, .Section = RangeSection(addr_st, addr_ed).? };
-        range.Owner = owner;
-        self.AddressListTail.Data.set(range_i, range);
+            self.AddressCount += 1;
 
-        self.AddressCount += 1;
+            @memcpy(self.RangeGameMemorySlice(&range), @as([*]u8, @ptrFromInt(addr_st)));
 
-        @memcpy(self.RangeGameMemorySlice(&range), @as([*]u8, @ptrFromInt(addr_st)));
-
-        return AddressHandle.Init(@truncate(range_i), range.Generation);
-    }
-
-    pub fn RangeRelease(self: *RangeManager, handle: AddressHandle) void {
-        const ref = self.RangeRefByHandle(handle) orelse return;
-        self.RangeReleaseByRef(ref);
-    }
-
-    /// release an address range, restoring its original contents
-    pub fn RangeReleaseByRef(self: *RangeManager, ref: AddressRef) void {
-        assert(self.AddressWriting.IsNull());
-
-        var range = self.RangeGetByRef(ref) orelse return;
-
-        if (self.RangeWriteStByRef(ref)) {
-            defer self.RangeWriteEdByRef(ref);
-            @memcpy(@as([*]u8, @ptrFromInt(range.AddressSt)), self.RangeGameMemorySlice(&range));
+            return AddressHandle.Init(@truncate(range_i), range.Generation);
         }
 
-        range.Flags.Used = false;
-        self.RangeSetByRef(ref, range);
+        pub fn RangeRelease(self: *RangeManagerT, handle: AddressHandle) void {
+            const ref = self.RangeRefByHandle(handle) orelse return;
+            self.RangeReleaseByRef(ref);
+        }
 
-        self.AddressCount -= 1;
-    }
+        /// release an address range, restoring its original contents
+        pub fn RangeReleaseByRef(self: *RangeManagerT, ref: AddressRef) void {
+            assert(self.AddressWriting.IsNull());
 
-    pub fn RangeReleaseOwner(self: *RangeManager, owner: u16) void {
-        assert(self.AddressWriting.IsNull());
+            var range = self.RangeGetByRef(ref) orelse return;
 
-        var p_list = self.AddressListHead;
-        while (true) : (p_list = p_list.Next orelse break) {
-            for (
-                p_list.Data.items(.Owner),
-                p_list.Data.items(.Flags),
-                0..,
-            ) |o, f, i| {
-                if (owner != o or !f.Used) continue;
-                const handle = self.RangeHandleByIndex(@truncate(i));
-                self.RangeRelease(handle);
+            if (self.RangeWriteStByRef(ref)) {
+                defer self.RangeWriteEdByRef(ref);
+                @memcpy(@as([*]u8, @ptrFromInt(range.AddressSt)), self.RangeGameMemorySlice(&range));
+            }
+
+            range.Flags.Used = false;
+            self.RangeSetByRef(ref, range);
+
+            self.AddressCount -= 1;
+        }
+
+        pub fn RangeReleaseOwner(self: *RangeManagerT, owner: u16) void {
+            assert(self.AddressWriting.IsNull());
+
+            var p_list = self.AddressListHead;
+            while (true) : (p_list = p_list.Next orelse break) {
+                for (
+                    p_list.Data.items(.Owner),
+                    p_list.Data.items(.Flags),
+                    0..,
+                ) |o, f, i| {
+                    if (owner != o or !f.Used) continue;
+                    const handle = self.RangeHandleByIndex(@truncate(i));
+                    self.RangeRelease(handle);
+                }
             }
         }
-    }
 
-    /// return original contents to memory range
-    pub fn RangeRestore(self: *RangeManager, handle: AddressHandle) void {
-        assert(self.AddressWriting.IsNull());
+        /// return original contents to memory range
+        pub fn RangeRestore(self: *RangeManagerT, handle: AddressHandle) void {
+            assert(self.AddressWriting.IsNull());
 
-        const range = self.RangeGetByHandle(handle) orelse return;
+            const range = self.RangeGetByHandle(handle) orelse return;
 
-        if (self.RangeWriteSt(handle)) {
-            defer self.RangeWriteEd(handle);
-            @memcpy(@as([*]u8, @ptrFromInt(range.AddressSt)), self.RangeGameMemorySlice(&range));
+            if (self.RangeWriteSt(handle)) {
+                defer self.RangeWriteEd(handle);
+                @memcpy(@as([*]u8, @ptrFromInt(range.AddressSt)), self.RangeGameMemorySlice(&range));
+            }
         }
-    }
 
-    pub fn RangeRead(addr_st: u24, addr_ed: u24, buffer: []u8) bool {
-        assert(addr_ed - addr_st == buffer.len);
+        pub fn RangeRead(addr_st: u24, addr_ed: u24, buffer: []u8) bool {
+            assert(addr_ed - addr_st == buffer.len);
 
-        if (!RangeValid(addr_st, addr_ed)) return false;
+            if (!RangeValid(addr_st, addr_ed)) return false;
 
-        @memcpy(buffer, @as([*]u8, @ptrFromInt(addr_st)));
-        return true;
-    }
+            @memcpy(buffer, @as([*]u8, @ptrFromInt(addr_st)));
+            return true;
+        }
 
-    fn RangeWriteStByRef(self: *RangeManager, ref: AddressRef) bool {
-        if (!self.AddressWriting.IsNull()) return false; // already writing
+        fn RangeWriteStByRef(self: *RangeManagerT, ref: AddressRef) bool {
+            if (!self.AddressWriting.IsNull()) return false; // already writing
 
-        const range = self.RangeGetByRef(ref) orelse return false;
+            const range = self.RangeGetByRef(ref) orelse return false;
 
-        var protect: PAGE_PROTECTION_FLAGS = undefined;
-        const range_len = range.AddressEd - range.AddressSt;
-        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, PAGE_EXECUTE_READWRITE, &protect))
-            return false;
+            var protect: PAGE_PROTECTION_FLAGS = undefined;
+            const range_len = range.AddressEd - range.AddressSt;
+            if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, PAGE_EXECUTE_READWRITE, &protect))
+                return false;
 
-        self.AddressWriting = self.RangeHandleByIndex(ref.Index);
-        return true;
-    }
+            self.AddressWriting = self.RangeHandleByIndex(ref.Index);
+            return true;
+        }
 
-    /// opens range for writing, ensuring the memory has write permissions.
-    /// user must:
-    ///  - only open one range for writing at a time
-    ///  - close the range by end of plugin callback scope
-    ///  - not have any range open during range reserve, release or restore operations
-    pub fn RangeWriteSt(self: *RangeManager, handle: AddressHandle) bool {
-        const ref = self.RangeRefByHandle(handle) orelse return false; // handle invalid
-        return self.RangeWriteStByRef(ref);
-    }
+        /// opens range for writing, ensuring the memory has write permissions.
+        /// user must:
+        ///  - only open one range for writing at a time
+        ///  - close the range by end of plugin callback scope
+        ///  - not have any range open during range reserve, release or restore operations
+        pub fn RangeWriteSt(self: *RangeManagerT, handle: AddressHandle) bool {
+            const ref = self.RangeRefByHandle(handle) orelse return false; // handle invalid
+            return self.RangeWriteStByRef(ref);
+        }
 
-    // mirrored from `WriteSt*` because `AddressWriting` logic works more naturally
-    fn RangeWriteEdByRef(self: *RangeManager, ref: AddressRef) void {
-        const handle = self.RangeHandleByRef(ref);
-        self.RangeWriteEd(handle);
-    }
+        // mirrored from `WriteSt*` because `AddressWriting` logic works more naturally
+        fn RangeWriteEdByRef(self: *RangeManagerT, ref: AddressRef) void {
+            const handle = self.RangeHandleByRef(ref);
+            self.RangeWriteEd(handle);
+        }
 
-    /// closes an address range for writing and restores its normal permissions.
-    pub fn RangeWriteEd(self: *RangeManager, handle: AddressHandle) void {
-        if (self.AddressWriting.IsNull() or !handle.Eql(self.AddressWriting)) return; // handle not writing
+        /// closes an address range for writing and restores its normal permissions.
+        pub fn RangeWriteEd(self: *RangeManagerT, handle: AddressHandle) void {
+            if (self.AddressWriting.IsNull() or !handle.Eql(self.AddressWriting)) return; // handle not writing
 
-        const range = self.RangeGetByHandle(handle) orelse return; // handle invalid
+            const range = self.RangeGetByHandle(handle) orelse return; // handle invalid
 
-        var protect: PAGE_PROTECTION_FLAGS = undefined;
-        const range_len = range.AddressEd - range.AddressSt;
-        const range_protect = RACER_SECTIONS[range.Flags.Section].flags;
-        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, range_protect, &protect))
-            return;
+            var protect: PAGE_PROTECTION_FLAGS = undefined;
+            const range_len = range.AddressEd - range.AddressSt;
+            const range_protect = IMAGE_SECTIONS[range.Flags.Section].flags;
+            if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, range_protect, &protect))
+                return;
 
-        self.AddressWriting = AddressHandle.Zero;
-    }
+            self.AddressWriting = AddressHandle.Zero;
+        }
+    };
+}
+
+const SectionInfo = struct {
+    addr_st: u32,
+    addr_ed: u32,
+    flags: PAGE_PROTECTION_FLAGS,
 };
 
 const AddressListNode = struct {
@@ -405,6 +430,11 @@ const AddressHandle = packed struct(u32) {
     Index: u24,
     Generation: u8,
 
+    comptime {
+        assert(AddressHandleOpaque == @typeInfo(AddressHandle).Struct.backing_integer);
+        assert(@as(AddressHandle, @bitCast(ADDRESS_HANDLE_OPAQUE_NULL)).IsNull());
+    }
+
     const MAX_GENERATION = std.math.maxInt(u8);
 
     // TODO: decl literal, after zig version upgrade
@@ -422,14 +452,6 @@ const AddressHandle = packed struct(u32) {
         return handle.Eql(Zero);
     }
 };
-
-pub const AddressHandleOpaque = u32;
-pub const ADDRESS_HANDLE_OPAQUE_NULL: AddressHandleOpaque = 0;
-
-comptime {
-    assert(AddressHandleOpaque == @typeInfo(AddressHandle).Struct.backing_integer);
-    assert(@as(AddressHandle, @bitCast(ADDRESS_HANDLE_OPAQUE_NULL)).IsNull());
-}
 
 // TODO: ?? pass enclosed zero-size case (true == CollisionStrict1D(u8, 2, 5, 3, 3))
 // FIXME: move to libannodue under base_vector or something

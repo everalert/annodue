@@ -12,7 +12,8 @@ const Allocator = std.mem.Allocator;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const core_address = @import("../util/core/core_address.zig");
-const RangeManager = core_address.RangeManager;
+const RangeManagerOpts = core_address.RangeManagerOpts;
+const RangeManager = core_address.RangeManager(RangeManagerOpts.RacerOpts(1024));
 const AddressHandle = core_address.AddressHandleOpaque;
 const ADDRESS_HANDLE_NULL = core_address.ADDRESS_HANDLE_OPAQUE_NULL;
 

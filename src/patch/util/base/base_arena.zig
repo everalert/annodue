@@ -205,7 +205,7 @@ test {
     // getting zero-ed memory
     var mem2 = arena.PushZero(size_mem2);
     try std.testing.expect(mem2.len == size_mem2);
-    try std.testing.expect(std.mem.count(mem2, &.{0}) == size_mem2);
+    try std.testing.expect(std.mem.count(u8, mem2, &.{0}) == size_mem2);
     try std.testing.expect(arena.SizeUsed == size_mem1 + size_mem2);
     try std.testing.expect(arena.SizeCommitted == size_inc * 2);
 

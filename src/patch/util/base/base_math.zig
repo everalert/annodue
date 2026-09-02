@@ -2,13 +2,13 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 pub fn RoundIntUp(comptime T: type, n: T, inc: T) T {
-    comptime if (@typeInfo(T) != .Int) @compileError("T must be an integer type");
+    comptime assert(@typeInfo(T) == .Int or @typeInfo(T) == .ComptimeInt);
     const v: T = n + inc - 1;
     return v - @mod(v, inc);
 }
 
 pub fn RoundIntDown(comptime T: type, n: T, inc: T) T {
-    comptime if (@typeInfo(T) != .Int) @compileError("T must be an integer type");
+    comptime assert(@typeInfo(T) == .Int or @typeInfo(T) == .ComptimeInt);
     return n - @mod(n, inc);
 }
 

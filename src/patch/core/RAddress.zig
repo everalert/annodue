@@ -48,7 +48,7 @@ pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
     const handle = AddressState.Manager.AddressWriting;
     if (!handle.IsNull()) {
-        const range = AddressState.Manager.RangeGet(handle) orelse panic(
+        const range = AddressState.Manager.RangeGetByHandle(handle) orelse panic(
             "RAddress: range handle {X:0>8} closed with write mode left dangling",
             .{@as(AddressHandle, @bitCast(handle))},
         );
@@ -115,7 +115,7 @@ pub fn RAddressRangeRestore(handle: AddressHandle) callconv(.C) void {
 pub fn RAddressRangeContainsRange(handle: AddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
     assert(RangeManager.RangeValid(addr_st, addr_ed));
-    const range = AddressState.Manager.RangeGet(handle) orelse return false;
+    const range = AddressState.Manager.RangeGetByHandle(@bitCast(handle)) orelse return false;
     return addr_st >= range.AddressSt and addr_ed <= range.AddressEd;
 }
 

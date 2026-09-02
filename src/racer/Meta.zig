@@ -1,9 +1,9 @@
-pub const IMAGE_BASE: u32 = 0x400000;
-pub const IMAGE_SIZE: u32 = 0xAD0000;
-pub const IMAGE_END: u32 = IMAGE_BASE + IMAGE_SIZE;
-pub const CODE_BASE: u32 = IMAGE_BASE + 0x001000;
-pub const DATA_BASE: u32 = IMAGE_BASE + 0x0AC000;
-pub const ENTRY_POINT: u32 = IMAGE_BASE + 0x0A0A60;
+pub const IMAGE_BASE = 0x400000;
+pub const IMAGE_SIZE = 0xAD0000;
+pub const IMAGE_END = IMAGE_BASE + IMAGE_SIZE;
+pub const CODE_BASE = IMAGE_BASE + 0x001000;
+pub const DATA_BASE = IMAGE_BASE + 0x0AC000;
+pub const ENTRY_POINT = IMAGE_BASE + 0x0A0A60;
 
 // name, virtual address, virtual size, flags, alignment
 pub const SECTIONS: [4]struct { [:0]const u8, u32, u32, u32, u32 } = .{

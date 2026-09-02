@@ -610,6 +610,7 @@ pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
 
 // last function call in successful setup path
 fn HookGameSetup(memory: usize) usize {
+    _ = RAddress.RAddressRangeReserve(0x4240AD, 0x4240B7); // TODO: save handle
     const addr: usize = 0x4240AD;
     const len: usize = 0x4240B7 - addr;
     const off_call: usize = 0x4240AF - addr;

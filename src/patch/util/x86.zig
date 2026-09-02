@@ -1,12 +1,15 @@
-pub const Self = @This();
-
 const std = @import("std");
+const builtin = @import("builtin");
 const mem = @import("memory.zig");
 const assert = std.debug.assert;
 const bytesToHex = std.fmt.bytesToHex;
 const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
 const minInt = std.math.minInt;
 const maxInt = std.math.maxInt;
+
+comptime {
+    assert(builtin.target.cpu.arch == .x86); // example build command flag:  -target x86-windows
+}
 
 // NOTE: supporting x86 only, not x86_64
 // NOTE: instructions roughly organized according to pnx.tf reference
@@ -15,7 +18,7 @@ const maxInt = std.math.maxInt;
 
 // TODO: some kind of documentation at the top summarizing the overall themes
 //  with the api design
-// TODO: change all usize to u32; ensures correct size of address-related params
+// TODO: change all u32 to u32; ensures correct size of address-related params
 //  when not compiling for x86 target
 // TODO: remove windows requirement; not urgent, not using this outside of
 //  windows for now anyway
@@ -150,7 +153,7 @@ pub fn Instruction(comptime TD: type) type {
         //  override ("WORD" etc.); i.e. "SIB behaviour" should ignore displacement
         //  input type and only use sizes implied by field-defined registers
         // FIXME: add assertions that guarantee values won't be null in the wrong places
-        pub fn Emit(self: *const Inst, write_at: usize) usize {
+        pub fn Emit(self: *const Inst, write_at: u32) u32 {
             var addr = write_at;
             assert(self.TargetReg == null or self.TargetReg.? != .imm);
             assert(self.TargetReg != null or self.SourceReg != null);
@@ -206,7 +209,7 @@ pub fn Instruction(comptime TD: type) type {
 }
 
 /// helper to write simple opcode with optional two-byte prefix
-pub inline fn EmitOpcode(write_at: usize, opcode: u8, b_two_byte: bool) usize {
+pub inline fn EmitOpcode(write_at: u32, opcode: u8, b_two_byte: bool) u32 {
     var addr = if (b_two_byte) mem.write(write_at, u8, 0x0F) else write_at;
     return mem.write(addr, u8, opcode);
 }
@@ -352,57 +355,57 @@ inline fn parseModMR(
 
 // FIXME: remove, replace usage with OverrideOperandSizePf + EncodeRegisterOp
 pub inline fn op_r16(
-    write_at: usize,
+    write_at: u32,
     comptime base: u8,
     reg: GenReg16,
-) usize {
+) u32 {
     return mem.write_bytes(write_at, &[2]u8{ 0x66, base + @intFromEnum(reg) });
 }
 
 // FIXME: remove, replace usage with EncodeRegisterOp
 pub inline fn op_r32(
-    write_at: usize,
+    write_at: u32,
     comptime base: u8,
     reg: GenReg32,
-) usize {
+) u32 {
     return mem.write(write_at, u8, base + @intFromEnum(reg));
 }
 
 pub inline fn op_imm8(
-    write_at: usize,
+    write_at: u32,
     comptime op: u8,
     value: u8,
-) usize {
+) u32 {
     return mem.write_bytes(write_at, &[2]u8{ op, value });
 }
 
 pub inline fn op_imm32(
-    write_at: usize,
+    write_at: u32,
     comptime op: u8,
     value: u32,
-) usize {
+) u32 {
     var addr = mem.write(write_at, u8, op);
     return mem.write(addr, u32, value);
 }
 
 pub inline fn op_modRM(
-    write_at: usize,
+    write_at: u32,
     op: u8,
     comptime mod: EffAdd,
     comptime dest: GenReg32,
     comptime src: GenReg32,
-) usize {
+) u32 {
     var addr = mem.write(write_at, u8, op);
     return mem.write(addr, u8, comptime parseModRM(mod, dest, src));
 }
 
 pub inline fn op_modMR(
-    write_at: usize,
+    write_at: u32,
     op: u8,
     comptime mod: EffAdd,
     comptime dest: GenReg32,
     comptime src: GenReg32,
-) usize {
+) u32 {
     var addr = mem.write(write_at, u8, op);
     return mem.write(addr, u8, comptime parseModMR(mod, dest, src));
 }
@@ -440,7 +443,7 @@ fn parseAddSubOperandSize(n: i32, base: u8, dst: GenReg, b_ptr: bool, b_use_16bi
 /// ADD [EAX+4], 4                  ADD(<addr>, .eax,    4, .imm, 4)    // (r/m, imm) with offset
 /// ADD AL, BYTE PTR [EBX+4]        ADD(<addr>,  .al, null,  .bl, 4)    // byte derefs must be low byte
 /// ADD WORD PTR [EBX+0xF0], 0xFF   ADD(<addr>, .bx, 0xF0, .imm, 0xFF)
-fn GenericArithmeticInstruction(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, comptime V_BASE: u8, comptime V_EXT: u3) usize {
+fn GenericArithmeticInstruction(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32, comptime V_BASE: u8, comptime V_EXT: u3) u32 {
     const dst_t = dst.RegType();
     const src_t = src.RegType();
     const dst_ri = dst.RegIndex();
@@ -493,7 +496,7 @@ const GenericArithmeticInstructionTestCase = struct { GenReg, ?i32, GenReg, ?i32
 
 fn GenericArithmeticInstructionTest(
     comptime label: []const u8,
-    comptime test_fn: *const fn (usize, GenReg, ?i32, GenReg, ?i32) callconv(.Inline) usize,
+    comptime test_fn: *const fn (u32, GenReg, ?i32, GenReg, ?i32) callconv(.Inline) u32,
     comptime test_cases: []const GenericArithmeticInstructionTestCase,
 ) !void {
     var output: [12]u8 = undefined;
@@ -512,7 +515,7 @@ fn GenericArithmeticInstructionTest(
 
 /// ADD - Add
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn ADD(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn ADD(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x00, 0);
 }
 
@@ -561,31 +564,31 @@ test "ADD" {
 
 /// OR - Logical Inclusive OR
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn OR(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn OR(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x08, 1);
 }
 
 /// ADC - Add With Carry
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn ADC(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn ADC(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x10, 2);
 }
 
 /// SBB - Integer Subtraction With Borrow
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn SBB(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn SBB(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x18, 3);
 }
 
 /// AND - Logical AND
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn AND(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn AND(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x20, 4);
 }
 
 /// SUB - Subtract
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn SUB(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn SUB(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x28, 5);
 }
 
@@ -620,14 +623,14 @@ test "SUB" {
 
 /// XOR - Logical Exclusive OR
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn XOR(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn XOR(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x30, 6);
 }
 
 // NOTE: technically not in the "arithmetic" category, but shares same logic
 /// CMP - Compare Two Operands
 /// Refer to `GenericArithmeticInstruction` for usage
-pub inline fn CMP(write_at: usize, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) usize {
+pub inline fn CMP(write_at: u32, dst: GenReg, v1: ?i32, src: GenReg, v2: ?i32) u32 {
     return GenericArithmeticInstruction(write_at, dst, v1, src, v2, 0x38, 7);
 }
 
@@ -651,7 +654,7 @@ test "CMP" {
 
 // FIXME: add more thorough tests
 /// SAL/SAR/SHL/SHR — Shift
-fn ShiftArithmeticInstruction(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8, comptime V_EXT: u3) usize {
+fn ShiftArithmeticInstruction(write_at: u32, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8, comptime V_EXT: u3) u32 {
     assert(dst != .imm);
     assert(src == .imm or src == .cl);
     assert((src == .imm) != (v2 == null));
@@ -692,7 +695,7 @@ const ShiftArithmeticInstructionTestCase = struct {
 
 fn ShiftArithmeticInstructionTest(
     comptime label: []const u8,
-    comptime test_fn: *const fn (usize, GenReg, anytype, GenReg, ?u8) callconv(.Inline) usize,
+    comptime test_fn: *const fn (u32, GenReg, anytype, GenReg, ?u8) callconv(.Inline) u32,
     comptime test_cases: []const ShiftArithmeticInstructionTestCase,
 ) !void {
     var output: [12]u8 = undefined;
@@ -711,7 +714,7 @@ fn ShiftArithmeticInstructionTest(
 }
 
 pub const SHL = SAL;
-pub inline fn SAL(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) usize {
+pub inline fn SAL(write_at: u32, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) u32 {
     return ShiftArithmeticInstruction(write_at, dst, v1, src, v2, 4);
 }
 
@@ -731,11 +734,11 @@ test "SHL/SAL" {
     });
 }
 
-pub inline fn SAR(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) usize {
+pub inline fn SAR(write_at: u32, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) u32 {
     return ShiftArithmeticInstruction(write_at, dst, v1, src, v2, 7);
 }
 
-pub inline fn SHR(write_at: usize, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) usize {
+pub inline fn SHR(write_at: u32, dst: GenReg, v1: anytype, src: GenReg, v2: ?u8) u32 {
     return ShiftArithmeticInstruction(write_at, dst, v1, src, v2, 5);
 }
 
@@ -753,22 +756,22 @@ test "SHR" {
 }
 
 /// AAA — ASCII Adjust After Addition
-pub fn AAA(write_at: usize) usize {
+pub fn AAA(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x37);
 }
 
 /// AAS — ASCII Adjust AL After Subtraction
-pub fn AAS(write_at: usize) usize {
+pub fn AAS(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x3F);
 }
 
 /// DAA — Decimal Adjust AL After Addition
-pub fn DAA(write_at: usize) usize {
+pub fn DAA(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x27);
 }
 
 /// DAS — Decimal Adjust AL After Subtraction
-pub fn DAS(write_at: usize) usize {
+pub fn DAS(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x2F);
 }
 
@@ -778,14 +781,14 @@ pub fn DAS(write_at: usize) usize {
 
 // WARN: could underflow, but not likely for our use case i guess
 // NOTE: probably more useful on Instruction and paired with a "calcInstructionSize"
-inline fn calcRelativeOffset(write_at: usize, target: usize) i32 {
+inline fn calcRelativeOffset(write_at: u32, target: u32) i32 {
     return @as(i32, @bitCast(target -% write_at));
 }
 
 const Condition = enum(u4) { o, no, b, nb, e, ne, be, a, s, ns, pe, po, l, ge, le, g };
 
 // NOTE: cc instructions: CMOVcc, FCMOVcc, Jcc, LOOPcc, SETcc
-inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE: bool, I_BASE: u8) usize {
+inline fn ConditionalInstructionBase(write_at: u32, cond:Condition, B_TWOBYTE: bool, I_BASE: u8) u32 {
     return EmitOpcode(write_at, I_BASE + @intFromEnum(cond), B_TWOBYTE);
 }
 
@@ -812,7 +815,7 @@ inline fn ConditionalInstructionBase(write_at: usize, cond:Condition, B_TWOBYTE:
 //  not sure how useful this really is, but technically the impl is "wrong".
 /// Jcc - Jump if Condition Is Met
 /// Used via mnemonic-specific helpers JNZ, JE, etc.
-fn JccInstruction(write_at: usize, jump_to: u32, cond: Condition) usize {
+fn JccInstruction(write_at: u32, jump_to: u32, cond: Condition) u32 {
     var offset: i32 = calcRelativeOffset(write_at, jump_to);
     // -2 forces size 4 if offset==-127 (adjustment is 2 bytes if short jump); forces size 1 if +129
     const offset_w: u8 = parseOperandSize(offset - 2, false);
@@ -830,9 +833,9 @@ fn JccInstruction(write_at: usize, jump_to: u32, cond: Condition) usize {
 // of indirectly here
 test "Jcc" {
     var buf_o: [6]u8 = undefined;
-    const addr_o: usize = @intFromPtr(&buf_o[0]);
-    const addr_min_o: usize = addr_o - 126;
-    const addr_max_o: usize = addr_o + 129;
+    const addr_o: u32 = @intFromPtr(&buf_o[0]);
+    const addr_min_o: u32 = addr_o - 126;
+    const addr_max_o: u32 = addr_o + 129;
     const sl_2_o = buf_o[0..2];
     const sl_6_o = buf_o[0..6];
 
@@ -895,73 +898,73 @@ pub const JNL = JGE;
 pub const JNG = JLE;
 pub const JNLE = JG;
 
-pub inline fn JO(write_at: usize, jump_to: usize) usize {
+pub inline fn JO(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .o);
 }
 
-pub inline fn JNO(write_at: usize, jump_to: usize) usize {
+pub inline fn JNO(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .no);
 }
 
-pub inline fn JB(write_at: usize, jump_to: usize) usize {
+pub inline fn JB(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .b);
 }
 
-pub inline fn JNB(write_at: usize, jump_to: usize) usize {
+pub inline fn JNB(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .nb);
 }
 
-pub inline fn JE(write_at: usize, jump_to: usize) usize {
+pub inline fn JE(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .e);
 }
 
-pub inline fn JNE(write_at: usize, jump_to: usize) usize {
+pub inline fn JNE(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .ne);
 }
 
-pub inline fn JBE(write_at: usize, jump_to: usize) usize {
+pub inline fn JBE(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .be);
 }
 
-pub inline fn JA(write_at: usize, jump_to: usize) usize {
+pub inline fn JA(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .a);
 }
 
-pub inline fn JS(write_at: usize, jump_to: usize) usize {
+pub inline fn JS(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .s);
 }
 
-pub inline fn JNS(write_at: usize, jump_to: usize) usize {
+pub inline fn JNS(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .ns);
 }
 
-pub inline fn JPE(write_at: usize, jump_to: usize) usize {
+pub inline fn JPE(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .pe);
 }
 
-pub inline fn JPO(write_at: usize, jump_to: usize) usize {
+pub inline fn JPO(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .po);
 }
 
-pub inline fn JL(write_at: usize, jump_to: usize) usize {
+pub inline fn JL(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .l);
 }
 
-pub inline fn JGE(write_at: usize, jump_to: usize) usize {
+pub inline fn JGE(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .ge);
 }
 
-pub inline fn JLE(write_at: usize, jump_to: usize) usize {
+pub inline fn JLE(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .le);
 }
 
-pub inline fn JG(write_at: usize, jump_to: usize) usize {
+pub inline fn JG(write_at: u32, jump_to: u32) u32 {
     return JccInstruction(write_at, jump_to, .g);
 }
 
 /// Jcc - Jump if Condition Is Met
 /// Special case for JCXZ/JECXZ
-fn JccCXInstruction(write_at: usize, jump_to: u32, reg: GenReg) usize {
+fn JccCXInstruction(write_at: u32, jump_to: u32, reg: GenReg) u32 {
     const b_16bit = reg == .cx;
     const inst_s: u8 = if (b_16bit) 3 else 2;
     var offset: i32 = calcRelativeOffset(write_at + inst_s, jump_to);
@@ -978,9 +981,9 @@ fn JccCXInstruction(write_at: usize, jump_to: u32, reg: GenReg) usize {
 
 test "Jcc CX" {
     var buf_o: [3]u8 = undefined;
-    const addr_o: usize = @intFromPtr(&buf_o[0]);
-    const addr_min_o: usize = addr_o - 126;
-    const addr_max_o: usize = addr_o + 129;
+    const addr_o: u32 = @intFromPtr(&buf_o[0]);
+    const addr_min_o: u32 = addr_o - 126;
+    const addr_max_o: u32 = addr_o + 129;
     const sl_2_o = buf_o[0..2];
     const sl_3_o = buf_o[0..3];
 
@@ -996,11 +999,11 @@ test "Jcc CX" {
     try std.testing.expectEqualSlices(u8, &[2]u8{0xE3, 0x80}, sl_2_o);
 }
 
-pub inline fn JCXZ(write_at: usize, jump_to: usize) usize {
+pub inline fn JCXZ(write_at: u32, jump_to: u32) u32 {
     return JccCXInstruction(write_at, jump_to, .cx);
 }
 
-pub inline fn JECXZ(write_at: usize, jump_to: usize) usize {
+pub inline fn JECXZ(write_at: u32, jump_to: u32) u32 {
     return JccCXInstruction(write_at, jump_to, .ecx);
 }
 
@@ -1009,7 +1012,7 @@ pub inline fn JECXZ(write_at: usize, jump_to: usize) usize {
 // TODO: generalized JMP; missing rm16/32 (FF /4), m16/32 (FF /5), ptr16/32
 // TODO: rename to JMP when above done
 /// JMP with D op/en only
-pub fn jmp_rel(write_at: usize, jump_to: usize) usize {
+pub fn jmp_rel(write_at: u32, jump_to: u32) u32 {
     var offset: i32 = calcRelativeOffset(write_at, jump_to);
     const offset_w: u8 = o: {
         if (offset-2 >= minInt(i8) and offset-2 <= maxInt(i8)) break :o 1;
@@ -1031,11 +1034,11 @@ pub fn jmp_rel(write_at: usize, jump_to: usize) usize {
 // TODO: impl generalized JMP tests once complete JMP implemented
 test "JMP" {
     var buf_o: [6]u8 = undefined;
-    const addr_o: usize = @intFromPtr(&buf_o[0]);
-    const addr_min8_o: usize = addr_o - 128 + 2;
-    const addr_max8_o: usize = addr_o + 127 + 2;
-    const addr_min16_o: usize = addr_o - 32768 + 4;
-    const addr_max16_o: usize = addr_o + 32767 + 4;
+    const addr_o: u32 = @intFromPtr(&buf_o[0]);
+    const addr_min8_o: u32 = addr_o - 128 + 2;
+    const addr_max8_o: u32 = addr_o + 127 + 2;
+    const addr_min16_o: u32 = addr_o - 32768 + 4;
+    const addr_max16_o: u32 = addr_o + 32767 + 4;
     const sl_2_o = buf_o[0..2];
     const sl_4_o = buf_o[0..4];
     const sl_5_o = buf_o[0..5];
@@ -1069,18 +1072,18 @@ test "JMP" {
 
 // test
 
-pub fn test_rm32_r32(write_at: usize, r32: u8) usize {
+pub fn test_rm32_r32(write_at: u32, r32: u8) u32 {
     var addr = write_at;
     addr = mem.write(addr, u8, 0x85);
     addr = mem.write(addr, u8, r32);
     return addr;
 }
 
-pub fn test_eax_eax(write_at: usize) usize {
+pub fn test_eax_eax(write_at: u32) u32 {
     return test_rm32_r32(write_at, 0xC0);
 }
 
-pub fn test_edx_edx(write_at: usize) usize {
+pub fn test_edx_edx(write_at: u32) u32 {
     return test_rm32_r32(write_at, 0xD2);
 }
 
@@ -1088,21 +1091,21 @@ pub fn test_edx_edx(write_at: usize) usize {
 
 // WARN: could underflow, but not likely for our use case i guess
 // call_rel32
-pub fn call(write_at: usize, fn_addr: usize) usize {
+pub fn call(write_at: u32, fn_addr: u32) u32 {
     var addr = write_at;
     addr = mem.write(addr, u8, 0xE8);
     addr = mem.write(addr, i32, @as(i32, @bitCast(fn_addr)) - (@as(i32, @bitCast(addr)) + 4));
     return addr;
 }
 
-pub fn call_rm32(write_at: usize, fn_addr: usize) usize {
+pub fn call_rm32(write_at: u32, fn_addr: u32) u32 {
     var addr = write_at;
     addr = mem.write(addr, u8, 0xFF);
     addr = mem.write(addr, u32, fn_addr);
     return addr;
 }
 
-pub fn call_one_u32_param(write_at: usize, fn_addr: usize) usize {
+pub fn call_one_u32_param(write_at: u32, fn_addr: u32) u32 {
     var addr = write_at;
     addr = reg_save(addr, .esp, .ebp);
     addr = mov_eax_esp_add(addr, 0x08);
@@ -1114,7 +1117,7 @@ pub fn call_one_u32_param(write_at: usize, fn_addr: usize) usize {
 
 // return
 
-pub fn retn(write_at: usize) usize {
+pub fn retn(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xC3);
 }
 
@@ -1126,50 +1129,50 @@ pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
 }
 
 /// IRET — Interrupt Return
-pub inline fn IRET(write_at: usize) usize {
+pub inline fn IRET(write_at: u32) u32 {
     var addr = OverrideOperandSizePf(write_at);
     return IRETD(addr);
 }
 
 /// IRETD — Interrupt Return
-pub inline fn IRETD(write_at: usize) usize {
+pub inline fn IRETD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xCF);
 }
 
 // clearing
 
 /// CMC — Complement Carry Flag
-pub fn CMC(write_at: usize) usize {
+pub fn CMC(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xF5);
 }
 
 /// CLC — Clear Carry Flag
-pub fn CLC(write_at: usize) usize {
+pub fn CLC(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xF8);
 }
 
 /// STC — Set Carry Flag
-pub fn STC(write_at: usize) usize {
+pub fn STC(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xF9);
 }
 
 /// CLI — Clear Interrupt Flag
-pub fn CLI(write_at: usize) usize {
+pub fn CLI(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xFA);
 }
 
 /// STI — Set Interrupt Flag
-pub fn STI(write_at: usize) usize {
+pub fn STI(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xFB);
 }
 
 /// CLD — Clear Direction Flag
-pub fn CLD(write_at: usize) usize {
+pub fn CLD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xFC);
 }
 
 /// STD — Set Direction Flag
-pub fn STD(write_at: usize) usize {
+pub fn STD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xFD);
 }
 
@@ -1185,7 +1188,7 @@ pub const PushSrc = union(enum) { imm8: u8, imm16: u16, imm32: u32, seg: SegReg,
 
 // TODO: r/m16, r/m32 (FF /6)
 /// PUSH — Push Word or Doubleword Onto the Stack
-pub inline fn push(write_at: usize, src: PushSrc) usize {
+pub inline fn push(write_at: u32, src: PushSrc) u32 {
     switch (src) {
         .r16 => |reg| return op_r16(write_at, 0x50, reg),
         .r32 => |reg| return op_r32(write_at, 0x50, reg),
@@ -1203,24 +1206,24 @@ pub inline fn push(write_at: usize, src: PushSrc) usize {
 }
 
 /// PUSHA/PUSHAD – Pop All General Registers
-pub inline fn PUSHA(write_at: usize) usize {
+pub inline fn PUSHA(write_at: u32) u32 {
     var addr = OverrideOperandSizePf(write_at);
     return PUSHAD(addr);
 }
 
 /// PUSHA/PUSHAD – Pop All General Registers
-pub inline fn PUSHAD(write_at: usize) usize {
+pub inline fn PUSHAD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x60);
 }
 
 /// PUSHF/PUSHFD – Pop Stack into FLAGS or EFLAGS Register
-pub inline fn PUSHF(write_at: usize) usize {
+pub inline fn PUSHF(write_at: u32) u32 {
     var addr = OverrideOperandSizePf(write_at);
     return PUSHFD(addr);
 }
 
 /// PUSHF/PUSHFD – Pop Stack into FLAGS or EFLAGS Register
-pub inline fn PUSHFD(write_at: usize) usize {
+pub inline fn PUSHFD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x9C);
 }
 
@@ -1228,7 +1231,7 @@ pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
 
 // TODO: r/m16, r/m32 (8F /0)
 /// POP — Pop a Value From the Stack
-pub inline fn pop(write_at: usize, dest: PopDest) usize {
+pub inline fn pop(write_at: u32, dest: PopDest) u32 {
     switch (dest) {
         .r16 => |reg| return op_r16(write_at, 0x58, reg),
         .r32 => |reg| return op_r32(write_at, 0x58, reg),
@@ -1244,24 +1247,24 @@ pub inline fn pop(write_at: usize, dest: PopDest) usize {
 }
 
 /// POPA/POPAD – Pop All General Registers
-pub inline fn POPA(write_at: usize) usize {
+pub inline fn POPA(write_at: u32) u32 {
     var addr = OverrideOperandSizePf(write_at);
     return POPAD(addr);
 }
 
 /// POPA/POPAD – Pop All General Registers
-pub inline fn POPAD(write_at: usize) usize {
+pub inline fn POPAD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x61);
 }
 
 /// POPF/POPFD – Pop Stack into FLAGS or EFLAGS Register
-pub inline fn POPF(write_at: usize) usize {
+pub inline fn POPF(write_at: u32) u32 {
     var addr = OverrideOperandSizePf(write_at);
     return POPFD(addr);
 }
 
 /// POPF/POPFD – Pop Stack into FLAGS or EFLAGS Register
-pub inline fn POPFD(write_at: usize) usize {
+pub inline fn POPFD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x9D);
 }
 
@@ -1271,40 +1274,40 @@ pub inline fn POPFD(write_at: usize) usize {
 
 
 /// SAHF — Store AH Into Flags
-pub fn SAHF(write_at: usize) usize {
+pub fn SAHF(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x9E);
 }
 
 /// LAHF — Load Status Flags Into AH Register
-pub fn LAHF(write_at: usize) usize {
+pub fn LAHF(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x9F);
 }
 
 /// CBW — Convert Byte to Word
-pub inline fn CBW(write_at: usize) usize {
+pub inline fn CBW(write_at: u32) u32 {
     var addr = OverrideOperandSizePf(write_at);
     return CWDE(addr);
 }
 
 /// CWDE — Convert Word to Doubleword
-pub inline fn CWDE(write_at: usize) usize {
+pub inline fn CWDE(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x98);
 }
 
 /// CDQ — Convert Doubleword to Quadword
-pub inline fn CDQ(write_at: usize) usize {
+pub inline fn CDQ(write_at: u32) u32 {
     var addr = OverrideOperandSizePf(write_at);
     return CWD(addr);
 }
 
 /// CWD — Convert Word to Doubleword
-pub inline fn CWD(write_at: usize) usize {
+pub inline fn CWD(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x99);
 }
 
 // mov
 
-pub fn mov_ecx_imm32(write_at: usize, comptime T: type, imm32: T) usize {
+pub fn mov_ecx_imm32(write_at: u32, comptime T: type, imm32: T) u32 {
     assert(T == u8 or T == u32);
     var addr = write_at;
     addr = mem.write(addr, u8, 0xB9); // EDX=BA, EBX=BB
@@ -1312,7 +1315,7 @@ pub fn mov_ecx_imm32(write_at: usize, comptime T: type, imm32: T) usize {
     return addr;
 }
 
-pub fn mov_eax_imm32(write_at: usize, comptime T: type, imm32: T) usize {
+pub fn mov_eax_imm32(write_at: u32, comptime T: type, imm32: T) u32 {
     assert(T == u8 or T == u32);
     var addr = write_at;
     addr = mem.write(addr, u8, 0xB8);
@@ -1320,7 +1323,7 @@ pub fn mov_eax_imm32(write_at: usize, comptime T: type, imm32: T) usize {
     return addr;
 }
 
-pub fn mov_esi_imm32(write_at: usize, comptime T: type, imm32: T) usize {
+pub fn mov_esi_imm32(write_at: u32, comptime T: type, imm32: T) u32 {
     assert(T == u8 or T == u32);
     var addr = write_at;
     addr = mem.write(addr, u8, 0xBE);
@@ -1328,15 +1331,15 @@ pub fn mov_esi_imm32(write_at: usize, comptime T: type, imm32: T) usize {
     return addr;
 }
 
-pub fn mov_eax_moffs32(write_at: usize, moffs32: usize) usize {
+pub fn mov_eax_moffs32(write_at: u32, moffs32: u32) u32 {
     var addr = write_at;
     addr = mem.write(addr, u8, 0xA1);
-    addr = mem.write(addr, usize, moffs32);
+    addr = mem.write(addr, u32, moffs32);
     return addr;
 }
 
 // mov r/m32 imm32
-pub fn mov_espoff_imm32(write_at: usize, off8: u8, imm32: u32) usize {
+pub fn mov_espoff_imm32(write_at: u32, off8: u8, imm32: u32) u32 {
     var addr = write_at;
     addr = mem.write(addr, u8, 0xC7);
     addr = mem.write(addr, u8, 0x44);
@@ -1348,7 +1351,7 @@ pub fn mov_espoff_imm32(write_at: usize, off8: u8, imm32: u32) usize {
 
 /// mov r32(@dst), r/m32(@src)
 /// mov reg, reg
-pub fn mov_r32_rm32(write_at: usize, comptime dst: GenReg32, comptime src: GenReg32) usize {
+pub fn mov_r32_rm32(write_at: u32, comptime dst: GenReg32, comptime src: GenReg32) u32 {
     return op_modRM(write_at, 0x8B, .reg, dst, src);
 }
 
@@ -1357,12 +1360,12 @@ pub fn mov_r32_rm32(write_at: usize, comptime dst: GenReg32, comptime src: GenRe
 /// mov r32, r/m32 (with offset)
 /// mov reg, [reg + offset]
 pub fn mov_r32_rm32o(
-    write_at: usize,
+    write_at: u32,
     comptime dst: GenReg32,
     comptime src: GenReg32,
     comptime T: type,
     disp: T,
-) usize {
+) u32 {
     if (src == .esp) @compileError("use mov_r32_rm32so for esp src (uses SIB)");
     const ea = comptime parseEffAddFromDispType(T);
     var addr = write_at;
@@ -1398,7 +1401,7 @@ test "mov_r32_rm32o" {
 // ebp (101), addressing becomes EIP-relative with 4-byte displacement value
 // WARN: depends on incomplete behaviour of `mov_r32_rm32o` (see test)
 /// mov @dst, [disp]
-pub fn mov_r32_disp(write_at: usize, comptime dst: GenReg32, disp: i32) usize {
+pub fn mov_r32_disp(write_at: u32, comptime dst: GenReg32, disp: i32) u32 {
     var addr = write_at;
     addr = mov_r32_rm32o(addr, dst, .ebp, i0, 0);
     addr = mem.write(addr, i32, disp);
@@ -1427,11 +1430,11 @@ test "mov_r32_disp" {
 /// mov reg, [esp + offset]
 /// version for ESP with SIB-related options
 pub fn mov_r32_rm32so(
-    write_at: usize,
+    write_at: u32,
     comptime dst: GenReg32,
     comptime src: GenReg32,
     disp: i32,
-) usize {
+) u32 {
     assert(false); // implementation not complete
     if (src != .esp) @compileError("use mov_r32_rm32o for non-esp src");
     const disp_bytes: u3 = @intCast((32 - @clz(disp) + 7) % 8);
@@ -1470,7 +1473,7 @@ pub fn mov_r32_rm32so(
 // FIXME: this does part of the (planned) functionality of `mov_r32_rm32so`, should
 // remove once that's sorted
 /// mov r32, [esp+<delta>]
-pub fn mov_r32_esp_add(write_at: usize, r32: u8, delta: i8) usize {
+pub fn mov_r32_esp_add(write_at: u32, r32: u8, delta: i8) u32 {
     // values less than zero have the upper bit set
     var delta_u8: u8 = @bitCast(delta);
     var addr = write_at;
@@ -1481,25 +1484,25 @@ pub fn mov_r32_esp_add(write_at: usize, r32: u8, delta: i8) usize {
     return addr;
 }
 
-pub fn mov_eax_esp_add(write_at: usize, delta: i8) usize {
+pub fn mov_eax_esp_add(write_at: u32, delta: i8) u32 {
     return mov_r32_esp_add(write_at, 0x44, delta);
 }
 
-pub fn mov_ebx_esp_add(write_at: usize, delta: i8) usize {
+pub fn mov_ebx_esp_add(write_at: u32, delta: i8) u32 {
     return mov_r32_esp_add(write_at, 0x5C, delta);
 }
 
-pub fn mov_ecx_esp_add(write_at: usize, delta: i8) usize {
+pub fn mov_ecx_esp_add(write_at: u32, delta: i8) u32 {
     return mov_r32_esp_add(write_at, 0x4C, delta);
 }
 
-pub fn mov_edx_esp_add(write_at: usize, delta: i8) usize {
+pub fn mov_edx_esp_add(write_at: u32, delta: i8) u32 {
     return mov_r32_esp_add(write_at, 0x54, delta);
 }
 
 // TODO: impl different offset sizes? (not just .reg)
 /// mov r/m32(@dst), r32(@src)
-pub fn mov_rm32_r32(write_at: usize, comptime dst: GenReg32, comptime src: GenReg32) usize {
+pub fn mov_rm32_r32(write_at: u32, comptime dst: GenReg32, comptime src: GenReg32) u32 {
     return op_modMR(write_at, 0x89, .reg, dst, src);
 }
 
@@ -1526,11 +1529,11 @@ test "mov_rm32_r32" {
 
 // FIXME: not functional, in progress
 //pub inline fn mov(
-//    write_at: usize,
+//    write_at: u32,
 //    tgt: union(enum) { r16: GenReg16, r32: GenReg32 },
 //    src: union(enum) { rm16: GenReg16, rm32: GenReg32, imm32: u32 },
 //    reg_offset: ?i32,
-//) usize {
+//) u32 {
 //    _ = reg_offset;
 //    var off = write_at;
 //    off = switch (tgt) {
@@ -1548,7 +1551,7 @@ test "mov_rm32_r32" {
 // TODO: figure out if anything different needs to happen for GenReg16
 // TODO: impl different offset sizes?
 /// lea dst, [src+off]
-pub inline fn lea(write_at: usize, dst: GenReg32, src: GenReg32, off: i8) usize {
+pub inline fn lea(write_at: u32, dst: GenReg32, src: GenReg32, off: i8) u32 {
     var addr = write_at;
     addr = op_modRM(addr, 0x8D, .mem8, dst, src);
     addr = mem.write(addr, i8, off);
@@ -1573,7 +1576,7 @@ test "lea" {
 }
 
 /// BSWAP — Byte Swap
-fn BSWAP(write_at: usize, reg: GenReg) usize {
+fn BSWAP(write_at: u32, reg: GenReg) u32 {
     assert(reg.RegType() == .r32);
     const op = EncodeRegisterOp(0xC8, reg);
     return EmitOpcode(write_at, op, true);
@@ -1581,7 +1584,7 @@ fn BSWAP(write_at: usize, reg: GenReg) usize {
 
 test "BSWAP" {
     var buf_o: [2]u8 = undefined;
-    const addr_o: usize = @intFromPtr(&buf_o);
+    const addr_o: u32 = @intFromPtr(&buf_o);
 
     try std.testing.expectEqual(@intFromPtr(&buf_o) + 2, BSWAP(addr_o, .eax));
     try std.testing.expectEqualSlices(u8, &[2]u8{0x0F, 0xC8}, &buf_o);
@@ -1615,7 +1618,7 @@ test "BSWAP" {
 // TODO: {L,S}LDT etc., {L,S}GDT etc.
 
 /// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
-pub inline fn INT3(write_at: usize) usize {
+pub inline fn INT3(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xCC);
 }
 
@@ -1623,78 +1626,78 @@ pub inline fn INT3(write_at: usize) usize {
 /// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
 
 /// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
-pub inline fn INTO(write_at: usize) usize {
+pub inline fn INTO(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xCE);
 }
 
 /// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
-pub inline fn INT1(write_at: usize) usize {
+pub inline fn INT1(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xF1);
 }
 
 /// HLT — Halt
-pub inline fn HLT(write_at: usize) usize {
+pub inline fn HLT(write_at: u32) u32 {
     return mem.write(write_at, u8, 0xF4);
 }
 
 pub const FWAIT = WAIT;
 /// WAIT/FWAIT — Wait
-pub inline fn WAIT(write_at: usize) usize {
+pub inline fn WAIT(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x9B);
 }
 
 /// CLTS — Clear Task-Switched Flag in CR0
-pub inline fn CLTS(write_at: usize) usize {
+pub inline fn CLTS(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x06, true);
 }
 
 /// INVD — Invalidate Internal Caches
-pub inline fn INVD(write_at: usize) usize {
+pub inline fn INVD(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x08, true);
 }
 
 /// WBINVD — Write Back and Invalidate Cache
-pub inline fn WBINVD(write_at: usize) usize {
+pub inline fn WBINVD(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x09, true);
 }
 
 /// RDTSC – Read Time-Stamp Counter
-pub inline fn RDTSC(write_at: usize) usize {
+pub inline fn RDTSC(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x31, true);
 }
 
 /// WRMSR — Write to Model Specific Register
-pub inline fn WRMSR(write_at: usize) usize {
+pub inline fn WRMSR(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x30, true);
 }
 
 /// RDMSR — Read From Model Specific Register
-pub inline fn RDMSR(write_at: usize) usize {
+pub inline fn RDMSR(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x32, true);
 }
 
 /// RDPMC – Read Performance Monitoring Counters
-pub inline fn RDPMC(write_at: usize) usize {
+pub inline fn RDPMC(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x33, true);
 }
 
 /// SYSENTER — Fast System Call
-pub inline fn SYSENTER(write_at: usize) usize {
+pub inline fn SYSENTER(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x34, true);
 }
 
 /// SYSEXIT — Fast Return from Fast System Call
-pub inline fn SYSEXIT(write_at: usize) usize {
+pub inline fn SYSEXIT(write_at: u32) u32 {
     return EmitOpcode(write_at, 0x35, true);
 }
 
 /// CPUID — CPU Identification
-pub inline fn CPUID(write_at: usize) usize {
+pub inline fn CPUID(write_at: u32) u32 {
     return EmitOpcode(write_at, 0xA2, true);
 }
 
 /// RSM — Resume From System Management Mode
-pub inline fn RSM(write_at: usize) usize {
+pub inline fn RSM(write_at: u32) u32 {
     return EmitOpcode(write_at, 0xAA, true);
 }
 
@@ -1702,19 +1705,19 @@ pub inline fn RSM(write_at: usize) usize {
 // prefix
 // ------
 
-//pub inline fn LockPf(write_at: usize) usize {
+//pub inline fn LockPf(write_at: u32) u32 {
 //    return mem.write(write_at, u8, 0xF0);
 //}
 
-//pub inline fn RepnPf(write_at: usize) usize {
+//pub inline fn RepnPf(write_at: u32) u32 {
 //    return mem.write(write_at, u8, 0xF2);
 //}
 
-//pub inline fn RepPf(write_at: usize) usize {
+//pub inline fn RepPf(write_at: u32) u32 {
 //    return mem.write(write_at, u8, 0xF3);
 //}
 
-//pub inline fn SegmentOverridePf(write_at: usize, comptime s: SegReg) usize {
+//pub inline fn SegmentOverridePf(write_at: u32, comptime s: SegReg) u32 {
 //    return switch (s) {
 //        .cs => mem.write(write_at, u8, 0x2E),
 //        .ds => mem.write(write_at, u8, 0x3E),
@@ -1725,11 +1728,11 @@ pub inline fn RSM(write_at: usize) usize {
 //    };
 //}
 
-pub inline fn OverrideOperandSizePf(write_at: usize) usize {
+pub inline fn OverrideOperandSizePf(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x66);
 }
 
-pub inline fn OverrideAddressSizePf(write_at: usize) usize {
+pub inline fn OverrideAddressSizePf(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x67);
 }
 
@@ -1740,22 +1743,22 @@ pub inline fn OverrideAddressSizePf(write_at: usize) usize {
 // no-op
 // TODO: multi-byte nop flavors (e.g. 0xOF 0x1F)
 
-pub fn nop(write_at: usize) usize {
+pub fn nop(write_at: u32) u32 {
     return mem.write(write_at, u8, 0x90);
 }
 
-pub fn nop_align(write_at: usize, alignment: usize) usize {
+pub fn nop_align(write_at: u32, alignment: u32) u32 {
     assert(std.math.isPowerOfTwo(alignment));
-    var addr: usize = write_at;
+    var addr: u32 = write_at;
     while (addr % alignment > 0) {
         addr = nop(addr);
     }
     return addr;
 }
 
-pub fn nop_until(write_at: usize, end: usize) usize {
+pub fn nop_until(write_at: u32, end: u32) u32 {
     assert(end >= write_at);
-    var addr: usize = write_at;
+    var addr: u32 = write_at;
     while (addr < end) {
         addr = nop(addr);
     }
@@ -1764,7 +1767,7 @@ pub fn nop_until(write_at: usize, end: usize) usize {
 
 test "NOP" {
     var buf_o: [4]u8 = undefined; // should be 4-byte aligned (stack-allocated)
-    const addr_o: usize = @intFromPtr(&buf_o);
+    const addr_o: u32 = @intFromPtr(&buf_o);
 
     try std.testing.expectEqual(addr_o + 1, nop(addr_o));
     try std.testing.expectEqual(@as(u8, 0x90), buf_o[0]);
@@ -1773,7 +1776,7 @@ test "NOP" {
     try std.testing.expectEqual(addr_o + sl_until.len, nop_until(addr_o, addr_o + sl_until.len));
     try std.testing.expectEqualSlices(u8, &[_]u8{0x90,0x90,0x90}, sl_until);
 
-    const alignment: usize = 4;
+    const alignment: u32 = 4;
     const sl_align0 = buf_o[0..0]; 
     const sl_align1 = buf_o[1..alignment];
     try std.testing.expectEqual(addr_o + 0, nop_align(addr_o + 0, alignment));
@@ -1790,16 +1793,16 @@ test "NOP" {
 
 /// save value at register @reg in register @into, preserving @into on the stack
 /// in the meantime. pair with `reg_restore`.
-pub fn reg_save(write_at: usize, comptime reg: GenReg32, comptime into: GenReg32) usize {
-    var addr: usize = write_at;
+pub fn reg_save(write_at: u32, comptime reg: GenReg32, comptime into: GenReg32) u32 {
+    var addr: u32 = write_at;
     addr = push(addr, .{ .r32 = into });
     addr = mov_rm32_r32(addr, into, reg);
     return addr;
 }
 
 /// counterpart to `reg_save` used to clean up stack and registers.
-pub fn reg_restore(write_at: usize, comptime reg: GenReg32, comptime from: GenReg32) usize {
-    var addr: usize = write_at;
+pub fn reg_restore(write_at: u32, comptime reg: GenReg32, comptime from: GenReg32) u32 {
+    var addr: u32 = write_at;
     addr = mov_rm32_r32(addr, reg, from);
     addr = pop(addr, .{ .r32 = from });
     return addr;

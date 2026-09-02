@@ -9,6 +9,8 @@ const assert = std.debug.assert;
 const toBytes = std.mem.toBytes;
 const nativeToBig = std.mem.nativeToBig;
 
+const log = std.log.scoped(.png);
+
 // https://www.libpng.org/pub/png/spec/pngspec-index.html
 // https://www.libpng.org/pub/png/spec/1.2/
 // https://www.w3.org/TR/png-3/
@@ -127,7 +129,7 @@ pub fn Read(gpa: Allocator, reader: anytype) !void {
         var chunk: CT = undefined;
         const chunk_r = try chunk.Start(reader);
 
-        std.debug.print("\nCHUNK: {s}\n", .{toBytes(nativeToBig(u32, chunk.Type))});
+        log.debug("\nCHUNK: {s}\n", .{toBytes(nativeToBig(u32, chunk.Type))});
 
         if (chunk.TypeValue()) |v| {
             switch (v) {
@@ -204,7 +206,7 @@ pub fn Read(gpa: Allocator, reader: anytype) !void {
 
         try chunk.End();
 
-        std.debug.print(
+        log.debug(
             "\tlen:  {d}\n\tcrc:  {X:0>8}\n\tancl: {}\n\tpriv: {}\n\tresv: {}\n\tcopy: {}\n",
             .{ chunk.Length, chunk.Crc, chunk.bAncillary, chunk.bPrivate, chunk.bReserved, chunk.bSafeToCopy },
         );
@@ -269,12 +271,12 @@ pub fn Read(gpa: Allocator, reader: anytype) !void {
     // some left over
     if (line_sh_r > 0) try filter_buf_w.writeByte(recon_next);
 
-    std.debug.print(
+    log.debug(
         "\nwidth:      {d}\nheight:     {d}\nbit depth:  {d}\ncolor type: {d}\n",
         .{ IHDR_width, IHDR_height, IHDR_bit_depth, IHDR_color_type },
     );
 
-    std.debug.print(
+    log.debug(
         "\ndata_buf:   {any}\nfilter_buf: {any}\n",
         .{ data_buf.items, filter_buf.items },
     );

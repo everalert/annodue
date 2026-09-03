@@ -53,20 +53,18 @@ pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
     const handle = AddressState.Manager.AddressWriting;
     if (!handle.IsNull()) {
-        const range = AddressState.Manager.RangeGetByHandle(handle) orelse panic(
+        const span = AddressState.Manager.RangeSpan(handle);
+        if (span.IsNull()) panic(
             "RAddress: range handle {X:0>8} closed with write mode left dangling",
             .{@as(AddressHandle, @bitCast(handle))},
         );
 
-        panic(
-            "RAddress: range {X:0>6}..{X:0>6} write mode left dangling",
-            .{ range.AddressSt, range.AddressEd },
-        );
+        panic("RAddress: range {X:0>6}..{X:0>6} write mode left dangling", .{ span.St, span.Ed });
     }
 }
 
 pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
-    AddressState.Manager.RangeReleaseOwner(owner);
+    AddressState.Manager.RangeReleaseByOwner(owner);
 }
 
 //------------------------------------------------------------------------------
@@ -74,14 +72,14 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 
 pub fn RAddressRangeAvailable(addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.RangeValid(addr_st, addr_ed));
-    return AddressState.Manager.RangeAvailable(@truncate(addr_st), @truncate(addr_ed));
+    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
+    return AddressState.Manager.AddressAvailable(addr_st, addr_ed);
 }
 
 pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHandle {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.RangeValid(addr_st, addr_ed));
-    const handle = AddressState.Manager.RangeReserve(@truncate(addr_st), @truncate(addr_ed), workingOwner());
+    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
+    const handle = AddressState.Manager.RangeReserve(addr_st, addr_ed, workingOwner());
     if (handle.IsNull()) panic(
         "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} cannot be reserved",
         .{ addr_st, addr_ed },
@@ -96,10 +94,10 @@ pub fn RAddressRangeRelease(handle: AddressHandle) callconv(.C) void {
 
 pub fn RAddressRangeRead(addr_st: u32, addr_ed: u32, buffer: ?[*]u8) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.RangeValid(addr_st, addr_ed));
+    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
     if (buffer == null) return false;
     const buf_sl = buffer.?[0 .. addr_ed - addr_st];
-    return AddressState.Manager.RangeRead(@truncate(addr_st), @truncate(addr_ed), buf_sl);
+    return AddressState.Manager.RangeRead(addr_st, addr_ed, buf_sl);
 }
 
 pub fn RAddressRangeWriteSt(handle: AddressHandle) callconv(.C) bool {
@@ -119,9 +117,10 @@ pub fn RAddressRangeRestore(handle: AddressHandle) callconv(.C) void {
 
 pub fn RAddressRangeContainsRange(handle: AddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.RangeValid(addr_st, addr_ed));
-    const range = AddressState.Manager.RangeGetByHandle(@bitCast(handle)) orelse return false;
-    return addr_st >= range.AddressSt and addr_ed <= range.AddressEd;
+    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
+    const span = AddressState.Manager.RangeSpan(@bitCast(handle));
+    if (span.IsNull()) return false;
+    return addr_st >= span.St and addr_ed <= span.Ed;
 }
 
 // update the memoized copy of the address range with the current contents

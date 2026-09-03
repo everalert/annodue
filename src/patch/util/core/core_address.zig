@@ -40,16 +40,12 @@ comptime {
 //  api (pub functions):
 //  - "default"/unlabeled usage is via handle
 
-// TODO: RangeReleaseByRef to release with pre-knowledge of which RangeListNode
-//  and index the range is at, to prevent having to constantly iterate over
-//  the loop. also need RangeRefByIndex/RangeRefByHandle, and to update any
-//  sites that use RangeGetByHandle/RangeGetByIndex (and their code). maybe
-//  "by ref" should be the default/unlabeled case? also, "by handle" should be
-//  the only pub functions. update: this should be mostly done, just need review
 // TODO: cleanup/rework util->memory
 // TODO: ?? consider bitfield for tracking reserved memory as an optimization over
 //  searching the whole reserve list for 1D collisions; probably not a perf concern
 //  right now, but could be with a lot of live reservations
+// TODO: more comprehensive tests, possibly using more sophisticated test runner
+//  that actually loads the game
 
 pub const AddressHandleOpaque = u32;
 pub const ADDRESS_HANDLE_OPAQUE_NULL: AddressHandleOpaque = 0;
@@ -92,12 +88,12 @@ pub const RangeManager = struct {
     GameMemoryBackup: []u8,
 
     RangeCount: u32,
-    RangeCountMax: u32, // TODO: track peak count for profiling purposes
+    RangeCountPeak: u32,
 
     RangeListHead: *RangeListNode,
     RangeListTail: *RangeListNode,
     RangeListCount: u16,
-    RangeListCountMax: u16, // TODO: track peak count for profiling purposes
+    RangeListCountPeak: u16,
     /// the highest index assignable given the current set of list nodes
     RangeCapacity: u24,
 
@@ -140,9 +136,9 @@ pub const RangeManager = struct {
             .RangeListTail = p_list_head,
             .RangeCapacity = LIST_CAPACITY,
             .RangeCount = 0, // FIXME: should this just count 1 and include the null obj?
-            .RangeCountMax = 0,
+            .RangeCountPeak = 0,
             .RangeListCount = 1,
-            .RangeListCountMax = 1,
+            .RangeListCountPeak = 1,
             .AddressWriting = AddressHandle.Zero,
             .OptImageSize = IMAGE_SIZE,
             .OptImageBase = IMAGE_BASE,
@@ -189,6 +185,7 @@ pub const RangeManager = struct {
         self.RangeListTail.Next = new_list;
         self.RangeListTail = new_list;
         self.RangeListCount += 1;
+        self.RangeListCountPeak = @max(self.RangeListCount, self.RangeListCountPeak);
 
         return new_list;
     }
@@ -345,6 +342,7 @@ pub const RangeManager = struct {
         self.RangeDataSet(ref, range);
 
         self.RangeCount += 1;
+        self.RangeCountPeak = @max(self.RangeCount, self.RangeCountPeak);
 
         @memcpy(self.RangeSliceGetBackup(ref), self.RangeSliceGetAddress(ref));
 
@@ -537,8 +535,11 @@ const AddressHandle = packed struct(u32) {
     }
 };
 
+// TODO: test range release -> range reserve -> handle differs between them
 // TODO: impl more structural approach to test cases
 // TODO: impl Deinit and test
+// TODO: more compact basic usage test that is actually readable as an api reference,
+//  and move the "extras" to separate tests and make those more thorough
 test "Manager: basic usage" {
     const expect = std.testing.expect;
     const expectEqual = std.testing.expectEqual;
@@ -611,29 +612,34 @@ test "Manager: basic usage" {
     const h1 = m.RangeReserve(A1.St, A1.Ed, 0);
     try expectEqual(AddressHandle.Init(1, 1), h1);
     try expect(1 == m.RangeCount);
+    try expect(1 == m.RangeListCount);
 
     // fail: overlapping h1
     try expect(false == m.AddressAvailable(A1F.St, A1F.Ed));
     try expectEqual(AddressHandle.Zero, m.RangeReserve(A1F.St, A1F.Ed, 0));
     try expect(1 == m.RangeCount);
+    try expect(1 == m.RangeListCount);
 
     // different owner (1)
     try expect(true == m.AddressAvailable(A2.St, A2.Ed));
     const h2 = m.RangeReserve(A2.St, A2.Ed, 1);
     try expectEqual(AddressHandle.Init(2, 1), h2);
     try expect(2 == m.RangeCount);
+    try expect(2 == m.RangeListCount);
 
     // different section
     try expect(true == m.AddressAvailable(A3.St, A3.Ed));
     const h3 = m.RangeReserve(A3.St, A3.Ed, 0);
     try expectEqual(AddressHandle.Init(3, 1), h3);
     try expect(3 == m.RangeCount);
+    try expect(2 == m.RangeListCount);
 
     // different owner (2)
     try expect(true == m.AddressAvailable(A4.St, A4.Ed));
     const h4 = m.RangeReserve(A4.St, A4.Ed, 2);
     try expectEqual(AddressHandle.Init(4, 1), h4);
     try expect(4 == m.RangeCount);
+    try expect(3 == m.RangeListCount);
 
     //---------------------------------
     // read-write-reset
@@ -680,6 +686,7 @@ test "Manager: basic usage" {
     m.RangeRelease(h4);
     try expectEqualSlices(u8, r4exp, r4real);
     try expect(0 == m.RangeCount);
+    try expect(4 == m.RangeCountPeak);
 }
 
 // TODO: ?? pass enclosed zero-size case (true == CollisionStrict1D(u8, 2, 5, 3, 3))

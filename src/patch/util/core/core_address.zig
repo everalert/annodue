@@ -18,6 +18,7 @@ const VirtualQuery = w32.system.memory.VirtualQuery;
 const GetLastError = w32.foundation.GetLastError;
 
 const RoundIntUp = @import("../base/base_math.zig").RoundIntUp;
+const CollisionStrict1D = @import("../base/base_math.zig").CollisionStrict1D;
 
 // TODO: also assert windows? (only necessary because memory-related functions
 //  not yet os-agnostic)
@@ -687,30 +688,4 @@ test "Manager: basic usage" {
     try expectEqualSlices(u8, r4exp, r4real);
     try expect(0 == m.RangeCount);
     try expect(4 == m.RangeCountPeak);
-}
-
-// TODO: ?? pass enclosed zero-size case (true == CollisionStrict1D(u8, 2, 5, 3, 3))
-// FIXME: move to libannodue under base_vector or something
-/// slice-style collision check, where n2 values represent first integer
-/// value that is out-of-range (i.e. a2==b1 is not a collision)
-fn CollisionStrict1D(comptime T: type, a1: T, a2: T, b1: T, b2: T) bool {
-    assert(a1 <= a2);
-    assert(b1 <= b2);
-    const st_max = @max(a1, b1);
-    const ed_min = @min(a2, b2);
-    return st_max < ed_min or ed_min > st_max;
-}
-
-test "CollisionStrict1D" {
-    try std.testing.expect(false == CollisionStrict1D(u8, 2, 5, 1, 2)); // outside left
-    try std.testing.expect(false == CollisionStrict1D(u8, 2, 5, 5, 6)); // outside right
-    try std.testing.expect(false == CollisionStrict1D(u8, 2, 5, 2, 2)); // zero-length left
-    try std.testing.expect(false == CollisionStrict1D(u8, 2, 5, 5, 5)); // zero-length right
-    try std.testing.expect(true == CollisionStrict1D(u8, 2, 5, 1, 3)); // partial left
-    try std.testing.expect(true == CollisionStrict1D(u8, 2, 5, 4, 6)); // partial right
-    try std.testing.expect(true == CollisionStrict1D(u8, 2, 5, 1, 6)); // encompassing
-    try std.testing.expect(true == CollisionStrict1D(u8, 2, 5, 3, 4)); // enclosed
-    //try std.testing.expect(true == CollisionStrict1D(u8, 2, 5, 3, 3)); // enclosed, zero size
-    try std.testing.expect(true == CollisionStrict1D(u8, 2, 5, 2, 5)); // equal
-    try std.testing.expect(false == CollisionStrict1D(u8, 2, 2, 2, 2)); // equal both zero
 }

@@ -7,7 +7,7 @@ const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 // FIXME: ?? should these ownership checks not be in some api? not necessarily
 //  the public api but at least organized
-const workingOwnerIsSystem = @import("AHook.zig").PluginState.workingOwnerIsSystem;
+const WorkingOwnerIsSystem = @import("AHook.zig").PluginState.WorkingOwnerIsSystem;
 
 const apih = @import("../util/api/api_helper.zig");
 const MiB = @import("../util/base/base_memory.zig").MiB;
@@ -168,7 +168,7 @@ const GDraw = struct {
 /// @return     true if text successfully added to queue
 pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) callconv(.C) bool {
     if (text == null) return false;
-    if ((layer == .System or layer == .SystemP) and !workingOwnerIsSystem()) return false;
+    if ((layer == .System or layer == .SystemP) and !WorkingOwnerIsSystem()) return false;
     GDraw.insertText(layer, text.?) catch return false;
     return true;
 }
@@ -183,7 +183,7 @@ pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) callconv(.C) bool {
 /// @return     true if text successfully added to queue
 pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_y: i16, rect_color: u32) callconv(.C) bool {
     if (text == null) return false;
-    if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
+    if ((layer == .System or layer == .SystemP or layer == .Debug) and !WorkingOwnerIsSystem()) return false;
 
     GDraw.insertText(layer, text.?) catch return false;
 
@@ -206,7 +206,7 @@ pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_
 /// - set color 0 for default
 /// @return     true if rect successfully added to queue
 pub fn GDrawRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) callconv(.C) bool {
-    if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
+    if ((layer == .System or layer == .SystemP or layer == .Debug) and !WorkingOwnerIsSystem()) return false;
     GDraw.insertRect(layer, x, y, w, h, color) catch return false;
     return true;
 }
@@ -225,7 +225,7 @@ pub fn GDrawRectBdr(
     bdr_w: i16,
     bdr_col: u32,
 ) callconv(.C) bool {
-    if ((layer == .System or layer == .SystemP or layer == .Debug) and !workingOwnerIsSystem()) return false;
+    if ((layer == .System or layer == .SystemP or layer == .Debug) and !WorkingOwnerIsSystem()) return false;
     const bw = bdr_w;
     GDraw.insertRect(layer, x + bw, y + bw, w - bw * 2, h - bw * 2, color) catch return false;
     GDraw.insertRect(layer, x, y, w, bw, bdr_col) catch return false; // T

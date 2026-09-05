@@ -25,7 +25,7 @@ const ADDRESS_HANDLE_NULL = core_address.ADDRESS_HANDLE_OPAQUE_NULL;
 //  AHook then we will depend on the api foundation layer and should no longer
 //  accept null owners. also, the api should be setup to tell use the owner id
 //  directly, so we don't have to do this import at all
-const workingOwner = @import("AHook.zig").PluginState.workingOwner;
+const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const AddressState = struct {
     var Initialized: bool = false;
@@ -79,7 +79,7 @@ pub fn RAddressRangeAvailable(addr_st: u32, addr_ed: u32) callconv(.C) bool {
 pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHandle {
     assert(AddressState.Initialized);
     assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
-    const handle = AddressState.Manager.RangeReserve(addr_st, addr_ed, workingOwner());
+    const handle = AddressState.Manager.RangeReserve(addr_st, addr_ed, WorkingOwner());
     if (handle.IsNull()) panic(
         "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} cannot be reserved",
         .{ addr_st, addr_ed },

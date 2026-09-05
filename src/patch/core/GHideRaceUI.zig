@@ -3,7 +3,7 @@ const std = @import("std");
 const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 const GLOBAL_STATE = &@import("Global.zig").GLOBAL_STATE;
-const workingOwner = @import("AHook.zig").PluginState.workingOwner;
+const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const rq = @import("racer").Quad;
 const rg = @import("racer").Global;
@@ -50,12 +50,12 @@ pub const HideRaceUI = extern struct {
 
 /// @return request processed successfully
 pub fn GHideRaceUIOn() callconv(.C) bool {
-    return HideRaceUI.hide(workingOwner());
+    return HideRaceUI.hide(WorkingOwner());
 }
 
 /// @return request processed successfully
 pub fn GHideRaceUIOff() callconv(.C) bool {
-    return HideRaceUI.unhide(workingOwner());
+    return HideRaceUI.unhide(WorkingOwner());
 }
 
 /// @return game currently hiding race ui via api

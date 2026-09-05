@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
-const workingOwner = @import("AHook.zig").PluginState.workingOwner;
+const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const mem = @import("../util/memory.zig");
 
@@ -58,12 +58,12 @@ pub const Freeze = extern struct {
 
 /// @return request processed successfully
 pub fn GFreezeOn() callconv(.C) bool {
-    return Freeze.freeze(workingOwner());
+    return Freeze.freeze(WorkingOwner());
 }
 
 /// @return request processed successfully
 pub fn GFreezeOff() callconv(.C) bool {
-    return Freeze.unfreeze(workingOwner());
+    return Freeze.unfreeze(WorkingOwner());
 }
 
 /// @return game currently frozen via api

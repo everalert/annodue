@@ -8,7 +8,7 @@ const BOOL = w32.foundation.BOOL;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
-const workingOwner = @import("AHook.zig").PluginState.workingOwner;
+const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
@@ -298,7 +298,7 @@ pub fn RRequest(
     fnUpdate: ?*const fn (*Trig, u16) callconv(.C) void,
 ) callconv(.C) THandle {
     if (id < TRIGGER_LIMIT_INTERNAL) return TNullHandle;
-    return CustomTrigger.insert(workingOwner(), id, fnTrigger, fnInit, fnDestroy, fnUpdate, true) orelse TNullHandle;
+    return CustomTrigger.insert(WorkingOwner(), id, fnTrigger, fnInit, fnDestroy, fnUpdate, true) orelse TNullHandle;
 }
 
 /// release a single handle
@@ -308,7 +308,7 @@ pub fn RRelease(h: THandle) callconv(.C) void {
 
 /// release all handles held by the plugin
 pub fn RReleaseAll() callconv(.C) void {
-    CustomTrigger.removeAll(workingOwner());
+    CustomTrigger.removeAll(WorkingOwner());
 }
 
 // HOOKS

@@ -12,8 +12,8 @@ const w32f = @import("zigwin32").foundation;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
-const workingOwner = @import("AHook.zig").PluginState.workingOwner;
-const workingOwnerIsSystem = @import("AHook.zig").PluginState.workingOwnerIsSystem;
+const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
+const WorkingOwnerIsSystem = @import("AHook.zig").PluginState.WorkingOwnerIsSystem;
 const AMemory = @import("AMemory.zig");
 
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
@@ -30,6 +30,7 @@ const r = @import("racer");
 const rt = r.Text;
 const rti = r.Time;
 
+// TODO: ?? change DEFAULT_ID
 // TODO: add global st/fn ptrs to fnOnChange defs?
 // TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
 // TODO: minor cleanup with handle_map 'update owner' fn?
@@ -928,7 +929,7 @@ pub fn ASectionOccupy(
     fnOnChange: ?*const fn ([*]ASettingSent, usize) callconv(.C) void,
 ) callconv(.C) Handle {
     return ASettings.sectionOccupy(
-        workingOwner(),
+        WorkingOwner(),
         if (section.isNull()) null else section,
         name,
         fnOnChange,
@@ -986,9 +987,9 @@ pub fn ASettingOccupy(
     value_ptr: ?*anyopaque,
     fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
 ) callconv(.C) Handle {
-    if (!workingOwnerIsSystem() and section.isNull()) return NullHandle;
+    if (!WorkingOwnerIsSystem() and section.isNull()) return NullHandle;
     return ASettings.settingOccupy(
-        workingOwner(),
+        WorkingOwner(),
         if (section.isNull()) null else section,
         name,
         value_type,
@@ -1017,21 +1018,21 @@ pub fn ASettingUpdate(handle: Handle, value: ASettingSent.Value) callconv(.C) vo
 /// with the caller.
 /// for internal use; will do nothing if caller is plugin
 pub fn AVacateAll() callconv(.C) void {
-    if (!workingOwnerIsSystem()) return;
-    ASettings.vacateOwner(workingOwner());
+    if (!WorkingOwnerIsSystem()) return;
+    ASettings.vacateOwner(WorkingOwner());
 }
 
 /// revert all entries back to owner-defined defaults
 /// for internal use; will do nothing if caller is plugin
 pub fn ASettingResetAllDefault() callconv(.C) void {
-    if (!workingOwnerIsSystem()) return;
+    if (!WorkingOwnerIsSystem()) return;
     ASettings.settingResetAllToDefaults();
 }
 
 /// revert all entries back to values on file
 /// for internal use; will do nothing if caller is plugin
 pub fn ASettingResetAllFile() callconv(.C) void {
-    if (!workingOwnerIsSystem()) return;
+    if (!WorkingOwnerIsSystem()) return;
     ASettings.settingResetAllToSaved();
 }
 
@@ -1039,14 +1040,14 @@ pub fn ASettingResetAllFile() callconv(.C) void {
 /// will be reflected in the settings file on the following save write
 /// for internal use; will do nothing if caller is plugin
 pub fn ASettingCleanAll() callconv(.C) void {
-    if (!workingOwnerIsSystem()) return;
+    if (!WorkingOwnerIsSystem()) return;
     ASettings.settingRemoveAllVacant();
 }
 
 /// manually trigger write of settings file
 /// for internal use; will do nothing if caller is plugin
 pub fn ASave() callconv(.C) void {
-    if (!workingOwnerIsSystem()) return;
+    if (!WorkingOwnerIsSystem()) return;
     ASettings.save() catch {};
 }
 

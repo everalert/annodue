@@ -3,8 +3,6 @@ const std = @import("std");
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
-const mem = @import("../util/memory.zig");
-
 const rg = @import("racer").Global;
 const re = @import("racer").Entity;
 

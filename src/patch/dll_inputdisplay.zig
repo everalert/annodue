@@ -70,8 +70,8 @@ const InputDisplay = struct {
     const style_left = rt.hMakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
     fn ReadInputs() void {
-        analog = mem.read(@intFromPtr(ri.MAPPED_AXIS), @TypeOf(analog));
-        digital = mem.read(@intFromPtr(ri.MAPPED_BUTTON), @TypeOf(digital));
+        analog = mem.Read(@intFromPtr(ri.MAPPED_AXIS), @TypeOf(analog));
+        digital = mem.Read(@intFromPtr(ri.MAPPED_BUTTON), @TypeOf(digital));
     }
 
     fn GetStick(input: ri.AXIS) f32 {

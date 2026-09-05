@@ -498,9 +498,9 @@ const FontState = struct {
         const unit_scale_x: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_W else 64);
         const unit_scale_y: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_H else 128);
 
-        _ = mem.write(0x42D8EE + 3, u32, table); // font table reference
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
-        _ = mem.write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
+        _ = mem.Write(0x42D8EE + 3, u32, table); // font table reference
+        _ = mem.Write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
+        _ = mem.Write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
     }
 
     pub fn FontLoadAndSet(font: [*:0]const u8) void {
@@ -964,7 +964,7 @@ fn PatchTextClippingBug(apply: bool) void {
         d.addr = x86.ADD(d.addr, .esp, null, .imm, 0x20);
     } else {
         // the original assembly bytes from the replaced code section
-        _ = mem.write_bytes(0x42DD08, &[0x42DD8A - 0x42DD08]u8{
+        _ = mem.WriteBytes(0x42DD08, &[0x42DD8A - 0x42DD08]u8{
             0x3B, 0xD9, 0x7D, 0x1C, 0x2B, 0xCB, 0x8B, 0x5C, 0x24, 0x14, 0x89, 0x4C,
             0x24, 0x44, 0x03, 0xD9, 0xDB, 0x44, 0x24, 0x44, 0x89, 0x5C, 0x24, 0x14,
             0xD8, 0x44, 0x24, 0x18, 0xD9, 0x5C, 0x24, 0x18, 0x3B, 0xC2, 0x7D, 0x1C,

@@ -10,7 +10,7 @@ pub const ALIGN_SIZE: usize = 16;
 pub const DETOUR_LIMIT: usize = 32;
 
 pub fn addr_from_call(src_call: usize) usize {
-    const orig_dest_rel: i32 = mem.read(src_call + 1, i32);
+    const orig_dest_rel: i32 = mem.Read(src_call + 1, i32);
     const orig_dest_abs: usize = @bitCast(@as(i32, @bitCast(src_call + 5)) + orig_dest_rel);
     return orig_dest_abs;
 }
@@ -37,15 +37,15 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
 
     const call_target: usize = addr_from_call(addr_detour + off_call);
     var scratch: [DETOUR_LIMIT]u8 = undefined;
-    mem.read_bytes(addr_detour, scratch[0..len]);
+    mem.ReadBytes(addr_detour, scratch[0..len]);
 
     const off_hook: usize = x86.jmp_rel(addr_detour, off);
     _ = x86.nop_until(off_hook, addr_detour + len);
 
     if (dest_before) |dest| off = x86.call(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, scratch[0..off_call]);
+    off = mem.WriteBytes(off, scratch[0..off_call]);
     off = x86.call(off, call_target);
-    off = mem.write_bytes(off, scratch[off_call + 5 .. len]);
+    off = mem.WriteBytes(off, scratch[off_call + 5 .. len]);
     if (dest_after) |dest| off = x86.call(off, @intFromPtr(dest));
     off = x86.jmp_rel(off, addr_detour + len);
     off = x86.nop_align(off, ALIGN_SIZE);
@@ -60,7 +60,7 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
     assert(len <= DETOUR_LIMIT);
 
     var scratch: [DETOUR_LIMIT]u8 = undefined;
-    mem.read_bytes(addr, scratch[0..len]); // make copy of original asm
+    mem.ReadBytes(addr, scratch[0..len]); // make copy of original asm
 
     var off: usize = memory;
 
@@ -68,7 +68,7 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
     _ = x86.nop_until(off_hook, addr + len);
 
     if (dest_before) |dest| off = x86.jmp_rel(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, scratch[0..len]);
+    off = mem.WriteBytes(off, scratch[0..len]);
     if (dest_after) |dest| off = x86.jmp_rel(off, @intFromPtr(dest));
     off = x86.retn(off);
     off = x86.nop_align(off, ALIGN_SIZE);
@@ -125,10 +125,10 @@ pub fn intercept_call_one_u32_param(memory: usize, off_call: usize, dest_before:
 
 pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
     const item_addr: usize = jt_addr + 4 * jt_idx;
-    const item_target: usize = mem.read(item_addr, u32);
+    const item_target: usize = mem.Read(item_addr, u32);
     var off: usize = memory;
 
-    _ = mem.write(item_addr, u32, off);
+    _ = mem.Write(item_addr, u32, off);
 
     off = x86.call(off, @intFromPtr(dest));
     off = x86.jmp_rel(off, item_target);

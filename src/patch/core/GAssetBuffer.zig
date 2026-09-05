@@ -70,12 +70,12 @@ const GAssetBuffer = struct {
         const tex_count: u32 = @min(TEXBUF_MAX_ITEMS, @max(@max(s_texbuf_size, @as(*u32, @ptrFromInt(0xE9823C)).*), 1700));
 
         // patch TextureBuffer_LoadModelTexture (fn_447490)
-        _ = mem.write(0x4474B1, u32, @intFromPtr(texbuf_alloc.ptr));
-        _ = mem.write(0x4474C4, u32, @intFromPtr(texbuf_alloc.ptr));
-        _ = mem.write(0x447555, u32, @intFromPtr(texbuf_alloc.ptr));
+        _ = mem.Write(0x4474B1, u32, @intFromPtr(texbuf_alloc.ptr));
+        _ = mem.Write(0x4474C4, u32, @intFromPtr(texbuf_alloc.ptr));
+        _ = mem.Write(0x447555, u32, @intFromPtr(texbuf_alloc.ptr));
         // patch TextureBuffer_ClearBufferAfterPtr (fn_4475D0)
-        _ = mem.write(0x4475D5, u32, @intFromPtr(texbuf_alloc.ptr));
-        _ = mem.write(0x4475E7, u32, @intFromPtr(texbuf_alloc.ptr) + tex_count * 4);
+        _ = mem.Write(0x4475D5, u32, @intFromPtr(texbuf_alloc.ptr));
+        _ = mem.Write(0x4475E7, u32, @intFromPtr(texbuf_alloc.ptr) + tex_count * 4);
     }
 
     fn settings_init(gf: *GlobalFn) void {

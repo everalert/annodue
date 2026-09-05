@@ -41,7 +41,7 @@ pub const HideRaceUI = extern struct {
         if (disable and !GLOBAL_STATE.in_race.on()) return;
 
         const instruction: u8 = if (disable) 0xC3 else 0x81; // RETN or original value
-        _ = mem.write(0x463580, u8, instruction); // top of Jdge0x20
+        _ = mem.Write(0x463580, u8, instruction); // top of Jdge0x20
         rq.QUAD_SKIP_RENDERING.* = @intFromBool(disable);
     }
 };

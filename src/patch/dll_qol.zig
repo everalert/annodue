@@ -331,7 +331,7 @@ const QolState = struct {
 
         QuickRaceMenu.values.racers = @intCast(s_default_racers);
         if (QuickRaceMenu.gf.SInitLatePassed()) {
-            _ = mem.write(0x50C558, i8, @as(i8, @intCast(s_default_racers)));
+            _ = mem.Write(0x50C558, i8, @as(i8, @intCast(s_default_racers)));
             re.Manager.entity(.Hang, 0).Racers = @intCast(s_default_racers);
         }
     }
@@ -353,7 +353,7 @@ const QolState = struct {
         if (h_s_default_camera) |h| QuickRaceMenu.gf.ASettingUpdate(h, .{ .u = s_default_camera });
 
         // patch CMan_SetNewCamera_451D60 call at end of CMan_HandlePreRaceSweepCam_451EF0
-        _ = mem.write(0x4525AE, u8, @as(u8, @intCast(s_default_camera)));
+        _ = mem.Write(0x4525AE, u8, @as(u8, @intCast(s_default_camera)));
     }
 
     fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
@@ -451,11 +451,11 @@ fn PatchCameraFKeys(enable: bool) void {
     if (enable) {
         var d: x86.Detour = undefined;
         d.Start(0x451D64, 0x451D6B, QolState.fcam_buf);
-        d.addr = mem.write_bytes(d.addr, &fcam_src_asm);
-        d.addr = mem.write_bytes(d.addr, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }); // mov [eax+80], ecx
+        d.addr = mem.WriteBytes(d.addr, &fcam_src_asm);
+        d.addr = mem.WriteBytes(d.addr, &[6]u8{ 0x89, 0x88, 0x80, 0x00, 0x00, 0x00 }); // mov [eax+80], ecx
         d.End();
     } else {
-        _ = mem.write_bytes(0x451D64, &fcam_src_asm);
+        _ = mem.WriteBytes(0x451D64, &fcam_src_asm);
     }
 }
 
@@ -475,11 +475,11 @@ fn PatchRaceTimerMsFinish(enable: bool) void {
     const end_race_timer_offset: u8 = if (enable) 8 else 0;
     _ = x86.call(0x46252F, @intFromPtr(draw_fn));
     _ = x86.call(0x462660, @intFromPtr(draw_fn));
-    _ = mem.write(0x4623D7, u8, end_race_timer_offset + 91);
-    _ = mem.write(0x4623F1, u8, end_race_timer_offset + 105);
-    _ = mem.write(0x46240B, u8, end_race_timer_offset + 115);
-    _ = mem.write(0x46241E, u8, end_race_timer_offset + 125);
-    _ = mem.write(0x46242D, u8, end_race_timer_offset + 135);
+    _ = mem.Write(0x4623D7, u8, end_race_timer_offset + 91);
+    _ = mem.Write(0x4623F1, u8, end_race_timer_offset + 105);
+    _ = mem.Write(0x46240B, u8, end_race_timer_offset + 115);
+    _ = mem.Write(0x46241E, u8, end_race_timer_offset + 125);
+    _ = mem.Write(0x46242D, u8, end_race_timer_offset + 135);
 }
 
 // PLANET CUTSCENES
@@ -536,8 +536,8 @@ fn PatchN64Pitch(enable: bool) void {
 fn PatchViewportEdges(enable: bool) void {
     const h: u8 = if (enable) 0x90 else 0x48; // dec eax = height
     const w: u8 = if (enable) 0x90 else 0x49; // dec ecx = width
-    _ = mem.write(0x44F610, u8, h);
-    _ = mem.write(0x44F611, u8, w);
+    _ = mem.Write(0x44F610, u8, h);
+    _ = mem.Write(0x44F611, u8, w);
 }
 
 // WINDOW
@@ -552,7 +552,7 @@ fn PatchWindowBackgroundActivity(enable: bool) void {
         offset = x86.mov_esi_imm32(offset, u32, 1);
         offset = x86.nop_until(offset, 0x423AE1 + window_activity_asm.len);
     } else {
-        offset = mem.write_bytes(offset, &window_activity_asm);
+        offset = mem.WriteBytes(offset, &window_activity_asm);
     }
     std.debug.assert(offset == 0x423AE9);
 }
@@ -572,7 +572,7 @@ fn ToggleJinnReeso() callconv(.C) void {
         var on: bool = false;
     };
     if (!state.initialized) {
-        state.on = mem.read(rv.JINN_REESO_METADATA_ADDR + 4, u32) == 299;
+        state.on = mem.Read(rv.JINN_REESO_METADATA_ADDR + 4, u32) == 299;
         state.initialized = true;
     }
 
@@ -586,23 +586,23 @@ fn ToggleJinnReeso() callconv(.C) void {
 
 fn DisableJinnReeso() callconv(.C) void {
     //VehicleMetadata = 0x4C28A0
-    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
-    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
-    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
-    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
-    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
-    _ = mem.write(comptime rv.JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
+    _ = mem.Write(comptime rv.JINN_REESO_METADATA_ADDR + 0x04, u32, 16); // Podd
+    _ = mem.Write(comptime rv.JINN_REESO_METADATA_ADDR + 0x08, u32, 18); // MAlt
+    _ = mem.Write(comptime rv.JINN_REESO_METADATA_ADDR + 0x0C, u32, 263); // PartLo
+    _ = mem.Write(comptime rv.JINN_REESO_METADATA_ADDR + 0x30, u32, 92); // Pupp
+    _ = mem.Write(comptime rv.JINN_REESO_METADATA_ADDR + 0x14, u32, 0x4C397C); // PtrFirst
+    _ = mem.Write(comptime rv.JINN_REESO_METADATA_ADDR + 0x18, u32, 0x4C3964); // PtrLast
     //MysteryStruct = 0x4C73E8
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
-    _ = mem.write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x0C, u32, 0x40A8A3D7);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x24, u32, 0x3FA147AE);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x28, u32, 0x4043D70A);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x2C, u32, 0xBF3D70A4);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x30, u32, 0xC0147AE1);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x34, u32, 0xC06F5C29);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x38, u32, 0x3EF0A3D7);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x3C, u32, 0x401851EC);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x40, u32, 0x00000000);
+    _ = mem.Write(comptime rv.JINN_REESO_MYSTERY_ADDR + 0x44, u32, 0x00000000);
 }
 
 fn PatchCyYungaCheat(enable: bool) void {
@@ -615,7 +615,7 @@ fn ToggleCyYunga() callconv(.C) void {
         var on: bool = false;
     };
     if (!state.initialized) {
-        state.on = mem.read(rv.CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
+        state.on = mem.Read(rv.CY_YUNGA_METADATA_ADDR + 4, u32) == 301;
         state.initialized = true;
     }
 
@@ -629,24 +629,24 @@ fn ToggleCyYunga() callconv(.C) void {
 
 fn DisableCyYunga() callconv(.C) void {
     //VehicleMetadata = 0x4C2B78
-    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
-    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
-    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
-    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
-    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
-    _ = mem.write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
+    _ = mem.Write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x04, u32, 46); // Podd
+    _ = mem.Write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x08, u32, 45); // MAlt
+    _ = mem.Write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x0C, u32, 277); // PartLo
+    _ = mem.Write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x30, u32, 108); // Pupp
+    _ = mem.Write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x14, u32, 0x4C36C4); // PtrFirst
+    _ = mem.Write(comptime rv.CY_YUNGA_METADATA_ADDR + 0x18, u32, 0x4C36A8); // PtrLast
     //MysteryStruct = 0x4C79D0
-    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
-    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
-    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
-    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
-    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
-    _ = mem.write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
+    _ = mem.Write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x30, u32, 0x00000000);
+    _ = mem.Write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x34, u32, 0x3F7AE148);
+    _ = mem.Write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x38, u32, 0x3F6E147B);
+    _ = mem.Write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x3C, u32, 0x3F851EB8);
+    _ = mem.Write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x40, u32, 0x3F8A3D71);
+    _ = mem.Write(comptime rv.CY_YUNGA_MYSTERY_ADDR + 0x44, u32, 0x3DCCCCCD);
 }
 
 fn PatchCyYungaCheatAudio(enable: bool) void {
     const id: u8 = if (enable) 0x2D else 0xFF;
-    _ = mem.write(comptime 0x41057D + 0x01, u8, id);
+    _ = mem.Write(comptime 0x41057D + 0x01, u8, id);
 }
 
 // infinite uses and greater amount
@@ -654,13 +654,13 @@ fn PatchTrugutsCheat(enable: bool) void {
     const amount_addr: u32 = 0x410700 + 6;
     const uses_addr: u32 = 0x410F8C;
     if (enable) {
-        _ = mem.write(amount_addr, u32, 10000);
+        _ = mem.Write(amount_addr, u32, 10000);
         var off: u32 = uses_addr;
         off = x86.jmp_rel(off, 0x410FB4); // skip limit check
         off = x86.nop_until(off, 0x410F90);
     } else {
-        _ = mem.write(amount_addr, u32, 1000);
-        _ = mem.write_bytes(uses_addr, &[4]u8{ 0x8B, 0x44, 0x24, 0x10 }); // mov eax, [esp+0x10]
+        _ = mem.Write(amount_addr, u32, 1000);
+        _ = mem.WriteBytes(uses_addr, &[4]u8{ 0x8B, 0x44, 0x24, 0x10 }); // mov eax, [esp+0x10]
     }
 }
 
@@ -682,8 +682,8 @@ fn PatchTrackSelectEntry(enable: bool) void {
         var o = x86.call(off2, @intFromPtr(&CallbackTrackSelectEntry));
         _ = x86.nop_until(o, end2);
     } else {
-        _ = mem.write_bytes(off1, &[3]u8{ 0x88, 0x5E, 0x5E }); // mov r/m8, r8
-        _ = mem.write_bytes(off2, &[6]u8{ 0x89, 0x1D, 0xD0, 0x95, 0xE2, 0x00 }); // mov r/m32, r32
+        _ = mem.WriteBytes(off1, &[3]u8{ 0x88, 0x5E, 0x5E }); // mov r/m8, r8
+        _ = mem.WriteBytes(off2, &[6]u8{ 0x89, 0x1D, 0xD0, 0x95, 0xE2, 0x00 }); // mov r/m32, r32
     }
 }
 
@@ -715,13 +715,13 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // pod select: wait time before advancing after selecting pod
     if (enable) {
         // skip through special state that makes you wait before transitioning
-        off = mem.write_bytes(0x435B6D, &[10]u8{ //mov [E295A0], 00000000 (MenuTimer1=0.0)
+        off = mem.WriteBytes(0x435B6D, &[10]u8{ //mov [E295A0], 00000000 (MenuTimer1=0.0)
             0xC7, 0x05, 0xA0, 0x95, 0xE2, 0x00,
             0x00, 0x00, 0x00, 0x00,
         }); // set timer to how it would be at the end of running normally
         off = x86.nop_until(off, 0x435B87); // skip everything until part where state is changed
     } else {
-        _ = mem.write_bytes(0x435B6D, &[26]u8{ // original logic decrementing and checking timer
+        _ = mem.WriteBytes(0x435B6D, &[26]u8{ // original logic decrementing and checking timer
             0x68, 0x33, 0x33, 0x53, 0xC0, 0xE8, 0x19, 0x40, 0x03, 0x00, 0xD8, 0x1D,
             0x78, 0xC7, 0x4A, 0x00, 0x83, 0xC4, 0x04, 0xDF, 0xE0, 0xF6, 0xC4, 0x40,
             0x74, 0x0A,
@@ -746,13 +746,13 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // TODO: fix animation snapping on repetitive inputs
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
     if (enable) {
-        _ = mem.write(0x43921E + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (left)
-        _ = mem.write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (right)
+        _ = mem.Write(0x43921E + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (left)
+        _ = mem.Write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (right)
         _ = x86.nop_until(0x439233, 0x439233 + 6); // camera is animating check (left)
         _ = x86.nop_until(0x4392F9, 0x4392F9 + 6); // camera is animating check (right)
     } else {
-        _ = mem.write(0x43921E + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x10
-        _ = mem.write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x20
+        _ = mem.Write(0x43921E + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x10
+        _ = mem.Write(0x4392E4 + 2, u32, @intFromPtr(ri.MENU_RAW)); // test byte ptr [50C908], 0x20
         _ = x86.JZ(0x439233, 0x4392E4);
         _ = x86.JZ(0x4392F9, 0x4393A2);
     }
@@ -762,7 +762,7 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
     if (enable) {
         var d: x86.Detour = undefined;
-        _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
+        _ = mem.Write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
         d.Start(0x43AFAE, 0x43AFB9, nav_asm[0..48]);
         d.addr = x86.CMP(d.addr, .cx, null, .imm, 1);
@@ -781,13 +781,13 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         d.addr = x86.JNZ(d.addr, 0x43AFDA);
         d.End();
     } else {
-        _ = mem.write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
+        _ = mem.Write(0x43AE9D + 1, u32, @intFromPtr(ri.MENU_RAW)); // mov ebp, 50C908
         _ = x86.JNZ(0x43AF93, 0x43AFE0);
-        _ = mem.write_bytes(0x43AFAE, &[11]u8{ // camera anim state checks (left scroll)
+        _ = mem.WriteBytes(0x43AFAE, &[11]u8{ // camera anim state checks (left scroll)
             0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
             0x66, 0x3B, 0xCF, 0x75, 0x05,
         });
-        _ = mem.write_bytes(0x43AFCB, &[11]u8{ // camera anim state checks (right scroll)
+        _ = mem.WriteBytes(0x43AFCB, &[11]u8{ // camera anim state checks (right scroll)
             0x66, 0x83, 0xF9, 0x05, 0x74, 0x05,
             0x66, 0x3B, 0xCF, 0x75, 0x04,
         });
@@ -795,13 +795,13 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
 
     // general: horizontal hold scroll speed (pod, track, watto shop)
     if (enable) {
-        _ = mem.write(0x469D46 + 6, f32, 0.24); // hold initial delay (left)
-        _ = mem.write(0x469CBC + 6, f32, 0.24); // hold initial delay (right)
-        _ = mem.write(0x4AD588, f32, 0.04); // hold fast delay (both)
+        _ = mem.Write(0x469D46 + 6, f32, 0.24); // hold initial delay (left)
+        _ = mem.Write(0x469CBC + 6, f32, 0.24); // hold initial delay (right)
+        _ = mem.Write(0x4AD588, f32, 0.04); // hold fast delay (both)
     } else {
-        _ = mem.write(0x469D46 + 6, f32, 0.6); // dflt 0.6 3F19999A
-        _ = mem.write(0x469CBC + 6, f32, 0.6); // dflt 0.6 3F19999A
-        _ = mem.write(0x4AD588, f32, 0.1); // dflt 0.1 3DCCCCCD
+        _ = mem.Write(0x469D46 + 6, f32, 0.6); // dflt 0.6 3F19999A
+        _ = mem.Write(0x469CBC + 6, f32, 0.6); // dflt 0.6 3F19999A
+        _ = mem.Write(0x4AD588, f32, 0.1); // dflt 0.1 3DCCCCCD
     }
 
     // general: cutscene speed (affects several camera transitions)
@@ -828,11 +828,11 @@ fn PatchMenuNavigationSpeedTransitions(enable: bool) void {
 
     if (actually_enable) {
         // increase last arg of calls to Hang__45C560 in Hang_DoCameraTransition__45C3C0
-        _ = mem.write(0x45C44D + 1, f32, 30.0); // push 30.0
-        _ = mem.write(0x45C471 + 1, f32, 20.0); // push 20.0
+        _ = mem.Write(0x45C44D + 1, f32, 30.0); // push 30.0
+        _ = mem.Write(0x45C471 + 1, f32, 20.0); // push 20.0
     } else {
-        _ = mem.write(0x45C44D + 1, f32, 1.5); // dflt 1.5 3FC00000
-        _ = mem.write(0x45C471 + 1, f32, 1.0); // dflt 1.0 3F800000
+        _ = mem.Write(0x45C44D + 1, f32, 1.5); // dflt 1.5 3FC00000
+        _ = mem.Write(0x45C471 + 1, f32, 1.0); // dflt 1.0 3F800000
     }
 }
 
@@ -864,10 +864,10 @@ const FastCountdown = struct {
         const prerace_max_time: u32 = if (enable) @bitCast(9.10 + CountDif) else 0x4111999A; // 9.10
         const boost_window_min: u32 = if (enable) @bitCast(0.05 * CountRatio) else 0x3D4CCCCD; // 0.05
         const boost_window_max: u32 = if (enable) @bitCast(0.30 * CountRatio) else 0x3E99999A; // 0.30
-        _ = mem.write(0x45E628, usize, addr);
-        _ = mem.write(0x45E2D5, u32, prerace_max_time);
-        _ = mem.write(0x4AD254, u32, boost_window_min);
-        _ = mem.write(0x4AD258, u32, boost_window_max);
+        _ = mem.Write(0x45E628, usize, addr);
+        _ = mem.Write(0x45E2D5, u32, prerace_max_time);
+        _ = mem.Write(0x4AD254, u32, boost_window_min);
+        _ = mem.Write(0x4AD258, u32, boost_window_max);
     }
 };
 
@@ -1153,7 +1153,7 @@ const QuickRaceMenu = extern struct {
 
         // NOTE: laps, racers handled by settings update fn
         FpsTimer.SetPeriod(@intCast(values.fps));
-        _ = mem.write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
+        _ = mem.Write(0xE35A84, u8, @as(u8, @intCast(values.vehicle))); // file slot 0 - character
         var hang = re.Manager.entity(.Hang, 0);
         hang.VehiclePlayer = @intCast(values.vehicle);
         hang.Track = @intCast(values.track);
@@ -1491,7 +1491,7 @@ export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     // TODO: change annodue setting to i32 for both, also look into anywhere
     // else like this that might have been affected by new Hang stuff
     hang.Laps = @intCast(QolState.s_default_laps);
-    _ = mem.write(0x50C558, i8, @as(i8, @intCast(QolState.s_default_racers))); // racers
+    _ = mem.Write(0x50C558, i8, @as(i8, @intCast(QolState.s_default_racers))); // racers
 
     if (QolState.s_trackselect_remember) {
         hang.Track = @truncate(QolState.s_trackselect_last);
@@ -1519,7 +1519,7 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
     PatchWindowBackgroundActivity(false);
     PatchTrackSelectEntry(false);
     PatchMenuNavigationSpeed(false);
-    _ = mem.write(0x4525AE, u8, 1); // undo 'default_camera'
+    _ = mem.Write(0x4525AE, u8, 1); // undo 'default_camera'
 
     FastCountdown.patch(false);
 }
@@ -1556,8 +1556,8 @@ export fn InputUpdateKeyboardA(_: *GlobalFn) callconv(.C) void {
     // map xinput start to esc
     const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
     const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
-    _ = mem.write(ri.RAW_STATE_ON_ADDR + 4, u32, start_on);
-    _ = mem.write(ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
+    _ = mem.Write(ri.RAW_STATE_ON_ADDR + 4, u32, start_on);
+    _ = mem.Write(ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
 }
 
 export fn TimerUpdateB(gf: *GlobalFn) callconv(.C) void {
@@ -1576,7 +1576,7 @@ export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
     if (QolState.h_s_default_laps != null and laps != QolState.s_default_laps)
         gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .u = laps });
 
-    const racers: u32 = @intCast(mem.read(0x50C558, i8));
+    const racers: u32 = @intCast(mem.Read(0x50C558, i8));
     if (QolState.h_s_default_racers != null and racers != QolState.s_default_racers)
         gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .u = racers });
 

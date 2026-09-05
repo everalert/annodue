@@ -19,7 +19,6 @@ const MiB = @import("../util/base/base_memory.zig").MiB;
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
 const x86 = @import("../util/x86.zig");
-const mem = @import("../util/memory.zig");
 
 const r = @import("racer");
 const t = r.Text;

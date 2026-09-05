@@ -28,7 +28,6 @@ const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
 const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
-const mem = @import("../util/memory.zig");
 const apih = @import("../util/api/api_helper.zig");
 const debug = @import("../util/debug/debug.zig");
 

@@ -1,11 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const mem = @import("memory.zig");
 const assert = std.debug.assert;
 const bytesToHex = std.fmt.bytesToHex;
 const fmtSliceHexUpper = std.fmt.fmtSliceHexUpper;
 const minInt = std.math.minInt;
 const maxInt = std.math.maxInt;
+
+const mem = @import("memory.zig");
 
 comptime {
     assert(builtin.target.cpu.arch == .x86); // example build command flag:  -target x86-windows
@@ -13,21 +14,18 @@ comptime {
 
 // NOTE: supporting x86 only, not x86_64
 // NOTE: instructions roughly organized according to pnx.tf reference
-// NOTE: run tests in x86-windows mode
-//  `zig test src/patch/util/x86.zig -target x86-windows -freference-trace`
+// WARN: memory writes assume appropriate page protections are already set
 
 // TODO: some kind of documentation at the top summarizing the overall themes
 //  with the api design
-// TODO: change all u32 to u32; ensures correct size of address-related params
-//  when not compiling for x86 target
 // TODO: remove windows requirement; not urgent, not using this outside of
-//  windows for now anyway
+//  windows for now anyway. requires OS abstraction in memory.zig
 // FIXME: cut down on comptime requirements as much as possible (to reduce
 //  function coloring)
 // FIXME: some of the tests are getting stupid/redundant af, maybe add some
 //  integration/end-to-end style testing to cover it more concisely? or generally
 //  rethink where test content goes so that there isn't so much implicit redundancy
-// see: BSWAP, Jcc, etc.
+//  see: BSWAP, Jcc, etc.
 // FIXME: values are "type-less" because two's complement makes signed/unsigned
 //  the same at bit-level; what convention should be used to allow user to use
 //  both iN/uN types? or is it ok to just let them spam `@bitCast`?
@@ -41,6 +39,7 @@ comptime {
 // https://www.c-jump.com/CIS77/reference/Instructions_by_Opcode.html
 // http://ref.x86asm.net/coder32.html
 // https://pnx.tf/files/x86_opcode_structure_and_instruction_overview.pdf
+// https://www.cs.uaf.edu/2016/fall/cs301/lecture/09_28_machinecode.html
 // https://shell-storm.org/online/Online-Assembler-and-Disassembler/
 // https://disasm.pro/
 // https://godbolt.org/
@@ -190,18 +189,18 @@ pub fn Instruction(comptime TD: type) type {
 
             // prefixes
             // WARN: apparently the prefix order doesn't matter, but if it crashes try swapping these
-            addr = if (self.BehaviorPf) |b| mem.write(addr, u8, @intFromEnum(b)) else addr;
-            addr = if (self.SegmentPf) |s| mem.write(addr, u8, @intFromEnum(s)) else addr;
+            addr = if (self.BehaviorPf) |b| mem.Write(addr, u8, @intFromEnum(b)) else addr;
+            addr = if (self.SegmentPf) |s| mem.Write(addr, u8, @intFromEnum(s)) else addr;
             addr = if (self.bForceAddressPf or b_16bit_addr) OverrideAddressSizePf(addr) else addr;
             addr = if (self.bForceOperandPf or b_16bit_open) OverrideOperandSizePf(addr) else addr;
 
             addr = EmitOpcode(addr, self.Opcode, self.bTwoByteOpcode);
 
-            addr = if (mod_rm_byte) |mod| mem.write(addr, u8, @as(u8, @bitCast(mod))) else addr;
+            addr = if (mod_rm_byte) |mod| mem.Write(addr, u8, @as(u8, @bitCast(mod))) else addr;
             // TODO: sib
 
-            addr = mem.write_bytes(addr, dsp_sl);
-            addr = mem.write_bytes(addr, imm_sl);
+            addr = mem.WriteBytes(addr, dsp_sl);
+            addr = mem.WriteBytes(addr, imm_sl);
 
             return addr;
         }
@@ -210,8 +209,8 @@ pub fn Instruction(comptime TD: type) type {
 
 /// helper to write simple opcode with optional two-byte prefix
 pub inline fn EmitOpcode(write_at: u32, opcode: u8, b_two_byte: bool) u32 {
-    var addr = if (b_two_byte) mem.write(write_at, u8, 0x0F) else write_at;
-    return mem.write(addr, u8, opcode);
+    var addr = if (b_two_byte) mem.Write(write_at, u8, 0x0F) else write_at;
+    return mem.Write(addr, u8, opcode);
 }
 
 pub inline fn EncodeRegisterOp(base: u8, reg: GenReg) u8 {
@@ -359,7 +358,7 @@ pub inline fn op_r16(
     comptime base: u8,
     reg: GenReg16,
 ) u32 {
-    return mem.write_bytes(write_at, &[2]u8{ 0x66, base + @intFromEnum(reg) });
+    return mem.WriteBytes(write_at, &[2]u8{ 0x66, base + @intFromEnum(reg) });
 }
 
 // FIXME: remove, replace usage with EncodeRegisterOp
@@ -368,7 +367,7 @@ pub inline fn op_r32(
     comptime base: u8,
     reg: GenReg32,
 ) u32 {
-    return mem.write(write_at, u8, base + @intFromEnum(reg));
+    return mem.Write(write_at, u8, base + @intFromEnum(reg));
 }
 
 pub inline fn op_imm8(
@@ -376,7 +375,7 @@ pub inline fn op_imm8(
     comptime op: u8,
     value: u8,
 ) u32 {
-    return mem.write_bytes(write_at, &[2]u8{ op, value });
+    return mem.WriteBytes(write_at, &[2]u8{ op, value });
 }
 
 pub inline fn op_imm32(
@@ -384,8 +383,8 @@ pub inline fn op_imm32(
     comptime op: u8,
     value: u32,
 ) u32 {
-    var addr = mem.write(write_at, u8, op);
-    return mem.write(addr, u32, value);
+    var addr = mem.Write(write_at, u8, op);
+    return mem.Write(addr, u32, value);
 }
 
 pub inline fn op_modRM(
@@ -395,8 +394,8 @@ pub inline fn op_modRM(
     comptime dest: GenReg32,
     comptime src: GenReg32,
 ) u32 {
-    var addr = mem.write(write_at, u8, op);
-    return mem.write(addr, u8, comptime parseModRM(mod, dest, src));
+    var addr = mem.Write(write_at, u8, op);
+    return mem.Write(addr, u8, comptime parseModRM(mod, dest, src));
 }
 
 pub inline fn op_modMR(
@@ -406,8 +405,8 @@ pub inline fn op_modMR(
     comptime dest: GenReg32,
     comptime src: GenReg32,
 ) u32 {
-    var addr = mem.write(write_at, u8, op);
-    return mem.write(addr, u8, comptime parseModMR(mod, dest, src));
+    var addr = mem.Write(write_at, u8, op);
+    return mem.Write(addr, u8, comptime parseModMR(mod, dest, src));
 }
 
 // ------------------
@@ -485,10 +484,10 @@ fn GenericArithmeticInstruction(write_at: u32, dst: GenReg, v1: ?i32, src: GenRe
 
     var addr = write_at;
     addr = if (b_16bit) OverrideOperandSizePf(addr) else addr;
-    addr = mem.write(addr, u8, base);
-    addr = if (mod_rm) |m| mem.write(addr, u8, @as(u8, @bitCast(m))) else addr;
-    addr = if (v1_b) |b| mem.write_bytes(addr, b[0..v1_s]) else addr;
-    addr = if (v2_b) |b| mem.write_bytes(addr, b[0..v2_s]) else addr;
+    addr = mem.Write(addr, u8, base);
+    addr = if (mod_rm) |m| mem.Write(addr, u8, @as(u8, @bitCast(m))) else addr;
+    addr = if (v1_b) |b| mem.WriteBytes(addr, b[0..v1_s]) else addr;
+    addr = if (v2_b) |b| mem.WriteBytes(addr, b[0..v2_s]) else addr;
     return addr;
 }
 
@@ -757,22 +756,22 @@ test "SHR" {
 
 /// AAA — ASCII Adjust After Addition
 pub fn AAA(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x37);
+    return mem.Write(write_at, u8, 0x37);
 }
 
 /// AAS — ASCII Adjust AL After Subtraction
 pub fn AAS(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x3F);
+    return mem.Write(write_at, u8, 0x3F);
 }
 
 /// DAA — Decimal Adjust AL After Addition
 pub fn DAA(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x27);
+    return mem.Write(write_at, u8, 0x27);
 }
 
 /// DAS — Decimal Adjust AL After Subtraction
 pub fn DAS(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x2F);
+    return mem.Write(write_at, u8, 0x2F);
 }
 
 // --------------------------
@@ -825,7 +824,7 @@ fn JccInstruction(write_at: u32, jump_to: u32, cond: Condition) u32 {
     var addr = write_at;
     addr = ConditionalInstructionBase(addr, cond, b_twobyte, base);
     offset -= if (b_twobyte) 6 else 2; // offset is from EIP, so we adjust it
-    addr = mem.write_bytes(addr, @as([*]const u8, @ptrCast(&offset))[0..offset_w]);
+    addr = mem.WriteBytes(addr, @as([*]const u8, @ptrCast(&offset))[0..offset_w]);
     return addr;
 }
 
@@ -974,8 +973,8 @@ fn JccCXInstruction(write_at: u32, jump_to: u32, reg: GenReg) u32 {
 
     var addr = write_at;
     addr = if (b_16bit) OverrideAddressSizePf(addr) else addr;
-    addr = mem.write(addr, u8, 0xE3);
-    addr = mem.write(addr, i8, @as(i8, @truncate(offset)));
+    addr = mem.Write(addr, u8, 0xE3);
+    addr = mem.Write(addr, i8, @as(i8, @truncate(offset)));
     return addr;
 }
 
@@ -1024,9 +1023,9 @@ pub fn jmp_rel(write_at: u32, jump_to: u32) u32 {
 
     var addr = write_at;
     addr = if (b_16bit) OverrideOperandSizePf(addr) else addr;
-    addr = mem.write(addr, u8, base);
+    addr = mem.Write(addr, u8, base);
     offset -= @bitCast(addr - write_at + offset_w); // offset is from EIP, so we adjust it
-    addr = mem.write_bytes(addr, @as([*]const u8, @ptrCast(&offset))[0..offset_w]);
+    addr = mem.WriteBytes(addr, @as([*]const u8, @ptrCast(&offset))[0..offset_w]);
     return addr;
 }
 
@@ -1074,8 +1073,8 @@ test "JMP" {
 
 pub fn test_rm32_r32(write_at: u32, r32: u8) u32 {
     var addr = write_at;
-    addr = mem.write(addr, u8, 0x85);
-    addr = mem.write(addr, u8, r32);
+    addr = mem.Write(addr, u8, 0x85);
+    addr = mem.Write(addr, u8, r32);
     return addr;
 }
 
@@ -1093,15 +1092,15 @@ pub fn test_edx_edx(write_at: u32) u32 {
 // call_rel32
 pub fn call(write_at: u32, fn_addr: u32) u32 {
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xE8);
-    addr = mem.write(addr, i32, @as(i32, @bitCast(fn_addr)) - (@as(i32, @bitCast(addr)) + 4));
+    addr = mem.Write(addr, u8, 0xE8);
+    addr = mem.Write(addr, i32, @as(i32, @bitCast(fn_addr)) - (@as(i32, @bitCast(addr)) + 4));
     return addr;
 }
 
 pub fn call_rm32(write_at: u32, fn_addr: u32) u32 {
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xFF);
-    addr = mem.write(addr, u32, fn_addr);
+    addr = mem.Write(addr, u8, 0xFF);
+    addr = mem.Write(addr, u32, fn_addr);
     return addr;
 }
 
@@ -1118,13 +1117,13 @@ pub fn call_one_u32_param(write_at: u32, fn_addr: u32) u32 {
 // return
 
 pub fn retn(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xC3);
+    return mem.Write(write_at, u8, 0xC3);
 }
 
 pub fn retn_imm16(write_at: u32, bytes: u16) u32 {
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xC2);
-    addr = mem.write(addr, u16, bytes);
+    addr = mem.Write(addr, u8, 0xC2);
+    addr = mem.Write(addr, u16, bytes);
     return addr;
 }
 
@@ -1136,44 +1135,44 @@ pub inline fn IRET(write_at: u32) u32 {
 
 /// IRETD — Interrupt Return
 pub inline fn IRETD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xCF);
+    return mem.Write(write_at, u8, 0xCF);
 }
 
 // clearing
 
 /// CMC — Complement Carry Flag
 pub fn CMC(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xF5);
+    return mem.Write(write_at, u8, 0xF5);
 }
 
 /// CLC — Clear Carry Flag
 pub fn CLC(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xF8);
+    return mem.Write(write_at, u8, 0xF8);
 }
 
 /// STC — Set Carry Flag
 pub fn STC(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xF9);
+    return mem.Write(write_at, u8, 0xF9);
 }
 
 /// CLI — Clear Interrupt Flag
 pub fn CLI(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xFA);
+    return mem.Write(write_at, u8, 0xFA);
 }
 
 /// STI — Set Interrupt Flag
 pub fn STI(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xFB);
+    return mem.Write(write_at, u8, 0xFB);
 }
 
 /// CLD — Clear Direction Flag
 pub fn CLD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xFC);
+    return mem.Write(write_at, u8, 0xFC);
 }
 
 /// STD — Set Direction Flag
 pub fn STD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xFD);
+    return mem.Write(write_at, u8, 0xFD);
 }
 
 // -----
@@ -1195,10 +1194,10 @@ pub inline fn push(write_at: u32, src: PushSrc) u32 {
         .imm8 => |imm| return op_imm8(write_at, 0x6A, imm),
         .imm16, .imm32 => |imm| return op_imm32(write_at, 0x68, imm),
         .seg => |seg| return switch (seg) {
-            .cs => mem.write(write_at, u8, 0x0E),
-            .ss => mem.write(write_at, u8, 0x16),
-            .ds => mem.write(write_at, u8, 0x1E),
-            .es => mem.write(write_at, u8, 0x06),
+            .cs => mem.Write(write_at, u8, 0x0E),
+            .ss => mem.Write(write_at, u8, 0x16),
+            .ds => mem.Write(write_at, u8, 0x1E),
+            .es => mem.Write(write_at, u8, 0x06),
             .fs => EmitOpcode(write_at, 0xA0, true),
             .gs => EmitOpcode(write_at, 0xA8, true),
         },
@@ -1213,7 +1212,7 @@ pub inline fn PUSHA(write_at: u32) u32 {
 
 /// PUSHA/PUSHAD – Pop All General Registers
 pub inline fn PUSHAD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x60);
+    return mem.Write(write_at, u8, 0x60);
 }
 
 /// PUSHF/PUSHFD – Pop Stack into FLAGS or EFLAGS Register
@@ -1224,7 +1223,7 @@ pub inline fn PUSHF(write_at: u32) u32 {
 
 /// PUSHF/PUSHFD – Pop Stack into FLAGS or EFLAGS Register
 pub inline fn PUSHFD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x9C);
+    return mem.Write(write_at, u8, 0x9C);
 }
 
 pub const PopDest = union(enum) { seg: SegReg, r16: GenReg16, r32: GenReg32 };
@@ -1236,9 +1235,9 @@ pub inline fn pop(write_at: u32, dest: PopDest) u32 {
         .r16 => |reg| return op_r16(write_at, 0x58, reg),
         .r32 => |reg| return op_r32(write_at, 0x58, reg),
         .seg => |seg| return switch (seg) {
-            .ds => mem.write(write_at, u8, 0x1F),
-            .es => mem.write(write_at, u8, 0x07),
-            .ss => mem.write(write_at, u8, 0x17),
+            .ds => mem.Write(write_at, u8, 0x1F),
+            .es => mem.Write(write_at, u8, 0x07),
+            .ss => mem.Write(write_at, u8, 0x17),
             .fs => EmitOpcode(write_at, 0xA1, true),
             .gs => EmitOpcode(write_at, 0xA9, true),
             else => @panic("pop(): invalid segment register"),
@@ -1254,7 +1253,7 @@ pub inline fn POPA(write_at: u32) u32 {
 
 /// POPA/POPAD – Pop All General Registers
 pub inline fn POPAD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x61);
+    return mem.Write(write_at, u8, 0x61);
 }
 
 /// POPF/POPFD – Pop Stack into FLAGS or EFLAGS Register
@@ -1265,7 +1264,7 @@ pub inline fn POPF(write_at: u32) u32 {
 
 /// POPF/POPFD – Pop Stack into FLAGS or EFLAGS Register
 pub inline fn POPFD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x9D);
+    return mem.Write(write_at, u8, 0x9D);
 }
 
 // ------
@@ -1275,12 +1274,12 @@ pub inline fn POPFD(write_at: u32) u32 {
 
 /// SAHF — Store AH Into Flags
 pub fn SAHF(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x9E);
+    return mem.Write(write_at, u8, 0x9E);
 }
 
 /// LAHF — Load Status Flags Into AH Register
 pub fn LAHF(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x9F);
+    return mem.Write(write_at, u8, 0x9F);
 }
 
 /// CBW — Convert Byte to Word
@@ -1291,7 +1290,7 @@ pub inline fn CBW(write_at: u32) u32 {
 
 /// CWDE — Convert Word to Doubleword
 pub inline fn CWDE(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x98);
+    return mem.Write(write_at, u8, 0x98);
 }
 
 /// CDQ — Convert Doubleword to Quadword
@@ -1302,7 +1301,7 @@ pub inline fn CDQ(write_at: u32) u32 {
 
 /// CWD — Convert Word to Doubleword
 pub inline fn CWD(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x99);
+    return mem.Write(write_at, u8, 0x99);
 }
 
 // mov
@@ -1310,42 +1309,42 @@ pub inline fn CWD(write_at: u32) u32 {
 pub fn mov_ecx_imm32(write_at: u32, comptime T: type, imm32: T) u32 {
     assert(T == u8 or T == u32);
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xB9); // EDX=BA, EBX=BB
-    addr = mem.write(addr, T, imm32);
+    addr = mem.Write(addr, u8, 0xB9); // EDX=BA, EBX=BB
+    addr = mem.Write(addr, T, imm32);
     return addr;
 }
 
 pub fn mov_eax_imm32(write_at: u32, comptime T: type, imm32: T) u32 {
     assert(T == u8 or T == u32);
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xB8);
-    addr = mem.write(addr, T, imm32);
+    addr = mem.Write(addr, u8, 0xB8);
+    addr = mem.Write(addr, T, imm32);
     return addr;
 }
 
 pub fn mov_esi_imm32(write_at: u32, comptime T: type, imm32: T) u32 {
     assert(T == u8 or T == u32);
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xBE);
-    addr = mem.write(addr, T, imm32);
+    addr = mem.Write(addr, u8, 0xBE);
+    addr = mem.Write(addr, T, imm32);
     return addr;
 }
 
 pub fn mov_eax_moffs32(write_at: u32, moffs32: u32) u32 {
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xA1);
-    addr = mem.write(addr, u32, moffs32);
+    addr = mem.Write(addr, u8, 0xA1);
+    addr = mem.Write(addr, u32, moffs32);
     return addr;
 }
 
 // mov r/m32 imm32
 pub fn mov_espoff_imm32(write_at: u32, off8: u8, imm32: u32) u32 {
     var addr = write_at;
-    addr = mem.write(addr, u8, 0xC7);
-    addr = mem.write(addr, u8, 0x44);
-    addr = mem.write(addr, u8, 0x24);
-    addr = mem.write(addr, u8, off8);
-    addr = mem.write(addr, u32, imm32);
+    addr = mem.Write(addr, u8, 0xC7);
+    addr = mem.Write(addr, u8, 0x44);
+    addr = mem.Write(addr, u8, 0x24);
+    addr = mem.Write(addr, u8, off8);
+    addr = mem.Write(addr, u32, imm32);
     return addr;
 }
 
@@ -1370,7 +1369,7 @@ pub fn mov_r32_rm32o(
     const ea = comptime parseEffAddFromDispType(T);
     var addr = write_at;
     addr = op_modRM(addr, 0x8B, ea, dst, src);
-    addr = mem.write(addr, T, disp);
+    addr = mem.Write(addr, T, disp);
     return addr;
 }
 
@@ -1404,7 +1403,7 @@ test "mov_r32_rm32o" {
 pub fn mov_r32_disp(write_at: u32, comptime dst: GenReg32, disp: i32) u32 {
     var addr = write_at;
     addr = mov_r32_rm32o(addr, dst, .ebp, i0, 0);
-    addr = mem.write(addr, i32, disp);
+    addr = mem.Write(addr, i32, disp);
     return addr;
 }
 
@@ -1441,10 +1440,10 @@ pub fn mov_r32_rm32so(
     const ea = parseEffAddFromDispSize(disp_bytes);
     var addr = write_at;
     addr = op_modRM(addr, 0x8B, ea, dst, src);
-    addr = mem.write(addr, u8, 0x00); // TODO: SIB generation
+    addr = mem.Write(addr, u8, 0x00); // TODO: SIB generation
     addr = switch (ea) {
-        .mem8 => mem.write(addr, i8, @intCast(disp)),
-        .mem32 => mem.write(addr, i32, @intCast(disp)),
+        .mem8 => mem.Write(addr, i8, @intCast(disp)),
+        .mem32 => mem.Write(addr, i32, @intCast(disp)),
         else => null,
     };
     return addr;
@@ -1477,10 +1476,10 @@ pub fn mov_r32_esp_add(write_at: u32, r32: u8, delta: i8) u32 {
     // values less than zero have the upper bit set
     var delta_u8: u8 = @bitCast(delta);
     var addr = write_at;
-    addr = mem.write(addr, u8, 0x8B);
-    addr = mem.write(addr, u8, r32);
-    addr = mem.write(addr, u8, 0x24);
-    addr = mem.write(addr, u8, delta_u8);
+    addr = mem.Write(addr, u8, 0x8B);
+    addr = mem.Write(addr, u8, r32);
+    addr = mem.Write(addr, u8, 0x24);
+    addr = mem.Write(addr, u8, delta_u8);
     return addr;
 }
 
@@ -1554,7 +1553,7 @@ test "mov_rm32_r32" {
 pub inline fn lea(write_at: u32, dst: GenReg32, src: GenReg32, off: i8) u32 {
     var addr = write_at;
     addr = op_modRM(addr, 0x8D, .mem8, dst, src);
-    addr = mem.write(addr, i8, off);
+    addr = mem.Write(addr, i8, off);
     return addr;
 }
 
@@ -1619,7 +1618,7 @@ test "BSWAP" {
 
 /// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
 pub inline fn INT3(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xCC);
+    return mem.Write(write_at, u8, 0xCC);
 }
 
 // TODO: INT n (CD ib)
@@ -1627,23 +1626,23 @@ pub inline fn INT3(write_at: u32) u32 {
 
 /// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
 pub inline fn INTO(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xCE);
+    return mem.Write(write_at, u8, 0xCE);
 }
 
 /// INT n/INTO/INT3/INT1 — Call to Interrupt Procedure
 pub inline fn INT1(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xF1);
+    return mem.Write(write_at, u8, 0xF1);
 }
 
 /// HLT — Halt
 pub inline fn HLT(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0xF4);
+    return mem.Write(write_at, u8, 0xF4);
 }
 
 pub const FWAIT = WAIT;
 /// WAIT/FWAIT — Wait
 pub inline fn WAIT(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x9B);
+    return mem.Write(write_at, u8, 0x9B);
 }
 
 /// CLTS — Clear Task-Switched Flag in CR0
@@ -1706,34 +1705,34 @@ pub inline fn RSM(write_at: u32) u32 {
 // ------
 
 //pub inline fn LockPf(write_at: u32) u32 {
-//    return mem.write(write_at, u8, 0xF0);
+//    return mem.Write(write_at, u8, 0xF0);
 //}
 
 //pub inline fn RepnPf(write_at: u32) u32 {
-//    return mem.write(write_at, u8, 0xF2);
+//    return mem.Write(write_at, u8, 0xF2);
 //}
 
 //pub inline fn RepPf(write_at: u32) u32 {
-//    return mem.write(write_at, u8, 0xF3);
+//    return mem.Write(write_at, u8, 0xF3);
 //}
 
 //pub inline fn SegmentOverridePf(write_at: u32, comptime s: SegReg) u32 {
 //    return switch (s) {
-//        .cs => mem.write(write_at, u8, 0x2E),
-//        .ds => mem.write(write_at, u8, 0x3E),
-//        .es => mem.write(write_at, u8, 0x26),
-//        .fs => mem.write(write_at, u8, 0x64),
-//        .gs => mem.write(write_at, u8, 0x65),
-//        .ss => mem.write(write_at, u8, 0x36),
+//        .cs => mem.Write(write_at, u8, 0x2E),
+//        .ds => mem.Write(write_at, u8, 0x3E),
+//        .es => mem.Write(write_at, u8, 0x26),
+//        .fs => mem.Write(write_at, u8, 0x64),
+//        .gs => mem.Write(write_at, u8, 0x65),
+//        .ss => mem.Write(write_at, u8, 0x36),
 //    };
 //}
 
 pub inline fn OverrideOperandSizePf(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x66);
+    return mem.Write(write_at, u8, 0x66);
 }
 
 pub inline fn OverrideAddressSizePf(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x67);
+    return mem.Write(write_at, u8, 0x67);
 }
 
 // ----------------
@@ -1744,7 +1743,7 @@ pub inline fn OverrideAddressSizePf(write_at: u32) u32 {
 // TODO: multi-byte nop flavors (e.g. 0xOF 0x1F)
 
 pub fn nop(write_at: u32) u32 {
-    return mem.write(write_at, u8, 0x90);
+    return mem.Write(write_at, u8, 0x90);
 }
 
 pub fn nop_align(write_at: u32, alignment: u32) u32 {

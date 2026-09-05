@@ -14,6 +14,7 @@ test {
 
     _ = @import("xinput.zig");
 
+    _ = @import("memory.zig");
     _ = @import("x86.zig");
 
     _ = @import("base/base_arena.zig");

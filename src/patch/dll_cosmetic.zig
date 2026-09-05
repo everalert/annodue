@@ -160,14 +160,14 @@ fn PatchAudioStreamQuality(sample_rate: u32, bits_per_sample: u8, stereo: bool) 
     const buffer_size: u32 = 2 * sample_rate * (bits_per_sample / 8) * buffer_stereo;
 
     // Patch audio stream source setting
-    _ = mem.write(0x423215, u32, buffer_size);
-    _ = mem.write(0x42321A, u8, bits_per_sample);
-    _ = mem.write(0x42321E, u32, sample_rate);
+    _ = mem.Write(0x423215, u32, buffer_size);
+    _ = mem.Write(0x42321A, u8, bits_per_sample);
+    _ = mem.Write(0x42321E, u32, sample_rate);
 
     // Patch audio stream buffer chunk size
-    _ = mem.write(0x423549, u32, buffer_size / 2);
-    _ = mem.write(0x42354E, u32, buffer_size / 2);
-    _ = mem.write(0x423555, u32, buffer_size / 2);
+    _ = mem.Write(0x423549, u32, buffer_size / 2);
+    _ = mem.Write(0x42354E, u32, buffer_size / 2);
+    _ = mem.Write(0x423555, u32, buffer_size / 2);
 }
 
 // WARN: not tested, also should verify consistency with old patch
@@ -179,7 +179,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     const tga_path = "data\\sprites\\sprite-%d.tga";
 
     const offset_tga_path: usize = off;
-    off = mem.write(off, @TypeOf(tga_path.*), tga_path.*);
+    off = mem.Write(off, @TypeOf(tga_path.*), tga_path.*);
 
     // FIXME: load_success: Yay! Shift down size, to compensate for higher resolution
     const offset_load_success: usize = off;
@@ -191,7 +191,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     off = x86.SHR(off, .eax, @as(i16, 0xE), .imm, 2); // shr  WORD PTR [eax+0xE], 2
 
     // Get address of page and repeat steps
-    off = mem.write_bytes(off, &[3]u8{ 0x8B, 0x50, 0x10 }); // mov  edx, DWORD PTR [eax+0x10]
+    off = mem.WriteBytes(off, &[3]u8{ 0x8B, 0x50, 0x10 }); // mov  edx, DWORD PTR [eax+0x10]
     off = x86.SHR(off, .edx, @as(i16, 0x0), .imm, 1); // shr  WORD PTR [edx+0x0], 1
     off = x86.SHR(off, .edx, @as(i16, 0x2), .imm, 2); // shr  WORD PTR [edx+0x2], 2
 
@@ -208,7 +208,7 @@ fn PatchSpriteLoaderToLoadTga(memory: usize) usize {
     const offset_tga_loader_code: usize = off;
 
     // Read the sprite_index from stack
-    off = mem.write_bytes(off, &[4]u8{ 0x8B, 0x44, 0x24, 0x04 }); // mov  eax, [esp+0x04]
+    off = mem.WriteBytes(off, &[4]u8{ 0x8B, 0x44, 0x24, 0x04 }); // mov  eax, [esp+0x04]
 
     // Make room for sprintf buffer and keep the pointer in edx
     off = x86.ADD(off, .esp, null, .imm, -0x400);

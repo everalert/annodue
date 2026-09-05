@@ -99,12 +99,12 @@ fn ModifyNetworkGuid(data: []u8) void {
         std.mem.swap(u8, &k_s[k_i], &k_s[k_j]);
         var idx: usize = (@as(usize, k_s[k_i]) + k_s[k_j]) % 0xFF;
         var rc4_output: u8 = k_s[idx];
-        _ = mem.write(0x4AF9B0 + i, u8, rc4_output);
+        _ = mem.Write(0x4AF9B0 + i, u8, rc4_output);
     }
 
     // Overwrite the first 2 byte with a version index, so we have room
     // to fix the algorithm if we have messed up
-    _ = mem.write(0x4AF9B0 + 0, u16, 0x00000000);
+    _ = mem.Write(0x4AF9B0 + 0, u16, 0x00000000);
 }
 
 fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_healths: *[7]u8, patch_guid: bool) usize {
@@ -117,14 +117,14 @@ fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_he
     var offset: usize = memory_offset;
 
     // Update menu upgrades
-    _ = mem.write(0x45CFC6, u8, 0x05); // levels
-    _ = mem.write(0x45CFCB, u8, 0xFF); // healths
+    _ = mem.Write(0x45CFC6, u8, 0x05); // levels
+    _ = mem.Write(0x45CFCB, u8, 0xFF); // healths
 
     // Place upgrade data in memory
     const off_up_lv: usize = offset;
-    offset = mem.write(offset, @TypeOf(upgrade_levels.*), upgrade_levels.*);
+    offset = mem.Write(offset, @TypeOf(upgrade_levels.*), upgrade_levels.*);
     const off_up_hp: usize = offset;
-    offset = mem.write(offset, @TypeOf(upgrade_healths.*), upgrade_healths.*);
+    offset = mem.Write(offset, @TypeOf(upgrade_healths.*), upgrade_healths.*);
 
     // Construct our code
     const off_upgrade_code: usize = offset;
@@ -168,7 +168,7 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     offset = x86.retn(offset);
 
     // Install it by patching call at 0x47B5AF
-    _ = mem.write(0x47B5AF + 1, u32, memory_offset_collision_code - (0x47B5AF + 5));
+    _ = mem.Write(0x47B5AF + 1, u32, memory_offset_collision_code - (0x47B5AF + 5));
 
     return offset;
 }

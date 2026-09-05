@@ -22,7 +22,6 @@ const st = @import("../util/toggle_state.zig");
 const ToggleState = st.ToggleState;
 const xinput = @import("../util/xinput.zig");
 const msg = @import("../util/message.zig");
-const mem = @import("../util/memory.zig");
 
 const app = @import("../appinfo.zig");
 const VERSION = app.VERSION;

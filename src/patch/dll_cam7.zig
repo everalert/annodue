@@ -403,7 +403,7 @@ fn patchFog(on: bool) void {
 
 fn patchFOV(on: bool) void {
     const fov: f32 = if (on) 100 else 120; // first-person internal cam fov
-    _ = mem.write(0x4528EF, f32, fov); // instruction at 0x4528E9
+    _ = mem.Write(0x4528EF, f32, fov); // instruction at 0x4528E9
 }
 
 inline fn CamTransitionOut() void {
@@ -417,7 +417,7 @@ inline fn CamTransitionOut() void {
 
 fn SaveSavedCam() void {
     if (Cam7.saved_camstate_index != null) return;
-    Cam7.saved_camstate_index = mem.read(camstate_ref_addr, u32);
+    Cam7.saved_camstate_index = mem.Read(camstate_ref_addr, u32);
 
     const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
         Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
@@ -429,12 +429,12 @@ fn SaveSavedCam() void {
     patchFOV(true);
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 31;
-    _ = mem.write(camstate_ref_addr, u32, 31);
+    _ = mem.Write(camstate_ref_addr, u32, 31);
 }
 
 fn RestoreSavedCam() void {
     if (Cam7.saved_camstate_index) |i| {
-        _ = mem.write(camstate_ref_addr, u32, i);
+        _ = mem.Write(camstate_ref_addr, u32, i);
         re.Manager.entity(.cMan, 0).CamStateIndex = i;
         CamTransitionOut();
     }
@@ -442,7 +442,7 @@ fn RestoreSavedCam() void {
 
 fn CheckAndResetSavedCam(gf: *GlobalFn) void {
     if (Cam7.saved_camstate_index == null) return;
-    if (mem.read(camstate_ref_addr, u32) == 31) return;
+    if (mem.Read(camstate_ref_addr, u32) == 31) return;
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 7;
     CamTransitionOut();

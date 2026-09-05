@@ -1,6 +1,28 @@
-pub const Self = @This();
+//! patching-friedly memory read/write api
+//!
+//! defs:
+//!   "safe"    correct page permissions are ensured via OS api
+//!   "unsafe"  correct page permissions are assumed; use to avoid spamming
+//!             OS api calls when you know the permissions are good
+//!
+//! usage:
+//! - tagged `Safe` functions are "safe" as defined above
+//! - tagged `Deref` functions resolve an address at the end of a pointer chain
+//!   before doing the action. these functions are "unsafe"; there are no "safe"
+//!   versions for the sake of simplicity
+//! - untagged functions are "unsafe". use `SafeContext` functions to use these
+//!   functions safely in bulk
+//! - `Write` functions return the address at the end of the written range (one
+//!   byte after the last written byte); this is so you can do iterative writes
+//!   without manually keeping track of the next address at each step
+
+// TODO: tests; see core_address for inspo
+// TODO: update core_address to use this, now that it's straightened out?
+// TODO: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection or smth)
+// TODO: look into perf cost of spamming VirtualProtect
 
 const std = @import("std");
+const assert = std.debug.assert;
 const panic = std.debug.panic;
 
 const w32 = @import("zigwin32");
@@ -10,105 +32,130 @@ const FALSE = w32.zig.FALSE;
 const VirtualProtect = w32.system.memory.VirtualProtect;
 const GetLastError = w32.foundation.GetLastError;
 
-// TODO: write page protection for reading functions too? for api symmetry
+//------------------------------------------------------------------------------
+// "unsafe" api
 
-// TODO: experiment with unprotected/raw memory access without the bullshit
-// - switching to PAGE_EXECUTE_READWRITE is required
-// - maybe add fns: write_unsafe, write_unsafe_enable, write_unsafe_disable ?
-//     then you could do something like:
-//     GameLoopAfter() {
-//        write_unsafe_enable();
-//        function_containing_write_unsafe();
-//        ...
-//        write_unsafe_disable();
-//     }
-//     and only have to set it a handful of times outside of special cases
-// - need to know exactly the perf cost of calling virtualprotect to know
-//     if making a arch shift is worth it tho
-
-// NOTE: mod r/m table here
-// https://www.cs.uaf.edu/2016/fall/cs301/lecture/09_28_machinecode.html
-
-// FIXME: rework write* stuff to be named better (unsafe/unprotected is weirdge)
-// FIXME: change x86 api to use unsafe versions (i.e. make it more convenient
-//  for users to use RAddress api/easier to find bad usage)
-// FIXME: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection or smth)
-// FIXME: technically a memory range might not have read rights? so read_* should
-//  also set VirtualProtect and have "unsafe" versions?
-
-pub fn write(offset: usize, comptime T: type, value: T) usize {
-    if (@bitSizeOf(T) == 0) return offset;
-    const addr: [*]align(1) u8 = @ptrFromInt(offset);
+/// write value to address, assuming correct page permissions
+pub fn Write(addr: usize, comptime T: type, value: T) usize {
+    if (@bitSizeOf(T) == 0) return addr;
+    const a: [*]align(1) u8 = @ptrFromInt(addr);
     const data: []const u8 = @as([*]const u8, @ptrCast(&value))[0..@sizeOf(T)];
-    write_unprotected(addr, data);
-    return offset + @sizeOf(T);
+    @memcpy(a, data);
+    return addr + @sizeOf(T);
 }
 
-pub fn write_bytes(offset: usize, data: []const u8) usize {
-    if (data.len == 0) return offset;
-    const addr: [*]align(1) u8 = @ptrFromInt(offset);
-    write_unprotected(addr, data);
-    return offset + data.len;
+/// write bytes to address, assuming correct page permissions
+pub fn WriteBytes(addr: usize, data: []const u8) usize {
+    if (data.len == 0) return addr;
+    const a: [*]align(1) u8 = @ptrFromInt(addr);
+    @memcpy(a, data);
+    return addr + data.len;
 }
 
-fn write_unprotected(dst: [*]u8, src: []const u8) void {
-    var protect: PAGE_PROTECTION_FLAGS = undefined;
-    if (FALSE == VirtualProtect(dst, src.len, PAGE_EXECUTE_READWRITE, &protect))
-        panic("write_unprotected: VirtualProtect(set): {s}", .{@tagName(GetLastError())});
-    defer _ = if (FALSE == VirtualProtect(dst, src.len, protect, &protect))
-        panic("write_unprotected: VirtualProtect(restore): {s}", .{@tagName(GetLastError())});
-    @memcpy(dst, src);
-}
-
-pub fn write_unsafe(offset: usize, comptime T: type, value: T) usize {
-    if (@bitSizeOf(T) == 0) return offset;
-    const addr: [*]align(1) u8 = @ptrFromInt(offset);
-    const data: []const u8 = @as([*]const u8, @ptrCast(&value))[0..@sizeOf(T)];
-    write_assume_safe(addr, data);
-    return offset + @sizeOf(T);
-}
-
-pub fn write_bytes_unsafe(offset: usize, data: []const u8) usize {
-    if (data.len == 0) return offset;
-    const addr: [*]align(1) u8 = @ptrFromInt(offset);
-    write_assume_safe(addr, data);
-    return offset + data.len;
-}
-
-/// write while assuming that the memory already has write permissions
-fn write_assume_safe(dst: [*]u8, src: []const u8) void {
-    @memcpy(dst, src);
-}
-
-pub fn read(offset: usize, comptime T: type) T {
-    const addr: [*]align(1) T = @ptrFromInt(offset);
+// TODO: check if placing the value on the stack first is necessary
+// TODO: check if setting align(1) is necessary
+/// read value from address, assuming correct page permissions
+pub fn Read(addr: usize, comptime T: type) T {
+    const a: [*]align(1) T = @ptrFromInt(addr);
     var data: [1]T = undefined;
-    @memcpy(&data, addr);
+    @memcpy(&data, a);
     return data[0];
 }
 
-pub fn read_bytes(offset: usize, data: []u8) void {
-    const addr: [*]u8 = @ptrFromInt(offset);
-    @memcpy(data, addr);
+/// read bytes from address, assuming correct page permissions
+pub fn ReadBytes(addr: usize, data: []u8) void {
+    const a: [*]u8 = @ptrFromInt(addr);
+    @memcpy(data, a);
 }
 
-// TODO: remove?
-pub fn patch_add(offset: usize, comptime T: type, delta: T) usize {
-    const value: T = read(offset, T);
-    return write(offset, T, value + delta);
+//------------------------------------------------------------------------------
+// pointer chain api
+
+/// resolve address at end of pointer chain
+pub fn Deref(addr: usize, path: []const usize) usize {
+    var a: usize = addr;
+    for (path[0 .. path.len - 1]) |p| a = Read(a + p);
+    return a + path[path.len - 1];
 }
 
-// FIXME: error handling/path validation
-pub fn deref(path: []const usize) usize {
-    var i: u32 = 0;
-    var addr: usize = 0;
-    while (i < path.len - 1) : (i += 1) {
-        addr = read(addr + path[i], u32);
-    }
-    return addr + path[i];
+/// write value at end of pointer chain, assuming correct page permissions along the chain
+pub fn DerefWrite(addr: usize, path: []const usize, comptime T: type, value: T) usize {
+    const a = Deref(addr, path);
+    return Write(a, T, value);
 }
 
-pub fn deref_read(path: []const usize, comptime T: type) T {
-    const addr = deref(path);
-    return read(addr, T);
+/// write bytes at end of pointer chain, assuming correct page permissions along the chain
+pub fn DerefWriteBytes(addr: usize, path: []const usize, data: []const u8) usize {
+    const a = Deref(addr, path);
+    return Write(a, data);
+}
+
+/// read value at end of pointer chain, assuming correct page permissions along the chain
+pub fn DerefRead(addr: usize, path: []const usize, comptime T: type) T {
+    const a = Deref(addr, path);
+    return Read(a, T);
+}
+
+/// read bytes at end of pointer chain, assuming correct page permissions along the chain
+pub fn DerefReadBytes(addr: usize, path: []const usize, data: []u8) void {
+    const a = Deref(addr, path);
+    Read(a, data);
+}
+
+//------------------------------------------------------------------------------
+// "safe" api
+
+// write value to address, using OS api to ensure correct page permissions
+pub fn SafeWrite(addr: usize, comptime T: type, value: T) usize {
+    const ctx = SafeContextSt(addr, addr + @sizeOf(T));
+    defer SafeContextEd(ctx);
+    return Write(addr, T, value);
+}
+
+// write bytes to address, using OS api to ensure correct page permissions
+pub fn SafeWriteBytes(addr: usize, data: []const u8) usize {
+    const ctx = SafeContextSt(addr, addr + data.len);
+    defer SafeContextEd(ctx);
+    return WriteBytes(addr, data);
+}
+
+// read value from address, using OS api to ensure correct page permissions
+pub fn SafeRead(addr: usize, comptime T: type) T {
+    const ctx = SafeContextSt(addr, addr + @sizeOf(T));
+    defer SafeContextEd(ctx);
+    return Read(addr, T);
+}
+
+// read bytes from address, using OS api to ensure correct page permissions
+pub fn SafeReadBytes(addr: usize, data: []u8) void {
+    const ctx = SafeContextSt(addr, addr + data.len);
+    defer SafeContextEd(ctx);
+    ReadBytes(addr, data);
+}
+
+//------------------------------------------------------------------------------
+// safety context helper
+
+const Context = struct {
+    Addr: ?*anyopaque,
+    Size: usize,
+    Flags: PAGE_PROTECTION_FLAGS,
+};
+
+/// make an address range safe to read/write to, using OS api to set page permissions,
+/// allowing safe bulk use of "unsafe" api with a single permissions cycle. user must
+/// use `SafeContextEd` to restore previous permissions when done.
+pub fn SafeContextSt(addr_st: usize, addr_ed: usize) Context {
+    assert(addr_st > 0);
+    assert(addr_ed > addr_st);
+    var ctx: Context = .{ .Addr = @ptrFromInt(addr_st), .Size = addr_ed - addr_st, .Flags = undefined };
+    if (FALSE == VirtualProtect(ctx.Addr, ctx.Size, PAGE_EXECUTE_READWRITE, &ctx.Flags))
+        panic("SafeContextSt: VirtualProtect: {s}", .{@tagName(GetLastError())});
+    return ctx;
+}
+
+pub fn SafeContextEd(ctx: Context) void {
+    var flags: PAGE_PROTECTION_FLAGS = undefined; // needed for valid api usage
+    if (FALSE == VirtualProtect(ctx.Addr, ctx.Size, ctx.Flags, &flags))
+        panic("SafeContextEd: VirtualProtect: {s}", .{@tagName(GetLastError())});
 }

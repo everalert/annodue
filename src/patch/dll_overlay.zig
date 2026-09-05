@@ -13,7 +13,6 @@ const rto = rt.TextStyleOpts;
 const ModelMesh_GetBehavior = @import("racer").Model.Mesh_GetBehavior;
 const rti = @import("racer").Time;
 
-const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
 const ToggleState = @import("util/toggle_state.zig").ToggleState;
 

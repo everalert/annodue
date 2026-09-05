@@ -83,8 +83,8 @@ const GameplayTweak = struct {
 // DEATHSPEED
 
 fn PatchDeathSpeed(min: f32, drop: f32) void {
-    _ = mem.write(0x4C7BB8, f32, min);
-    _ = mem.write(0x4C7BBC, f32, drop);
+    _ = mem.Write(0x4C7BB8, f32, min);
+    _ = mem.Write(0x4C7BBC, f32, drop);
 }
 
 // HOUSEKEEPING

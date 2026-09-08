@@ -37,7 +37,7 @@ pub fn Init(arena_perm: Allocator, arena_temp: Allocator) void {
     AddressState.Manager = RangeManager.Init(
         arena_perm,
         arena_temp,
-        RangeManagerOpts.RacerOpts(1024),
+        RangeManagerOpts.InitProcess(arena_perm, 1024, 64),
     ) orelse @panic("RAddress.Init: OutOfMemory");
 }
 
@@ -70,15 +70,22 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 //------------------------------------------------------------------------------
 // annodue api
 
+inline fn AssertAddressValid(addr_st: u32, addr_ed: u32) void {
+    if (!AddressState.Manager.AddressValid(addr_st, addr_ed)) panic(
+        "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} invalid",
+        .{ addr_st, addr_ed },
+    );
+}
+
 pub fn RAddressRangeAvailable(addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
+    AssertAddressValid(addr_st, addr_ed);
     return AddressState.Manager.AddressAvailable(addr_st, addr_ed);
 }
 
 pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHandle {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
+    AssertAddressValid(addr_st, addr_ed);
     const handle = AddressState.Manager.RangeReserve(addr_st, addr_ed, WorkingOwner());
     if (handle.IsNull()) panic(
         "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} cannot be reserved",
@@ -94,7 +101,7 @@ pub fn RAddressRangeRelease(handle: AddressHandle) callconv(.C) void {
 
 pub fn RAddressRangeRead(addr_st: u32, addr_ed: u32, buffer: ?[*]u8) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
+    AssertAddressValid(addr_st, addr_ed);
     if (buffer == null) return false;
     const buf_sl = buffer.?[0 .. addr_ed - addr_st];
     return AddressState.Manager.RangeRead(addr_st, addr_ed, buf_sl);
@@ -117,7 +124,7 @@ pub fn RAddressRangeRestore(handle: AddressHandle) callconv(.C) void {
 
 pub fn RAddressRangeContainsRange(handle: AddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
-    assert(AddressState.Manager.AddressValid(addr_st, addr_ed));
+    AssertAddressValid(addr_st, addr_ed);
     const span = AddressState.Manager.RangeSpan(@bitCast(handle));
     if (span.IsNull()) return false;
     return addr_st >= span.St and addr_ed <= span.Ed;

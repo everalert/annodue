@@ -30,6 +30,30 @@ pub inline fn AMemoryGetTemporaryZeroT(gf: *GlobalFn, comptime T: type) ?*T {
 pub const RAddressHandle = api.RAddressHandle;
 pub const RADDRESS_HANDLE_NULL = api.RADDRESS_HANDLE_NULL;
 
+/// convenience struct for cutting down on definitions
+pub const RAddressHandleInfo = struct {
+    Handle: RAddressHandle,
+    AddrSt: u32,
+    AddrEd: u32,
+
+    pub fn Init(addr_st: u32, addr_ed: u32) RAddressHandleInfo {
+        assert(addr_ed > addr_st);
+        return RAddressHandleInfo{
+            .Handle = RADDRESS_HANDLE_NULL,
+            .AddrSt = addr_st,
+            .AddrEd = addr_ed,
+        };
+    }
+
+    pub fn InitLen(addr: u32, len: u32) RAddressHandleInfo {
+        return Init(addr, addr + len);
+    }
+
+    pub fn Reserve(self: *RAddressHandleInfo, gf: *GlobalFn) void {
+        self.Handle = gf.RAddressRangeReserve(self.AddrSt, self.AddrEd);
+    }
+};
+
 /// returns `true` if range was reserved and its handle written to @handle_out
 pub fn RAddressRangeReserveIfAvailable(gf: *GlobalFn, addr_st: u32, addr_ed: u32) RAddressHandle {
     const b_available = gf.RAddressRangeAvailable(addr_st, addr_ed);
@@ -53,4 +77,27 @@ pub fn RAddressRangeWriteBytes(gf: *GlobalFn, handle: RAddressHandle, addr: u32,
 
     @memcpy(@as([*]u8, @ptrFromInt(addr)), buf);
     return true;
+}
+
+/// helper to apply or revert a memory patch that has a simple on-off pattern
+/// where disabling the patch only involves reverting the game memory to its
+/// original state. user should use this as a "guard" to doing the enable action.
+/// if the function succeeds, the user should do the "enable" action; if the
+/// function fails, the user should do nothing, and the memory reversion is
+/// implicit in the disable case.
+/// @return  whether the calling function should abort the "enable" action
+pub fn RAddressPatchToggle(gf: *GlobalFn, handle: RAddressHandle, enable: bool) bool {
+    if (handle == RADDRESS_HANDLE_NULL) return false;
+    if (enable) return true;
+    gf.RAddressRangeRestore(handle);
+    return false;
+}
+
+/// same as `RAddressPatchToggle` but applies to a whole group collectively, performing
+/// no action if any of the handles are invalid
+pub fn RAddressPatchToggleGroup(gf: *GlobalFn, handles: []const RAddressHandle, enable: bool) bool {
+    for (handles) |handle| if (handle == RADDRESS_HANDLE_NULL) return false;
+    if (enable) return true;
+    for (handles) |handle| gf.RAddressRangeRestore(handle);
+    return false;
 }

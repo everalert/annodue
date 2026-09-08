@@ -124,10 +124,19 @@ const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 const TGA = @import("util/tga.zig");
 const GIF = @import("util/gif.zig");
-const apih = @import("util/api/api_helper.zig");
 const MiB = @import("util/base/base_memory.zig").MiB;
 const HotReloadFontHandle = u32;
 const HotReloadFont = @import("util/hot_reload.zig").HotReload(HotReloadFontHandle, 1);
+
+const adapi = @import("util/api/api.zig");
+const RAddressHandle = adapi.RAddressHandle;
+const RAddressHandleInfo = adapi.helper.RAddressHandleInfo;
+const AMemoryGetPermanentT = adapi.helper.AMemoryGetPermanentT;
+const AMemoryGetTemporaryT = adapi.helper.AMemoryGetTemporaryT;
+const AMemoryGetTemporaryZeroT = adapi.helper.AMemoryGetTemporaryZeroT;
+const RAddressPatchToggle = adapi.helper.RAddressPatchToggle;
+const RAddressPatchToggleGroup = adapi.helper.RAddressPatchToggleGroup;
+const RAddressRangeWrite = adapi.helper.RAddressRangeWrite;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -179,9 +188,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // TODO: fonts_initialized asserted throughout, must fail here or just not
     //  patch the text clipping bug; latter preferable?
-    text_clip_fix_buf = apih.AMemoryGetPermanentT(gf, [128]u8) orelse return;
+    text_clip_fix_buf = AMemoryGetPermanentT(gf, [128]u8) orelse return;
 
     FontState.gf = gf;
+    FontState.h_ar_tablerefinst.Reserve(gf);
+    FontState.h_ar_drawcharglobals.Reserve(gf);
+    FontState.h_ar_textclip.Reserve(gf);
+
     FontState.FontsInit();
     FontState.SettingsInit(); // after `FontsInit` because it may call `FontsEnable`
 }
@@ -267,6 +280,10 @@ const FontState = struct {
     var s_can_toggle_system: bool = false;
     /// dev-only feature
     var s_can_toggle_custom: bool = false;
+
+    var h_ar_tablerefinst = RAddressHandleInfo.Init(0x42D8EE, 0x42D8F5);
+    var h_ar_drawcharglobals = RAddressHandleInfo.Init(0x4AC628, 0x4AC650); // TODO: add global defs to libracer
+    var h_ar_textclip = RAddressHandleInfo.Init(0x42DD08, 0x42DD8A); // TODO: check disasm for better bounds
 
     var font_reloader: HotReloadFont = undefined;
 
@@ -478,7 +495,7 @@ const FontState = struct {
     fn FontStockLoad() void {
         if (font_stock_custom_loaded) return;
 
-        var scratch_buf = apih.AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse return;
+        var scratch_buf = AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse return;
         var scratch_fba = FixedBufferAllocator.init(scratch_buf);
 
         var stock_custom_fbs = std.io.fixedBufferStream(@embedFile("embed/font_stock.gif"));
@@ -491,6 +508,9 @@ const FontState = struct {
     }
 
     pub fn FontSet(font: ?*const CustomFont) void {
+        const handles = [_]RAddressHandle{ h_ar_tablerefinst.Handle, h_ar_drawcharglobals.Handle };
+        if (!RAddressPatchToggleGroup(gf, &handles, true)) return;
+
         const table: u32 = if (font) |f| @intFromPtr(&f.FontTable) else @intFromPtr(rt.apTextFont);
 
         // regardless of font texture scale, the same values are used because the UVs
@@ -498,9 +518,9 @@ const FontState = struct {
         const unit_scale_x: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_W else 64);
         const unit_scale_y: f32 = 1 / @as(f32, if (font) |_| CustomFont.CUSTOM_FONT_H else 128);
 
-        _ = mem.Write(0x42D8EE + 3, u32, table); // font table reference
-        _ = mem.Write(@intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
-        _ = mem.Write(@intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
+        _ = RAddressRangeWrite(gf, handles[0], 0x42D8EE + 3, u32, table); // font table reference
+        _ = RAddressRangeWrite(gf, handles[1], @intFromPtr(rf.gFontPageUnitScaleX), f32, unit_scale_x);
+        _ = RAddressRangeWrite(gf, handles[1], @intFromPtr(rf.gFontPageUnitScaleY), f32, unit_scale_y);
     }
 
     pub fn FontLoadAndSet(font: [*:0]const u8) void {
@@ -518,7 +538,7 @@ const FontState = struct {
                 },
             };
 
-            var scratch_buf = apih.AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse break :blk;
+            var scratch_buf = AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse break :blk;
             var scratch_fba = FixedBufferAllocator.init(scratch_buf);
             const alloc = scratch_fba.allocator();
             const path = GIFCustomFontPath(alloc, font[0..std.mem.len(font)]) catch break :blk;
@@ -555,7 +575,7 @@ const FontState = struct {
 
         // TODO: determine what happens if this fails; won't load stock, so only
         //  falls back to stock if it was already loaded?
-        var scratch_buf = apih.AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse return false;
+        var scratch_buf = AMemoryGetTemporaryT(gf, [SCRATCH_SIZE]u8) orelse return false;
         var scratch_fba = FixedBufferAllocator.init(scratch_buf);
         const alloc = scratch_fba.allocator();
         FontCustomLoad(alloc, name) catch {
@@ -579,7 +599,7 @@ const FontState = struct {
         dump_fonts_done = true;
 
         blk: {
-            var font = apih.AMemoryGetTemporaryT(gf, [5][0x2000]u8) orelse break :blk;
+            var font = AMemoryGetTemporaryT(gf, [5][0x2000]u8) orelse break :blk;
             ExtractRawFontPagesToGrey8(font);
             DumpGrey8toTGA(&font[0], 64, 128, "annodue/developer/fontraw0.tga");
             DumpGrey8toTGA(&font[1], 64, 128, "annodue/developer/fontraw1.tga");
@@ -591,7 +611,7 @@ const FontState = struct {
         // TODO: resolve or filter out garbage glyph defs polluting templates
         // TODO: draw each glyph as a separate image, to account for overlaps?
         blk: {
-            var font = apih.AMemoryGetTemporaryZeroT(gf, [5][0x2000]u8) orelse break :blk;
+            var font = AMemoryGetTemporaryZeroT(gf, [5][0x2000]u8) orelse break :blk;
             DrawGlyphRegions(&[_][]rf.GLYPH{ rf.aFontGlyphs0, rf.aFontGlyphs0Ext }, &[_][]u8{ &font[0], &font[1], &font[2] }, 64, 128);
             DrawGlyphRegions(&[_][]rf.GLYPH{rf.aFontGlyphs1}, &[_][]u8{&font[2]}, 64, 128);
             DrawGlyphRegions(&[_][]rf.GLYPH{rf.aFontGlyphs2}, &[_][]u8{&font[2]}, 64, 128);
@@ -648,7 +668,7 @@ const FontState = struct {
     //  'nice', but need to rework GDrawText api first
     /// testing display showing all(?) font glyphs
     pub fn ShowFontTest() void {
-        var buf = apih.AMemoryGetTemporaryZeroT(gf, [255:0]u8) orelse return;
+        var buf = AMemoryGetTemporaryZeroT(gf, [255:0]u8) orelse return;
         var x: i16 = 12;
         var y: i16 = 12;
 
@@ -930,54 +950,43 @@ var text_clip_fix_buf: *[128]u8 = undefined;
 //     - Text_DrawCharacter__42D990; see clipping codepaths
 //     - Text_SetCurrentEntry1ClippingRegion__450310
 //     - Text_FlushQueue1__450100
-fn PatchTextClippingBug(apply: bool) void {
-    if (apply) {
-        var d: x86.Detour = undefined;
-        d.Start(0x42DD08, 0x42DD8A, text_clip_fix_buf);
-        defer d.End();
+fn PatchTextClippingBug(enable: bool) void {
+    const handle = FontState.h_ar_textclip.Handle;
+    if (!RAddressPatchToggle(FontState.gf, handle, enable)) return;
 
-        // get stable reference to esp, while storing ebp on the stack.
-        // ebp contained pos_y2 (see instruction at 0x42DCB3), so the modified
-        // stack copy will be propagated back to ebp during `reg_restore`.
-        d.addr = x86.reg_save(d.addr, .esp, .ebp);
-        defer d.addr = x86.reg_restore(d.addr, .esp, .ebp);
+    if (!FontState.gf.RAddressRangeWriteSt(handle)) return;
+    defer FontState.gf.RAddressRangeWriteEd(handle);
 
-        // TODO: impl x86.PushSrc pointer types (r/m16, r/m32 (FF /6)) and use
-        // in cdecl_call instead of manually managing args
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x48); // uv_y2
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x40); // uv_x2
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x3C); // uv_y1
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x18); // uv_x1
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x00); // pos_y2
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x2C); // pos_x2
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x34); // pos_y1
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x14); // pos_x1
-        d.addr = x86.push(d.addr, .{ .r32 = .eax });
-        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&ClipText), null);
-        d.addr = x86.ADD(d.addr, .esp, null, .imm, 0x20);
-    } else {
-        // the original assembly bytes from the replaced code section
-        _ = mem.WriteBytes(0x42DD08, &[0x42DD8A - 0x42DD08]u8{
-            0x3B, 0xD9, 0x7D, 0x1C, 0x2B, 0xCB, 0x8B, 0x5C, 0x24, 0x14, 0x89, 0x4C,
-            0x24, 0x44, 0x03, 0xD9, 0xDB, 0x44, 0x24, 0x44, 0x89, 0x5C, 0x24, 0x14,
-            0xD8, 0x44, 0x24, 0x18, 0xD9, 0x5C, 0x24, 0x18, 0x3B, 0xC2, 0x7D, 0x1C,
-            0x2B, 0xD0, 0x8B, 0x44, 0x24, 0x34, 0x89, 0x54, 0x24, 0x44, 0x03, 0xC2,
-            0xDB, 0x44, 0x24, 0x44, 0x89, 0x44, 0x24, 0x34, 0xD8, 0x44, 0x24, 0x40,
-            0xD9, 0x5C, 0x24, 0x40, 0xA1, 0x58, 0x97, 0xE9, 0x00, 0x3B, 0xF0, 0x7E,
-            0x1C, 0x2B, 0xF0, 0x8B, 0x44, 0x24, 0x2C, 0x89, 0x74, 0x24, 0x44, 0x2B,
-            0xC6, 0xDB, 0x44, 0x24, 0x44, 0x89, 0x44, 0x24, 0x2C, 0xD8, 0x6C, 0x24,
-            0x3C, 0xD9, 0x5C, 0x24, 0x3C, 0xA1, 0x5C, 0x97, 0xE9, 0x00, 0x3B, 0xF8,
-            0x7E, 0x14, 0x2B, 0xF8, 0x89, 0x7C, 0x24, 0x44, 0x2B, 0xEF, 0xDB, 0x44,
-            0x24, 0x44, 0xD8, 0x6C, 0x24, 0x48, 0xD9, 0x5C, 0x24, 0x48,
-        });
-    }
+    var d: x86.Detour = undefined;
+    d.Start(0x42DD08, 0x42DD8A, text_clip_fix_buf);
+    defer d.End();
+
+    // get stable reference to esp, while storing ebp on the stack.
+    // ebp contained pos_y2 (see instruction at 0x42DCB3), so the modified
+    // stack copy will be propagated back to ebp during `reg_restore`.
+    d.addr = x86.reg_save(d.addr, .esp, .ebp);
+    defer d.addr = x86.reg_restore(d.addr, .esp, .ebp);
+
+    // TODO: impl x86.PushSrc pointer types (r/m16, r/m32 (FF /6)) and use
+    // in cdecl_call instead of manually managing args
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x48); // uv_y2
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x40); // uv_x2
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x3C); // uv_y1
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x18); // uv_x1
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x00); // pos_y2
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x2C); // pos_x2
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x34); // pos_y1
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.lea(d.addr, .eax, .ebp, 0x04 + 0x14); // pos_x1
+    d.addr = x86.push(d.addr, .{ .r32 = .eax });
+    d.addr = x86.cdecl_call(d.addr, @intFromPtr(&ClipText), null);
+    d.addr = x86.ADD(d.addr, .esp, null, .imm, 0x20);
 }
 
 /// logic replacing the buggy clipping (fn_42D990). at the point this runs, the

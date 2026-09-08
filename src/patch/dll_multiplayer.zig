@@ -190,19 +190,25 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     MpState.settingsInit(gf);
 
+    // TODO: both PatchNetworkUpgrades and PatchNetworkCollisions are doing some
+    //  address rawdogging and will need to be updated to use RAddress if this is
+    //  re-enabled. apparently these functions were never updated to use buffers
+    //  from api memory, so will also need to be updated to use AMemory. reason
+    //  for punting is basically that I plan to drop this plugin entirely but not
+    //  yet 100% committed
     // TODO: move this to settings handler, once global allocation figured out
     //var off = gs.patch_offset;
-    if (MpState.s_enable) {
-        var off: u32 = @intFromPtr(&MpState.asm_buf);
-        const traction: u8 = if (MpState.s_patch_r100) 3 else 5;
-        var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
-        var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-        const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
-        const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
-        off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.s_patch_guid);
-        off = PatchNetworkCollisions(off, MpState.s_patch_guid);
-        std.debug.assert(off - @intFromPtr(&MpState.asm_buf) <= MpState.asm_buf.len);
-    }
+    //if (MpState.s_enable) {
+    //    var off: u32 = @intFromPtr(&MpState.asm_buf);
+    //    const traction: u8 = if (MpState.s_patch_r100) 3 else 5;
+    //    var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
+    //    var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    //    const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
+    //    const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
+    //    off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.s_patch_guid);
+    //    off = PatchNetworkCollisions(off, MpState.s_patch_guid);
+    //    std.debug.assert(off - @intFromPtr(&MpState.asm_buf) <= MpState.asm_buf.len);
+    //}
     //gs.patch_offset = off;
 }
 

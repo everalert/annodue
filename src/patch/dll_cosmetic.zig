@@ -10,6 +10,9 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
+const apih = @import("util/api/api_helper.zig");
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -52,17 +55,30 @@ const CosmeticState = struct {
     var h_s_rb_value_enable: ?SettingHandle = null;
     var h_s_rb_label_enable: ?SettingHandle = null;
     var h_s_rb_speed_enable: ?SettingHandle = null;
-    var h_s_patch_tga_loader: ?SettingHandle = null;
-    var h_s_patch_audio: ?SettingHandle = null;
     var s_rb_enable: bool = false;
     var s_rb_value_enable: bool = false;
     var s_rb_label_enable: bool = false;
     var s_rb_speed_enable: bool = false;
+
     var rb_value = crot.RotatingRGB.new(95, 255, 0);
     var rb_label = crot.RotatingRGB.new(95, 255, 1);
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
+
+    var h_s_patch_tga_loader: ?SettingHandle = null;
+    var h_s_patch_audio: ?SettingHandle = null;
     var s_patch_tga_loader: bool = false;
     var s_patch_audio: bool = false;
+
+    // NOTE: reserving all 4 color args, not just RGB part
+    var h_ar_num1 = RAddressHandleInfo.InitLen(0x460E5B, 8); // in-race hud UI numbers
+    var h_ar_num2 = RAddressHandleInfo.InitLen(0x460FAF, 8);
+    var h_ar_num3 = RAddressHandleInfo.InitLen(0x461043, 8);
+    var h_ar_label1 = RAddressHandleInfo.InitLen(0x460E8B, 8); // in-race hud UI labels
+    var h_ar_label2 = RAddressHandleInfo.InitLen(0x460FE1, 8);
+    var h_ar_label3 = RAddressHandleInfo.InitLen(0x461067, 8);
+    var h_ar_speed = RAddressHandleInfo.InitLen(0x460A6C, 8); // in-race speedo number
+
+    var api: *GlobalFn = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", settingsUpdate);
@@ -112,40 +128,68 @@ const CosmeticState = struct {
         }
 
         if (update_rb_value and (!s_rb_enable or !s_rb_value_enable)) {
-            crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
-            crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
-            crot.PatchRgbArgs(0x461045, 0xFFFFFF);
+            api.RAddressRangeRestore(h_ar_num1.Handle); // in-race hud UI numbers
+            api.RAddressRangeRestore(h_ar_num2.Handle);
+            api.RAddressRangeRestore(h_ar_num3.Handle);
         }
 
         if (update_rb_label and (!s_rb_enable or !s_rb_label_enable)) {
-            crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
-            crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
-            crot.PatchRgbArgs(0x461069, 0xFFFFFF);
+            api.RAddressRangeRestore(h_ar_label1.Handle); // in-race hud UI labels
+            api.RAddressRangeRestore(h_ar_label2.Handle);
+            api.RAddressRangeRestore(h_ar_label3.Handle);
         }
 
         if (update_rb_speed and (!s_rb_enable or !s_rb_speed_enable)) {
-            crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
+            api.RAddressRangeRestore(h_ar_speed.Handle); // in-race speedo number
         }
     }
 
     // COLOR CHANGES
 
     fn PatchHudColRotate(value: bool, label: bool, speed: bool) void {
+        const handles = [_]RAddressHandle{
+            h_ar_num1.Handle,   h_ar_num2.Handle,   h_ar_num3.Handle,
+            h_ar_label1.Handle, h_ar_label2.Handle, h_ar_label3.Handle,
+            h_ar_speed.Handle,
+        };
+        if (!apih.RAddressPatchToggleGroup(api, &handles, true)) return;
+
         rb_value.update();
         rb_label.update();
         rb_speed.update();
         if (value) {
-            crot.PatchRgbArgs(0x460E5D, rb_value.get());
-            crot.PatchRgbArgs(0x460FB1, rb_value.get());
-            crot.PatchRgbArgs(0x461045, rb_value.get());
+            if (api.RAddressRangeWriteSt(handles[0])) {
+                defer api.RAddressRangeWriteEd(handles[0]);
+                crot.PatchRgbArgs(0x460E5D, rb_value.get());
+            }
+            if (api.RAddressRangeWriteSt(handles[1])) {
+                defer api.RAddressRangeWriteEd(handles[1]);
+                crot.PatchRgbArgs(0x460FB1, rb_value.get());
+            }
+            if (api.RAddressRangeWriteSt(handles[2])) {
+                defer api.RAddressRangeWriteEd(handles[2]);
+                crot.PatchRgbArgs(0x461045, rb_value.get());
+            }
         }
         if (label) {
-            crot.PatchRgbArgs(0x460E8D, rb_label.get());
-            crot.PatchRgbArgs(0x460FE3, rb_label.get());
-            crot.PatchRgbArgs(0x461069, rb_label.get());
+            if (api.RAddressRangeWriteSt(handles[3])) {
+                defer api.RAddressRangeWriteEd(handles[3]);
+                crot.PatchRgbArgs(0x460E8D, rb_label.get());
+            }
+            if (api.RAddressRangeWriteSt(handles[4])) {
+                defer api.RAddressRangeWriteEd(handles[4]);
+                crot.PatchRgbArgs(0x460FE3, rb_label.get());
+            }
+            if (api.RAddressRangeWriteSt(handles[5])) {
+                defer api.RAddressRangeWriteEd(handles[5]);
+                crot.PatchRgbArgs(0x461069, rb_label.get());
+            }
         }
         if (speed) {
-            crot.PatchRgbArgs(0x460A6E, rb_speed.get());
+            if (api.RAddressRangeWriteSt(handles[6])) {
+                defer api.RAddressRangeWriteEd(handles[6]);
+                crot.PatchRgbArgs(0x460A6E, rb_speed.get());
+            }
         }
     }
 };
@@ -257,6 +301,17 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    // FIXME: stop doing this
+    CosmeticState.api = gf;
+
+    CosmeticState.h_ar_num1.Reserve(gf);
+    CosmeticState.h_ar_num2.Reserve(gf);
+    CosmeticState.h_ar_num3.Reserve(gf);
+    CosmeticState.h_ar_label1.Reserve(gf);
+    CosmeticState.h_ar_label2.Reserve(gf);
+    CosmeticState.h_ar_label3.Reserve(gf);
+    CosmeticState.h_ar_speed.Reserve(gf);
+
     CosmeticState.settingsInit(gf);
 
     // TODO: convert to use global allocator once it is part of the GlobalFn interface;
@@ -265,6 +320,9 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     // at comptime, in the format racer expects them.
     //var off = gs.patch_offset;
 
+    // TODO: both PatchStreamAudioQuality and PatchSpriteLoaderToLoadTga are doing
+    //  some address rawdogging and will need to be updated to use RAddress if this
+    //  is re-enabled
     //if (CosmeticState.s_patch_audio) {
     //    const sample_rate: u32 = 22050 * 2;
     //    const bits_per_sample: u8 = 16;
@@ -280,15 +338,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
 
 export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
-    crot.PatchRgbArgs(0x460E5D, 0xFFFFFF); // in-race hud UI numbers
-    crot.PatchRgbArgs(0x460FB1, 0xFFFFFF);
-    crot.PatchRgbArgs(0x461045, 0xFFFFFF);
-    crot.PatchRgbArgs(0x460E8D, 0xFFFFFF); // in-race hud UI labels
-    crot.PatchRgbArgs(0x460FE3, 0xFFFFFF);
-    crot.PatchRgbArgs(0x461069, 0xFFFFFF);
-    crot.PatchRgbArgs(0x460A6E, 0x00C3FE); // in-race speedo number
-}
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 // HOOKS
 

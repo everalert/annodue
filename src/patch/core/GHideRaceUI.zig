@@ -10,6 +10,9 @@ const rg = @import("racer").Global;
 
 const mem = @import("../util/memory.zig");
 const ToggleState = @import("../util/toggle_state.zig").ToggleState;
+const apih = @import("../util/api/api_helper.zig");
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
 
 // FIXME: resolve clashing with practice mode indicators (should not hide them
 // even when everything else is). also makes lighting effects disappear
@@ -20,6 +23,11 @@ pub const HideRaceUI = extern struct {
     var owner: ?u16 = null;
 
     var paused: ToggleState = .On; // force .JustOff on first frame
+
+    var h_ar_hide = RAddressHandleInfo.InitLen(0x463580, 1);
+    var h_ar_quadskip = RAddressHandleInfo.InitLen(@intFromPtr(rq.QUAD_SKIP_RENDERING), 4);
+
+    var api: *GlobalFn = undefined;
 
     pub fn hide(o: u16) bool {
         if (hidden or owner != null) return false;
@@ -38,10 +46,12 @@ pub const HideRaceUI = extern struct {
     }
 
     inline fn writeHide(disable: bool) void {
-        if (disable and !GLOBAL_STATE.in_race.on()) return;
+        if (disable and !api.SInRace().on()) return;
 
-        const instruction: u8 = if (disable) 0xC3 else 0x81; // RETN or original value
-        _ = mem.Write(0x463580, u8, instruction); // top of Jdge0x20
+        const handles = [_]RAddressHandle{ h_ar_hide.Handle, h_ar_quadskip.Handle };
+        if (!apih.RAddressPatchToggleGroup(api, &handles, disable)) return;
+
+        _ = apih.RAddressRangeWrite(api, handles[0], 0x463580, u8, 0xC3); // insert RETN at top of Jdge0x20
         rq.QUAD_SKIP_RENDERING.* = @intFromBool(disable);
     }
 };
@@ -65,7 +75,13 @@ pub fn GHideRaceUIIsOn() callconv(.C) bool {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(api: *GlobalFn) callconv(.C) void {
+    // FIXME: don't do this
+    HideRaceUI.api = api;
+
+    HideRaceUI.h_ar_hide.Reserve(api);
+    HideRaceUI.h_ar_quadskip.Reserve(api);
+}
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 

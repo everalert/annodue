@@ -14,6 +14,9 @@ const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
+const apih = @import("util/api/api_helper.zig");
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -212,6 +215,16 @@ const Cam7 = extern struct {
     var i_mouse_d_x: f32 = 0;
     var i_mouse_d_y: f32 = 0;
 
+    // TODO: some chronic libracer/memset/memcpy usage in this plugin still not reserved
+    const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
+    var h_ar_flags = RAddressHandleInfo.InitLen(0x453FA1, 5);
+    var h_ar_fog1 = RAddressHandleInfo.Init(0x4539A0, 0x4539A6);
+    var h_ar_fog2 = RAddressHandleInfo.Init(0x4539AC, 0x4539B4);
+    var h_ar_fov = RAddressHandleInfo.Init(0x4528E9, 0x4528F3);
+    var h_ar_cam = RAddressHandleInfo.InitLen(camstate_ref_addr, 4);
+
+    var api: *GlobalFn = undefined;
+
     // TODO: maybe normalizing XY stuff (or do it at input system level)
     fn update_input(gf: *GlobalFn) void {
         i_toggle.update(gf);
@@ -378,32 +391,40 @@ const Cam7 = extern struct {
     }
 };
 
-const camstate_ref_addr: u32 = rc.METACAM_ARRAY_ADDR + 0x170; // = metacam index 1 0x04
+fn patchFlags(enable: bool) void {
+    const handle = Cam7.h_ar_flags.Handle;
+    if (!apih.RAddressPatchToggle(Cam7.api, handle, enable)) return;
 
-fn patchFlags(on: bool) void {
-    if (on) {
+    if (Cam7.api.RAddressRangeWriteSt(handle)) {
+        defer Cam7.api.RAddressRangeWriteEd(handle);
         _ = x86.mov_eax_imm32(0x453FA1, u32, 1); // map visual flags-related check
-    } else {
-        _ = x86.mov_eax_moffs32(0x453FA1, 0x50CA3C); // map visual flags-related check
     }
 }
 
-fn patchFog(on: bool) void {
-    if (on) {
-        const dist = if (Cam7.s_fog_remove) comptime m.pow(f32, 10, 10) else Cam7.fog_dist;
+fn patchFog(enable: bool) void {
+    const handles = [_]RAddressHandle{
+        Cam7.h_ar_fog1.Handle,
+        Cam7.h_ar_fog2.Handle,
+    };
+    if (!apih.RAddressPatchToggleGroup(Cam7.api, &handles, enable)) return;
+
+    const dist = if (Cam7.s_fog_remove) comptime m.pow(f32, 10, 10) else Cam7.fog_dist;
+    if (Cam7.api.RAddressRangeWriteSt(handles[0])) {
+        defer Cam7.api.RAddressRangeWriteEd(handles[0]);
         var o = x86.mov_ecx_imm32(0x4539A0, u32, @as(u32, @bitCast(dist))); // fog dist, normal case
         _ = x86.nop_until(o, 0x4539A6);
-        _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @bitCast(dist)); // fog dist, flags @0=1 case
-        return;
     }
-    //_ = x86.mov_ecx_u32(0x4539A0, 0x2D8); // fog dist, normal case
-    _ = x86.mov_r32_rm32o(0x4539A0, .ecx, .esi, i32, 0x2D8); // fog dist, normal case
-    _ = x86.mov_espoff_imm32(0x4539AC, 0x24, 0xBF800000); // fog dist, flags @0=1 case (-1.0)
+    if (Cam7.api.RAddressRangeWriteSt(handles[1])) {
+        defer Cam7.api.RAddressRangeWriteEd(handles[1]);
+        _ = x86.mov_espoff_imm32(0x4539AC, 0x24, @bitCast(dist)); // fog dist, flags @0=1 case
+    }
 }
 
-fn patchFOV(on: bool) void {
-    const fov: f32 = if (on) 100 else 120; // first-person internal cam fov
-    _ = mem.Write(0x4528EF, f32, fov); // instruction at 0x4528E9
+fn patchFOV(enable: bool) void {
+    const handle = Cam7.h_ar_fov.Handle;
+    if (!apih.RAddressPatchToggle(Cam7.api, handle, enable)) return;
+
+    _ = apih.RAddressRangeWrite(Cam7.api, handle, 0x4528EF, f32, 100); // first-person internal cam fov
 }
 
 inline fn CamTransitionOut() void {
@@ -416,8 +437,11 @@ inline fn CamTransitionOut() void {
 }
 
 fn SaveSavedCam() void {
+    const handle = Cam7.h_ar_cam.Handle;
+    if (!apih.RAddressPatchToggle(Cam7.api, handle, true)) return;
+
     if (Cam7.saved_camstate_index != null) return;
-    Cam7.saved_camstate_index = mem.Read(camstate_ref_addr, u32);
+    Cam7.saved_camstate_index = mem.Read(Cam7.camstate_ref_addr, u32);
 
     const mat4_addr: u32 = rc.CAMSTATE_ARRAY_ADDR +
         Cam7.saved_camstate_index.? * rc.CAMSTATE_ITEM_SIZE + 0x14;
@@ -428,23 +452,29 @@ fn SaveSavedCam() void {
     patchFog(Cam7.s_fog_patch);
     patchFOV(true);
 
-    re.Manager.entity(.cMan, 0).CamStateIndex = 31;
-    _ = mem.Write(camstate_ref_addr, u32, 31);
+    re.Manager.entity(.cMan, 0).CamStateIndex = 31; // TODO: use RAddress
+    _ = apih.RAddressRangeWrite(Cam7.api, handle, Cam7.camstate_ref_addr, u32, 31);
 }
 
 fn RestoreSavedCam() void {
+    const handle = Cam7.h_ar_cam.Handle;
+    if (!apih.RAddressPatchToggle(Cam7.api, handle, true)) return;
+
     if (Cam7.saved_camstate_index) |i| {
-        _ = mem.Write(camstate_ref_addr, u32, i);
-        re.Manager.entity(.cMan, 0).CamStateIndex = i;
+        _ = apih.RAddressRangeWrite(Cam7.api, handle, Cam7.camstate_ref_addr, u32, i);
+        re.Manager.entity(.cMan, 0).CamStateIndex = i; // TODO: use RAddress
         CamTransitionOut();
     }
 }
 
 fn CheckAndResetSavedCam(gf: *GlobalFn) void {
-    if (Cam7.saved_camstate_index == null) return;
-    if (mem.Read(camstate_ref_addr, u32) == 31) return;
+    const handle = Cam7.h_ar_cam.Handle;
+    if (!apih.RAddressPatchToggle(Cam7.api, handle, true)) return;
 
-    re.Manager.entity(.cMan, 0).CamStateIndex = 7;
+    if (Cam7.saved_camstate_index == null) return;
+    if (mem.Read(Cam7.camstate_ref_addr, u32) == 31) return;
+
+    re.Manager.entity(.cMan, 0).CamStateIndex = 7; // TODO: use RAddress
     CamTransitionOut();
     Cam7.cam_state = .None;
     _ = gf.GHideRaceUIOff();
@@ -702,6 +732,15 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    // FIXME: stop doing this
+    Cam7.api = gf;
+
+    Cam7.h_ar_flags.Reserve(gf);
+    Cam7.h_ar_fog1.Reserve(gf);
+    Cam7.h_ar_fog2.Reserve(gf);
+    Cam7.h_ar_fov.Reserve(gf);
+    Cam7.h_ar_cam.Reserve(gf);
+
     Cam7.settingsInit(gf);
 }
 
@@ -721,6 +760,7 @@ export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
 }
 
 export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
+    // TODO: use RAddress
     if (Cam7.cam_state == .FreeCam and Cam7.s_disable_input and rg.PAUSE_STATE.* == 0) { // kill race input
         // NOTE: unk block starting at 0xEC8820 still written to, but no observable ill-effects
         @memset(@as([*]u8, @ptrCast(rin.MAPPED_BUTTON))[0..0x70], 0); // split to avoid clearing settings

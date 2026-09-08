@@ -26,12 +26,9 @@ pub const ResetMaterial: *fn () callconv(.C) void = @ptrFromInt(0x44F5F0); // FI
 // GAME CONSTANTS
 
 // TODO: maybe change 'index' to 'count', since it's the first uninitialized index
-pub const QUAD_INITIALIZED_INDEX_ADDR: usize = 0x4B91B8;
-pub const QUAD_INITIALIZED_INDEX: *u16 = @ptrFromInt(QUAD_INITIALIZED_INDEX_ADDR);
-pub const QUAD_STAT_BAR_INDEX_ADDR: usize = 0x50C928;
-pub const QUAD_STAT_BAR_INDEX: *u16 = @ptrFromInt(QUAD_STAT_BAR_INDEX_ADDR);
-pub const QUAD_SKIP_RENDERING_ADDR: usize = 0x50C058;
-pub const QUAD_SKIP_RENDERING: *BOOL = @ptrFromInt(QUAD_SKIP_RENDERING_ADDR);
+pub const QUAD_INITIALIZED_INDEX: *u16 = @ptrFromInt(0x4B91B8);
+pub const QUAD_STAT_BAR_INDEX: *u16 = @ptrFromInt(0x50C928);
+pub const QUAD_SKIP_RENDERING: *BOOL = @ptrFromInt(0x50C058);
 
 // GAME TYPEDEFS
 

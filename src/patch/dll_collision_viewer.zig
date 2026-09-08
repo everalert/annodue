@@ -19,7 +19,6 @@ const m = @import("util/menu.zig");
 const Menu = m.Menu;
 const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
-const x86 = @import("util/x86.zig");
 const st = @import("util/toggle_state.zig");
 
 const InputMap = @import("core/Input.zig").InputMap;

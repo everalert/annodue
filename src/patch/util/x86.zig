@@ -16,6 +16,13 @@ comptime {
 // NOTE: instructions roughly organized according to pnx.tf reference
 // WARN: memory writes assume appropriate page protections are already set
 
+// TODO: versions which write to a buffer as though they were at the address,
+//  instead of the address directly. this way the x86 assembly can be generated
+//  in a nice-looking way without constantly jumping through hoops in places
+//  where there are many discontinuous patch sites that require page protection
+//  overhead.
+//  see dll_qol for example use cases
+
 // TODO: some kind of documentation at the top summarizing the overall themes
 //  with the api design
 // TODO: remove windows requirement; not urgent, not using this outside of

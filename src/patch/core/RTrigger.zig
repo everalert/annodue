@@ -15,10 +15,14 @@ const SettingValue = @import("ASettings.zig").ASettingSent.Value;
 const Setting = @import("ASettings.zig").ASettingSent;
 
 const apih = @import("../util/api/api_helper.zig");
+const RAddressHandleInfo = apih.RAddressHandleInfo;
 const MiB = @import("../util/base/base_memory.zig").MiB;
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
 const x86 = @import("../util/x86.zig");
+
+const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
+const RADDRESS_HANDLE_NULL = @import("../util/api/api.zig").RADDRESS_HANDLE_NULL;
 
 const r = @import("racer");
 const t = r.Text;
@@ -78,6 +82,11 @@ const CustomTrigger = struct {
     var h_s_section: ?SettingHandle = null;
     var h_s_notify_trigger: ?SettingHandle = null;
     var s_notify_trigger: bool = false;
+
+    var h_ar_hook = RAddressHandleInfo.InitLen(0x476E80, 5);
+    var h_ar_init = RAddressHandleInfo.Init(0x47D397, 0x47D3A0);
+    var h_ar_destroy = RAddressHandleInfo.Init(0x47C4D9, 0x47C4E0);
+    var h_ar_update = RAddressHandleInfo.Init(0x47C51B, 0x47C520);
 
     var scratch_fba: FixedBufferAllocator = undefined;
     var scratch_alloc: Allocator = undefined;
@@ -212,7 +221,13 @@ const CustomTrigger = struct {
 
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
     // fine since it has the same pattern as destroy; may also want save_esi on destroy
-    pub fn init(buf: []u8) void {
+    pub fn init(api: *GlobalFn) void {
+        h_ar_hook.Reserve(api);
+        h_ar_init.Reserve(api);
+        h_ar_destroy.Reserve(api);
+        h_ar_update.Reserve(api);
+
+        var buf = apih.AMemoryGetPermanentT(api, [PATCH_BUFFER_SIZE]u8) orelse @panic("RTrigger: API OutOfMemory");
         scratch_fba = FixedBufferAllocator.init(buf);
         scratch_alloc = scratch_fba.allocator();
 
@@ -224,51 +239,56 @@ const CustomTrigger = struct {
         var d: x86.Detour = undefined;
         data = THandleMap.init(scratch_alloc);
 
+        // TODO: this part probably not necessary, since reservation already
+        //  asserts the handles were available
+        const handles = [_]RAddressHandle{
+            h_ar_hook.Handle,    h_ar_init.Handle,
+            h_ar_destroy.Handle, h_ar_update.Handle,
+        };
+        if (!apih.RAddressPatchToggleGroup(api, &handles, true)) return;
+
         // triggers
         // 0x476E7C -> 0x476E88 (0x0C)
         // 0x476E80 = the actual call instruction
-        _ = x86.call(0x476E80, @intFromPtr(&hookTrigger));
+        if (api.RAddressRangeWriteSt(handles[0])) {
+            defer api.RAddressRangeWriteEd(handles[0]);
+            _ = x86.call(0x476E80, @intFromPtr(&hookTrigger));
+        }
 
         // init
-        d.Start(0x47D397, 0x47D3A0, state_init);
-        d.addr = x86.cdecl_call(d.addr, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
-        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookInit), &[_]x86.PushSrc{ .{ .r32 = .esi }, .{ .r32 = .ebp } });
-        d.End();
+        if (api.RAddressRangeWriteSt(handles[1])) {
+            defer api.RAddressRangeWriteEd(handles[1]);
+            d.Start(0x47D397, 0x47D3A0, state_init);
+            d.addr = x86.cdecl_call(d.addr, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
+            d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookInit), &[_]x86.PushSrc{ .{ .r32 = .esi }, .{ .r32 = .ebp } });
+            d.End();
+        }
 
         // destroy
-        d.Start(0x47C4D9, 0x47C4E0, state_destroy);
-        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookDestroy), &[_]x86.PushSrc{.{ .r32 = .esi }});
-        d.addr = x86.CMP(d.addr, .esi, 0x08, .imm, 0x1F5);
-        d.End();
+        if (api.RAddressRangeWriteSt(handles[2])) {
+            defer api.RAddressRangeWriteEd(handles[2]);
+            d.Start(0x47C4D9, 0x47C4E0, state_destroy);
+            d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookDestroy), &[_]x86.PushSrc{.{ .r32 = .esi }});
+            d.addr = x86.CMP(d.addr, .esi, 0x08, .imm, 0x1F5);
+            d.End();
+        }
 
         // update
-        d.Start(0x47C51B, 0x47C520, state_update);
-        d.addr = x86.reg_save(d.addr, .eax, .ebp); // TODO: is this detour meant to replace a function body?
-        d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
-        d.addr = x86.reg_restore(d.addr, .eax, .ebp);
-        d.addr = x86.CMP(d.addr, .eax, null, .imm, 0x134);
-        d.End();
+        if (api.RAddressRangeWriteSt(handles[3])) {
+            defer api.RAddressRangeWriteEd(handles[3]);
+            d.Start(0x47C51B, 0x47C520, state_update);
+            d.addr = x86.reg_save(d.addr, .eax, .ebp); // TODO: is this detour meant to replace a function body?
+            d.addr = x86.cdecl_call(d.addr, @intFromPtr(&hookUpdate), &[_]x86.PushSrc{.{ .r32 = .esi }});
+            d.addr = x86.reg_restore(d.addr, .eax, .ebp);
+            d.addr = x86.CMP(d.addr, .eax, null, .imm, 0x134);
+            d.End();
+        }
     }
 
     // FIXME: crashes after reinit -> track load
     // probably due to timing of hotreload or un-cleared triggers
     pub fn deinit() void {
         data.deinit();
-
-        // trigger
-        _ = x86.call(0x476E80, @intFromPtr(&Trig_HandleTriggers));
-
-        // init
-        // WARN: cdecl_call ends with add_esp8, which is fewer bytes than the source
-        // asm, but should not cause problems in this case; safer if auto asm restore
-        // implemented in x86 util detour functions though
-        _ = x86.cdecl_call(0x47D397, @intFromPtr(TriggerDescription_AddItem), &[_]x86.PushSrc{.{ .r32 = .esi }});
-
-        // destroy
-        _ = x86.CMP(0x47C4D9, .esi, 0x08, .imm, 0x1F5);
-
-        // update
-        _ = x86.CMP(0x47C51B, .eax, null, .imm, 0x134);
     }
 
     fn settingsInit(gf: *GlobalFn) void {
@@ -313,8 +333,7 @@ pub fn RReleaseAll() callconv(.C) void {
 // HOOKS
 
 pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
-    var memory = apih.AMemoryGetPermanentT(gf, [PATCH_BUFFER_SIZE]u8) orelse @panic("RTrigger: API OutOfMemory");
-    CustomTrigger.init(memory);
+    CustomTrigger.init(gf);
     CustomTrigger.settingsInit(gf);
 }
 

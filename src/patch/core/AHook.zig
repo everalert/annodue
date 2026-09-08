@@ -472,6 +472,27 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
     defer assert(PluginState.plugins_count == std.mem.count(bool, &PluginState.plugins_used, &.{true}));
     defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
 
+    // hooking game
+
+    patch_buf = try arena_perm.create([PATCH_BUFFER_SIZE]u8);
+    patch_off = @intFromPtr(patch_buf.ptr);
+    defer assert(patch_off <= @intFromPtr(patch_buf.ptr) + patch_buf.len);
+
+    patch_off = HookGameSetup(patch_off);
+    patch_off = HookGameLoop(patch_off);
+    patch_off = HookEngineUpdate(patch_off);
+    patch_off = HookInputUpdate(patch_off);
+    patch_off = HookTimerUpdate(patch_off);
+    patch_off = HookInitRaceQuads(patch_off);
+    patch_off = HookInitHangQuads(patch_off);
+    //patch_off = HookGameEnd(patch_off);
+    patch_off = HookTextRender(patch_off);
+    patch_off = HookMenuDrawing(patch_off);
+    patch_off = HookSceneBeginEnd(patch_off);
+    //patch_off = HookLoadSprite(patch_off);
+
+    // loading modules
+
     PluginState.arena_perm = arena_perm;
     PluginState.arena_temp = arena_temp;
 
@@ -560,25 +581,6 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
             _ = PluginState.plugins_reloader.TrackFile(buf_path, handle);
         }
     }
-
-    // hooking game
-
-    patch_buf = try arena_perm.create([PATCH_BUFFER_SIZE]u8);
-    patch_off = @intFromPtr(patch_buf.ptr);
-    defer assert(patch_off <= @intFromPtr(patch_buf.ptr) + patch_buf.len);
-
-    patch_off = HookGameSetup(patch_off);
-    patch_off = HookGameLoop(patch_off);
-    patch_off = HookEngineUpdate(patch_off);
-    patch_off = HookInputUpdate(patch_off);
-    patch_off = HookTimerUpdate(patch_off);
-    patch_off = HookInitRaceQuads(patch_off);
-    patch_off = HookInitHangQuads(patch_off);
-    //patch_off = HookGameEnd(patch_off);
-    patch_off = HookTextRender(patch_off);
-    patch_off = HookMenuDrawing(patch_off);
-    patch_off = HookSceneBeginEnd(patch_off);
-    //patch_off = HookLoadSprite(patch_off);
 }
 
 // HOOKS
@@ -613,7 +615,10 @@ pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
 
 // last function call in successful setup path
 fn HookGameSetup(memory: usize) usize {
-    _ = RAddress.RAddressRangeReserve(0x4240AD, 0x4240B7); // TODO: save handle
+    const handle = RAddress.RAddressRangeReserve(0x4240AD, 0x4240B7); // TODO: save handle
+    if (!RAddress.RAddressRangeWriteSt(handle)) return memory;
+    defer RAddress.RAddressRangeWriteEd(handle);
+
     const addr: usize = 0x4240AD;
     const len: usize = 0x4240B7 - addr;
     const off_call: usize = 0x4240AF - addr;
@@ -623,7 +628,10 @@ fn HookGameSetup(memory: usize) usize {
 // GAME LOOP
 
 fn HookGameLoop(memory: usize) usize {
-    _ = RAddress.RAddressRangeReserve(0x49CE2A, 0x49CE2F); // TODO: save handle
+    const handle = RAddress.RAddressRangeReserve(0x49CE2A, 0x49CE2F); // TODO: save handle
+    if (!RAddress.RAddressRangeWriteSt(handle)) return memory;
+    defer RAddress.RAddressRangeWriteEd(handle);
+
     return hook.intercept_call(
         memory,
         0x49CE2A,
@@ -635,28 +643,65 @@ fn HookGameLoop(memory: usize) usize {
 // ENGINE UPDATES
 
 fn HookEngineUpdate(memory: usize) usize {
+    const handle1 = RAddress.RAddressRangeReserve(0x445991, 0x445991 + 5); // TODO: save handle
+    const handle2 = RAddress.RAddressRangeReserve(0x445A00, 0x445A00 + 5); // TODO: save handle
+    const handle3 = RAddress.RAddressRangeReserve(0x445A10, 0x445A10 + 5); // TODO: save handle
+    const handle4 = RAddress.RAddressRangeReserve(0x445A40, 0x445A40 + 5); // TODO: save handle
+    const handle5 = RAddress.RAddressRangeReserve(0x4459D1, 0x4459D1 + 5); // TODO: save handle
+    const handle6 = RAddress.RAddressRangeReserve(0x4459D6, 0x4459D6 + 5); // TODO: save handle
+    const handle7 = RAddress.RAddressRangeReserve(0x4459E0, 0x4459E0 + 5); // TODO: save handle
+    const handle8 = RAddress.RAddressRangeReserve(0x4459E5, 0x4459E5 + 5); // TODO: save handle
+    const handle9 = RAddress.RAddressRangeReserve(0x4459EF, 0x4459EF + 5); // TODO: save handle
+
     var off: usize = memory;
 
     // fn_445980 case 1
     // physics updates, etc.
-    off = hook.intercept_call(off, 0x445991, PluginFnCallback(.EarlyEngineUpdateB), null);
-    off = hook.intercept_call(off, 0x445A00, null, PluginFnCallback(.EarlyEngineUpdateA));
+    if (RAddress.RAddressRangeWriteSt(handle1)) {
+        defer RAddress.RAddressRangeWriteEd(handle1);
+        off = hook.intercept_call(off, 0x445991, PluginFnCallback(.EarlyEngineUpdateB), null);
+    }
+    if (RAddress.RAddressRangeWriteSt(handle2)) {
+        defer RAddress.RAddressRangeWriteEd(handle2);
+        off = hook.intercept_call(off, 0x445A00, null, PluginFnCallback(.EarlyEngineUpdateA));
+    }
 
     // fn_445980 case 2
     // text processing, etc. before the actual render
-    off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
-    off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
+    if (RAddress.RAddressRangeWriteSt(handle3)) {
+        defer RAddress.RAddressRangeWriteEd(handle3);
+        off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
+    }
+    if (RAddress.RAddressRangeWriteSt(handle4)) {
+        defer RAddress.RAddressRangeWriteEd(handle4);
+        off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
+    }
 
     // the function before CallAll0x14, at the start of the entity updates block
     // EngineUpdateStage20A is the equivalent for end of block
-    off = hook.intercept_call(off, 0x4459D1, PluginFnCallback(.EngineEntityUpdateB), null);
+    if (RAddress.RAddressRangeWriteSt(handle5)) {
+        defer RAddress.RAddressRangeWriteEd(handle5);
+        off = hook.intercept_call(off, 0x4459D1, PluginFnCallback(.EngineEntityUpdateB), null);
+    }
 
     // entity system stages in EarlyEngineUpdate (CallAll0x14, etc.)
     // will only run when game is not paused
-    off = hook.intercept_call(off, 0x4459D6, null, PluginFnCallback(.EngineUpdateStage14A));
-    off = hook.intercept_call(off, 0x4459E0, null, PluginFnCallback(.EngineUpdateStage18A));
-    off = hook.intercept_call(off, 0x4459E5, null, PluginFnCallback(.EngineUpdateStage1CA));
-    off = hook.intercept_call(off, 0x4459EF, null, PluginFnCallback(.EngineUpdateStage20A));
+    if (RAddress.RAddressRangeWriteSt(handle6)) {
+        defer RAddress.RAddressRangeWriteEd(handle6);
+        off = hook.intercept_call(off, 0x4459D6, null, PluginFnCallback(.EngineUpdateStage14A));
+    }
+    if (RAddress.RAddressRangeWriteSt(handle7)) {
+        defer RAddress.RAddressRangeWriteEd(handle7);
+        off = hook.intercept_call(off, 0x4459E0, null, PluginFnCallback(.EngineUpdateStage18A));
+    }
+    if (RAddress.RAddressRangeWriteSt(handle8)) {
+        defer RAddress.RAddressRangeWriteEd(handle8);
+        off = hook.intercept_call(off, 0x4459E5, null, PluginFnCallback(.EngineUpdateStage1CA));
+    }
+    if (RAddress.RAddressRangeWriteSt(handle9)) {
+        defer RAddress.RAddressRangeWriteEd(handle9);
+        off = hook.intercept_call(off, 0x4459EF, null, PluginFnCallback(.EngineUpdateStage20A));
+    }
 
     return off;
 }
@@ -664,6 +709,10 @@ fn HookEngineUpdate(memory: usize) usize {
 // GAME LOOP TIMER
 
 fn HookTimerUpdate(memory: usize) usize {
+    const handle = RAddress.RAddressRangeReserve(0x4459AF, 0x4459AF + 5); // TODO: save handle
+    if (!RAddress.RAddressRangeWriteSt(handle)) return memory;
+    defer RAddress.RAddressRangeWriteEd(handle);
+
     // fn_480540, in early engine update
     return hook.intercept_call(
         memory,
@@ -678,37 +727,58 @@ fn HookTimerUpdate(memory: usize) usize {
 // NOTE: before early engine update in main loop; not the only calls to the
 // hooked functions, but the main ones
 fn HookInputUpdate(memory: usize) usize {
+    const handle1 = RAddress.RAddressRangeReserve(0x423592, 0x423592 + 5); // TODO: save handle
+    const handle2 = RAddress.RAddressRangeReserve(0x404DD7, 0x404DD7 + 5); // TODO: save handle
+    const handle3 = RAddress.RAddressRangeReserve(0x4856B3, 0x4856B3 + 5); // TODO: save handle
+    const handle4 = RAddress.RAddressRangeReserve(0x4856C1, 0x4856C1 + 5); // TODO: save handle
+    const handle5 = RAddress.RAddressRangeReserve(0x4856C6, 0x4856C6 + 5); // TODO: save handle
+
     var off = memory;
-    off = hook.intercept_call( // fn_404DD0
-        off,
-        0x423592,
-        PluginFnCallback(.InputUpdateB),
-        PluginFnCallback(.InputUpdateA),
-    );
-    off = hook.intercept_call( // fn_485630
-        off,
-        0x404DD7,
-        PluginFnCallback(.InputUpdateControlsB),
-        PluginFnCallback(.InputUpdateControlsA),
-    );
-    off = hook.intercept_call( // fn_486170
-        off,
-        0x4856B3,
-        PluginFnCallback(.InputUpdateKeyboardB),
-        PluginFnCallback(.InputUpdateKeyboardA),
-    );
-    off = hook.intercept_call( // fn_486340
-        off,
-        0x4856C1,
-        PluginFnCallback(.InputUpdateJoysticksB),
-        PluginFnCallback(.InputUpdateJoysticksA),
-    );
-    off = hook.intercept_call( // fn_486710
-        off,
-        0x4856C6,
-        PluginFnCallback(.InputUpdateMouseB),
-        PluginFnCallback(.InputUpdateMouseA),
-    );
+    if (RAddress.RAddressRangeWriteSt(handle1)) {
+        defer RAddress.RAddressRangeWriteEd(handle1);
+        off = hook.intercept_call( // fn_404DD0
+            off,
+            0x423592,
+            PluginFnCallback(.InputUpdateB),
+            PluginFnCallback(.InputUpdateA),
+        );
+    }
+    if (RAddress.RAddressRangeWriteSt(handle2)) {
+        defer RAddress.RAddressRangeWriteEd(handle2);
+        off = hook.intercept_call( // fn_485630
+            off,
+            0x404DD7,
+            PluginFnCallback(.InputUpdateControlsB),
+            PluginFnCallback(.InputUpdateControlsA),
+        );
+    }
+    if (RAddress.RAddressRangeWriteSt(handle3)) {
+        defer RAddress.RAddressRangeWriteEd(handle3);
+        off = hook.intercept_call( // fn_486170
+            off,
+            0x4856B3,
+            PluginFnCallback(.InputUpdateKeyboardB),
+            PluginFnCallback(.InputUpdateKeyboardA),
+        );
+    }
+    if (RAddress.RAddressRangeWriteSt(handle4)) {
+        defer RAddress.RAddressRangeWriteEd(handle4);
+        off = hook.intercept_call( // fn_486340
+            off,
+            0x4856C1,
+            PluginFnCallback(.InputUpdateJoysticksB),
+            PluginFnCallback(.InputUpdateJoysticksA),
+        );
+    }
+    if (RAddress.RAddressRangeWriteSt(handle5)) {
+        defer RAddress.RAddressRangeWriteEd(handle5);
+        off = hook.intercept_call( // fn_486710
+            off,
+            0x4856C6,
+            PluginFnCallback(.InputUpdateMouseB),
+            PluginFnCallback(.InputUpdateMouseA),
+        );
+    }
     return off;
 }
 
@@ -716,6 +786,10 @@ fn HookInputUpdate(memory: usize) usize {
 
 // NOTE: disabling before fn to match RaceQuads
 fn HookInitHangQuads(memory: usize) usize {
+    const handle = RAddress.RAddressRangeReserve(0x454DCF, 0x454DD8); // TODO: save handle
+    if (!RAddress.RAddressRangeWriteSt(handle)) return memory;
+    defer RAddress.RAddressRangeWriteEd(handle);
+
     const addr: usize = 0x454DCF;
     const len: usize = 0x454DD8 - addr;
     const off_call: usize = 0x454DD0 - addr;
@@ -726,6 +800,10 @@ fn HookInitHangQuads(memory: usize) usize {
 
 // FIXME: remove stub and integrate one-param hooks with PluginFnCallback
 fn HookLoadSprite(memory: usize) usize {
+    const handle = RAddress.RAddressRangeReserve(0x446FB5, 0x446FB5 + 5); // TODO: save handle
+    if (!RAddress.RAddressRangeWriteSt(handle)) return memory;
+    defer RAddress.RAddressRangeWriteEd(handle);
+
     return hook.intercept_call_one_u32_param(memory, 0x446FB5, &PluginFnCallback1_stub);
 }
 
@@ -733,6 +811,10 @@ fn HookLoadSprite(memory: usize) usize {
 
 // FIXME: before fn crashes when hooked with any function contents; disabling for now
 fn HookInitRaceQuads(memory: usize) usize {
+    const handle = RAddress.RAddressRangeReserve(0x466D76, 0x466D81); // TODO: save handle
+    if (!RAddress.RAddressRangeWriteSt(handle)) return memory;
+    defer RAddress.RAddressRangeWriteEd(handle);
+
     const addr: usize = 0x466D76;
     const len: usize = 0x466D81 - addr;
     const off_call: usize = 0x466D79 - addr;
@@ -753,10 +835,20 @@ fn HookGameEnd(memory: usize) usize {
     const exit2_off: usize = 0x49CE3D;
     const exit1_len: usize = exit2_off - exit1_off - 1; // excluding retn
     const exit2_len: usize = 0x49CE48 - exit2_off - 1; // excluding retn
+
+    const handle1 = RAddress.RAddressRangeReserve(exit1_off, exit1_off + exit1_len); // TODO: save handle
+    const handle2 = RAddress.RAddressRangeReserve(exit2_off, exit2_off + exit2_len); // TODO: save handle
+
     var offset: usize = memory;
 
-    offset = hook.detour(offset, exit1_off, exit1_len, null, PluginFnCallback(.OnDeinit));
-    offset = hook.detour(offset, exit2_off, exit2_len, null, PluginFnCallback(.OnDeinit));
+    if (RAddress.RAddressRangeWriteSt(handle1)) {
+        defer RAddress.RAddressRangeWriteEd(handle1);
+        offset = hook.detour(offset, exit1_off, exit1_len, null, PluginFnCallback(.OnDeinit));
+    }
+    if (RAddress.RAddressRangeWriteSt(handle2)) {
+        defer RAddress.RAddressRangeWriteEd(handle2);
+        offset = hook.detour(offset, exit2_off, exit2_len, null, PluginFnCallback(.OnDeinit));
+    }
 
     return offset;
 }
@@ -764,6 +856,11 @@ fn HookGameEnd(memory: usize) usize {
 // MENU DRAW CALLS in 'Hang' callback0x14
 
 fn HookMenuDrawing(memory: usize) usize {
+    // TODO: add jumptable end to reh (or length, or full typedef)
+    const handle = RAddress.RAddressRangeReserve(reh.DRAW_MENU_JUMPTABLE_ADDR, 0x457AD4); // TODO: save handle
+    if (!RAddress.RAddressRangeWriteSt(handle)) return memory;
+    defer RAddress.RAddressRangeWriteEd(handle);
+
     var off: usize = memory;
 
     // see fn_457620 @ 0x45777F
@@ -784,51 +881,73 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn HookTextRender(memory: usize) usize {
+    const handle1 = RAddress.RAddressRangeReserve(0x450297, 0x450297 + 5); // TODO: save handle
+    const handle2 = RAddress.RAddressRangeReserve(0x45029C, 0x45029C + 5); // TODO: save handle
+    const handle3 = RAddress.RAddressRangeReserve(0x445A1A, 0x445A1A + 5); // TODO: save handle
+
     // NOTE: 0x483F8B calls ProcessQueue1, only usable with after-fn when using intercept_call()
     var off = memory;
     // FlushQueue1
     // TODO: deprecate, update to be more reflective of current knowledge and add granularity
-    off = hook.intercept_call(
-        off,
-        0x450297,
-        PluginFnCallback(.TextRenderB),
-        PluginFnCallback(.TextRenderA),
-    );
+    if (RAddress.RAddressRangeWriteSt(handle1)) {
+        defer RAddress.RAddressRangeWriteEd(handle1);
+        off = hook.intercept_call(
+            off,
+            0x450297,
+            PluginFnCallback(.TextRenderB),
+            PluginFnCallback(.TextRenderA),
+        );
+    }
     // FlushMapQueue
-    off = hook.intercept_call(
-        off,
-        0x45029C,
-        PluginFnCallback(.MapRenderB),
-        PluginFnCallback(.MapRenderA),
-    );
+    if (RAddress.RAddressRangeWriteSt(handle2)) {
+        defer RAddress.RAddressRangeWriteEd(handle2);
+        off = hook.intercept_call(
+            off,
+            0x45029C,
+            PluginFnCallback(.MapRenderB),
+            PluginFnCallback(.MapRenderA),
+        );
+    }
     // MetaCam_Draw2D
-    off = hook.intercept_call(
-        off,
-        0x445A1A,
-        PluginFnCallback(.Draw2DB),
-        PluginFnCallback(.Draw2DA),
-    );
+    if (RAddress.RAddressRangeWriteSt(handle3)) {
+        defer RAddress.RAddressRangeWriteEd(handle3);
+        off = hook.intercept_call(
+            off,
+            0x445A1A,
+            PluginFnCallback(.Draw2DB),
+            PluginFnCallback(.Draw2DA),
+        );
+    }
     return off;
 }
 
 fn HookSceneBeginEnd(memory: usize) usize {
+    const handle1 = RAddress.RAddressRangeReserve(0x48DCEC, 0x48DCEC + 5); // TODO: save handle
+    const handle2 = RAddress.RAddressRangeReserve(0x48DD5A, 0x48DD5A + 5); // TODO: save handle
+
     var off = memory;
 
     // 3D_StartScene__48A300 in Render_Flush__48DCE0
-    off = hook.intercept_call(
-        off,
-        0x48DCEC,
-        PluginFnCallback(.RenderSceneBeginB),
-        PluginFnCallback(.RenderSceneBeginA),
-    );
+    if (RAddress.RAddressRangeWriteSt(handle1)) {
+        defer RAddress.RAddressRangeWriteEd(handle1);
+        off = hook.intercept_call(
+            off,
+            0x48DCEC,
+            PluginFnCallback(.RenderSceneBeginB),
+            PluginFnCallback(.RenderSceneBeginA),
+        );
+    }
 
     // 3D_EndScene__48A330 in Render_Flush__48DCE0
-    off = hook.intercept_call(
-        off,
-        0x48DD5A,
-        PluginFnCallback(.RenderSceneEndB),
-        PluginFnCallback(.RenderSceneEndA),
-    );
+    if (RAddress.RAddressRangeWriteSt(handle2)) {
+        defer RAddress.RAddressRangeWriteEd(handle2);
+        off = hook.intercept_call(
+            off,
+            0x48DD5A,
+            PluginFnCallback(.RenderSceneEndB),
+            PluginFnCallback(.RenderSceneEndA),
+        );
+    }
 
     return off;
 }

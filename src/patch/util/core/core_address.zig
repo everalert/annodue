@@ -19,6 +19,7 @@ const GetLastError = w32.foundation.GetLastError;
 
 const RoundIntUp = @import("../base/base_math.zig").RoundIntUp;
 const CollisionStrict1D = @import("../base/base_math.zig").CollisionStrict1D;
+const ProcessImageSlice = @import("../debug/debug.zig").ProcessImageSlice;
 
 // TODO: also assert windows? (only necessary because memory-related functions
 //  not yet os-agnostic)
@@ -47,36 +48,66 @@ comptime {
 //  right now, but could be with a lot of live reservations
 // TODO: more comprehensive tests, possibly using more sophisticated test runner
 //  that actually loads the game
+// TODO: only change page permissions for read/write functionality if the section
+//  the address range is in doesn't naturally have the read/write flag on
 
 pub const AddressHandleOpaque = u32;
 pub const ADDRESS_HANDLE_OPAQUE_NULL: AddressHandleOpaque = 0;
 
 pub const RangeManagerOpts = struct {
-    ListCapacity: u24,
-    MemorySize: u24,
-    MemoryBase: u32, // FIXME: just use a slice, since it's no longer comptime?
-    MemorySections: []const SectionInfo,
+    ListCapacity: u24, // limited to size of handle index field
+    ImageSlice: []const u8,
+    /// slices defining page permission boundaries in the image memory
+    ImageSections: []const []const u8,
 
-    pub fn RacerOpts(comptime list_capacity: comptime_int) RangeManagerOpts {
-        const r = @import("racer");
-        const s = struct {
-            // contain to function scope so that racer doesn't need to be imported
-            // as a module unless calling this function; easier for testing
-            const SECTIONS = blk: {
-                var sections: [r.Meta.SECTIONS.len]SectionInfo = undefined;
-                for (r.Meta.SECTIONS, 0..) |s, i| sections[i] = .{
-                    .memory = @as([*]u8, @ptrFromInt(s[1]))[0..s[2]],
-                    .flags = @bitCast(s[3]),
-                };
-                break :blk sections;
-            };
-        };
+    pub fn Init(list_capacity: u24, image: []const u8, sections: []const []const u8) RangeManagerOpts {
+        assert(image.len <= std.math.maxInt(u24));
+        assert(std.math.isPowerOfTwo(list_capacity));
+        for (sections) |section| {
+            assert(@intFromPtr(section.ptr) >= @intFromPtr(image.ptr));
+            assert(@intFromPtr(section.ptr) + section.len <= @intFromPtr(image.ptr) + image.len);
+        }
 
         return RangeManagerOpts{
             .ListCapacity = list_capacity,
-            .MemorySize = r.Meta.IMAGE_SIZE,
-            .MemoryBase = r.Meta.IMAGE_BASE,
-            .MemorySections = &s.SECTIONS,
+            .ImageSlice = image,
+            .ImageSections = sections,
+        };
+    }
+
+    /// init by inspecting process for image slice and sections
+    pub fn InitProcess(arena: Allocator, list_capacity: u24, section_capacity: u24) RangeManagerOpts {
+        assert(std.math.isPowerOfTwo(list_capacity));
+        assert(std.math.isPowerOfTwo(section_capacity));
+
+        const image_slice = ProcessImageSlice();
+        var image_sections = arena.alloc([]const u8, section_capacity) catch @panic("InitProcess: OutOfMemory");
+        var search_addr = @intFromPtr(image_slice.ptr);
+        const search_addr_ed = search_addr + image_slice.len;
+
+        var image_i: u32 = 0;
+        while (search_addr < search_addr_ed) {
+            if (image_i >= section_capacity) panic(
+                "InitProcess: SectionCapacity({d}) exceeded:  base={X:0>8} section={X:0>8}",
+                .{ section_capacity, @intFromPtr(image_slice.ptr), search_addr },
+            );
+
+            var mbi: MEMORY_BASIC_INFORMATION = undefined;
+            if (FALSE == VirtualQuery(@ptrFromInt(search_addr), &mbi, @sizeOf(MEMORY_BASIC_INFORMATION)))
+                panic("InitProcess: VirtualQuery: {s} (section {d})", .{ @tagName(GetLastError()), image_i });
+
+            // TODO: skip if section overruns end address? surely not possible if
+            //  going through win32 api?
+            image_sections[image_i] = @as([*]const u8, @ptrCast(mbi.BaseAddress))[0..mbi.RegionSize];
+
+            image_i += 1;
+            search_addr += mbi.RegionSize;
+        }
+
+        return RangeManagerOpts{
+            .ListCapacity = list_capacity,
+            .ImageSlice = image_slice,
+            .ImageSections = image_sections[0..image_i],
         };
     }
 };
@@ -101,10 +132,11 @@ pub const RangeManager = struct {
     /// current address range open for writing. only one range can be writing at
     /// a time, to avoid page permission write conflicts
     AddressWriting: AddressHandle,
+    AddressWritingNativeProtections: PAGE_PROTECTION_FLAGS,
 
-    OptImageSize: u24, // FIXME: can this just be a slice since it's no longer comptime?
-    OptImageBase: u32,
-    OptImageSections: []const SectionInfo,
+    ImageSlice: []const u8,
+    ImageSections: []const []const u8,
+
     OptListCapacity: u24,
     OptListCapacityLast: u24,
     OptListCountMax: u24,
@@ -114,15 +146,8 @@ pub const RangeManager = struct {
     //  fit in u32, even if moving to slices
     // TODO: impl Deinit
     pub fn Init(arena_perm: Allocator, arena_temp: Allocator, opts: RangeManagerOpts) ?RangeManager {
-        assert(opts.ListCapacity <= opts.MemorySize + 1); // +1 due to null object
-        assert(opts.MemorySize - 2 <= std.math.maxInt(u24)); // -2 due to maxInt offset and null object
-        assert(opts.MemorySections.len > 0);
-        assert(opts.MemorySections.len <= 4);
-
-        const IMAGE_SIZE = opts.MemorySize;
-        const IMAGE_BASE = opts.MemoryBase;
-        const IMAGE_SECTIONS = opts.MemorySections;
-        const LIST_CAPACITY = opts.ListCapacity;
+        const IMAGE_SIZE = @as(u24, @truncate(opts.ImageSlice.len));
+        const LIST_CAPACITY = @min(opts.ListCapacity, IMAGE_SIZE + 1);
         const LIST_COUNT_MAX = RoundIntUp(u24, IMAGE_SIZE + 1, LIST_CAPACITY) / LIST_CAPACITY;
         const LIST_CAPACITY_LAST = (IMAGE_SIZE + 1) % LIST_COUNT_MAX; // +1 to account for null object
 
@@ -141,9 +166,9 @@ pub const RangeManager = struct {
             .RangeListCount = 1,
             .RangeListCountPeak = 1,
             .AddressWriting = AddressHandle.Zero,
-            .OptImageSize = IMAGE_SIZE,
-            .OptImageBase = IMAGE_BASE,
-            .OptImageSections = IMAGE_SECTIONS,
+            .AddressWritingNativeProtections = std.mem.zeroes(PAGE_PROTECTION_FLAGS),
+            .ImageSlice = opts.ImageSlice,
+            .ImageSections = opts.ImageSections,
             .OptListCapacity = LIST_CAPACITY,
             .OptListCapacityLast = LIST_CAPACITY_LAST,
             .OptListCountMax = LIST_COUNT_MAX,
@@ -227,10 +252,10 @@ pub const RangeManager = struct {
         return RangeRef{ .Node = p_list, .Index = @intCast(chunk_start + i) };
     }
 
-    fn AddressSection(self: *const RangeManager, addr_st: u32, addr_ed: u32) ?u2 {
-        for (self.OptImageSections, 0..) |section, i| {
-            const section_st: u32 = @intFromPtr(section.memory.ptr);
-            const section_ed: u32 = section_st + section.memory.len;
+    fn AddressSection(self: *const RangeManager, addr_st: u32, addr_ed: u32) ?u16 {
+        for (self.ImageSections, 0..) |section, i| {
+            const section_st: u32 = @intFromPtr(section.ptr);
+            const section_ed: u32 = section_st + section.len;
             if (addr_st >= section_st and addr_ed <= section_ed) return @intCast(i);
         }
         return null;
@@ -325,8 +350,8 @@ pub const RangeManager = struct {
     fn RangeSliceGetBackup(self: *const RangeManager, ref: RangeRef) []u8 {
         assert(!self.RangeHandleByRef(ref).IsNull()); // range must be in use
         const span = self.RangeSpanByRef(ref);
-        const memo_st = span.St - self.OptImageBase;
-        const memo_ed = span.Ed - self.OptImageBase;
+        const memo_st = span.St - @intFromPtr(self.ImageSlice.ptr);
+        const memo_ed = span.Ed - @intFromPtr(self.ImageSlice.ptr);
         return self.GameMemoryBackup[memo_st..memo_ed];
     }
 
@@ -338,7 +363,7 @@ pub const RangeManager = struct {
         range.Generation += 1;
         range.AddressSt = addr_st;
         range.AddressEd = addr_ed;
-        range.Flags = .{ .Used = true, .Section = self.AddressSection(addr_st, addr_ed).? };
+        range.Flags = .{ .Used = true };
         range.Owner = owner;
         self.RangeDataSet(ref, range);
 
@@ -414,6 +439,7 @@ pub const RangeManager = struct {
         return true;
     }
 
+    // TODO: ?? log/panic on VirtualProtect error instead of silent fail?
     fn RangeWriteStByRef(self: *RangeManager, ref: RangeRef) bool {
         const handle = self.RangeHandleByRef(ref);
         assert(!handle.IsNull()); // handle invalid
@@ -421,15 +447,19 @@ pub const RangeManager = struct {
         if (!self.AddressWriting.IsNull()) return false; // already writing
 
         const range = self.RangeDataGet(ref);
-        var protect: PAGE_PROTECTION_FLAGS = undefined;
         const range_len = range.AddressEd - range.AddressSt;
-        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, PAGE_EXECUTE_READWRITE, &protect))
-            return false;
+        if (FALSE == VirtualProtect(
+            @ptrFromInt(range.AddressSt),
+            range_len,
+            PAGE_EXECUTE_READWRITE,
+            &self.AddressWritingNativeProtections,
+        )) return false;
 
         self.AddressWriting = handle;
         return true;
     }
 
+    // TODO: ?? log/panic on VirtualProtect error instead of silent fail?
     fn RangeWriteEdByRef(self: *RangeManager, ref: RangeRef) void {
         const handle = self.RangeHandleByRef(ref);
         assert(!handle.IsNull()); // handle invalid
@@ -439,9 +469,12 @@ pub const RangeManager = struct {
         const range = self.RangeDataGet(ref);
         var protect: PAGE_PROTECTION_FLAGS = undefined;
         const range_len = range.AddressEd - range.AddressSt;
-        const range_protect = self.OptImageSections[range.Flags.Section].flags;
-        if (FALSE == VirtualProtect(@ptrFromInt(range.AddressSt), range_len, range_protect, &protect))
-            return;
+        if (FALSE == VirtualProtect(
+            @ptrFromInt(range.AddressSt),
+            range_len,
+            self.AddressWritingNativeProtections,
+            &protect,
+        )) return;
 
         self.AddressWriting = AddressHandle.Zero;
     }
@@ -463,11 +496,6 @@ pub const RangeManager = struct {
         const ref = self.RangeRefByHandle(handle) orelse return;
         self.RangeWriteEdByRef(ref);
     }
-};
-
-const SectionInfo = struct {
-    memory: []const u8,
-    flags: PAGE_PROTECTION_FLAGS,
 };
 
 const RangeListNode = struct {
@@ -505,8 +533,7 @@ const AddressRange = struct {
 
 const AddressFlags = packed struct(u8) {
     Used: bool,
-    Section: u2,
-    _: u5 = 0,
+    _: u7 = 0,
 };
 
 const AddressHandle = packed struct(u32) {
@@ -548,23 +575,8 @@ test "Manager: basic usage" {
 
     const MEMORY_REF: [8]u8 = .{ 0, 1, 2, 3, 4, 5, 6, 7 };
     var MEMORY = MEMORY_REF;
-    var MEMORY_INFO: MEMORY_BASIC_INFORMATION = undefined;
-    if (FALSE == VirtualQuery(&MEMORY, &MEMORY_INFO, @sizeOf(MEMORY_BASIC_INFORMATION)))
-        panic("VirtualQuery: {s}", .{@tagName(GetLastError())});
-
-    const alloc_st = @intFromPtr(MEMORY_INFO.BaseAddress);
-    const alloc_ed = alloc_st + MEMORY_INFO.RegionSize;
-    const memory_st = @intFromPtr(&MEMORY);
-    const memory_ed = memory_st + MEMORY.len;
-    assert(alloc_st <= memory_st);
-    assert(alloc_ed >= memory_ed);
-
     const MEMORY_BASE = @intFromPtr(&MEMORY);
-    const MEMORY_SIZE = MEMORY.len;
-    const MEMORY_SECTIONS: [2]SectionInfo = .{
-        SectionInfo{ .memory = MEMORY[0..4], .flags = MEMORY_INFO.AllocationProtect },
-        SectionInfo{ .memory = MEMORY[4..6], .flags = MEMORY_INFO.AllocationProtect },
-    };
+    const MEMORY_SECTIONS: []const []const u8 = &.{ MEMORY[0..4], MEMORY[4..6] };
 
     var arena_perm = std.heap.ArenaAllocator.init(std.testing.allocator);
     var arena_temp = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -589,12 +601,7 @@ test "Manager: basic usage" {
     var m = RangeManager.Init(
         arena_perm.allocator(),
         arena_temp.allocator(),
-        RangeManagerOpts{
-            .ListCapacity = 2,
-            .MemoryBase = MEMORY_BASE,
-            .MemorySize = MEMORY_SIZE,
-            .MemorySections = &MEMORY_SECTIONS,
-        },
+        RangeManagerOpts.Init(2, &MEMORY, MEMORY_SECTIONS),
     ) orelse return error.ManagerInitFailed;
 
     //---------------------------------

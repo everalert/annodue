@@ -18,11 +18,6 @@ const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 const Setting = @import("core/ASettings.zig").ASettingSent;
 
-const ra = @import("racer").Asset;
-const rt = @import("racer").Text;
-const rf = @import("racer").Font;
-const r3 = @import("racer").@"3D";
-
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_cosmetic", "annodue/plugin/plugin_cosmetic.pdb");
 

@@ -11,7 +11,6 @@ const RAddressHandleInfo = apih.RAddressHandleInfo;
 const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
 
 const r = @import("racer");
-const t = r.Text;
 const Test = r.Entity.Test.Test;
 const Test_HandleTerrain = r.Entity.Test.HandleTerrain;
 const ModelMesh_GetBehavior = r.Model.Mesh_GetBehavior;

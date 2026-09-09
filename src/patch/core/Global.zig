@@ -62,13 +62,13 @@ fn global_player_reset(self: *GlobalState) void {
 
 fn global_player_update(self: *GlobalState) void {
     const p = &self.player;
-    const pt = re.Test.GetPlayerAssertValid();
+    const pt = re.Test.GetPlayerAssertValid(); // NOTE: indirect game image read
 
     p.boosting.update(pt.flags1.IS_BOOSTING);
     p.boost_charging.update(pt.boostChargeStatus == 1);
     p.boost_ready.update(pt.boostChargeStatus == 2);
-    p.underheating.update(re.Test.GetUnderheating(pt));
-    p.overheating.update(re.Test.GetOverheating(pt));
+    p.underheating.update(re.Test.GetUnderheating(pt)); // NOTE: indirect game image read
+    p.overheating.update(re.Test.GetOverheating(pt)); // NOTE: indirect game image read
     p.dead.update(pt.flags1.IS_DEAD);
     if (p.dead == .JustOn) p.deaths += 1;
 }

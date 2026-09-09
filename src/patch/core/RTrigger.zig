@@ -25,7 +25,7 @@ const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
 const RADDRESS_HANDLE_NULL = @import("../util/api/api.zig").RADDRESS_HANDLE_NULL;
 
 const r = @import("racer");
-const t = r.Text;
+const rt = r.Text;
 const Test = r.Entity.Test.Test;
 const Trig = r.Entity.Trig.Trig;
 const Trig_HandleTriggers = r.Entity.Trig.HandleTriggers;
@@ -155,7 +155,7 @@ const CustomTrigger = struct {
         if (s_notify_trigger) {
             var b: [127:0]u8 = undefined;
             _ = std.fmt.bufPrintZ(&b, "Trigger {d} activated", .{tr.Type}) catch {};
-            t.fnNewNotification(&b, 3.0);
+            rt.fnNewNotification(&b, 3.0);
         }
 
         if (tr.Type < TRIGGER_LIMIT_GAME) {

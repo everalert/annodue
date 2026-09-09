@@ -16,14 +16,20 @@
 //!   byte after the last written byte); this is so you can do iterative writes
 //!   without manually keeping track of the next address at each step
 
-// TODO: tests; see core_address for inspo
-// TODO: update core_address to use this, now that it's straightened out?
-// TODO: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection or smth)
-// TODO: look into perf cost of spamming VirtualProtect
-
 const std = @import("std");
+const builtin = @import("builtin");
 const assert = std.debug.assert;
 const panic = std.debug.panic;
+
+comptime {
+    assert(builtin.target.os.tag == .windows); // example build command flag:  -target x86-windows
+}
+
+// TODO: tests; see core_address for inspo
+// TODO: update core_address to use this, now that it's straightened out?
+// TODO: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection
+//  or smth), and make os-agnostic
+// TODO: look into perf cost of spamming VirtualProtect
 
 const w32 = @import("zigwin32");
 const PAGE_PROTECTION_FLAGS = w32.system.memory.PAGE_PROTECTION_FLAGS;
@@ -74,7 +80,7 @@ pub fn ReadBytes(addr: usize, data: []u8) void {
 /// resolve address at end of pointer chain
 pub fn Deref(addr: usize, path: []const usize) usize {
     var a: usize = addr;
-    for (path[0 .. path.len - 1]) |p| a = Read(a + p);
+    for (path[0 .. path.len - 1]) |p| a = Read(a + p, usize);
     return a + path[path.len - 1];
 }
 
@@ -87,7 +93,7 @@ pub fn DerefWrite(addr: usize, path: []const usize, comptime T: type, value: T) 
 /// write bytes at end of pointer chain, assuming correct page permissions along the chain
 pub fn DerefWriteBytes(addr: usize, path: []const usize, data: []const u8) usize {
     const a = Deref(addr, path);
-    return Write(a, data);
+    return WriteBytes(a, data);
 }
 
 /// read value at end of pointer chain, assuming correct page permissions along the chain
@@ -99,7 +105,7 @@ pub fn DerefRead(addr: usize, path: []const usize, comptime T: type) T {
 /// read bytes at end of pointer chain, assuming correct page permissions along the chain
 pub fn DerefReadBytes(addr: usize, path: []const usize, data: []u8) void {
     const a = Deref(addr, path);
-    Read(a, data);
+    ReadBytes(a, data);
 }
 
 //------------------------------------------------------------------------------
@@ -158,4 +164,117 @@ pub fn SafeContextEd(ctx: Context) void {
     var flags: PAGE_PROTECTION_FLAGS = undefined; // needed for valid api usage
     if (FALSE == VirtualProtect(ctx.Addr, ctx.Size, ctx.Flags, &flags))
         panic("SafeContextEd: VirtualProtect: {s}", .{@tagName(GetLastError())});
+}
+
+//------------------------------------------------------------------------------
+// tests
+
+fn TestAlloc(size: usize, protection: PAGE_PROTECTION_FLAGS) usize {
+    const VirtualAlloc = w32.system.memory.VirtualAlloc;
+    const MEM_RESERVE_COMMIT = w32.system.memory.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 };
+    return @intFromPtr(VirtualAlloc(null, size, MEM_RESERVE_COMMIT, protection) orelse
+        panic("VirtualAlloc: {s}", .{@tagName(GetLastError())}));
+}
+
+fn TestFree(addr: usize) void {
+    const VirtualFree = w32.system.memory.VirtualFree;
+    const MEM_RELEASE = w32.system.memory.MEM_RELEASE;
+    if (FALSE == VirtualFree(@ptrFromInt(addr), 0, MEM_RELEASE))
+        panic("VirtualFree: {s}", .{@tagName(GetLastError())});
+}
+
+test "Memory: Unsafe API" {
+    const SIZE: usize = 8;
+    const PAGE_READWRITE = w32.system.memory.PAGE_READWRITE;
+    const addr = TestAlloc(SIZE, PAGE_READWRITE);
+    defer TestFree(addr);
+
+    @memset(@as([*]u8, @ptrFromInt(addr))[0..SIZE], 0);
+
+    const w1data: [SIZE]u8 = [1]u8{0xBB} ** SIZE;
+    var r1data: [SIZE]u8 = undefined;
+    const w1 = WriteBytes(addr, w1data[0..]);
+    ReadBytes(addr, r1data[0..]);
+    try std.testing.expectEqual(addr + w1data.len, w1);
+    try std.testing.expectEqualSlices(u8, w1data[0..], r1data[0..]);
+
+    const w2data: u32 = 12345678;
+    const w2 = Write(addr, u32, w2data);
+    const r2data = Read(addr, u32);
+    try std.testing.expectEqual(addr + @sizeOf(u32), w2);
+    try std.testing.expectEqual(w2data, r2data);
+}
+
+test "Memory: Deref API" {
+    const SIZE: usize = @sizeOf(usize) * 2;
+    const PAGE_READWRITE = w32.system.memory.PAGE_READWRITE;
+    var addr: [3]usize = undefined;
+    for (0..addr.len) |i| {
+        addr[i] = TestAlloc(SIZE, PAGE_READWRITE);
+        @memset(@as([*]u8, @ptrFromInt(addr[i]))[0..SIZE], 0);
+    }
+    defer for (0..addr.len) |i| TestFree(addr[i]);
+
+    @memset(@as([*]usize, @ptrFromInt(addr[0]))[0..2], addr[1]);
+    @memset(@as([*]usize, @ptrFromInt(addr[1]))[0..2], addr[2]);
+    const p1: []const usize = &.{ 0, @sizeOf(usize), 0 }; // x86: [[addr0+0]+4]+0
+    const p2: []const usize = &.{ @sizeOf(usize), 0, @sizeOf(u32) }; // x86: [[addr0+4]+0]+4
+    try std.testing.expectEqual(addr[2] + p1[p1.len - 1], Deref(addr[0], p1));
+    try std.testing.expectEqual(addr[2] + p2[p2.len - 1], Deref(addr[0], p2));
+
+    const w1data: [SIZE]u8 = [1]u8{0xBB} ** SIZE;
+    var r1data: [SIZE]u8 = undefined;
+    const w1 = DerefWriteBytes(addr[0], p1, w1data[0..]);
+    DerefReadBytes(addr[0], p1, r1data[0..]);
+    try std.testing.expectEqual(addr[2] + p1[p1.len - 1] + w1data.len, w1);
+    try std.testing.expectEqualSlices(u8, w1data[0..], r1data[0..]);
+
+    const w2data: u32 = 12345678;
+    const w2 = DerefWrite(addr[0], p2, u32, w2data);
+    const r2data = DerefRead(addr[0], p2, u32);
+    try std.testing.expectEqual(addr[2] + p2[p2.len - 1] + @sizeOf(u32), w2);
+    try std.testing.expectEqual(w2data, r2data);
+}
+
+test "Memory: Safe API" {
+    const SIZE: usize = 8;
+    const PAGE_NOACCESS = w32.system.memory.PAGE_NOACCESS;
+    const addr = TestAlloc(SIZE, PAGE_NOACCESS);
+    defer TestFree(addr);
+
+    const w1data: [SIZE]u8 = [1]u8{0xBB} ** SIZE;
+    var r1data: [SIZE]u8 = undefined;
+    const w1 = SafeWriteBytes(addr, w1data[0..]);
+    SafeReadBytes(addr, r1data[0..]);
+    try std.testing.expectEqual(addr + w1data.len, w1);
+    try std.testing.expectEqualSlices(u8, w1data[0..], r1data[0..]);
+
+    const w2data: u32 = 12345678;
+    const w2 = SafeWrite(addr, u32, w2data);
+    const r2data = SafeRead(addr, u32);
+    try std.testing.expectEqual(addr + @sizeOf(u32), w2);
+    try std.testing.expectEqual(w2data, r2data);
+}
+
+test "Memory: SafeContext API" {
+    const SIZE: usize = 8;
+    const PAGE_NOACCESS = w32.system.memory.PAGE_NOACCESS;
+    const addr = TestAlloc(SIZE, PAGE_NOACCESS);
+    defer TestFree(addr);
+
+    const ctx = SafeContextSt(addr, addr + SIZE);
+    defer SafeContextEd(ctx);
+
+    const w1data: [SIZE]u8 = [1]u8{0xBB} ** SIZE;
+    var r1data: [SIZE]u8 = undefined;
+    const w1 = WriteBytes(addr, w1data[0..]);
+    ReadBytes(addr, r1data[0..]);
+    try std.testing.expectEqual(addr + w1data.len, w1);
+    try std.testing.expectEqualSlices(u8, w1data[0..], r1data[0..]);
+
+    const w2data: u32 = 12345678;
+    const w2 = Write(addr, u32, w2data);
+    const r2data = Read(addr, u32);
+    try std.testing.expectEqual(addr + @sizeOf(u32), w2);
+    try std.testing.expectEqual(w2data, r2data);
 }

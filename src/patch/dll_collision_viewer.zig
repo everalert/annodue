@@ -20,6 +20,9 @@ const Menu = m.Menu;
 const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const st = @import("util/toggle_state.zig");
+const apih = @import("util/api/api_helper.zig");
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
@@ -54,6 +57,11 @@ const AnnodueSettings = struct {
     var h_s_section: ?SettingHandle = null;
     var h_s_depth_bias: ?SettingHandle = null;
     var s_depth_bias: i32 = 10;
+
+    // NOTE: detour at top of Viewport_RenderViewport__483A90. hooking for this
+    //  happens in cpp land, so for now all we're doing is making the reservation
+    //  for the sake of avoiding collisions
+    var h_ar_hook = RAddressHandleInfo.InitLen(0x483A90, 5);
 
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "collisionviewer", null);
@@ -357,11 +365,14 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    // FIXME: stop doing this
+    QuickRaceMenu.gf = gf;
+
+    AnnodueSettings.h_ar_hook.Reserve(gf);
+
     AnnodueSettings.settingsInit(gf);
 
     init_collision_viewer(&state);
-
-    QuickRaceMenu.gf = gf;
 }
 
 export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}

@@ -8,6 +8,9 @@
 #include <map>
 #include <optional>
 #include <algorithm>
+
+#include <initguid.h>
+
 #include <d3d.h>
 #include <ddraw.h>
 
@@ -21,10 +24,17 @@
 auto stdDisplay_Update = (int (*)())0x00489ab0; // <-- will be hooked
 auto swrModel_UnkDraw = (void (*)(int x))0x00483A90; // <-- will be hooked
 
+auto rdMaterial_InvertTextureAlphaR4G4B4A4 = (void (*)(RdMaterial*))0x00431CF0; // <-- will be hooked
+auto rdMaterial_InvertTextureColorR4G4B4A4 = (void (*)(RdMaterial*))0x00431DF0; // <-- will be hooked
+auto rdMaterial_RemoveTextureAlphaR5G5B5A1 = (void (*)(RdMaterial*))0x00431EF0; // <-- will be hooked
+auto rdMaterial_RemoveTextureAlphaR4G4B4A4 = (void (*)(RdMaterial*))0x00431FD0; // <-- will be hooked
+auto rdMaterial_SaturateTextureR4G4B4A4 = (void (*)(RdMaterial*))0x004320B0; // <-- will be hooked
+
 const auto swrModel_NodeGetTransform = (void (*)(const swrModel_NodeTransformed* node, rdMatrix44* matrix))0x004316A0;
 const auto swrEvent_GetItem = (void* (*)(int event, int index))0x00450b30;
 const auto std3D_SetRenderState = (void (*)(Std3DRenderState rdflags))0x0048a450;
-const auto stdDisplay_BackBufferFill = (void (*)(unsigned int r, unsigned int b, unsigned int g, LECRECT* lpRect))0x00489cd0;
+const auto stdDisplay_BackBufferFill =
+    (void (*)(unsigned int r, unsigned int b, unsigned int g, LECRECT* lpRect))0x00489cd0;
 const auto rdCache_Flush = (void (*)(void))0x0048dce0;
 
 // math functions, not strictly needed, it would be better to reimplement them for performance reasons.
@@ -32,7 +42,8 @@ const auto rdMatrix_Multiply44 = (void (*)(rdMatrix44* out, const rdMatrix44* ma
 const auto rdVector_Sub3 = (void (*)(rdVector3* v1, const rdVector3* v2, const rdVector3* v3))0x0042f860;
 const auto rdVector_Normalize3Acc = (float (*)(rdVector3* v1))0x0042f9b0;
 const auto rdVector_Scale3 = (void (*)(rdVector3* v1, float scale, const rdVector3* v2))0x0042fa50;
-const auto rdVector_Scale3Add3 = (void (*)(rdVector3* v1, const rdVector3* v2, float scale, const rdVector3* v3))0x0042fa80;
+const auto rdVector_Scale3Add3 =
+    (void (*)(rdVector3* v1, const rdVector3* v2, float scale, const rdVector3* v3))0x0042fa80;
 const auto rdVector_Cross3 = (void (*)(rdVector3* v1, const rdVector3* v2, const rdVector3* v3))0x0042f9f0;
 const auto rdMatrix_Copy44_34 = (void (*)(rdMatrix44* dest, const rdMatrix34* src))0x0044bad0;
 const auto rdMatrix_SetIdentity44 = (void (*)(rdMatrix44* mat))0x004313d0;
@@ -53,7 +64,8 @@ struct D3DVertex
     Color c;
 };
 
-void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat, const rdMatrix44& model_matrix)
+void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat,
+                       const rdMatrix44& model_matrix)
 {
     if (!mesh->collision_vertices)
         return;
@@ -169,7 +181,8 @@ void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix4
     if (settings.collision_mesh_opacity != 0.0)
     {
         std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_SOLID);
-        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(), vertices.size(), indices.data(), indices.size(), 0);
+        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(),
+                                              vertices.size(), indices.data(), indices.size(), 0);
     }
 
     for (auto& v : vertices)
@@ -178,11 +191,13 @@ void debug_render_mesh(const swrModel_Mesh* mesh, bool mirrored, const rdMatrix4
     if (settings.collision_line_opacity != 0.0)
     {
         std3D_pD3Device->SetRenderState(D3DRENDERSTATE_FILLMODE, D3DFILL_WIREFRAME);
-        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(), vertices.size(), indices.data(), indices.size(), 0);
+        std3D_pD3Device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, D3DFVF_XYZ | D3DFVF_DIFFUSE, vertices.data(),
+                                              vertices.size(), indices.data(), indices.size(), 0);
     }
 }
 
-void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, bool mirrored, const rdMatrix44& proj_mat, const rdMatrix44& view_mat, rdMatrix44 model_mat, uint32_t col_flags)
+void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, bool mirrored,
+                       const rdMatrix44& proj_mat, const rdMatrix44& view_mat, rdMatrix44 model_mat, uint32_t col_flags)
 {
     if (!node)
         return;
@@ -303,7 +318,8 @@ void debug_render_node(const swrModel_unk& current, const swrModel_Node* node, b
             break;
         default:
             if (child >= 0 && child < node->num_children)
-                debug_render_node(current, node->child_nodes[child], mirrored, proj_mat, view_mat, model_mat, col_flags);
+                debug_render_node(current, node->child_nodes[child], mirrored, proj_mat, view_mat, model_mat,
+                                  col_flags);
 
             break;
         }
@@ -339,7 +355,8 @@ void render_spline()
     if (!precomputed_splines.contains(track_index))
     {
         PrecomputedSpline precomputed_spline;
-        auto draw_cubic_bezier = [&](const rdVector3& p0, const rdVector3& p1, const rdVector3& p2, const rdVector3& p3) {
+        auto draw_cubic_bezier = [&](const rdVector3& p0, const rdVector3& p1, const rdVector3& p2,
+                                     const rdVector3& p3) {
             const rdMatrix44 P{ p0.x, p1.x, p2.x, p3.x, p0.y, p1.y, p2.y, p3.y, p0.z, p1.z, p2.z, p3.z, 0, 0, 0, 0 };
             const rdMatrix44 bezier_matrix{ 1, -3, 3, -1, 0, 3, -6, 3, 0, 0, 3, -3, 0, 0, 0, 1 };
 
@@ -392,7 +409,8 @@ void render_spline()
     std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_WORLD, (D3DMATRIX*)&model_mat.vA.x);
 
     for (const auto& vertices : segments)
-        std3D_pD3Device->DrawPrimitive(D3DPT_LINESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, (void*)vertices.data(), vertices.size(), 0);
+        std3D_pD3Device->DrawPrimitive(D3DPT_LINESTRIP, D3DFVF_XYZ | D3DFVF_DIFFUSE, (void*)vertices.data(),
+                                       vertices.size(), 0);
 }
 
 void render_collision_meshes()
@@ -477,7 +495,8 @@ void render_collision_meshes()
         std3D_pD3Device->SetTransform(D3DTRANSFORMSTATE_PROJECTION, (D3DMATRIX*)&proj_mat.vA.x);
 
         if (global_state->show_collision_mesh)
-            debug_render_node(swrModel_unk_array[0], root_node->child_nodes[3], mirrored, proj_mat, view_mat_corrected, model_mat, col_flags);
+            debug_render_node(swrModel_unk_array[0], root_node->child_nodes[3], mirrored, proj_mat, view_mat_corrected,
+                              model_mat, col_flags);
 
         if (global_state->show_spline)
             render_spline();
@@ -532,6 +551,85 @@ void swrModel_UnkDraw_Hook(int x)
     std::copy(temp_children.begin(), temp_children.end(), root_node->child_nodes);
 }
 
+#define debug_print(string, ...)                                                                                       \
+    {                                                                                                                  \
+        printf("%s:%d: " string "\n", __func__, __LINE__, __VA_ARGS__);                                                \
+        fflush(stdout);                                                                                                \
+    }
+
+template <typename F>
+void modify_texture_data(RdMaterial* mat, const char* name, F&& mod)
+{
+    if (strncmp(mat->aName, name, strlen(name)) == 0)
+        return;
+
+    sprintf(mat->aName, "%s", name);
+
+    tSystemTexture* tex = mat->aTextures;
+    IDirectDrawSurface4* surf = NULL;
+    HRESULT err = tex->pD3DSrcTexture->QueryInterface(IID_IDirectDrawSurface4, (void**)&surf);
+    if (err != S_OK)
+    {
+        debug_print("material %p %s: QueryInterface failed: %08lx", mat, name, err);
+        return;
+    }
+
+    DDSURFACEDESC2 desc = { 0 };
+    desc.dwSize = sizeof(DDSURFACEDESC2);
+    err = surf->Lock(NULL, &desc, DDLOCK_WAIT, NULL);
+    if (err != S_OK)
+    {
+        debug_print("material %p %s: Lock failed: %08lx", mat, name, err);
+        return;
+    }
+
+    debug_print("material %p %s: width=%d height=%d pitch=%d lpSurface=%p", mat, name, desc.dwWidth, desc.dwHeight,
+                desc.lPitch, desc.lpSurface);
+
+    const int pitch = desc.dwFlags & DDSD_PITCH ? desc.lPitch : desc.dwWidth * 2;
+    uint8_t* data = (uint8_t*)desc.lpSurface;
+    for (int y = 0; y < desc.dwHeight; y++)
+    {
+        uint16_t* line_ptr = (uint16_t*)(data + pitch * y);
+        for (int x = 0; x < desc.dwWidth; x++)
+            line_ptr[x] = mod(line_ptr[x]);
+    }
+
+    debug_print("material %p %s modification finished.", mat, name);
+
+    surf->Unlock(NULL);
+
+    // this line is the only memory leak fix: release is missing in the original functions.
+    surf->Release();
+
+    debug_print("material %p %s cleanup finished.", mat, name);
+}
+
+void rdMaterial_InvertTextureAlphaR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "invert", [](uint16_t pixel) { return ~(pixel & 0xF000) | (pixel & 0xFFF); });
+}
+
+void rdMaterial_InvertTextureColorR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "invcol", [](uint16_t pixel) { return (pixel & 0xF000) | ~(pixel & 0xFFF); });
+}
+
+void rdMaterial_RemoveTextureAlphaR5G5B5A1_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "noalpha", [](uint16_t pixel) { return pixel | 0x8000; });
+}
+
+void rdMaterial_RemoveTextureAlphaR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "noalpha", [](uint16_t pixel) { return pixel | 0xF000; });
+}
+
+void rdMaterial_SaturateTextureR4G4B4A4_Hook(RdMaterial* mat)
+{
+    modify_texture_data(mat, "saturate", [](uint16_t pixel) { return pixel | 0x0FFF; });
+}
+
 void detour_attach(void** pPointer, void* pDetour, int num_bytes_to_copy)
 {
     if (num_bytes_to_copy < 5)
@@ -580,11 +678,29 @@ void detour_detach(void** pPointer, void* pDetour, int num_bytes_to_copy)
 
 extern "C" void init_collision_viewer(CollisionViewerState* global_state)
 {
+    freopen("collision_viewer.log", "w", stdout);
+
     ::global_state = global_state;
+    // collision viewer
     detour_attach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
+
+    // fix memory leaks
+    detour_attach((void**)&rdMaterial_InvertTextureAlphaR4G4B4A4, (void*)rdMaterial_InvertTextureAlphaR4G4B4A4_Hook, 6);
+    detour_attach((void**)&rdMaterial_InvertTextureColorR4G4B4A4, (void*)rdMaterial_InvertTextureColorR4G4B4A4_Hook, 6);
+    detour_attach((void**)&rdMaterial_RemoveTextureAlphaR5G5B5A1, (void*)rdMaterial_RemoveTextureAlphaR5G5B5A1_Hook, 6);
+    detour_attach((void**)&rdMaterial_RemoveTextureAlphaR4G4B4A4, (void*)rdMaterial_RemoveTextureAlphaR4G4B4A4_Hook, 6);
+    detour_attach((void**)&rdMaterial_SaturateTextureR4G4B4A4, (void*)rdMaterial_SaturateTextureR4G4B4A4_Hook, 6);
 }
 
 extern "C" void deinit_collision_viewer()
 {
+    // collision viewer
     detour_detach((void**)&swrModel_UnkDraw, (void*)swrModel_UnkDraw_Hook, 5);
+
+    // fix memory leaks
+    detour_detach((void**)&rdMaterial_InvertTextureAlphaR4G4B4A4, (void*)rdMaterial_InvertTextureAlphaR4G4B4A4_Hook, 6);
+    detour_detach((void**)&rdMaterial_InvertTextureColorR4G4B4A4, (void*)rdMaterial_InvertTextureColorR4G4B4A4_Hook, 6);
+    detour_detach((void**)&rdMaterial_RemoveTextureAlphaR5G5B5A1, (void*)rdMaterial_RemoveTextureAlphaR5G5B5A1_Hook, 6);
+    detour_detach((void**)&rdMaterial_RemoveTextureAlphaR4G4B4A4, (void*)rdMaterial_RemoveTextureAlphaR4G4B4A4_Hook, 6);
+    detour_detach((void**)&rdMaterial_SaturateTextureR4G4B4A4, (void*)rdMaterial_SaturateTextureR4G4B4A4_Hook, 6);
 }

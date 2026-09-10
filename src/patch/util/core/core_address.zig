@@ -17,6 +17,9 @@ const VirtualProtect = w32.system.memory.VirtualProtect;
 const VirtualQuery = w32.system.memory.VirtualQuery;
 const GetLastError = w32.foundation.GetLastError;
 
+const MemoryContext = @import("../memory.zig").Context;
+const MemorySafeContextSt = @import("../memory.zig").SafeContextSt;
+const MemorySafeContextEd = @import("../memory.zig").SafeContextEd;
 const RoundIntUp = @import("../base/base_math.zig").RoundIntUp;
 const CollisionStrict1D = @import("../base/base_math.zig").CollisionStrict1D;
 const ProcessImageSlice = @import("../debug/debug.zig").ProcessImageSlice;
@@ -132,7 +135,7 @@ pub const RangeManager = struct {
     /// current address range open for writing. only one range can be writing at
     /// a time, to avoid page permission write conflicts
     AddressWriting: AddressHandle,
-    AddressWritingNativeProtections: PAGE_PROTECTION_FLAGS,
+    AddressWritingCtx: MemoryContext,
 
     ImageSlice: []const u8,
     ImageSections: []const []const u8,
@@ -166,7 +169,7 @@ pub const RangeManager = struct {
             .RangeListCount = 1,
             .RangeListCountPeak = 1,
             .AddressWriting = AddressHandle.Zero,
-            .AddressWritingNativeProtections = std.mem.zeroes(PAGE_PROTECTION_FLAGS),
+            .AddressWritingCtx = undefined,
             .ImageSlice = opts.ImageSlice,
             .ImageSections = opts.ImageSections,
             .OptListCapacity = LIST_CAPACITY,
@@ -439,7 +442,6 @@ pub const RangeManager = struct {
         return true;
     }
 
-    // TODO: ?? log/panic on VirtualProtect error instead of silent fail?
     fn RangeWriteStByRef(self: *RangeManager, ref: RangeRef) bool {
         const handle = self.RangeHandleByRef(ref);
         assert(!handle.IsNull()); // handle invalid
@@ -447,35 +449,18 @@ pub const RangeManager = struct {
         if (!self.AddressWriting.IsNull()) return false; // already writing
 
         const range = self.RangeDataGet(ref);
-        const range_len = range.AddressEd - range.AddressSt;
-        if (FALSE == VirtualProtect(
-            @ptrFromInt(range.AddressSt),
-            range_len,
-            PAGE_EXECUTE_READWRITE,
-            &self.AddressWritingNativeProtections,
-        )) return false;
-
+        self.AddressWritingCtx = MemorySafeContextSt(range.AddressSt, range.AddressEd);
         self.AddressWriting = handle;
         return true;
     }
 
-    // TODO: ?? log/panic on VirtualProtect error instead of silent fail?
     fn RangeWriteEdByRef(self: *RangeManager, ref: RangeRef) void {
         const handle = self.RangeHandleByRef(ref);
         assert(!handle.IsNull()); // handle invalid
 
         if (self.AddressWriting.IsNull() or !handle.Eql(self.AddressWriting)) return; // handle not writing
 
-        const range = self.RangeDataGet(ref);
-        var protect: PAGE_PROTECTION_FLAGS = undefined;
-        const range_len = range.AddressEd - range.AddressSt;
-        if (FALSE == VirtualProtect(
-            @ptrFromInt(range.AddressSt),
-            range_len,
-            self.AddressWritingNativeProtections,
-            &protect,
-        )) return;
-
+        MemorySafeContextEd(self.AddressWritingCtx);
         self.AddressWriting = AddressHandle.Zero;
     }
 

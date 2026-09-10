@@ -16,20 +16,18 @@
 //!   byte after the last written byte); this is so you can do iterative writes
 //!   without manually keeping track of the next address at each step
 
-const std = @import("std");
-const builtin = @import("builtin");
-const assert = std.debug.assert;
-const panic = std.debug.panic;
+// TODO: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection
+//  or smth), and make os-agnostic
+// TODO: look into perf cost of spamming VirtualProtect
 
 comptime {
     assert(builtin.target.os.tag == .windows); // example build command flag:  -target x86-windows
 }
 
-// TODO: tests; see core_address for inspo
-// TODO: update core_address to use this, now that it's straightened out?
-// TODO: extract VirtualProtect bit to a util/os thing (OS_Memory_SetProtection
-//  or smth), and make os-agnostic
-// TODO: look into perf cost of spamming VirtualProtect
+const std = @import("std");
+const builtin = @import("builtin");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 
 const w32 = @import("zigwin32");
 const PAGE_PROTECTION_FLAGS = w32.system.memory.PAGE_PROTECTION_FLAGS;
@@ -142,7 +140,7 @@ pub fn SafeReadBytes(addr: usize, data: []u8) void {
 //------------------------------------------------------------------------------
 // safety context helper
 
-const Context = struct {
+pub const Context = struct {
     Addr: ?*anyopaque,
     Size: usize,
     Flags: PAGE_PROTECTION_FLAGS,

@@ -14,9 +14,9 @@ const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const asettings = @import("ASettings.zig");
 const AMemory = @import("AMemory.zig");
-const rterrain = @import("RTerrain.zig");
-const rtrigger = @import("RTrigger.zig");
-const raddress = @import("RAddress.zig");
+const RTerrain = @import("RTerrain.zig");
+const RTrigger = @import("RTrigger.zig");
+const RAddress = @import("RAddress.zig");
 
 const st = @import("../util/toggle_state.zig");
 const ToggleState = st.ToggleState;
@@ -192,20 +192,20 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
     // Resources
-    .RAddressRangeAvailable = &raddress.RAddressRangeAvailable,
-    .RAddressRangeReserve = &raddress.RAddressRangeReserve,
-    .RAddressRangeRelease = &raddress.RAddressRangeRelease,
-    .RAddressRangeRestore = &raddress.RAddressRangeRestore,
-    .RAddressRangeRead = &raddress.RAddressRangeRead,
-    .RAddressRangeWriteSt = &raddress.RAddressRangeWriteSt,
-    .RAddressRangeWriteEd = &raddress.RAddressRangeWriteEd,
-    .RAddressRangeContainsRange = &raddress.RAddressRangeContainsRange,
-    .RTerrainRequest = &rterrain.RRequest,
-    .RTerrainRelease = &rterrain.RRelease,
-    .RTerrainReleaseAll = &rterrain.RReleaseAll,
-    .RTriggerRequest = &rtrigger.RRequest,
-    .RTriggerRelease = &rtrigger.RRelease,
-    .RTriggerReleaseAll = &rtrigger.RReleaseAll,
+    .RAddressRangeAvailable = &RAddress.RAddressRangeAvailable,
+    .RAddressRangeReserve = &RAddress.RAddressRangeReserve,
+    .RAddressRangeRelease = &RAddress.RAddressRangeRelease,
+    .RAddressRangeRestore = &RAddress.RAddressRangeRestore,
+    .RAddressRangeRead = &RAddress.RAddressRangeRead,
+    .RAddressRangeWriteSt = &RAddress.RAddressRangeWriteSt,
+    .RAddressRangeWriteEd = &RAddress.RAddressRangeWriteEd,
+    .RAddressRangeContainsRange = &RAddress.RAddressRangeContainsRange,
+    .RTerrainRequest = &RTerrain.RRequest,
+    .RTerrainRelease = &RTerrain.RRelease,
+    .RTerrainReleaseAll = &RTerrain.RReleaseAll,
+    .RTriggerRequest = &RTrigger.RRequest,
+    .RTriggerRelease = &RTrigger.RRelease,
+    .RTriggerReleaseAll = &RTrigger.RReleaseAll,
     // State
     .SInitLatePassed = &SInitLatePassed,
     .SPracticeMode = &SPracticeMode,

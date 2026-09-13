@@ -24,9 +24,8 @@ const RoundIntUp = @import("../base/base_math.zig").RoundIntUp;
 const CollisionStrict1D = @import("../base/base_math.zig").CollisionStrict1D;
 const ProcessImageSlice = @import("../debug/debug.zig").ProcessImageSlice;
 
-// TODO: also assert windows? (only necessary because memory-related functions
-//  not yet os-agnostic)
 comptime {
+    assert(builtin.os.tag == .windows); // TODO: OS-agnostic memory abstraction to remove this
     assert(builtin.target.cpu.arch == .x86); // example build command flag:  -target x86-windows
 }
 
@@ -46,7 +45,6 @@ comptime {
 //  api (pub functions):
 //  - always to/from handle (or directly on st..ed if no ownership involved)
 
-// TODO: cleanup/rework util->memory
 // TODO: ?? consider bitfield for tracking reserved memory as an optimization over
 //  searching the whole reserve list for 1D collisions; probably not a perf concern
 //  right now, but could be with a lot of live reservations
@@ -62,8 +60,14 @@ pub const RangeManager = struct {
     /// persistent memory
     Arena: Allocator,
 
+    /// startup-allocated memory range from process image
+    ImageSlice: []const u8,
+    /// valid regions of memory within image slice. needs not necessarily match
+    /// sections in the executable headers; page permissions at load time may be
+    /// different to header-defined sections in any case
+    ImageSections: []const []const u8,
     /// storage for original contents of an address range at reserve time
-    GameMemoryBackup: []u8,
+    ImageBackup: []u8,
 
     RangeCount: u32,
     /// benchmarking counter
@@ -82,38 +86,24 @@ pub const RangeManager = struct {
     AddressWriting: AddressHandle,
     AddressWritingCtx: MemoryContext,
 
-    /// startup-allocated memory range from process image
-    ImageSlice: []const u8,
-    /// valid regions of memory within image slice. needs not necessarily match
-    /// sections in the executable headers; page permissions at load time may be
-    /// different to header-defined sections in any case
-    ImageSections: []const []const u8,
-
     /// option: chunk size for reservation list allocations
     OptListCapacity: u24,
-    // TODO: remove? can probably derive on demand?
-    /// (derived) option: chunk size of last chunk, given image and chunk sizes
-    OptListCapacityLast: u24,
-    // TODO: remove? can probably derive on demand?
-    /// (derived) option: total number of possible chunks, given image and chunk sizes
-    OptListCountMax: u24,
 
     // NOTE: memory size, list capacity, etc. must remain u24 so that handle can
     //  fit in u32, even if moving to slices
-    // TODO: impl Deinit
     /// arena memory must be persistent throughout lifetime of resulting RangeManager
     pub fn Init(arena: Allocator, opts: RangeManagerOpts) ?RangeManager {
-        const IMAGE_SIZE = @as(u24, @truncate(opts.ImageSlice.len));
+        const IMAGE_SIZE = @as(u24, @intCast(opts.ImageSlice.len));
         const LIST_CAPACITY = @min(opts.ListCapacity, IMAGE_SIZE + 1);
-        const LIST_COUNT_MAX = RoundIntUp(u24, IMAGE_SIZE + 1, LIST_CAPACITY) / LIST_CAPACITY;
-        const LIST_CAPACITY_LAST = (IMAGE_SIZE + 1) % LIST_COUNT_MAX; // +1 to account for null object
 
-        const p_game_memory = arena.alloc(u8, IMAGE_SIZE) catch return null;
+        const p_image_backup = arena.alloc(u8, IMAGE_SIZE) catch return null;
         const p_list_head = arena.create(RangeListNode) catch return null;
 
         var man = RangeManager{
             .Arena = arena,
-            .GameMemoryBackup = p_game_memory,
+            .ImageSlice = opts.ImageSlice,
+            .ImageSections = opts.ImageSections,
+            .ImageBackup = p_image_backup,
             .RangeListHead = p_list_head,
             .RangeListTail = p_list_head,
             .RangeCapacity = LIST_CAPACITY,
@@ -123,11 +113,7 @@ pub const RangeManager = struct {
             .RangeListCountPeak = 1,
             .AddressWriting = AddressHandle.Zero,
             .AddressWritingCtx = undefined,
-            .ImageSlice = opts.ImageSlice,
-            .ImageSections = opts.ImageSections,
             .OptListCapacity = LIST_CAPACITY,
-            .OptListCapacityLast = LIST_CAPACITY_LAST,
-            .OptListCountMax = LIST_COUNT_MAX,
         };
 
         man.RangeListHead.* = .{
@@ -146,16 +132,40 @@ pub const RangeManager = struct {
         return man;
     }
 
+    pub fn Deinit(self: *RangeManager) void {
+        assert(self.AddressWriting.IsNull());
+
+        var i_start: u24 = 0;
+        var p_list = self.RangeListHead;
+        while (true) : (p_list = p_list.Next orelse break) {
+            for (p_list.Data.items(.Flags), i_start..) |f, i| {
+                if (!f.Used) continue;
+                const ref = RangeRef{ .Node = p_list, .Index = @intCast(i) };
+                self.RangeReleaseByRef(ref);
+            }
+            i_start += @intCast(p_list.Data.len);
+        }
+    }
+
+    inline fn RangeChunkCountMax(self: *const RangeManager) u24 {
+        return RoundIntUp(u24, @as(u24, @intCast(self.ImageSlice.len + 1)), self.OptListCapacity) / self.OptListCapacity;
+    }
+
+    inline fn RangeChunkCapacityLast(self: *const RangeManager) u24 {
+        return @as(u24, @intCast(self.ImageSlice.len + 1)) % self.OptListCapacity;
+    }
+
     /// creates new chunk of address slots. asserts that the current chunk is
     /// full and that the chunk limit is not reached
     fn RangeChunkNew(self: *RangeManager) ?*RangeListNode {
+        const LIST_COUNT_MAX = self.RangeChunkCountMax();
         assert(self.RangeListTail.Next == null);
         assert(self.RangeListTail.Data.len == self.RangeListTail.Data.capacity);
-        assert(self.RangeListCount < self.OptListCountMax);
+        assert(self.RangeListCount < LIST_COUNT_MAX);
         assert(self.RangeCapacity % self.OptListCapacity == 0);
 
-        const b_final_list = self.RangeListCount + 1 == self.OptListCountMax;
-        const new_capacity: u24 = if (b_final_list) self.OptListCapacityLast else self.OptListCapacity;
+        const b_final_list = self.RangeListCount + 1 == LIST_COUNT_MAX;
+        const new_capacity: u24 = if (!b_final_list) self.OptListCapacity else self.RangeChunkCapacityLast();
 
         var new_list = self.Arena.create(RangeListNode) catch return null;
         new_list.Data = .{};
@@ -200,7 +210,7 @@ pub const RangeManager = struct {
         }
 
         if (p_list.Data.len == p_list.Data.capacity) {
-            if (self.RangeListCount == self.OptListCountMax) return null;
+            if (self.RangeListCount == self.RangeChunkCountMax()) return null;
             p_list = self.RangeChunkNew() orelse return null;
         }
 
@@ -259,8 +269,6 @@ pub const RangeManager = struct {
         return AddressHandle.Init(ref.Index, generation);
     }
 
-    // TODO: RangeIndexByRef
-
     /// checks that a range does not collide with existing reserved ranges
     fn AddressAvailable(self: *const RangeManager, addr_st: u32, addr_ed: u32) bool {
         if (!self.AddressValid(addr_st, addr_ed)) return false;
@@ -305,7 +313,7 @@ pub const RangeManager = struct {
         const span = self.RangeSpanByRef(ref);
         const memo_st = span.St - @intFromPtr(self.ImageSlice.ptr);
         const memo_ed = span.Ed - @intFromPtr(self.ImageSlice.ptr);
-        return self.GameMemoryBackup[memo_st..memo_ed];
+        return self.ImageBackup[memo_st..memo_ed];
     }
 
     fn AddressReserve(self: *RangeManager, addr_st: u32, addr_ed: u32, owner: u16) AddressHandle {
@@ -584,7 +592,6 @@ const AddressHandle = packed struct(u32) {
 
 // TODO: test range release -> range reserve -> handle differs between them
 // TODO: impl more structural approach to test cases
-// TODO: impl Deinit and test
 // TODO: more compact basic usage test that is actually readable as an api reference,
 //  and move the "extras" to separate tests and make those more thorough
 test "Manager: basic usage" {
@@ -623,44 +630,44 @@ test "Manager: basic usage" {
     //---------------------------------
     // address range validity
 
-    try expect(false == m.AddressValid(MEMORY_BASE - 1, MEMORY_BASE + 1)); // not in range
-    try expect(false == m.AddressValid(MEMORY_BASE + 2, MEMORY_BASE + 6)); // in range, multi-section
-    try expect(false == m.AddressValid(MEMORY_BASE + 4, MEMORY_BASE + 8)); // in range, outside section
-    try expect(true == m.AddressValid(MEMORY_BASE + 0, MEMORY_BASE + 2)); // in range
+    try expect(false == m.AddressRangeValid(MEMORY_BASE - 1, MEMORY_BASE + 1)); // not in range
+    try expect(false == m.AddressRangeValid(MEMORY_BASE + 2, MEMORY_BASE + 6)); // in range, multi-section
+    try expect(false == m.AddressRangeValid(MEMORY_BASE + 4, MEMORY_BASE + 8)); // in range, outside section
+    try expect(true == m.AddressRangeValid(MEMORY_BASE + 0, MEMORY_BASE + 2)); // in range
 
     //---------------------------------
     // reservation
 
     // pass: check and reserve h1
-    try expect(true == m.AddressAvailable(A1.St, A1.Ed));
-    const h1 = m.AddressReserve(A1.St, A1.Ed, 0);
+    try expect(true == m.AddressRangeAvailable(A1.St, A1.Ed));
+    const h1 = m.AddressRangeReserve(A1.St, A1.Ed, 0);
     try expectEqual(AddressHandle.Init(1, 1), h1);
     try expect(1 == m.RangeCount);
     try expect(1 == m.RangeListCount);
 
     // fail: overlapping h1
-    try expect(false == m.AddressAvailable(A1F.St, A1F.Ed));
-    try expectEqual(AddressHandle.Zero, m.AddressReserve(A1F.St, A1F.Ed, 0));
+    try expect(false == m.AddressRangeAvailable(A1F.St, A1F.Ed));
+    try expectEqual(AddressHandle.Zero, m.AddressRangeReserve(A1F.St, A1F.Ed, 0));
     try expect(1 == m.RangeCount);
     try expect(1 == m.RangeListCount);
 
     // different owner (1)
-    try expect(true == m.AddressAvailable(A2.St, A2.Ed));
-    const h2 = m.AddressReserve(A2.St, A2.Ed, 1);
+    try expect(true == m.AddressRangeAvailable(A2.St, A2.Ed));
+    const h2 = m.AddressRangeReserve(A2.St, A2.Ed, 1);
     try expectEqual(AddressHandle.Init(2, 1), h2);
     try expect(2 == m.RangeCount);
     try expect(2 == m.RangeListCount);
 
     // different section
-    try expect(true == m.AddressAvailable(A3.St, A3.Ed));
-    const h3 = m.AddressReserve(A3.St, A3.Ed, 0);
+    try expect(true == m.AddressRangeAvailable(A3.St, A3.Ed));
+    const h3 = m.AddressRangeReserve(A3.St, A3.Ed, 0);
     try expectEqual(AddressHandle.Init(3, 1), h3);
     try expect(3 == m.RangeCount);
     try expect(2 == m.RangeListCount);
 
     // different owner (2)
-    try expect(true == m.AddressAvailable(A4.St, A4.Ed));
-    const h4 = m.AddressReserve(A4.St, A4.Ed, 2);
+    try expect(true == m.AddressRangeAvailable(A4.St, A4.Ed));
+    const h4 = m.AddressRangeReserve(A4.St, A4.Ed, 2);
     try expectEqual(AddressHandle.Init(4, 1), h4);
     try expect(4 == m.RangeCount);
     try expect(3 == m.RangeListCount);
@@ -669,46 +676,52 @@ test "Manager: basic usage" {
     // read-write-reset
 
     // read
-    try expect(true == m.AddressRead(A1.St, A1.Ed, r1buf[0..]));
+    try expect(true == m.AddressRangeRead(A1.St, A1.Ed, r1buf[0..]));
     try expectEqualSlices(u8, r1exp, r1buf[0..]);
 
     // TODO: test inability to write outside handle's designated address range
     // TODO: test writing indirectly (maybe impl RangeGetSlice?)
     // TODO: test page permissions during and after write
     // write
-    try expect(true == m.RangeWriteStByHandle(h1));
+    try expect(true == m.AddressRangeWriteSt(h1));
     try expect(false == m.AddressWriting.IsNull());
     @memcpy(r1real, w1exp);
-    m.RangeWriteEdByHandle(h1);
+    m.AddressRangeWriteEd(h1);
     try expectEqualSlices(u8, w1exp, r1real);
     try expect(true == m.AddressWriting.IsNull());
     r1buf = undefined;
 
     // restore
-    m.RangeRestoreByHandle(h1);
+    m.AddressRangeRestore(h1);
     try expectEqualSlices(u8, r1exp, r1real);
 
     //---------------------------------
     // releasing
 
     // basic release
-    m.RangeReleaseByHandle(h2);
+    m.AddressRangeRelease(h2);
     try expectEqual(@as(u32, 3), m.RangeCount);
-    try expect(false == m.RangeWriteStByHandle(h2)); // handle no longer valid = can't write
+    try expect(false == m.AddressRangeWriteSt(h2)); // handle no longer valid = can't write
 
     // releasing multiple at a time via owner id
-    m.RangeReleaseByOwner(0);
+    m.AddressRangeReleaseByOwner(0);
     try expect(1 == m.RangeCount);
-    try expect(false == m.RangeWriteStByHandle(h1)); // handle no longer valid = can't write
-    try expect(false == m.RangeWriteStByHandle(h3)); // handle no longer valid = can't write
+    try expect(false == m.AddressRangeWriteSt(h1)); // handle no longer valid = can't write
+    try expect(false == m.AddressRangeWriteSt(h3)); // handle no longer valid = can't write
 
     // releasing automatically restores memory
-    _ = m.RangeWriteStByHandle(h4);
+    _ = m.AddressRangeWriteSt(h4);
     @memcpy(r4real, w4exp);
-    m.RangeWriteEdByHandle(h4);
+    m.AddressRangeWriteEd(h4);
     try expectEqualSlices(u8, w4exp, r4real);
-    m.RangeReleaseByHandle(h4);
+    m.AddressRangeRelease(h4);
     try expectEqualSlices(u8, r4exp, r4real);
     try expect(0 == m.RangeCount);
     try expect(4 == m.RangeCountPeak);
+
+    // deinit automatically releases all ranges
+    _ = m.AddressRangeReserve(A1.St, A1.Ed, 0);
+    try expect(1 == m.RangeCount);
+    m.Deinit();
+    try expect(0 == m.RangeCount);
 }

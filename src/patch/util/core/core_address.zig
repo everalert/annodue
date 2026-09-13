@@ -1,5 +1,5 @@
-//! swe1r address range ownership api. used to help guarantee that any range of
-//! memory needed for a patch is not already in use by another patcher.
+//! process address range ownership api. used to help guarantee that any range
+//! of memory needed for a patch is not already in use.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -31,8 +31,9 @@ comptime {
 }
 
 // NOTE: nomenclature:
-//  Address*    = game memory range (outward-facing representation)
-//  Range*      = internal record of an address range (inward-facing representation)
+//  Address*        game memory range (outward-facing representation)
+//  Range*          internal record of an address range (inward-facing representation)
+//  AddressRange*   API endpoint
 // NOTE: structure:
 //  general data flow:
 //      handle/index -> ref -> work   OR
@@ -43,7 +44,7 @@ comptime {
 //    dereferencing a handle requires a linear search; separating the deref from
 //    the data access prevents constantly redoing deref during any api action
 //  api (pub functions):
-//  - "default"/unlabeled usage is via handle
+//  - always to/from handle (or directly on st..ed if no ownership involved)
 
 // TODO: cleanup/rework util->memory
 // TODO: ?? consider bitfield for tracking reserved memory as an optimization over
@@ -57,77 +58,21 @@ comptime {
 pub const AddressHandleOpaque = u32;
 pub const ADDRESS_HANDLE_OPAQUE_NULL: AddressHandleOpaque = 0;
 
-pub const RangeManagerOpts = struct {
-    ListCapacity: u24, // limited to size of handle index field
-    ImageSlice: []const u8,
-    /// slices defining page permission boundaries in the image memory
-    ImageSections: []const []const u8,
-
-    pub fn Init(list_capacity: u24, image: []const u8, sections: []const []const u8) RangeManagerOpts {
-        assert(image.len <= std.math.maxInt(u24));
-        assert(std.math.isPowerOfTwo(list_capacity));
-        for (sections) |section| {
-            assert(@intFromPtr(section.ptr) >= @intFromPtr(image.ptr));
-            assert(@intFromPtr(section.ptr) + section.len <= @intFromPtr(image.ptr) + image.len);
-        }
-
-        return RangeManagerOpts{
-            .ListCapacity = list_capacity,
-            .ImageSlice = image,
-            .ImageSections = sections,
-        };
-    }
-
-    /// init by inspecting process for image slice and sections
-    pub fn InitProcess(arena: Allocator, list_capacity: u24, section_capacity: u24) RangeManagerOpts {
-        assert(std.math.isPowerOfTwo(list_capacity));
-        assert(std.math.isPowerOfTwo(section_capacity));
-
-        const image_slice = ProcessImageSlice();
-        var image_sections = arena.alloc([]const u8, section_capacity) catch @panic("InitProcess: OutOfMemory");
-        var search_addr = @intFromPtr(image_slice.ptr);
-        const search_addr_ed = search_addr + image_slice.len;
-
-        var image_i: u32 = 0;
-        while (search_addr < search_addr_ed) {
-            if (image_i >= section_capacity) panic(
-                "InitProcess: SectionCapacity({d}) exceeded:  base={X:0>8} section={X:0>8}",
-                .{ section_capacity, @intFromPtr(image_slice.ptr), search_addr },
-            );
-
-            var mbi: MEMORY_BASIC_INFORMATION = undefined;
-            if (FALSE == VirtualQuery(@ptrFromInt(search_addr), &mbi, @sizeOf(MEMORY_BASIC_INFORMATION)))
-                panic("InitProcess: VirtualQuery: {s} (section {d})", .{ @tagName(GetLastError()), image_i });
-
-            // TODO: skip if section overruns end address? surely not possible if
-            //  going through win32 api?
-            image_sections[image_i] = @as([*]const u8, @ptrCast(mbi.BaseAddress))[0..mbi.RegionSize];
-
-            image_i += 1;
-            search_addr += mbi.RegionSize;
-        }
-
-        return RangeManagerOpts{
-            .ListCapacity = list_capacity,
-            .ImageSlice = image_slice,
-            .ImageSections = image_sections[0..image_i],
-        };
-    }
-};
-
 pub const RangeManager = struct {
-    ArenaPerm: Allocator,
-    ArenaTemp: Allocator,
+    /// persistent memory
+    Arena: Allocator,
 
     /// storage for original contents of an address range at reserve time
     GameMemoryBackup: []u8,
 
     RangeCount: u32,
+    /// benchmarking counter
     RangeCountPeak: u32,
 
     RangeListHead: *RangeListNode,
     RangeListTail: *RangeListNode,
     RangeListCount: u16,
+    /// benchmarking counter
     RangeListCountPeak: u16,
     /// the highest index assignable given the current set of list nodes
     RangeCapacity: u24,
@@ -137,29 +82,37 @@ pub const RangeManager = struct {
     AddressWriting: AddressHandle,
     AddressWritingCtx: MemoryContext,
 
+    /// startup-allocated memory range from process image
     ImageSlice: []const u8,
+    /// valid regions of memory within image slice. needs not necessarily match
+    /// sections in the executable headers; page permissions at load time may be
+    /// different to header-defined sections in any case
     ImageSections: []const []const u8,
 
+    /// option: chunk size for reservation list allocations
     OptListCapacity: u24,
+    // TODO: remove? can probably derive on demand?
+    /// (derived) option: chunk size of last chunk, given image and chunk sizes
     OptListCapacityLast: u24,
+    // TODO: remove? can probably derive on demand?
+    /// (derived) option: total number of possible chunks, given image and chunk sizes
     OptListCountMax: u24,
 
-    // NOTE: API
     // NOTE: memory size, list capacity, etc. must remain u24 so that handle can
     //  fit in u32, even if moving to slices
     // TODO: impl Deinit
-    pub fn Init(arena_perm: Allocator, arena_temp: Allocator, opts: RangeManagerOpts) ?RangeManager {
+    /// arena memory must be persistent throughout lifetime of resulting RangeManager
+    pub fn Init(arena: Allocator, opts: RangeManagerOpts) ?RangeManager {
         const IMAGE_SIZE = @as(u24, @truncate(opts.ImageSlice.len));
         const LIST_CAPACITY = @min(opts.ListCapacity, IMAGE_SIZE + 1);
         const LIST_COUNT_MAX = RoundIntUp(u24, IMAGE_SIZE + 1, LIST_CAPACITY) / LIST_CAPACITY;
         const LIST_CAPACITY_LAST = (IMAGE_SIZE + 1) % LIST_COUNT_MAX; // +1 to account for null object
 
-        const p_game_memory = arena_perm.alloc(u8, IMAGE_SIZE) catch return null;
-        const p_list_head = arena_perm.create(RangeListNode) catch return null;
+        const p_game_memory = arena.alloc(u8, IMAGE_SIZE) catch return null;
+        const p_list_head = arena.create(RangeListNode) catch return null;
 
         var man = RangeManager{
-            .ArenaPerm = arena_perm,
-            .ArenaTemp = arena_temp,
+            .Arena = arena,
             .GameMemoryBackup = p_game_memory,
             .RangeListHead = p_list_head,
             .RangeListTail = p_list_head,
@@ -183,8 +136,9 @@ pub const RangeManager = struct {
             .Next = null,
             .Head = man.RangeListHead,
         };
-        man.RangeListHead.Data.setCapacity(arena_perm, LIST_CAPACITY) catch return null;
+        man.RangeListHead.Data.setCapacity(arena, LIST_CAPACITY) catch return null;
 
+        // TODO: remove? may not be needed if generation 0 is always invalid
         // reserve index 0 for null object
         const range_null = man.RangeListTail.Data.addOneAssumeCapacity();
         man.RangeListTail.Data.set(range_null, std.mem.zeroes(AddressRange));
@@ -203,9 +157,9 @@ pub const RangeManager = struct {
         const b_final_list = self.RangeListCount + 1 == self.OptListCountMax;
         const new_capacity: u24 = if (b_final_list) self.OptListCapacityLast else self.OptListCapacity;
 
-        var new_list = self.ArenaPerm.create(RangeListNode) catch return null;
+        var new_list = self.Arena.create(RangeListNode) catch return null;
         new_list.Data = .{};
-        new_list.Data.setCapacity(self.ArenaPerm, new_capacity) catch return null;
+        new_list.Data.setCapacity(self.Arena, new_capacity) catch return null;
         new_list.Head = self.RangeListHead;
         new_list.Prev = self.RangeListTail;
         new_list.Next = null;
@@ -264,8 +218,7 @@ pub const RangeManager = struct {
         return null;
     }
 
-    // NOTE: API
-    pub fn AddressValid(self: *const RangeManager, addr_st: u32, addr_ed: u32) bool {
+    fn AddressValid(self: *const RangeManager, addr_st: u32, addr_ed: u32) bool {
         const b_section_ok = self.AddressSection(addr_st, addr_ed) != null;
         return (addr_ed > addr_st) and b_section_ok;
     }
@@ -308,9 +261,8 @@ pub const RangeManager = struct {
 
     // TODO: RangeIndexByRef
 
-    // NOTE: API
     /// checks that a range does not collide with existing reserved ranges
-    pub fn AddressAvailable(self: *const RangeManager, addr_st: u32, addr_ed: u32) bool {
+    fn AddressAvailable(self: *const RangeManager, addr_st: u32, addr_ed: u32) bool {
         if (!self.AddressValid(addr_st, addr_ed)) return false;
 
         var p_list = self.RangeListHead;
@@ -336,9 +288,7 @@ pub const RangeManager = struct {
         };
     }
 
-    // NOTE: API
-    /// get the address associated with a range record
-    pub fn RangeSpan(self: *const RangeManager, handle: AddressHandle) AddressSpan {
+    fn RangeSpanByHandle(self: *const RangeManager, handle: AddressHandle) AddressSpan {
         const ref = self.RangeRefByHandle(handle) orelse return AddressSpan.Zero;
         return self.RangeSpanByRef(ref);
     }
@@ -358,8 +308,7 @@ pub const RangeManager = struct {
         return self.GameMemoryBackup[memo_st..memo_ed];
     }
 
-    // NOTE: API
-    pub fn RangeReserve(self: *RangeManager, addr_st: u32, addr_ed: u32, owner: u16) AddressHandle {
+    fn AddressReserve(self: *RangeManager, addr_st: u32, addr_ed: u32, owner: u16) AddressHandle {
         const ref = self.RangeRefNew(addr_st, addr_ed) orelse return AddressHandle.Zero;
 
         var range = self.RangeDataGet(ref);
@@ -388,14 +337,12 @@ pub const RangeManager = struct {
         self.RangeCount -= 1;
     }
 
-    // NOTE: API
-    pub fn RangeRelease(self: *RangeManager, handle: AddressHandle) void {
+    fn RangeReleaseByHandle(self: *RangeManager, handle: AddressHandle) void {
         const ref = self.RangeRefByHandle(handle) orelse return;
         self.RangeReleaseByRef(ref);
     }
 
-    // NOTE: API
-    pub fn RangeReleaseByOwner(self: *RangeManager, owner: u16) void {
+    fn RangeReleaseByOwner(self: *RangeManager, owner: u16) void {
         assert(self.AddressWriting.IsNull());
 
         var i_start: u24 = 0;
@@ -424,16 +371,12 @@ pub const RangeManager = struct {
         }
     }
 
-    // NOTE: API
-    /// return original contents to memory range
-    pub fn RangeRestore(self: *RangeManager, handle: AddressHandle) void {
+    fn RangeRestoreByHandle(self: *RangeManager, handle: AddressHandle) void {
         const ref = self.RangeRefByHandle(handle) orelse return; // handle invalid
         self.RangeRestoreByRef(ref);
     }
 
-    // NOTE: API
-    /// copy address range contents to buffer
-    pub fn RangeRead(self: *const RangeManager, addr_st: u32, addr_ed: u32, buffer: []u8) bool {
+    fn AddressRead(self: *const RangeManager, addr_st: u32, addr_ed: u32, buffer: []u8) bool {
         assert(addr_ed - addr_st == buffer.len);
 
         if (!self.AddressValid(addr_st, addr_ed)) return false;
@@ -464,22 +407,110 @@ pub const RangeManager = struct {
         self.AddressWriting = AddressHandle.Zero;
     }
 
-    // NOTE: API
+    fn RangeWriteStByHandle(self: *RangeManager, handle: AddressHandle) bool {
+        const ref = self.RangeRefByHandle(handle) orelse return false; // handle invalid
+        return self.RangeWriteStByRef(ref);
+    }
+
+    fn RangeWriteEdByHandle(self: *RangeManager, handle: AddressHandle) void {
+        const ref = self.RangeRefByHandle(handle) orelse return;
+        self.RangeWriteEdByRef(ref);
+    }
+
+    //--------------------------------------------------------------------------
+    // API
+
+    /// check an address is within range of the target memory and sections
+    pub const AddressRangeValid = AddressValid;
+
+    /// check an address is valid and does not conflict with existing reservations
+    pub const AddressRangeAvailable = AddressAvailable;
+
+    /// get the address associated with a handle
+    pub const AddressRangeSpan = RangeSpanByHandle;
+
+    /// claim an address and get its reservation handle; returns null handle on failure
+    pub const AddressRangeReserve = AddressReserve;
+
+    /// release an address reservation associated with a handle
+    pub const AddressRangeRelease = RangeReleaseByHandle;
+
+    /// release all address reservations associated with an owner
+    pub const AddressRangeReleaseByOwner = RangeReleaseByOwner;
+
+    /// copy address contents to buffer
+    pub const AddressRangeRead = AddressRead;
+
+    /// return original contents to target memory range
+    pub const AddressRangeRestore = RangeRestoreByHandle;
+
     /// opens range for writing, ensuring the memory has write permissions.
     /// user must:
     ///  - only open one range for writing at a time
     ///  - close the range by end of plugin callback scope
     ///  - not have any range open during range reserve, release or restore operations
-    pub fn RangeWriteSt(self: *RangeManager, handle: AddressHandle) bool {
-        const ref = self.RangeRefByHandle(handle) orelse return false; // handle invalid
-        return self.RangeWriteStByRef(ref);
+    pub const AddressRangeWriteSt = RangeWriteStByHandle;
+
+    /// closes an address range for writing and restores its normal permissions.
+    pub const AddressRangeWriteEd = RangeWriteEdByHandle;
+};
+
+pub const RangeManagerOpts = struct {
+    ListCapacity: u24, // limited to size of handle index field
+    ImageSlice: []const u8,
+    /// slices defining page permission boundaries in the image memory
+    ImageSections: []const []const u8,
+
+    pub fn Init(list_capacity: u24, image: []const u8, sections: []const []const u8) RangeManagerOpts {
+        assert(image.len <= std.math.maxInt(u24));
+        assert(std.math.isPowerOfTwo(list_capacity));
+        for (sections) |section| {
+            assert(@intFromPtr(section.ptr) >= @intFromPtr(image.ptr));
+            assert(@intFromPtr(section.ptr) + section.len <= @intFromPtr(image.ptr) + image.len);
+        }
+
+        return RangeManagerOpts{
+            .ListCapacity = list_capacity,
+            .ImageSlice = image,
+            .ImageSections = sections,
+        };
     }
 
-    // NOTE: API
-    /// closes an address range for writing and restores its normal permissions.
-    pub fn RangeWriteEd(self: *RangeManager, handle: AddressHandle) void {
-        const ref = self.RangeRefByHandle(handle) orelse return;
-        self.RangeWriteEdByRef(ref);
+    /// init by inspecting running process for main module size and sections. arena
+    /// memory must be persistent throughout lifetime of the target RangeManager
+    pub fn InitProcess(arena: Allocator, list_capacity: u24, section_capacity: u24) RangeManagerOpts {
+        assert(std.math.isPowerOfTwo(list_capacity));
+        assert(std.math.isPowerOfTwo(section_capacity));
+
+        const image_slice = ProcessImageSlice();
+        var image_sections = arena.alloc([]const u8, section_capacity) catch @panic("InitProcess: OutOfMemory");
+        var search_addr = @intFromPtr(image_slice.ptr);
+        const search_addr_ed = search_addr + image_slice.len;
+
+        var image_i: u32 = 0;
+        while (search_addr < search_addr_ed) {
+            if (image_i >= section_capacity) panic(
+                "InitProcess: SectionCapacity({d}) exceeded:  base={X:0>8} section={X:0>8}",
+                .{ section_capacity, @intFromPtr(image_slice.ptr), search_addr },
+            );
+
+            var mbi: MEMORY_BASIC_INFORMATION = undefined;
+            if (FALSE == VirtualQuery(@ptrFromInt(search_addr), &mbi, @sizeOf(MEMORY_BASIC_INFORMATION)))
+                panic("InitProcess: VirtualQuery: {s} (section {d})", .{ @tagName(GetLastError()), image_i });
+
+            // TODO: skip if section overruns end address? surely not possible if
+            //  going through win32 api?
+            image_sections[image_i] = @as([*]const u8, @ptrCast(mbi.BaseAddress))[0..mbi.RegionSize];
+
+            image_i += 1;
+            search_addr += mbi.RegionSize;
+        }
+
+        return RangeManagerOpts{
+            .ListCapacity = list_capacity,
+            .ImageSlice = image_slice,
+            .ImageSections = image_sections[0..image_i],
+        };
     }
 };
 
@@ -548,6 +579,9 @@ const AddressHandle = packed struct(u32) {
     }
 };
 
+//------------------------------------------------------------------------------
+// tests
+
 // TODO: test range release -> range reserve -> handle differs between them
 // TODO: impl more structural approach to test cases
 // TODO: impl Deinit and test
@@ -563,10 +597,8 @@ test "Manager: basic usage" {
     const MEMORY_BASE = @intFromPtr(&MEMORY);
     const MEMORY_SECTIONS: []const []const u8 = &.{ MEMORY[0..4], MEMORY[4..6] };
 
-    var arena_perm = std.heap.ArenaAllocator.init(std.testing.allocator);
-    var arena_temp = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_perm.deinit();
-    defer arena_temp.deinit();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
 
     const A1 = AddressSpan{ .St = MEMORY_BASE + 0, .Ed = MEMORY_BASE + 2 };
     const A1F = AddressSpan{ .St = MEMORY_BASE + 1, .Ed = MEMORY_BASE + 3 };
@@ -584,8 +616,7 @@ test "Manager: basic usage" {
     comptime assert(!std.mem.eql(u8, r4exp, w4exp));
 
     var m = RangeManager.Init(
-        arena_perm.allocator(),
-        arena_temp.allocator(),
+        arena.allocator(),
         RangeManagerOpts.Init(2, &MEMORY, MEMORY_SECTIONS),
     ) orelse return error.ManagerInitFailed;
 
@@ -602,34 +633,34 @@ test "Manager: basic usage" {
 
     // pass: check and reserve h1
     try expect(true == m.AddressAvailable(A1.St, A1.Ed));
-    const h1 = m.RangeReserve(A1.St, A1.Ed, 0);
+    const h1 = m.AddressReserve(A1.St, A1.Ed, 0);
     try expectEqual(AddressHandle.Init(1, 1), h1);
     try expect(1 == m.RangeCount);
     try expect(1 == m.RangeListCount);
 
     // fail: overlapping h1
     try expect(false == m.AddressAvailable(A1F.St, A1F.Ed));
-    try expectEqual(AddressHandle.Zero, m.RangeReserve(A1F.St, A1F.Ed, 0));
+    try expectEqual(AddressHandle.Zero, m.AddressReserve(A1F.St, A1F.Ed, 0));
     try expect(1 == m.RangeCount);
     try expect(1 == m.RangeListCount);
 
     // different owner (1)
     try expect(true == m.AddressAvailable(A2.St, A2.Ed));
-    const h2 = m.RangeReserve(A2.St, A2.Ed, 1);
+    const h2 = m.AddressReserve(A2.St, A2.Ed, 1);
     try expectEqual(AddressHandle.Init(2, 1), h2);
     try expect(2 == m.RangeCount);
     try expect(2 == m.RangeListCount);
 
     // different section
     try expect(true == m.AddressAvailable(A3.St, A3.Ed));
-    const h3 = m.RangeReserve(A3.St, A3.Ed, 0);
+    const h3 = m.AddressReserve(A3.St, A3.Ed, 0);
     try expectEqual(AddressHandle.Init(3, 1), h3);
     try expect(3 == m.RangeCount);
     try expect(2 == m.RangeListCount);
 
     // different owner (2)
     try expect(true == m.AddressAvailable(A4.St, A4.Ed));
-    const h4 = m.RangeReserve(A4.St, A4.Ed, 2);
+    const h4 = m.AddressReserve(A4.St, A4.Ed, 2);
     try expectEqual(AddressHandle.Init(4, 1), h4);
     try expect(4 == m.RangeCount);
     try expect(3 == m.RangeListCount);
@@ -638,45 +669,45 @@ test "Manager: basic usage" {
     // read-write-reset
 
     // read
-    try expect(true == m.RangeRead(A1.St, A1.Ed, r1buf[0..]));
+    try expect(true == m.AddressRead(A1.St, A1.Ed, r1buf[0..]));
     try expectEqualSlices(u8, r1exp, r1buf[0..]);
 
     // TODO: test inability to write outside handle's designated address range
     // TODO: test writing indirectly (maybe impl RangeGetSlice?)
     // TODO: test page permissions during and after write
     // write
-    try expect(true == m.RangeWriteSt(h1));
+    try expect(true == m.RangeWriteStByHandle(h1));
     try expect(false == m.AddressWriting.IsNull());
     @memcpy(r1real, w1exp);
-    m.RangeWriteEd(h1);
+    m.RangeWriteEdByHandle(h1);
     try expectEqualSlices(u8, w1exp, r1real);
     try expect(true == m.AddressWriting.IsNull());
     r1buf = undefined;
 
     // restore
-    m.RangeRestore(h1);
+    m.RangeRestoreByHandle(h1);
     try expectEqualSlices(u8, r1exp, r1real);
 
     //---------------------------------
     // releasing
 
     // basic release
-    m.RangeRelease(h2);
+    m.RangeReleaseByHandle(h2);
     try expectEqual(@as(u32, 3), m.RangeCount);
-    try expect(false == m.RangeWriteSt(h2)); // handle no longer valid = can't write
+    try expect(false == m.RangeWriteStByHandle(h2)); // handle no longer valid = can't write
 
     // releasing multiple at a time via owner id
     m.RangeReleaseByOwner(0);
     try expect(1 == m.RangeCount);
-    try expect(false == m.RangeWriteSt(h1)); // handle no longer valid = can't write
-    try expect(false == m.RangeWriteSt(h3)); // handle no longer valid = can't write
+    try expect(false == m.RangeWriteStByHandle(h1)); // handle no longer valid = can't write
+    try expect(false == m.RangeWriteStByHandle(h3)); // handle no longer valid = can't write
 
     // releasing automatically restores memory
-    _ = m.RangeWriteSt(h4);
+    _ = m.RangeWriteStByHandle(h4);
     @memcpy(r4real, w4exp);
-    m.RangeWriteEd(h4);
+    m.RangeWriteEdByHandle(h4);
     try expectEqualSlices(u8, w4exp, r4real);
-    m.RangeRelease(h4);
+    m.RangeReleaseByHandle(h4);
     try expectEqualSlices(u8, r4exp, r4real);
     try expect(0 == m.RangeCount);
     try expect(4 == m.RangeCountPeak);

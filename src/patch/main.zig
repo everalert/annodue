@@ -28,7 +28,7 @@ export fn Init() void {
 
     ASettings.init(arena_perm, arena_temp) catch |e|
         std.debug.panic("Init(ASettings): {s}", .{@errorName(e)});
-    RAddress.Init(arena_perm, arena_temp);
+    RAddress.Init(arena_perm);
 
     // ring 2
 

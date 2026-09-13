@@ -32,11 +32,10 @@ const AddressState = struct {
     var Manager: RangeManager = undefined;
 };
 
-pub fn Init(arena_perm: Allocator, arena_temp: Allocator) void {
+pub fn Init(arena_perm: Allocator) void {
     AddressState.Initialized = true;
     AddressState.Manager = RangeManager.Init(
         arena_perm,
-        arena_temp,
         RangeManagerOpts.InitProcess(arena_perm, 1024, 64),
     ) orelse @panic("RAddress.Init: OutOfMemory");
 }
@@ -53,7 +52,7 @@ pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
     const handle = AddressState.Manager.AddressWriting;
     if (!handle.IsNull()) {
-        const span = AddressState.Manager.RangeSpan(handle);
+        const span = AddressState.Manager.AddressRangeSpan(handle);
         if (span.IsNull()) panic(
             "RAddress: range handle {X:0>8} closed with write mode left dangling",
             .{@as(AddressHandle, @bitCast(handle))},
@@ -64,14 +63,20 @@ pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
 }
 
 pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
-    AddressState.Manager.RangeReleaseByOwner(owner);
+    AddressState.Manager.AddressRangeReleaseByOwner(owner);
 }
 
 //------------------------------------------------------------------------------
 // annodue api
 
+// NOTE: asserting range validity and availability prioritized over "graceful"
+//  failure. internal development should reserve upfront so that collisions are
+//  assertion-checked and caught early. plugin authors requiring a "graceful"
+//  option should check for availability first; in this case validity will still
+//  be asserted.
+
 inline fn AssertAddressValid(addr_st: u32, addr_ed: u32) void {
-    if (!AddressState.Manager.AddressValid(addr_st, addr_ed)) panic(
+    if (!AddressState.Manager.AddressRangeValid(addr_st, addr_ed)) panic(
         "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} invalid",
         .{ addr_st, addr_ed },
     );
@@ -80,13 +85,13 @@ inline fn AssertAddressValid(addr_st: u32, addr_ed: u32) void {
 pub fn RAddressRangeAvailable(addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
     AssertAddressValid(addr_st, addr_ed);
-    return AddressState.Manager.AddressAvailable(addr_st, addr_ed);
+    return AddressState.Manager.AddressRangeAvailable(addr_st, addr_ed);
 }
 
 pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHandle {
     assert(AddressState.Initialized);
     AssertAddressValid(addr_st, addr_ed);
-    const handle = AddressState.Manager.RangeReserve(addr_st, addr_ed, WorkingOwner());
+    const handle = AddressState.Manager.AddressRangeReserve(addr_st, addr_ed, WorkingOwner());
     if (handle.IsNull()) panic(
         "RAddressRangeReserve: range 0x{X:0>6}..0x{X:0>6} cannot be reserved",
         .{ addr_st, addr_ed },
@@ -96,7 +101,7 @@ pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHand
 
 pub fn RAddressRangeRelease(handle: AddressHandle) callconv(.C) void {
     assert(AddressState.Initialized);
-    AddressState.Manager.RangeRelease(@bitCast(handle));
+    AddressState.Manager.AddressRangeRelease(@bitCast(handle));
 }
 
 pub fn RAddressRangeRead(addr_st: u32, addr_ed: u32, buffer: ?[*]u8) callconv(.C) bool {
@@ -104,28 +109,28 @@ pub fn RAddressRangeRead(addr_st: u32, addr_ed: u32, buffer: ?[*]u8) callconv(.C
     AssertAddressValid(addr_st, addr_ed);
     if (buffer == null) return false;
     const buf_sl = buffer.?[0 .. addr_ed - addr_st];
-    return AddressState.Manager.RangeRead(addr_st, addr_ed, buf_sl);
+    return AddressState.Manager.AddressRangeRead(addr_st, addr_ed, buf_sl);
 }
 
 pub fn RAddressRangeWriteSt(handle: AddressHandle) callconv(.C) bool {
     assert(AddressState.Initialized);
-    return AddressState.Manager.RangeWriteSt(@bitCast(handle));
+    return AddressState.Manager.AddressRangeWriteSt(@bitCast(handle));
 }
 
 pub fn RAddressRangeWriteEd(handle: AddressHandle) callconv(.C) void {
     assert(AddressState.Initialized);
-    AddressState.Manager.RangeWriteEd(@bitCast(handle));
+    AddressState.Manager.AddressRangeWriteEd(@bitCast(handle));
 }
 
 pub fn RAddressRangeRestore(handle: AddressHandle) callconv(.C) void {
     assert(AddressState.Initialized);
-    AddressState.Manager.RangeRestore(@bitCast(handle));
+    AddressState.Manager.AddressRangeRestore(@bitCast(handle));
 }
 
 pub fn RAddressRangeContainsRange(handle: AddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool {
     assert(AddressState.Initialized);
     AssertAddressValid(addr_st, addr_ed);
-    const span = AddressState.Manager.RangeSpan(@bitCast(handle));
+    const span = AddressState.Manager.AddressRangeSpan(@bitCast(handle));
     if (span.IsNull()) return false;
     return addr_st >= span.St and addr_ed <= span.Ed;
 }

@@ -50,6 +50,7 @@ comptime {
 // https://shell-storm.org/online/Online-Assembler-and-Disassembler/
 // https://disasm.pro/
 // https://godbolt.org/
+// https://github.com/netwide-assembler/nasm/blob/master/x86/insns.dat
 
 // --------------------------------------
 // instruction encoding & metaprogramming

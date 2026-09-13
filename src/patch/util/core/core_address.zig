@@ -94,7 +94,7 @@ pub const RangeManager = struct {
     /// arena memory must be persistent throughout lifetime of resulting RangeManager
     pub fn Init(arena: Allocator, opts: RangeManagerOpts) ?RangeManager {
         const IMAGE_SIZE = @as(u24, @intCast(opts.ImageSlice.len));
-        const LIST_CAPACITY = @min(opts.ListCapacity, IMAGE_SIZE + 1);
+        const LIST_CAPACITY = @min(opts.ListCapacity, IMAGE_SIZE);
 
         const p_image_backup = arena.alloc(u8, IMAGE_SIZE) catch return null;
         const p_list_head = arena.create(RangeListNode) catch return null;
@@ -107,7 +107,7 @@ pub const RangeManager = struct {
             .RangeListHead = p_list_head,
             .RangeListTail = p_list_head,
             .RangeCapacity = LIST_CAPACITY,
-            .RangeCount = 0, // FIXME: should this just count 1 and include the null obj?
+            .RangeCount = 0,
             .RangeCountPeak = 0,
             .RangeListCount = 1,
             .RangeListCountPeak = 1,
@@ -123,11 +123,6 @@ pub const RangeManager = struct {
             .Head = man.RangeListHead,
         };
         man.RangeListHead.Data.setCapacity(arena, LIST_CAPACITY) catch return null;
-
-        // TODO: remove? may not be needed if generation 0 is always invalid
-        // reserve index 0 for null object
-        const range_null = man.RangeListTail.Data.addOneAssumeCapacity();
-        man.RangeListTail.Data.set(range_null, std.mem.zeroes(AddressRange));
 
         return man;
     }
@@ -148,11 +143,11 @@ pub const RangeManager = struct {
     }
 
     inline fn RangeChunkCountMax(self: *const RangeManager) u24 {
-        return RoundIntUp(u24, @as(u24, @intCast(self.ImageSlice.len + 1)), self.OptListCapacity) / self.OptListCapacity;
+        return RoundIntUp(u24, @as(u24, @intCast(self.ImageSlice.len)), self.OptListCapacity) / self.OptListCapacity;
     }
 
     inline fn RangeChunkCapacityLast(self: *const RangeManager) u24 {
-        return @as(u24, @intCast(self.ImageSlice.len + 1)) % self.OptListCapacity;
+        return @as(u24, @intCast(self.ImageSlice.len)) % self.OptListCapacity;
     }
 
     /// creates new chunk of address slots. asserts that the current chunk is
@@ -190,21 +185,19 @@ pub const RangeManager = struct {
         if (!self.AddressValid(addr_st, addr_ed)) return null;
         if (!self.AddressAvailable(addr_st, addr_ed)) return null;
 
-        var node_i: u32 = 1; // skip null object
         var chunk_start: u32 = 0;
         var p_list = self.RangeListHead;
         while (true) {
             for (
-                p_list.Data.items(.Generation)[node_i..],
-                p_list.Data.items(.Flags)[node_i..],
-                node_i..,
+                p_list.Data.items(.Generation),
+                p_list.Data.items(.Flags),
+                0..,
             ) |gen, f, i| {
                 if (gen < AddressHandle.MAX_GENERATION and !f.Used) {
                     return RangeRef{ .Node = p_list, .Index = @intCast(chunk_start + i) };
                 }
             }
 
-            node_i = 0;
             if (p_list.Data.len == p_list.Data.capacity) chunk_start += p_list.Data.len;
             p_list = p_list.Next orelse break;
         }
@@ -641,7 +634,7 @@ test "Manager: basic usage" {
     // pass: check and reserve h1
     try expect(true == m.AddressRangeAvailable(A1.St, A1.Ed));
     const h1 = m.AddressRangeReserve(A1.St, A1.Ed, 0);
-    try expectEqual(AddressHandle.Init(1, 1), h1);
+    try expectEqual(AddressHandle.Init(0, 1), h1);
     try expect(1 == m.RangeCount);
     try expect(1 == m.RangeListCount);
 
@@ -654,23 +647,23 @@ test "Manager: basic usage" {
     // different owner (1)
     try expect(true == m.AddressRangeAvailable(A2.St, A2.Ed));
     const h2 = m.AddressRangeReserve(A2.St, A2.Ed, 1);
-    try expectEqual(AddressHandle.Init(2, 1), h2);
+    try expectEqual(AddressHandle.Init(1, 1), h2);
     try expect(2 == m.RangeCount);
-    try expect(2 == m.RangeListCount);
+    try expect(1 == m.RangeListCount);
 
     // different section
     try expect(true == m.AddressRangeAvailable(A3.St, A3.Ed));
     const h3 = m.AddressRangeReserve(A3.St, A3.Ed, 0);
-    try expectEqual(AddressHandle.Init(3, 1), h3);
+    try expectEqual(AddressHandle.Init(2, 1), h3);
     try expect(3 == m.RangeCount);
     try expect(2 == m.RangeListCount);
 
     // different owner (2)
     try expect(true == m.AddressRangeAvailable(A4.St, A4.Ed));
     const h4 = m.AddressRangeReserve(A4.St, A4.Ed, 2);
-    try expectEqual(AddressHandle.Init(4, 1), h4);
+    try expectEqual(AddressHandle.Init(3, 1), h4);
     try expect(4 == m.RangeCount);
-    try expect(3 == m.RangeListCount);
+    try expect(2 == m.RangeListCount);
 
     //---------------------------------
     // read-write-reset

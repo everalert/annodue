@@ -7,10 +7,14 @@ const std = @import("std");
 // unorganized stuff
 
 const w32 = @import("zigwin32");
+const GetCurrentProcess = w32.system.threading.GetCurrentProcess;
+const GetModuleInformation = w32.system.process_status.K32GetModuleInformation;
+const GetModuleHandleA = w32.system.library_loader.GetModuleHandleA;
 const GetModuleHandleExA = w32.system.library_loader.GetModuleHandleExA;
 const FLAG_FROM_ADDRESS = w32.system.library_loader.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS;
 const FLAG_UNCHANGED_REFCOUNT = w32.system.library_loader.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
 const HINSTANCE = w32.foundation.HINSTANCE;
+const MODULEINFO = w32.system.process_status.MODULEINFO;
 const FALSE = w32.zig.FALSE;
 
 pub inline fn PCompileError(comptime fmt: []const u8, args: anytype) noreturn {
@@ -35,4 +39,15 @@ pub fn ModuleBaseAddressFrom(src_address: usize) usize {
     const flags = FLAG_FROM_ADDRESS | FLAG_UNCHANGED_REFCOUNT;
     _ = GetModuleHandleExA(flags, @ptrFromInt(src_address), &hmod);
     return if (hmod) |h| @intFromPtr(h) else 0;
+}
+
+/// get slice of the allocation of the running process' executable image. this
+/// is the same range of memory one would find by extracting the image base and
+/// image size from the executable file headers.
+pub fn ProcessImageSlice() []const u8 {
+    var mi: MODULEINFO = undefined;
+    const process = GetCurrentProcess();
+    const module = GetModuleHandleA(null);
+    _ = GetModuleInformation(process, module, &mi, @sizeOf(MODULEINFO));
+    return @as([*]u8, @ptrCast(mi.lpBaseOfDll))[0..mi.SizeOfImage];
 }

@@ -13,7 +13,6 @@ const rto = rt.TextStyleOpts;
 const ModelMesh_GetBehavior = @import("racer").Model.Mesh_GetBehavior;
 const rti = @import("racer").Time;
 
-const mem = @import("util/memory.zig");
 const timing = @import("util/timing.zig");
 const ToggleState = @import("util/toggle_state.zig").ToggleState;
 
@@ -195,7 +194,7 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
         }
 
         Overlay.speed_prev = Overlay.speed;
-        Overlay.speed = if (Overlay.s_show_speed_raw) rete.GetSpeedBase(p) + rete.GetSpeedBoost(p) else @max(p.speed, 0.0);
+        Overlay.speed = if (Overlay.s_show_speed_raw) rete.GetSpeedBase(p) + rete.GetSpeedBoost(p) else @max(p.speed, 0.0); //NOTE: indirect game image read
 
         // rendering
 
@@ -204,8 +203,8 @@ export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
                 // FIXME: remove
                 //const heat_s: f32 = gf.SPlayerHeat() / gf.SPlayerHeatRate();
                 //const cool_s: f32 = (100 - gf.SPlayerHeat()) / gf.SPlayerCoolRate();
-                const heat_s = rete.GetPlayerTimeToOverheat();
-                const cool_s = rete.GetPlayerTimeToUnderheat();
+                const heat_s = rete.GetPlayerTimeToOverheat(); //NOTE: indirect game image read
+                const cool_s = rete.GetPlayerTimeToUnderheat(); //NOTE: indirect game image read
                 const heat_timer: f32 = if (gf.SPlayerBoosting().on()) heat_s else cool_s;
                 const heat_style = if (gf.SPlayerBoosting().on()) style_heat_up else if (p.temperature < 100) style_heat_dn else style_heat;
                 _ = gf.GDrawText(

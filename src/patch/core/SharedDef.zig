@@ -18,6 +18,7 @@ const ASettingSent = @import("ASettings.zig").ASettingSent;
 const ASetting = @import("ASettings.zig").Setting;
 const ASettingSection = @import("ASettings.zig").Section;
 const GDrawLayer = @import("GDraw.zig").GDrawLayer;
+const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
@@ -31,8 +32,6 @@ pub const HangState = r.Entity.Hang.HangMenuScreen;
 
 pub const GLOBAL_STATE_VERSION = 10;
 
-// TODO: move all references to patch_memory to use internal allocator; add
-// allocator interface to GlobalFunction
 // TODO: move all the common game check stuff from plugins/modules to here; cleanup
 // TODO: add index of currently consumed loaded tga IDs, since they are arbitrarily assigned
 //   also, some kind of interface plugins can use to avoid clashes
@@ -66,7 +65,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 34;
+pub const GLOBAL_FUNCTION_VERSION = 35;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -129,6 +128,14 @@ pub const GlobalFunction = extern struct {
     // Toast
     ToastNew: *const fn (text: [*:0]const u8, color: u32) callconv(.C) bool,
     // Resources
+    RAddressRangeAvailable: *const fn (address: u32, end: u32) callconv(.C) bool,
+    RAddressRangeReserve: *const fn (address: u32, end: u32) callconv(.C) RAddressHandle,
+    RAddressRangeRelease: *const fn (handle: RAddressHandle) callconv(.C) void,
+    RAddressRangeRestore: *const fn (handle: RAddressHandle) callconv(.C) void,
+    RAddressRangeRead: *const fn (address: u32, end: u32, buf: ?[*]u8) callconv(.C) bool,
+    RAddressRangeWriteSt: *const fn (handle: RAddressHandle) callconv(.C) bool,
+    RAddressRangeWriteEd: *const fn (handle: RAddressHandle) callconv(.C) void,
+    RAddressRangeContainsRange: *const fn (handle: RAddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool,
     RTerrainRequest: *const fn (
         bit: u16,
         group: u16,

@@ -1,6 +1,7 @@
 pub const Self = @This();
 
 const std = @import("std");
+const assert = std.debug.assert;
 
 const mem = @import("memory.zig");
 const x86 = @import("x86.zig");
@@ -9,7 +10,7 @@ pub const ALIGN_SIZE: usize = 16;
 pub const DETOUR_LIMIT: usize = 32;
 
 pub fn addr_from_call(src_call: usize) usize {
-    const orig_dest_rel: i32 = mem.read(src_call + 1, i32);
+    const orig_dest_rel: i32 = mem.Read(src_call + 1, i32);
     const orig_dest_abs: usize = @bitCast(@as(i32, @bitCast(src_call + 5)) + orig_dest_rel);
     return orig_dest_abs;
 }
@@ -20,27 +21,31 @@ pub fn addr_from_call(src_call: usize) usize {
 // TODO: version that only detours a CALL (5 bytes) with JMP, for simplicity
 // NOTE: assumes no relative shenanigans are in the detoured range other than
 // the intercepted CALL
+/// detours an instruction sequence, executing up to two new function calls with
+/// the original instructions in between, then returning the instruction pointer
+/// to the address after the original instruction sequence. assumes the original
+/// instructions are safe to execute verbatim when relocated.
 /// @addr_detour    the starting address of the sequence of instructions to replace
 /// @off_call       the number of bytes after @addr_detour where the CALL instruction to replace is
 /// @len            the total length of the sequence of instructions to replace
 pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
-    std.debug.assert(len >= 5);
-    std.debug.assert(len <= DETOUR_LIMIT);
-    std.debug.assert(off_call <= len - 5);
+    assert(len >= 5);
+    assert(len <= DETOUR_LIMIT);
+    assert(off_call <= len - 5);
 
     var off: usize = memory;
 
     const call_target: usize = addr_from_call(addr_detour + off_call);
     var scratch: [DETOUR_LIMIT]u8 = undefined;
-    mem.read_bytes(addr_detour, &scratch, len);
+    mem.ReadBytes(addr_detour, scratch[0..len]);
 
     const off_hook: usize = x86.jmp_rel(addr_detour, off);
     _ = x86.nop_until(off_hook, addr_detour + len);
 
     if (dest_before) |dest| off = x86.call(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, scratch[0..off_call]);
+    off = mem.WriteBytes(off, scratch[0..off_call]);
     off = x86.call(off, call_target);
-    off = mem.write_bytes(off, scratch[off_call + 5 .. len]);
+    off = mem.WriteBytes(off, scratch[off_call + 5 .. len]);
     if (dest_after) |dest| off = x86.call(off, @intFromPtr(dest));
     off = x86.jmp_rel(off, addr_detour + len);
     off = x86.nop_align(off, ALIGN_SIZE);
@@ -51,11 +56,11 @@ pub fn detour_call(memory: usize, addr_detour: usize, off_call: usize, len: usiz
 /// reroute asm without hooking a function body or callsite, while inserting
 /// before/after functions
 pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn () void, dest_after: ?*const fn () void) usize {
-    std.debug.assert(len >= 5);
-    std.debug.assert(len <= DETOUR_LIMIT);
+    assert(len >= 5);
+    assert(len <= DETOUR_LIMIT);
 
     var scratch: [DETOUR_LIMIT]u8 = undefined;
-    mem.read_bytes(addr, &scratch, len); // make copy of original asm
+    mem.ReadBytes(addr, scratch[0..len]); // make copy of original asm
 
     var off: usize = memory;
 
@@ -63,7 +68,7 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
     _ = x86.nop_until(off_hook, addr + len);
 
     if (dest_before) |dest| off = x86.jmp_rel(off, @intFromPtr(dest));
-    off = mem.write_bytes(off, scratch[0..len]);
+    off = mem.WriteBytes(off, scratch[0..len]);
     if (dest_after) |dest| off = x86.jmp_rel(off, @intFromPtr(dest));
     off = x86.retn(off);
     off = x86.nop_align(off, ALIGN_SIZE);
@@ -73,7 +78,7 @@ pub fn detour(memory: usize, addr: usize, len: usize, dest_before: ?*const fn ()
 
 /// @addr    address of the original RETN instruction; requires 4 trailing NOPs
 pub fn detour_retn(memory: usize, addr: usize, dest: *const fn () void) usize {
-    std.debug.assert(std.mem.eql(u8, @as(*[5]u8, @ptrFromInt(addr)), &[5]u8{ 0xC3, 0x90, 0x90, 0x90, 0x90 }));
+    assert(std.mem.eql(u8, @as(*[5]u8, @ptrFromInt(addr)), &[5]u8{ 0xC3, 0x90, 0x90, 0x90, 0x90 }));
 
     var off: usize = memory;
 
@@ -120,10 +125,10 @@ pub fn intercept_call_one_u32_param(memory: usize, off_call: usize, dest_before:
 
 pub fn intercept_jumptable(memory: usize, jt_addr: usize, jt_idx: u32, dest: *const fn () void) usize {
     const item_addr: usize = jt_addr + 4 * jt_idx;
-    const item_target: usize = mem.read(item_addr, u32);
+    const item_target: usize = mem.Read(item_addr, u32);
     var off: usize = memory;
 
-    _ = mem.write(item_addr, u32, off);
+    _ = mem.Write(item_addr, u32, off);
 
     off = x86.call(off, @intFromPtr(dest));
     off = x86.jmp_rel(off, item_target);

@@ -7,6 +7,9 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const mem = @import("util/memory.zig");
+const apih = @import("util/api/api_helper.zig");
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
 const SettingHandle = @import("core/ASettings.zig").Handle;
 const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
@@ -41,6 +44,10 @@ const GameplayTweak = struct {
     var s_ds_min: f32 = 325;
     var s_ds_drop: f32 = 140;
 
+    var h_ar_deathspeed = RAddressHandleInfo.InitLen(0x4C7BB8, 8); // deathspeedmin, deathspeeddrop
+
+    var api: *GlobalFn = undefined;
+
     fn settingsInit(gf: *GlobalFn) void {
         const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", settingsUpdate);
         h_s_section = section;
@@ -73,18 +80,24 @@ const GameplayTweak = struct {
         // TODO: add conditional thing for practice mode toggling
         if (update_death_speed_mod) {
             if (s_ds_mod_enable)
-                PatchDeathSpeed(s_ds_min, s_ds_drop)
+                PatchDeathSpeed(api, s_ds_min, s_ds_drop)
             else
-                PatchDeathSpeed(325, 140);
+                PatchDeathSpeed(api, 325, 140);
         }
     }
 };
 
 // DEATHSPEED
 
-fn PatchDeathSpeed(min: f32, drop: f32) void {
-    _ = mem.write(0x4C7BB8, f32, min);
-    _ = mem.write(0x4C7BBC, f32, drop);
+fn PatchDeathSpeed(api: *GlobalFn, min: f32, drop: f32) void {
+    const handle = GameplayTweak.h_ar_deathspeed.Handle;
+    if (!apih.RAddressPatchToggle(api, handle, true)) return;
+
+    if (!api.RAddressRangeWriteSt(handle)) return;
+    defer api.RAddressRangeWriteEd(handle);
+
+    _ = mem.Write(0x4C7BB8, f32, min);
+    _ = mem.Write(0x4C7BBC, f32, drop);
 }
 
 // HOUSEKEEPING
@@ -102,11 +115,14 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 }
 
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+    // FIXME: stop doing this
+    GameplayTweak.api = gf;
+
+    GameplayTweak.h_ar_deathspeed.Reserve(gf);
+
     GameplayTweak.settingsInit(gf);
 }
 
 export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
-    PatchDeathSpeed(325, 140);
-}
+export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}

@@ -1,14 +1,16 @@
 const std = @import("std");
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
-const workingOwner = @import("AHook.zig").PluginState.workingOwner;
+const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 const HandleMapStatic = @import("../util/handle_map_static.zig").HandleMapStatic;
 const x86 = @import("../util/x86.zig");
+const apih = @import("../util/api/api_helper.zig");
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
 
 const r = @import("racer");
-const t = r.Text;
 const Test = r.Entity.Test.Test;
 const Test_HandleTerrain = r.Entity.Test.HandleTerrain;
 const ModelMesh_GetBehavior = r.Model.Mesh_GetBehavior;
@@ -26,6 +28,8 @@ const CustomTerrainDef = extern struct {
 
 const CustomTerrain = struct {
     var data: THandleMap = undefined;
+
+    var h_ar_hook = RAddressHandleInfo.InitLen(0x47B8B0, 5);
 
     inline fn find(slot: u16) ?*CustomTerrainDef {
         for (data.values.slice()) |*def|
@@ -84,16 +88,18 @@ const CustomTerrain = struct {
         }
     }
 
-    pub fn init() void {
+    pub fn init(api: *GlobalFn) void {
         data = THandleMap.init() catch unreachable;
+
+        h_ar_hook.Reserve(api);
+
         // terrain
         // 0x47B8AF -> 0x47B8B8 (0x09)
         // 0x47B8B0 = the actual call instruction
-        _ = x86.call(0x47B8B0, @intFromPtr(&hookDoTerrain));
-    }
-
-    pub fn deinit() void {
-        _ = x86.call(0x47B8B0, @intFromPtr(&Test_HandleTerrain));
+        if (api.RAddressRangeWriteSt(h_ar_hook.Handle)) {
+            defer api.RAddressRangeWriteEd(h_ar_hook.Handle);
+            _ = x86.call(0x47B8B0, @intFromPtr(&hookDoTerrain));
+        }
     }
 };
 
@@ -112,7 +118,7 @@ pub fn RRequest(
 ) callconv(.C) THandle {
     if (group > 2) return TNullHandle;
     if (bit < 18 or bit >= 29) return TNullHandle;
-    return CustomTerrain.insert(workingOwner(), bit, group, fnTerrain, true) orelse TNullHandle;
+    return CustomTerrain.insert(WorkingOwner(), bit, group, fnTerrain, true) orelse TNullHandle;
 }
 
 /// release a single handle
@@ -122,20 +128,18 @@ pub fn RRelease(h: THandle) callconv(.C) void {
 
 /// release all handles held by the plugin
 pub fn RReleaseAll() callconv(.C) void {
-    CustomTerrain.removeAll(workingOwner());
+    CustomTerrain.removeAll(WorkingOwner());
 }
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {
-    CustomTerrain.init();
+pub fn OnInit(api: *GlobalFn) callconv(.C) void {
+    CustomTerrain.init(api);
 }
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
-    CustomTerrain.deinit();
-}
+pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     CustomTerrain.removeAll(owner);

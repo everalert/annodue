@@ -6,7 +6,6 @@ const win32 = @import("zigwin32");
 const win32kb = win32.ui.input.keyboard_and_mouse;
 
 const st = @import("toggle_state.zig");
-const mem = @import("memory.zig");
 const input = @import("../core/input.zig");
 
 const r = @import("racer");

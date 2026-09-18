@@ -14,14 +14,14 @@ const toast = @import("Toast.zig");
 const input = @import("Input.zig");
 const asettings = @import("ASettings.zig");
 const AMemory = @import("AMemory.zig");
-const rterrain = @import("RTerrain.zig");
-const rtrigger = @import("RTrigger.zig");
+const RTerrain = @import("RTerrain.zig");
+const RTrigger = @import("RTrigger.zig");
+const RAddress = @import("RAddress.zig");
 
 const st = @import("../util/toggle_state.zig");
 const ToggleState = st.ToggleState;
 const xinput = @import("../util/xinput.zig");
 const msg = @import("../util/message.zig");
-const mem = @import("../util/memory.zig");
 
 const app = @import("../appinfo.zig");
 const VERSION = app.VERSION;
@@ -62,13 +62,13 @@ fn global_player_reset(self: *GlobalState) void {
 
 fn global_player_update(self: *GlobalState) void {
     const p = &self.player;
-    const pt = re.Test.GetPlayerAssertValid();
+    const pt = re.Test.GetPlayerAssertValid(); // NOTE: indirect game image read
 
     p.boosting.update(pt.flags1.IS_BOOSTING);
     p.boost_charging.update(pt.boostChargeStatus == 1);
     p.boost_ready.update(pt.boostChargeStatus == 2);
-    p.underheating.update(re.Test.GetUnderheating(pt));
-    p.overheating.update(re.Test.GetOverheating(pt));
+    p.underheating.update(re.Test.GetUnderheating(pt)); // NOTE: indirect game image read
+    p.overheating.update(re.Test.GetOverheating(pt)); // NOTE: indirect game image read
     p.dead.update(pt.flags1.IS_DEAD);
     if (p.dead == .JustOn) p.deaths += 1;
 }
@@ -192,12 +192,20 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     // Toast
     .ToastNew = &toast.ToastSystem.NewToast,
     // Resources
-    .RTerrainRequest = &rterrain.RRequest,
-    .RTerrainRelease = &rterrain.RRelease,
-    .RTerrainReleaseAll = &rterrain.RReleaseAll,
-    .RTriggerRequest = &rtrigger.RRequest,
-    .RTriggerRelease = &rtrigger.RRelease,
-    .RTriggerReleaseAll = &rtrigger.RReleaseAll,
+    .RAddressRangeAvailable = &RAddress.RAddressRangeAvailable,
+    .RAddressRangeReserve = &RAddress.RAddressRangeReserve,
+    .RAddressRangeRelease = &RAddress.RAddressRangeRelease,
+    .RAddressRangeRestore = &RAddress.RAddressRangeRestore,
+    .RAddressRangeRead = &RAddress.RAddressRangeRead,
+    .RAddressRangeWriteSt = &RAddress.RAddressRangeWriteSt,
+    .RAddressRangeWriteEd = &RAddress.RAddressRangeWriteEd,
+    .RAddressRangeContainsRange = &RAddress.RAddressRangeContainsRange,
+    .RTerrainRequest = &RTerrain.RRequest,
+    .RTerrainRelease = &RTerrain.RRelease,
+    .RTerrainReleaseAll = &RTerrain.RReleaseAll,
+    .RTriggerRequest = &RTrigger.RRequest,
+    .RTriggerRelease = &RTrigger.RRelease,
+    .RTriggerReleaseAll = &RTrigger.RReleaseAll,
     // State
     .SInitLatePassed = &SInitLatePassed,
     .SPracticeMode = &SPracticeMode,

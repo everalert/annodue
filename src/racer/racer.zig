@@ -3,6 +3,7 @@
 // TODO: this module - adding typedefs, then migrating usage in codebase where appropriate
 // TODO: this module - naming pattern for helper stuff to help intellisense, e.g. HSomeHelperFn()
 
+pub const Meta = @import("Meta.zig");
 pub const Global = @import("Global.zig");
 
 pub const RaceData = @import("RaceData.zig");

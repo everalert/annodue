@@ -10,7 +10,6 @@ const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 const fl = @import("../util/flash.zig");
 const st = @import("../util/toggle_state.zig");
 const nt = @import("../util/normalized_transform.zig");
-const mem = @import("../util/memory.zig");
 
 const rq = @import("racer").Quad;
 const rc = @import("racer").constants;

@@ -7,8 +7,6 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const mem = @import("util/memory.zig");
-
 const r = @import("racer");
 const rt = r.Text;
 const re = r.Entity;

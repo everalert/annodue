@@ -18,8 +18,11 @@
 #include "globals.h"
 
 // functions, also from https://github.com/tim-tim707/SW_RACER_RE
-auto stdDisplay_Update = (int (*)())0x00489ab0; // <-- will be hooked
-auto swrModel_UnkDraw = (void (*)(int x))0x00483A90; // <-- will be hooked
+// NOTE(Gale): no RAddress reservation needed, actually not hooked :kekw:
+auto stdDisplay_Update = (int (*)())0x00489ab0; // <-- will be hooked 
+// NOTE(Gale): hook detours from top of function body. 5 bytes needed to cover 
+//  RAddress usage (one far jmp)
+auto swrModel_UnkDraw = (void (*)(int x))0x00483A90; // <-- will be hooked 
 
 const auto swrModel_NodeGetTransform = (void (*)(const swrModel_NodeTransformed* node, rdMatrix44* matrix))0x004316A0;
 const auto swrEvent_GetItem = (void* (*)(int event, int index))0x00450b30;
@@ -532,6 +535,10 @@ void swrModel_UnkDraw_Hook(int x)
     std::copy(temp_children.begin(), temp_children.end(), root_node->child_nodes);
 }
 
+// NOTE(Gale): installs detour to *pDetour at *pPointer, executing the code at
+//  *pDetour first, then executing the original code after. in the only place
+//  this is used, this will replace bytes at the top of a function body, so
+//  the execution will be HookFunction -> OriginalFunction
 void detour_attach(void** pPointer, void* pDetour, int num_bytes_to_copy)
 {
     if (num_bytes_to_copy < 5)
@@ -544,17 +551,24 @@ void detour_attach(void** pPointer, void* pDetour, int num_bytes_to_copy)
 
     int32_t offset = new_address - (original_address + 5);
 
+	// NOTE(Gale): create return springboard for bytes that will be clobbered by detour
     uint8_t* patch_memory = (uint8_t*)VirtualAlloc(nullptr, num_bytes_to_copy + 5, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
     memcpy(patch_memory, original_address, num_bytes_to_copy);
 
+	// NOTE(Gale): replace bytes at pPointer (in this case, top of function body) with:  jmp [pDetour]
     original_address[0] = 0xe9;
     memcpy(original_address + 1, &offset, 4);
 
     int32_t patch_offset = (original_address + num_bytes_to_copy) - (patch_memory + num_bytes_to_copy + 5);
 
+	// NOTE(Gale): place jmp to original function body from springboard
     patch_memory[num_bytes_to_copy] = 0xe9;
     memcpy(patch_memory + num_bytes_to_copy + 1, &patch_offset, 4);
 
+	// NOTE(Gale): store springboard allocation in original variable so it can 
+	//  be freed on detach. this also has the effect of allowing the original
+	//  code to be executed independently of the hook via jumping to (or calling)
+	//  the address at this variable
     *pPointer = patch_memory;
 }
 

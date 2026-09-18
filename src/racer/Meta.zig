@@ -1,17 +1,32 @@
-pub const IMAGE_BASE: u32 = 0x400000;
-pub const IMAGE_SIZE: u32 = 0xAD0000;
-pub const IMAGE_END: u32 = IMAGE_BASE + IMAGE_SIZE;
-pub const CODE_BASE: u32 = IMAGE_BASE + 0x001000;
-pub const DATA_BASE: u32 = IMAGE_BASE + 0x0AC000;
-pub const ENTRY_POINT: u32 = IMAGE_BASE + 0x0A0A60;
+pub const IMAGE_BASE = 0x400000;
+pub const IMAGE_SIZE = 0xAD0000;
+pub const IMAGE_END = IMAGE_BASE + IMAGE_SIZE;
+pub const CODE_BASE = IMAGE_BASE + 0x001000;
+pub const DATA_BASE = IMAGE_BASE + 0x0AC000;
+pub const ENTRY_POINT = IMAGE_BASE + 0x0A0A60;
 
+// NOTE: hand-corrected virtual sizes, mainly due to .data being drastically wrong
+//  based on objdump only. cross-referenced with IDA using SectionAlignment as basis
+//  for final sizes; this happens to align with page size on windows, so there are
+//  no memory gaps aside from the first 0x1000 bytes (one page)
 // name, virtual address, virtual size, flags, alignment
 pub const SECTIONS: [4]struct { [:0]const u8, u32, u32, u32, u32 } = .{
-    .{ "text", 0x401000, 0x0AA750, 0x60000020, 4 },
-    .{ "rdata", 0x4AC000, 0x0054A2, 0x40000040, 4 },
-    .{ "data", 0x4B2000, 0x023600, 0xC0000040, 4 },
-    .{ "rsrc", 0xECE000, 0x0017B8, 0x40000020, 4 },
+    .{ "text", 0x401000, 0x0AB000, 0x60000020, 4 },
+    .{ "rdata", 0x4AC000, 0x006000, 0x40000040, 4 },
+    .{ "data", 0x4B2000, 0xA1C000, 0xC0000040, 4 },
+    .{ "rsrc", 0xECE000, 0x002000, 0x40000020, 4 },
 };
+
+// NOTE: this one based purely on section header data from objdump, but the
+//  virtual size of .data is wrong, and SizeOfInitializedData seems to not be
+//  a correct substitute; unsure how IDA figures out the correct size, so just
+//  using hand-corrected version for now
+//pub const SECTIONS: [4]struct { [:0]const u8, u32, u32, u32, u32 } = .{
+//    .{ "text", 0x401000, 0x0AA750, 0x60000020, 4 },
+//    .{ "rdata", 0x4AC000, 0x0054A2, 0x40000040, 4 },
+//    .{ "data", 0x4B2000, 0x023600, 0xC0000040, 4 },
+//    .{ "rsrc", 0xECE000, 0x0017B8, 0x40000020, 4 },
+//};
 
 //  objdump -x SWEP1RCR.exe
 //

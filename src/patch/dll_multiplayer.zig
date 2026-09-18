@@ -99,12 +99,12 @@ fn ModifyNetworkGuid(data: []u8) void {
         std.mem.swap(u8, &k_s[k_i], &k_s[k_j]);
         var idx: usize = (@as(usize, k_s[k_i]) + k_s[k_j]) % 0xFF;
         var rc4_output: u8 = k_s[idx];
-        _ = mem.write(0x4AF9B0 + i, u8, rc4_output);
+        _ = mem.Write(0x4AF9B0 + i, u8, rc4_output);
     }
 
     // Overwrite the first 2 byte with a version index, so we have room
     // to fix the algorithm if we have messed up
-    _ = mem.write(0x4AF9B0 + 0, u16, 0x00000000);
+    _ = mem.Write(0x4AF9B0 + 0, u16, 0x00000000);
 }
 
 fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_healths: *[7]u8, patch_guid: bool) usize {
@@ -117,14 +117,14 @@ fn PatchNetworkUpgrades(memory_offset: usize, upgrade_levels: *[7]u8, upgrade_he
     var offset: usize = memory_offset;
 
     // Update menu upgrades
-    _ = mem.write(0x45CFC6, u8, 0x05); // levels
-    _ = mem.write(0x45CFCB, u8, 0xFF); // healths
+    _ = mem.Write(0x45CFC6, u8, 0x05); // levels
+    _ = mem.Write(0x45CFCB, u8, 0xFF); // healths
 
     // Place upgrade data in memory
     const off_up_lv: usize = offset;
-    offset = mem.write(offset, @TypeOf(upgrade_levels.*), upgrade_levels.*);
+    offset = mem.Write(offset, @TypeOf(upgrade_levels.*), upgrade_levels.*);
     const off_up_hp: usize = offset;
-    offset = mem.write(offset, @TypeOf(upgrade_healths.*), upgrade_healths.*);
+    offset = mem.Write(offset, @TypeOf(upgrade_healths.*), upgrade_healths.*);
 
     // Construct our code
     const off_upgrade_code: usize = offset;
@@ -168,7 +168,7 @@ fn PatchNetworkCollisions(memory_offset: usize, patch_guid: bool) usize {
     offset = x86.retn(offset);
 
     // Install it by patching call at 0x47B5AF
-    _ = mem.write(0x47B5AF + 1, u32, memory_offset_collision_code - (0x47B5AF + 5));
+    _ = mem.Write(0x47B5AF + 1, u32, memory_offset_collision_code - (0x47B5AF + 5));
 
     return offset;
 }
@@ -190,19 +190,25 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
 export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     MpState.settingsInit(gf);
 
+    // TODO: both PatchNetworkUpgrades and PatchNetworkCollisions are doing some
+    //  address rawdogging and will need to be updated to use RAddress if this is
+    //  re-enabled. apparently these functions were never updated to use buffers
+    //  from api memory, so will also need to be updated to use AMemory. reason
+    //  for punting is basically that I plan to drop this plugin entirely but not
+    //  yet 100% committed
     // TODO: move this to settings handler, once global allocation figured out
     //var off = gs.patch_offset;
-    if (MpState.s_enable) {
-        var off: u32 = @intFromPtr(&MpState.asm_buf);
-        const traction: u8 = if (MpState.s_patch_r100) 3 else 5;
-        var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
-        var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-        const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
-        const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
-        off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.s_patch_guid);
-        off = PatchNetworkCollisions(off, MpState.s_patch_guid);
-        std.debug.assert(off - @intFromPtr(&MpState.asm_buf) <= MpState.asm_buf.len);
-    }
+    //if (MpState.s_enable) {
+    //    var off: u32 = @intFromPtr(&MpState.asm_buf);
+    //    const traction: u8 = if (MpState.s_patch_r100) 3 else 5;
+    //    var upgrade_lv: [7]u8 = .{ traction, 5, 5, 5, 5, 5, 5 };
+    //    var upgrade_hp: [7]u8 = .{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    //    const upgrade_lv_ptr: *[7]u8 = @ptrCast(&upgrade_lv);
+    //    const upgrade_hp_ptr: *[7]u8 = @ptrCast(&upgrade_hp);
+    //    off = PatchNetworkUpgrades(off, upgrade_lv_ptr, upgrade_hp_ptr, MpState.s_patch_guid);
+    //    off = PatchNetworkCollisions(off, MpState.s_patch_guid);
+    //    std.debug.assert(off - @intFromPtr(&MpState.asm_buf) <= MpState.asm_buf.len);
+    //}
     //gs.patch_offset = off;
 }
 

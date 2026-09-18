@@ -9,10 +9,13 @@
 // this stuff needs to be first (ring 0)
 pub const AMemory = @import("AMemory.zig");
 
+// ring 1
+pub const ASettings = @import("ASettings.zig"); // depends on AMemory
+pub const RAddress = @import("RAddress.zig"); // depends on AMemory
+
 // this stuff was outside core and hooked in this order before making this file
-pub const AHook = @import("AHook.zig");
+pub const AHook = @import("AHook.zig"); // depends on AMemory, RAddress
 pub const Input = @import("Input.zig");
-pub const ASettings = @import("ASettings.zig");
 pub const Global = @import("Global.zig");
 pub const Practice = @import("Practice.zig");
 

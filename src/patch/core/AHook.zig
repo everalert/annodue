@@ -28,7 +28,6 @@ const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
 
 const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
-const mem = @import("../util/memory.zig");
 const apih = @import("../util/api/api_helper.zig");
 const debug = @import("../util/debug/debug.zig");
 
@@ -37,6 +36,11 @@ const MiB = @import("../util/base/base_memory.zig").MiB;
 const SettingHandle = @import("ASettings.zig").Handle;
 const SettingValue = @import("ASettings.zig").ASettingSent.Value;
 const Setting = @import("ASettings.zig").ASettingSent;
+
+// FIXME: anything using this should be moved to api Init; waiting on better core arch
+const RAddress = @import("RAddress.zig");
+const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
+const RADDRESS_HANDLE_NULL = @import("../util/api/api.zig").RADDRESS_HANDLE_NULL;
 
 const r = @import("racer");
 const reh = r.Entity.Hang;
@@ -77,7 +81,7 @@ const Plugin = plugin: {
     const stdf = .{
         .{ "Handle", ?HINSTANCE },
         .{ "Initialized", bool },
-        .{ "OwnerId", u16 },
+        .{ "OwnerId", Owner },
     };
     const ev = std.enums.values(PluginExportFn);
     var fields: [stdf.len + ev.len]std.builtin.Type.StructField = undefined;
@@ -114,7 +118,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginName, .PluginVersion => ?*const fn () callconv(.C) [*:0]const u8,
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
-        .OnPluginInitA, .OnPluginInitLateA, .OnPluginDeinitA => ?*const fn (u16) callconv(.C) void,
+        .OnPluginInitA, .OnPluginInitLateA, .OnPluginDeinitA => ?*const fn (OwnerOpaque) callconv(.C) void,
         else => ?*const fn (*GlobalFn) callconv(.C) void,
     };
 }
@@ -195,6 +199,34 @@ const PluginExportFn = enum(u32) {
     RenderSceneEndA,
 };
 
+pub const OwnerOpaque = u16;
+
+pub const Owner = packed struct(u16) {
+    Kind: OwnerKind,
+    Id: u14,
+
+    pub const OwnerKind = enum(u2) { None = 0, Core = 1, User = 2 };
+    pub const NULL = Owner{ .Kind = .None, .Id = 0 };
+    pub const NULL_CORE = Owner{ .Kind = .Core, .Id = 0 };
+    pub const NULL_USER = Owner{ .Kind = .User, .Id = 0 };
+
+    pub fn Init(kind: OwnerKind, id: u14) Owner {
+        return Owner{ .Kind = kind, .Id = id };
+    }
+
+    pub fn Eql(self: Owner, other: Owner) bool {
+        return self.Opaque() == other.Opaque();
+    }
+
+    pub fn Opaque(self: Owner) OwnerOpaque {
+        return @bitCast(self);
+    }
+
+    pub fn FromOpaque(other: OwnerOpaque) Owner {
+        return @bitCast(other);
+    }
+};
+
 // TODO: directory-monitoring hot_reload impl (need for core menu impl)
 // TODO: review plugin-related loops (including hot_reload impl); probably not
 //  a performance concern at all given the current array sizes, but there is
@@ -202,9 +234,18 @@ const PluginExportFn = enum(u32) {
 //  at N*M for every plugin and callback hook added
 // TODO: owner range limiting
 pub const PluginState = struct {
+    var arena_perm: Allocator = undefined;
+    var arena_temp: Allocator = undefined;
+
+    var h_s_hot_reload: ?SettingHandle = null;
+    var s_hot_reload: bool = true;
+
     var core: ArrayList(Plugin) = undefined;
     var core_fba: FixedBufferAllocator = undefined;
 
+    const PLUGIN_MAX = 64;
+    const HotReloadPluginHandle = u32;
+    const HotReloadPlugin = hot_reload.HotReload(HotReloadPluginHandle, PLUGIN_MAX);
     var plugins: [PLUGIN_MAX]Plugin = undefined;
     var plugins_used: [PLUGIN_MAX]bool = std.mem.zeroes([PLUGIN_MAX]bool);
     var plugins_count: u32 = 0;
@@ -212,26 +253,26 @@ pub const PluginState = struct {
     var plugins_toast_count: u32 = 0;
     var plugins_reloader: HotReloadPlugin = undefined;
 
-    var owners_core: u16 = 0x0000;
-    var owners_user: u16 = 0x0800;
-    var working_owner: u16 = 0;
+    var owner_count_core: u14 = 0;
+    var owner_count_user: u14 = 0;
+    // FIXME: this could be ref'd outside of callback/work context, in which case
+    //  it will contain the most recent context's owner, not the owner of whoever
+    //  is making the ref
+    var owner_current: Owner = Owner.NULL;
 
-    var h_s_hot_reload: ?SettingHandle = null;
-    var s_hot_reload: bool = true;
-
-    var arena_perm: Allocator = undefined;
-    var arena_temp: Allocator = undefined;
-
-    const PLUGIN_MAX = 64;
-    const HotReloadPluginHandle = u32;
-    const HotReloadPlugin = hot_reload.HotReload(HotReloadPluginHandle, PLUGIN_MAX);
-
-    pub fn workingOwner() u16 {
-        return working_owner;
+    // TODO: some kind of tracking in the ownership system that asserts there is
+    //  actually a plugin/module being worked on when the working owner is accessed.
+    //  for now accepting plain NULL owner as compromise, since a full solution
+    //  likely requires reworking handle_map (and anything depending on it)
+    pub fn WorkingOwner() OwnerOpaque {
+        assert(!owner_current.Eql(Owner.NULL_CORE));
+        assert(!owner_current.Eql(Owner.NULL_USER));
+        return owner_current.Opaque();
     }
 
-    pub fn workingOwnerIsSystem() bool {
-        return working_owner < 0x0800;
+    // TODO: more robust/direct check
+    pub fn WorkingOwnerIsSystem() bool {
+        return Owner.FromOpaque(WorkingOwner()).Kind != .User;
     }
 
     /// callback for Plugin hot_reload impl; the file given is assumed to be newer
@@ -338,9 +379,9 @@ pub const PluginState = struct {
             return result;
         }
 
-        p.OwnerId = PluginState.owners_user;
-        PluginState.owners_user += 1;
-        PluginState.working_owner = p.OwnerId;
+        PluginState.owner_count_user += 1;
+        PluginState.owner_current = Owner.Init(.User, PluginState.owner_count_user);
+        p.OwnerId = PluginState.owner_current;
         p.OnInit.?(GLOBAL_FUNCTION);
         PluginFnOnPluginInit(.OnPluginInitA, p.OwnerId);
         if (GLOBAL_STATE.init_late_passed) p.OnInitLate.?(GLOBAL_FUNCTION);
@@ -355,11 +396,11 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     const c = struct {
         fn callback() void {
             for (PluginState.core.items) |p| {
-                PluginState.working_owner = p.OwnerId;
+                PluginState.owner_current = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| {
                     f(GLOBAL_FUNCTION);
                     switch (ex) {
-                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, p.OwnerId),
                         else => {},
                     }
                 }
@@ -367,11 +408,11 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
             for (PluginState.plugins_used, 0..) |used, i| {
                 if (!used) continue;
                 const p: *const Plugin = &PluginState.plugins[i];
-                PluginState.working_owner = p.OwnerId;
+                PluginState.owner_current = p.OwnerId;
                 if (@field(p, @tagName(ex))) |f| {
                     f(GLOBAL_FUNCTION);
                     switch (ex) {
-                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, PluginState.working_owner),
+                        .OnInitLate => PluginFnOnPluginInit(.OnPluginInitLateA, p.OwnerId),
                         else => {},
                     }
                 }
@@ -381,35 +422,21 @@ pub fn PluginFnCallback(comptime ex: PluginExportFn) *const fn () void {
     return &c.callback;
 }
 
-//// TODO: generalize for OnPluginInit etc.
-//fn PluginFnOnPluginDeinit(owner: u16) void {
-//    for (PluginState.core.items) |p| {
-//        if (p.OwnerId == owner) continue;
-//        PluginState.working_owner = p.OwnerId;
-//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
-//    }
-//    for (PluginState.plugin.items) |p| {
-//        if (p.OwnerId == owner) continue;
-//        PluginState.working_owner = p.OwnerId;
-//        if (@field(p, @tagName(.OnPluginDeinit))) |f| f(owner);
-//    }
-//}
-pub fn PluginFnOnPluginInit(comptime ex: PluginExportFn, owner: u16) void {
+/// callback for core modules to run when any module is init/deinit, so that core
+/// features can do automatic processing of resources accessed via the plugin api
+/// and not rely on modules being good citizens. this function is run after the
+/// module's own init/deinit are run
+/// @owner  the plugin actually being init/deinit that this function is called in reaction to
+pub fn PluginFnOnPluginInit(comptime ex: PluginExportFn, owner: Owner) void {
     comptime if (ex != .OnPluginInitA and
         ex != .OnPluginInitLateA and
         ex != .OnPluginDeinitA) @compileError("invalid plugin export fn");
 
     for (PluginState.core.items) |p| {
-        if (p.OwnerId == owner) continue;
-        PluginState.working_owner = p.OwnerId;
-        if (@field(p, @tagName(ex))) |f| f(owner);
+        if (p.OwnerId.Eql(owner)) continue; // skip running own init/deinit callback
+        PluginState.owner_current = p.OwnerId;
+        if (@field(p, @tagName(ex))) |f| f(owner.Opaque());
     }
-    // TODO: system to allow any plugin to act on any other plugin's init-ing safely
-    //for (PluginState.plugin.items) |p| {
-    //    if (p.OwnerId == owner) continue;
-    //    PluginState.working_owner = p.OwnerId;
-    //    if (@field(p, @tagName(ex))) |f| f(owner);
-    //}
 }
 
 fn PluginFnCallback1_stub(_: u32) void {}
@@ -443,9 +470,60 @@ const PATCH_BUFFER_SIZE = MiB(u32, 4);
 var patch_buf: []u8 = &.{};
 var patch_off: u32 = 0;
 
+// NOTE: all reserved addresses in one spot for visibility
+var h_ar_GameSetup: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_GameLoop: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate1: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate2: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate3: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate4: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate5: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate6: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate7: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate8: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_EngineUpdate9: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_InputUpdate1: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_InputUpdate2: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_InputUpdate3: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_InputUpdate4: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_InputUpdate5: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_TimerUpdate: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_InitRaceQuads: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_InitHangQuads: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_GameEnd1: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_GameEnd2: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_TextRender1: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_TextRender2: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_TextRender3: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_MenuDrawing: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_SceneBeginEnd1: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_SceneBeginEnd2: RAddressHandle = RADDRESS_HANDLE_NULL;
+var h_ar_LoadSprite: RAddressHandle = RADDRESS_HANDLE_NULL;
+
 pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
     defer assert(PluginState.plugins_count == std.mem.count(bool, &PluginState.plugins_used, &.{true}));
     defer assert(PluginState.plugins_count == PluginState.plugins_reloader.FileListCount);
+
+    // hooking game
+
+    patch_buf = try arena_perm.create([PATCH_BUFFER_SIZE]u8);
+    patch_off = @intFromPtr(patch_buf.ptr);
+    defer assert(patch_off <= @intFromPtr(patch_buf.ptr) + patch_buf.len);
+
+    patch_off = HookGameSetup(patch_off);
+    patch_off = HookGameLoop(patch_off);
+    patch_off = HookEngineUpdate(patch_off);
+    patch_off = HookInputUpdate(patch_off);
+    patch_off = HookTimerUpdate(patch_off);
+    patch_off = HookInitRaceQuads(patch_off);
+    patch_off = HookInitHangQuads(patch_off);
+    //patch_off = HookGameEnd(patch_off);
+    patch_off = HookTextRender(patch_off);
+    patch_off = HookMenuDrawing(patch_off);
+    patch_off = HookSceneBeginEnd(patch_off);
+    //patch_off = HookLoadSprite(patch_off);
+
+    // loading modules
 
     PluginState.arena_perm = arena_perm;
     PluginState.arena_temp = arena_temp;
@@ -488,11 +566,11 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
             }
         }
         if (this_p) |plug| {
-            plug.OwnerId = PluginState.owners_core;
-            PluginState.owners_core += 1;
-            PluginState.working_owner = plug.OwnerId;
+            PluginState.owner_count_core += 1;
+            PluginState.owner_current = Owner.Init(.Core, PluginState.owner_count_core);
+            plug.OwnerId = PluginState.owner_current;
             plug.OnInit.?(GLOBAL_FUNCTION);
-            PluginFnOnPluginInit(.OnPluginInitA, PluginState.working_owner);
+            PluginFnOnPluginInit(.OnPluginInitA, plug.OwnerId);
         }
     }
 
@@ -535,25 +613,6 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
             _ = PluginState.plugins_reloader.TrackFile(buf_path, handle);
         }
     }
-
-    // hooking game
-
-    patch_buf = try arena_perm.create([PATCH_BUFFER_SIZE]u8);
-    patch_off = @intFromPtr(patch_buf.ptr);
-    defer assert(patch_off <= @intFromPtr(patch_buf.ptr) + patch_buf.len);
-
-    patch_off = HookGameSetup(patch_off);
-    patch_off = HookGameLoop(patch_off);
-    patch_off = HookEngineUpdate(patch_off);
-    patch_off = HookInputUpdate(patch_off);
-    patch_off = HookTimerUpdate(patch_off);
-    patch_off = HookInitRaceQuads(patch_off);
-    patch_off = HookInitHangQuads(patch_off);
-    //patch_off = HookGameEnd(patch_off);
-    patch_off = HookTextRender(patch_off);
-    patch_off = HookMenuDrawing(patch_off);
-    patch_off = HookSceneBeginEnd(patch_off);
-    //patch_off = HookLoadSprite(patch_off);
 }
 
 // HOOKS
@@ -588,6 +647,10 @@ pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
 
 // last function call in successful setup path
 fn HookGameSetup(memory: usize) usize {
+    h_ar_GameSetup = RAddress.RAddressRangeReserve(0x4240AD, 0x4240B7);
+    if (!RAddress.RAddressRangeWriteSt(h_ar_GameSetup)) @panic("HookGameSetup: RAddressRangeWriteSt failed");
+    defer RAddress.RAddressRangeWriteEd(h_ar_GameSetup);
+
     const addr: usize = 0x4240AD;
     const len: usize = 0x4240B7 - addr;
     const off_call: usize = 0x4240AF - addr;
@@ -597,6 +660,10 @@ fn HookGameSetup(memory: usize) usize {
 // GAME LOOP
 
 fn HookGameLoop(memory: usize) usize {
+    h_ar_GameLoop = RAddress.RAddressRangeReserve(0x49CE2A, 0x49CE2F);
+    if (!RAddress.RAddressRangeWriteSt(h_ar_GameLoop)) @panic("HookGameLoop: RAddressRangeWriteSt failed");
+    defer RAddress.RAddressRangeWriteEd(h_ar_GameLoop);
+
     return hook.intercept_call(
         memory,
         0x49CE2A,
@@ -608,28 +675,65 @@ fn HookGameLoop(memory: usize) usize {
 // ENGINE UPDATES
 
 fn HookEngineUpdate(memory: usize) usize {
+    h_ar_EngineUpdate1 = RAddress.RAddressRangeReserve(0x445991, 0x445991 + 5);
+    h_ar_EngineUpdate2 = RAddress.RAddressRangeReserve(0x445A00, 0x445A00 + 5);
+    h_ar_EngineUpdate3 = RAddress.RAddressRangeReserve(0x445A10, 0x445A10 + 5);
+    h_ar_EngineUpdate4 = RAddress.RAddressRangeReserve(0x445A40, 0x445A40 + 5);
+    h_ar_EngineUpdate5 = RAddress.RAddressRangeReserve(0x4459D1, 0x4459D1 + 5);
+    h_ar_EngineUpdate6 = RAddress.RAddressRangeReserve(0x4459D6, 0x4459D6 + 5);
+    h_ar_EngineUpdate7 = RAddress.RAddressRangeReserve(0x4459E0, 0x4459E0 + 5);
+    h_ar_EngineUpdate8 = RAddress.RAddressRangeReserve(0x4459E5, 0x4459E5 + 5);
+    h_ar_EngineUpdate9 = RAddress.RAddressRangeReserve(0x4459EF, 0x4459EF + 5);
+
     var off: usize = memory;
 
     // fn_445980 case 1
     // physics updates, etc.
-    off = hook.intercept_call(off, 0x445991, PluginFnCallback(.EarlyEngineUpdateB), null);
-    off = hook.intercept_call(off, 0x445A00, null, PluginFnCallback(.EarlyEngineUpdateA));
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate1)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate1);
+        off = hook.intercept_call(off, 0x445991, PluginFnCallback(.EarlyEngineUpdateB), null);
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (EarlyEngineUpdateB)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate2)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate2);
+        off = hook.intercept_call(off, 0x445A00, null, PluginFnCallback(.EarlyEngineUpdateA));
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (EarlyEngineUpdateA)");
 
     // fn_445980 case 2
     // text processing, etc. before the actual render
-    off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
-    off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate3)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate3);
+        off = hook.intercept_call(off, 0x445A10, PluginFnCallback(.LateEngineUpdateB), null);
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (LateEngineUpdateB)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate4)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate4);
+        off = hook.intercept_call(off, 0x445A40, null, PluginFnCallback(.LateEngineUpdateA));
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (LateEngineUpdateA)");
 
     // the function before CallAll0x14, at the start of the entity updates block
     // EngineUpdateStage20A is the equivalent for end of block
-    off = hook.intercept_call(off, 0x4459D1, PluginFnCallback(.EngineEntityUpdateB), null);
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate5)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate5);
+        off = hook.intercept_call(off, 0x4459D1, PluginFnCallback(.EngineEntityUpdateB), null);
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (EngineEntityUpdateB)");
 
     // entity system stages in EarlyEngineUpdate (CallAll0x14, etc.)
     // will only run when game is not paused
-    off = hook.intercept_call(off, 0x4459D6, null, PluginFnCallback(.EngineUpdateStage14A));
-    off = hook.intercept_call(off, 0x4459E0, null, PluginFnCallback(.EngineUpdateStage18A));
-    off = hook.intercept_call(off, 0x4459E5, null, PluginFnCallback(.EngineUpdateStage1CA));
-    off = hook.intercept_call(off, 0x4459EF, null, PluginFnCallback(.EngineUpdateStage20A));
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate6)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate6);
+        off = hook.intercept_call(off, 0x4459D6, null, PluginFnCallback(.EngineUpdateStage14A));
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (EngineUpdateStage14A)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate7)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate7);
+        off = hook.intercept_call(off, 0x4459E0, null, PluginFnCallback(.EngineUpdateStage18A));
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (EngineUpdateStage18A)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate8)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate8);
+        off = hook.intercept_call(off, 0x4459E5, null, PluginFnCallback(.EngineUpdateStage1CA));
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (EngineUpdateStage1CA)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_EngineUpdate9)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_EngineUpdate9);
+        off = hook.intercept_call(off, 0x4459EF, null, PluginFnCallback(.EngineUpdateStage20A));
+    } else @panic("HookEngineUpdate: RAddressRangeWriteSt failed (EngineUpdateStage20A)");
 
     return off;
 }
@@ -637,6 +741,10 @@ fn HookEngineUpdate(memory: usize) usize {
 // GAME LOOP TIMER
 
 fn HookTimerUpdate(memory: usize) usize {
+    h_ar_TimerUpdate = RAddress.RAddressRangeReserve(0x4459AF, 0x4459AF + 5);
+    if (!RAddress.RAddressRangeWriteSt(h_ar_TimerUpdate)) @panic("HookTimerUpdate: RAddressRangeWriteSt failed");
+    defer RAddress.RAddressRangeWriteEd(h_ar_TimerUpdate);
+
     // fn_480540, in early engine update
     return hook.intercept_call(
         memory,
@@ -651,37 +759,58 @@ fn HookTimerUpdate(memory: usize) usize {
 // NOTE: before early engine update in main loop; not the only calls to the
 // hooked functions, but the main ones
 fn HookInputUpdate(memory: usize) usize {
+    h_ar_InputUpdate1 = RAddress.RAddressRangeReserve(0x423592, 0x423592 + 5);
+    h_ar_InputUpdate2 = RAddress.RAddressRangeReserve(0x404DD7, 0x404DD7 + 5);
+    h_ar_InputUpdate3 = RAddress.RAddressRangeReserve(0x4856B3, 0x4856B3 + 5);
+    h_ar_InputUpdate4 = RAddress.RAddressRangeReserve(0x4856C1, 0x4856C1 + 5);
+    h_ar_InputUpdate5 = RAddress.RAddressRangeReserve(0x4856C6, 0x4856C6 + 5);
+
     var off = memory;
-    off = hook.intercept_call( // fn_404DD0
-        off,
-        0x423592,
-        PluginFnCallback(.InputUpdateB),
-        PluginFnCallback(.InputUpdateA),
-    );
-    off = hook.intercept_call( // fn_485630
-        off,
-        0x404DD7,
-        PluginFnCallback(.InputUpdateControlsB),
-        PluginFnCallback(.InputUpdateControlsA),
-    );
-    off = hook.intercept_call( // fn_486170
-        off,
-        0x4856B3,
-        PluginFnCallback(.InputUpdateKeyboardB),
-        PluginFnCallback(.InputUpdateKeyboardA),
-    );
-    off = hook.intercept_call( // fn_486340
-        off,
-        0x4856C1,
-        PluginFnCallback(.InputUpdateJoysticksB),
-        PluginFnCallback(.InputUpdateJoysticksA),
-    );
-    off = hook.intercept_call( // fn_486710
-        off,
-        0x4856C6,
-        PluginFnCallback(.InputUpdateMouseB),
-        PluginFnCallback(.InputUpdateMouseA),
-    );
+    if (RAddress.RAddressRangeWriteSt(h_ar_InputUpdate1)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_InputUpdate1);
+        off = hook.intercept_call( // fn_404DD0
+            off,
+            0x423592,
+            PluginFnCallback(.InputUpdateB),
+            PluginFnCallback(.InputUpdateA),
+        );
+    } else @panic("HookInputUpdate: RAddressRangeWriteSt failed (InputUpdate)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_InputUpdate2)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_InputUpdate2);
+        off = hook.intercept_call( // fn_485630
+            off,
+            0x404DD7,
+            PluginFnCallback(.InputUpdateControlsB),
+            PluginFnCallback(.InputUpdateControlsA),
+        );
+    } else @panic("HookInputUpdate: RAddressRangeWriteSt failed (InputUpdateControls)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_InputUpdate3)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_InputUpdate3);
+        off = hook.intercept_call( // fn_486170
+            off,
+            0x4856B3,
+            PluginFnCallback(.InputUpdateKeyboardB),
+            PluginFnCallback(.InputUpdateKeyboardA),
+        );
+    } else @panic("HookInputUpdate: RAddressRangeWriteSt failed (InputUpdateKeyboard)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_InputUpdate4)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_InputUpdate4);
+        off = hook.intercept_call( // fn_486340
+            off,
+            0x4856C1,
+            PluginFnCallback(.InputUpdateJoysticksB),
+            PluginFnCallback(.InputUpdateJoysticksA),
+        );
+    } else @panic("HookInputUpdate: RAddressRangeWriteSt failed (InputUpdateJoysticks)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_InputUpdate5)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_InputUpdate5);
+        off = hook.intercept_call( // fn_486710
+            off,
+            0x4856C6,
+            PluginFnCallback(.InputUpdateMouseB),
+            PluginFnCallback(.InputUpdateMouseA),
+        );
+    } else @panic("HookInputUpdate: RAddressRangeWriteSt failed (InputUpdateMouse)");
     return off;
 }
 
@@ -689,6 +818,10 @@ fn HookInputUpdate(memory: usize) usize {
 
 // NOTE: disabling before fn to match RaceQuads
 fn HookInitHangQuads(memory: usize) usize {
+    h_ar_InitHangQuads = RAddress.RAddressRangeReserve(0x454DCF, 0x454DD8);
+    if (!RAddress.RAddressRangeWriteSt(h_ar_InitHangQuads)) @panic("HookInitHangQuads: RAddressRangeWriteSt failed");
+    defer RAddress.RAddressRangeWriteEd(h_ar_InitHangQuads);
+
     const addr: usize = 0x454DCF;
     const len: usize = 0x454DD8 - addr;
     const off_call: usize = 0x454DD0 - addr;
@@ -699,6 +832,10 @@ fn HookInitHangQuads(memory: usize) usize {
 
 // FIXME: remove stub and integrate one-param hooks with PluginFnCallback
 fn HookLoadSprite(memory: usize) usize {
+    h_ar_LoadSprite = RAddress.RAddressRangeReserve(0x446FB5, 0x446FB5 + 5);
+    if (!RAddress.RAddressRangeWriteSt(h_ar_LoadSprite)) @panic("HookLoadSprite: RAddressRangeWriteSt failed");
+    defer RAddress.RAddressRangeWriteEd(h_ar_LoadSprite);
+
     return hook.intercept_call_one_u32_param(memory, 0x446FB5, &PluginFnCallback1_stub);
 }
 
@@ -706,6 +843,10 @@ fn HookLoadSprite(memory: usize) usize {
 
 // FIXME: before fn crashes when hooked with any function contents; disabling for now
 fn HookInitRaceQuads(memory: usize) usize {
+    h_ar_InitRaceQuads = RAddress.RAddressRangeReserve(0x466D76, 0x466D81);
+    if (!RAddress.RAddressRangeWriteSt(h_ar_InitRaceQuads)) @panic("HookInitRaceQuads: RAddressRangeWriteSt failed");
+    defer RAddress.RAddressRangeWriteEd(h_ar_InitRaceQuads);
+
     const addr: usize = 0x466D76;
     const len: usize = 0x466D81 - addr;
     const off_call: usize = 0x466D79 - addr;
@@ -726,10 +867,20 @@ fn HookGameEnd(memory: usize) usize {
     const exit2_off: usize = 0x49CE3D;
     const exit1_len: usize = exit2_off - exit1_off - 1; // excluding retn
     const exit2_len: usize = 0x49CE48 - exit2_off - 1; // excluding retn
+
+    h_ar_GameEnd1 = RAddress.RAddressRangeReserve(exit1_off, exit1_off + exit1_len);
+    h_ar_GameEnd2 = RAddress.RAddressRangeReserve(exit2_off, exit2_off + exit2_len);
+
     var offset: usize = memory;
 
-    offset = hook.detour(offset, exit1_off, exit1_len, null, PluginFnCallback(.OnDeinit));
-    offset = hook.detour(offset, exit2_off, exit2_len, null, PluginFnCallback(.OnDeinit));
+    if (RAddress.RAddressRangeWriteSt(h_ar_GameEnd1)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_GameEnd1);
+        offset = hook.detour(offset, exit1_off, exit1_len, null, PluginFnCallback(.OnDeinit));
+    } else @panic("HookGameEnd: RAddressRangeWriteSt failed (exit1)");
+    if (RAddress.RAddressRangeWriteSt(h_ar_GameEnd2)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_GameEnd2);
+        offset = hook.detour(offset, exit2_off, exit2_len, null, PluginFnCallback(.OnDeinit));
+    } else @panic("HookGameEnd: RAddressRangeWriteSt failed (exit2)");
 
     return offset;
 }
@@ -737,6 +888,11 @@ fn HookGameEnd(memory: usize) usize {
 // MENU DRAW CALLS in 'Hang' callback0x14
 
 fn HookMenuDrawing(memory: usize) usize {
+    // TODO: add jumptable end to reh (or length, or full typedef)
+    h_ar_MenuDrawing = RAddress.RAddressRangeReserve(reh.DRAW_MENU_JUMPTABLE_ADDR, 0x457AD4);
+    if (!RAddress.RAddressRangeWriteSt(h_ar_MenuDrawing)) @panic("HookMenuDrawing: RAddressRangeWriteSt failed");
+    defer RAddress.RAddressRangeWriteEd(h_ar_MenuDrawing);
+
     var off: usize = memory;
 
     // see fn_457620 @ 0x45777F
@@ -757,51 +913,73 @@ fn HookMenuDrawing(memory: usize) usize {
 // TEXT RENDER QUEUE FLUSHING
 
 fn HookTextRender(memory: usize) usize {
+    h_ar_TextRender1 = RAddress.RAddressRangeReserve(0x450297, 0x450297 + 5);
+    h_ar_TextRender2 = RAddress.RAddressRangeReserve(0x45029C, 0x45029C + 5);
+    h_ar_TextRender3 = RAddress.RAddressRangeReserve(0x445A1A, 0x445A1A + 5);
+
     // NOTE: 0x483F8B calls ProcessQueue1, only usable with after-fn when using intercept_call()
     var off = memory;
     // FlushQueue1
     // TODO: deprecate, update to be more reflective of current knowledge and add granularity
-    off = hook.intercept_call(
-        off,
-        0x450297,
-        PluginFnCallback(.TextRenderB),
-        PluginFnCallback(.TextRenderA),
-    );
+    if (RAddress.RAddressRangeWriteSt(h_ar_TextRender1)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_TextRender1);
+        off = hook.intercept_call(
+            off,
+            0x450297,
+            PluginFnCallback(.TextRenderB),
+            PluginFnCallback(.TextRenderA),
+        );
+    } else @panic("HookTextRender: RAddressRangeWriteSt failed (FlushQueue1)");
     // FlushMapQueue
-    off = hook.intercept_call(
-        off,
-        0x45029C,
-        PluginFnCallback(.MapRenderB),
-        PluginFnCallback(.MapRenderA),
-    );
+    if (RAddress.RAddressRangeWriteSt(h_ar_TextRender2)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_TextRender2);
+        off = hook.intercept_call(
+            off,
+            0x45029C,
+            PluginFnCallback(.MapRenderB),
+            PluginFnCallback(.MapRenderA),
+        );
+    } else @panic("HookTextRender: RAddressRangeWriteSt failed (FlushMapQueue)");
     // MetaCam_Draw2D
-    off = hook.intercept_call(
-        off,
-        0x445A1A,
-        PluginFnCallback(.Draw2DB),
-        PluginFnCallback(.Draw2DA),
-    );
+    if (RAddress.RAddressRangeWriteSt(h_ar_TextRender3)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_TextRender3);
+        off = hook.intercept_call(
+            off,
+            0x445A1A,
+            PluginFnCallback(.Draw2DB),
+            PluginFnCallback(.Draw2DA),
+        );
+    } else @panic("HookTextRender: RAddressRangeWriteSt failed (Viewport_Draw2D)");
     return off;
 }
 
 fn HookSceneBeginEnd(memory: usize) usize {
+    h_ar_SceneBeginEnd1 = RAddress.RAddressRangeReserve(0x48DCEC, 0x48DCEC + 5);
+    h_ar_SceneBeginEnd2 = RAddress.RAddressRangeReserve(0x48DD5A, 0x48DD5A + 5);
+
     var off = memory;
 
     // 3D_StartScene__48A300 in Render_Flush__48DCE0
-    off = hook.intercept_call(
-        off,
-        0x48DCEC,
-        PluginFnCallback(.RenderSceneBeginB),
-        PluginFnCallback(.RenderSceneBeginA),
-    );
+    if (RAddress.RAddressRangeWriteSt(h_ar_SceneBeginEnd1)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_SceneBeginEnd1);
+        off = hook.intercept_call(
+            off,
+            0x48DCEC,
+            PluginFnCallback(.RenderSceneBeginB),
+            PluginFnCallback(.RenderSceneBeginA),
+        );
+    } else @panic("HookSceneBeginEnd: RAddressRangeWriteSt failed (StartScene)");
 
     // 3D_EndScene__48A330 in Render_Flush__48DCE0
-    off = hook.intercept_call(
-        off,
-        0x48DD5A,
-        PluginFnCallback(.RenderSceneEndB),
-        PluginFnCallback(.RenderSceneEndA),
-    );
+    if (RAddress.RAddressRangeWriteSt(h_ar_SceneBeginEnd2)) {
+        defer RAddress.RAddressRangeWriteEd(h_ar_SceneBeginEnd2);
+        off = hook.intercept_call(
+            off,
+            0x48DD5A,
+            PluginFnCallback(.RenderSceneEndB),
+            PluginFnCallback(.RenderSceneEndA),
+        );
+    } else @panic("HookSceneBeginEnd: RAddressRangeWriteSt failed (EndScene)");
 
     return off;
 }

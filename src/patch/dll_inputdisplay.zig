@@ -69,9 +69,12 @@ const InputDisplay = struct {
     const style_center = rt.hMakeTextHeadStyle(.Small, true, null, .Center, .{rto.ToggleShadow}) catch "";
     const style_left = rt.hMakeTextHeadStyle(.Small, true, null, null, .{rto.ToggleShadow}) catch "";
 
+    // FIXME: possibly do an address range reservation for this? punted because
+    //  input system planned to implement in near future, and that will likely want
+    //  to control all input-related addresses, and this is only reading anyway
     fn ReadInputs() void {
-        analog = mem.read(@intFromPtr(ri.MAPPED_AXIS), @TypeOf(analog));
-        digital = mem.read(@intFromPtr(ri.MAPPED_BUTTON), @TypeOf(digital));
+        analog = mem.Read(@intFromPtr(ri.MAPPED_AXIS), @TypeOf(analog));
+        digital = mem.Read(@intFromPtr(ri.MAPPED_BUTTON), @TypeOf(digital));
     }
 
     fn GetStick(input: ri.AXIS) f32 {

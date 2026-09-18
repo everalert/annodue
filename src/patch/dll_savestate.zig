@@ -14,7 +14,6 @@ const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUT
 const st = @import("util/toggle_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
-const mem = @import("util/memory.zig");
 const TemporalCompressor = @import("util/temporal_compression.zig").TemporalCompressor;
 const TDataPoint = @import("util/temporal_compression.zig").DataPoint;
 const apih = @import("util/api/api_helper.zig");

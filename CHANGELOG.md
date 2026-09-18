@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: Save favorite vehicles on Quick Race Menu and scroll to them quickly (setting: `favorite_vehicles`)
 - QOL: N64 Pitch input toggle (experimental) (accessible via Quick Race Menu, active in Practice Mode only)
 - QOL: Settings to toggle each millisecend timer location individually (`ms_timer_hud_enable` `ms_timer_finish_enable`)
+- Core: RAddress for automatic game memory patch collision checking; all write-sensitive
+  patch sites migrated to this API
 - Core: GAssetBuffer
     - settings category: `core/GAssetBuffer`
     - Increase number of textures supported by TextureBlock (settings: `texbuf_enable` `texbuf_size`)
@@ -60,11 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- `RenderSceneEndB`
 	- `RenderSceneEndA`
 - Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`, `hang_state`, `hang_state_prev`, `hang_state_new`
-- Backend(Core): Global functions `AMemoryGetPermanent`, `AMemoryGetPermanentZero`, `AMemoryGetTemporary`, `AMemoryGetTemporaryZero`, `SPlayerBoostCharging`, `SPlayerBoostReady`, `SHangState`, `SHangStatePrev`, `SHangStateNew`
+- Backend(Core): Global functions `AMemoryGetPermanent`, `AMemoryGetPermanentZero`, `AMemoryGetTemporary`, `AMemoryGetTemporaryZero`, `RAddressRangeAvailable`, `RAddressRangeReserve`, `RAddressRangeRelease`, `RAddressRangeRead`, `RAddressRangeWriteSt`, `RAddressRangeWriteEd`, `RAddressRangeRestore`, `RAddressRangeContainsRange`, `SPlayerBoostCharging`, `SPlayerBoostReady`, `SHangState`, `SHangStatePrev`, `SHangStateNew`
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
-- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `api/api_helper`, `base/base_memory`, `base/base_arena`, `base/base_math`, `debug/debug_pdbparse` utils
+- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `api/api_helper`, `base/base_memory`, `base/base_arena`, `base/base_math`, `debug/debug_pdbparse`, `core/core_address` utils
+- Backend(Util): Entry point for running module-wide tests
 
 ### Changed
 
@@ -87,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(Util): `core/Debug` and `util/debug` merged into `util/debug/*`
 - Backend(Util): Reworked custom panic handler to manually process PDB files
 - Backend(Util): `temporal_compressor` now takes an external buffer for memory and has user define frame cap
+- Backend(Util): Reworked `memory` API
+    - default to "unsafe" page access assuming correct page permissions
+    - helpers for safe page access and pointer path dereferencing
 
 ### Removed
 

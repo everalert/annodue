@@ -42,14 +42,14 @@ pub const RotatingRGB = struct {
 // MISC
 
 pub fn PatchRgbArgs(addr: u32, rgba: u32) void {
-    _ = mem.write(addr + 1, u8, @as(u8, @truncate(rgba))); // B
-    _ = mem.write(addr + 3, u8, @as(u8, @truncate(rgba >> 8))); // G
-    _ = mem.write(addr + 5, u8, @as(u8, @truncate(rgba >> 16))); // R
+    _ = mem.Write(addr + 1, u8, @as(u8, @truncate(rgba))); // B
+    _ = mem.Write(addr + 3, u8, @as(u8, @truncate(rgba >> 8))); // G
+    _ = mem.Write(addr + 5, u8, @as(u8, @truncate(rgba >> 16))); // R
 }
 
 pub fn PatchRgbaArgs(addr: u32, rgba: u32) void {
-    _ = mem.write(addr + 1, u8, @as(u8, @truncate(rgba))); // A
-    _ = mem.write(addr + 3, u8, @as(u8, @truncate(rgba >> 8))); // B
-    _ = mem.write(addr + 5, u8, @as(u8, @truncate(rgba >> 16))); // G
-    _ = mem.write(addr + 7, u8, @as(u8, @truncate(rgba >> 24))); // R
+    _ = mem.Write(addr + 1, u8, @as(u8, @truncate(rgba))); // A
+    _ = mem.Write(addr + 3, u8, @as(u8, @truncate(rgba >> 8))); // B
+    _ = mem.Write(addr + 5, u8, @as(u8, @truncate(rgba >> 16))); // G
+    _ = mem.Write(addr + 7, u8, @as(u8, @truncate(rgba >> 24))); // R
 }

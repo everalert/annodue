@@ -30,6 +30,11 @@ pub inline fn AMemoryGetTemporaryZeroT(gf: *GlobalFn, comptime T: type) ?*T {
 pub const RAddressHandle = api.RAddressHandle;
 pub const RADDRESS_HANDLE_NULL = api.RADDRESS_HANDLE_NULL;
 
+// TODO: reservation for common types of memory that figure out the end address
+//  for you, e.g. addr+5 bytes for a callsite
+// TODO: helper that allocs both an address range and permanent memory at the
+//  same time as a convenience for setting up detour code
+
 /// convenience struct for cutting down on definitions
 pub const RAddressHandleInfo = struct {
     Handle: RAddressHandle,

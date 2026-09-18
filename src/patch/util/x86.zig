@@ -22,6 +22,9 @@ comptime {
 //  where there are many discontinuous patch sites that require page protection
 //  overhead.
 //  see dll_qol for example use cases
+// TODO: ?? versions which take a slice instead of a starting address, and return
+//  the remainder of the slice after writing to the front. this way zig can run
+//  bounds checking on the given memory while generating the asm
 
 // TODO: some kind of documentation at the top summarizing the overall themes
 //  with the api design

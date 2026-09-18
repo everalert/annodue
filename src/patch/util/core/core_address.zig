@@ -422,38 +422,58 @@ pub const RangeManager = struct {
     // API
 
     /// check an address is within range of the target memory and sections
-    pub const AddressRangeValid = AddressValid;
+    pub inline fn AddressRangeValid(self: *const RangeManager, addr_st: u32, addr_ed: u32) bool {
+        return self.AddressValid(addr_st, addr_ed);
+    }
 
     /// check an address is valid and does not conflict with existing reservations
-    pub const AddressRangeAvailable = AddressAvailable;
+    pub inline fn AddressRangeAvailable(self: *const RangeManager, addr_st: u32, addr_ed: u32) bool {
+        return self.AddressAvailable(addr_st, addr_ed);
+    }
 
     /// get the address associated with a handle
-    pub const AddressRangeSpan = RangeSpanByHandle;
+    pub inline fn AddressRangeSpan(self: *const RangeManager, handle: AddressHandle) AddressSpan {
+        return self.RangeSpanByHandle(handle);
+    }
 
     /// claim an address and get its reservation handle; returns null handle on failure
-    pub const AddressRangeReserve = AddressReserve;
+    pub inline fn AddressRangeReserve(self: *RangeManager, addr_st: u32, addr_ed: u32, owner: u16) AddressHandle {
+        return self.AddressReserve(addr_st, addr_ed, owner);
+    }
 
     /// release an address reservation associated with a handle
-    pub const AddressRangeRelease = RangeReleaseByHandle;
+    pub inline fn AddressRangeRelease(self: *RangeManager, handle: AddressHandle) void {
+        return self.RangeReleaseByHandle(handle);
+    }
 
     /// release all address reservations associated with an owner
-    pub const AddressRangeReleaseByOwner = RangeReleaseByOwner;
+    pub inline fn AddressRangeReleaseByOwner(self: *RangeManager, owner: u16) void {
+        return self.RangeReleaseByOwner(owner);
+    }
 
     /// copy address contents to buffer
-    pub const AddressRangeRead = AddressRead;
+    pub inline fn AddressRangeRead(self: *const RangeManager, addr_st: u32, addr_ed: u32, buffer: []u8) bool {
+        return self.AddressRead(addr_st, addr_ed, buffer);
+    }
 
     /// return original contents to target memory range
-    pub const AddressRangeRestore = RangeRestoreByHandle;
+    pub inline fn AddressRangeRestore(self: *RangeManager, handle: AddressHandle) void {
+        return self.RangeRestoreByHandle(handle);
+    }
 
     /// opens range for writing, ensuring the memory has write permissions.
     /// user must:
-    ///  - only open one range for writing at a time
-    ///  - close the range by end of plugin callback scope
-    ///  - not have any range open during range reserve, release or restore operations
-    pub const AddressRangeWriteSt = RangeWriteStByHandle;
+    /// - only open one range for writing at a time
+    /// - close the range by end of plugin callback scope
+    /// - not have any range open during range reserve, release or restore operations
+    pub inline fn AddressRangeWriteSt(self: *RangeManager, handle: AddressHandle) bool {
+        return self.RangeWriteStByHandle(handle);
+    }
 
     /// closes an address range for writing and restores its normal permissions.
-    pub const AddressRangeWriteEd = RangeWriteEdByHandle;
+    pub inline fn AddressRangeWriteEd(self: *RangeManager, handle: AddressHandle) void {
+        return self.RangeWriteEdByHandle(handle);
+    }
 };
 
 pub const RangeManagerOpts = struct {

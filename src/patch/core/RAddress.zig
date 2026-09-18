@@ -4,6 +4,9 @@
 //!
 //! internal dependencies: AMemory
 
+// TODO: ?? add api endpoint for updating backup copy of a memory range with the
+//  current contents in memory?
+
 const std = @import("std");
 const assert = std.debug.assert;
 const panic = std.debug.panic;
@@ -134,6 +137,3 @@ pub fn RAddressRangeContainsRange(handle: AddressHandle, addr_st: u32, addr_ed: 
     if (span.IsNull()) return false;
     return addr_st >= span.St and addr_ed <= span.Ed;
 }
-
-// update the memoized copy of the address range with the current contents
-//pub fn RAddressRangeBackup(handle: AddressHandleOpaque) callconv(.C) void;

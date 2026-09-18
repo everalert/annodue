@@ -120,8 +120,8 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
     // the update system is stable
     if (!UpdateState.s_auto_update) return;
 
-    if (s.init or gf.STimestamp() + s.retry_delay < s.last_try) return;
-    s.last_try = gf.STimestamp();
+    if (s.init or r.Time.TIMESTAMP.* + s.retry_delay < s.last_try) return;
+    s.last_try = r.Time.TIMESTAMP.*;
 
     var memory = apih.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse return;
     var scratch_fba = FixedBufferAllocator.init(memory);

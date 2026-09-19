@@ -4,6 +4,8 @@ const IterableDir = std.fs.IterableDir;
 const SemVer = std.SemanticVersion;
 const appinfo = @import("src/patch/appinfo.zig");
 
+const RunStep = std.build.Step.Run;
+
 // TODO: review overall efficiency/readability
 // graph seems slow after rework when adding hashfile
 // also seems slower after turning racerlib into module
@@ -17,6 +19,22 @@ const appinfo = @import("src/patch/appinfo.zig");
 
 // example release build command
 // zig build release -Doptimize=ReleaseSafe -Drop="F:\Projects\swe1r\annodue\.release"
+
+const PluginDef = struct { name: []const u8, to_hash: bool = true };
+const PLUGINS = [_]PluginDef{
+    .{ .name = "test", .to_hash = false },
+    .{ .name = "savestate" },
+    .{ .name = "qol" },
+    .{ .name = "overlay" },
+    .{ .name = "gameplaytweak", .to_hash = false },
+    .{ .name = "cosmetic" },
+    .{ .name = "font" },
+    .{ .name = "multiplayer" },
+    .{ .name = "developer", .to_hash = false },
+    .{ .name = "inputdisplay" },
+    .{ .name = "cam7" },
+    .{ .name = "collision_viewer" },
+};
 
 fn allocFmtSemVer(gpa: Allocator, ver: *const SemVer) ![]u8 {
     if (ver.pre) |pre|
@@ -118,6 +136,11 @@ pub fn build(b: *std.Build) void {
 
     const hotcopy_move_files_core = b.addRunArtifact(hotcopy_move_files);
     const hotcopy_move_files_plugin = b.addRunArtifact(hotcopy_move_files);
+    const hotcopy_move_files_plugin_single: [PLUGINS.len]*RunStep = blk: {
+        var steps: [PLUGINS.len]*RunStep = undefined;
+        for (0..PLUGINS.len) |i| steps[i] = b.addRunArtifact(hotcopy_move_files);
+        break :blk steps;
+    };
     const hotcopy_move_files_dinput = b.addRunArtifact(hotcopy_move_files);
     if (copypath) |path| {
         const arg_hci = std.fmt.allocPrint(alloc, "-I{s}", .{b.lib_dir}) catch unreachable;
@@ -129,6 +152,10 @@ pub fn build(b: *std.Build) void {
         const arg_hcop = std.fmt.allocPrint(alloc, "-O{s}/annodue/plugin", .{path}) catch unreachable;
         hotcopy_move_files_plugin.addArg(arg_hci);
         hotcopy_move_files_plugin.addArg(arg_hcop);
+        for (hotcopy_move_files_plugin_single[0..]) |ps| {
+            ps.addArg(arg_hci);
+            ps.addArg(arg_hcop);
+        }
 
         const arg_hcod = std.fmt.allocPrint(alloc, "-O{s}/", .{path}) catch unreachable;
         hotcopy_move_files_dinput.addArg(arg_hci);
@@ -256,20 +283,9 @@ pub fn build(b: *std.Build) void {
 
     var plugin_step = b.step(
         "plugins",
-        "Build plugin DLLs",
+        "Build all plugin DLLs",
     );
     hash_step.dependOn(plugin_step);
-
-    var single_plugin_step = b.step(
-        "plugin",
-        "Build individual plugin DLL; use -Dplugin=<name>, see build.zig for list",
-    );
-
-    const single_plugin_option = b.option(
-        []const u8,
-        "plugin",
-        "name of the plugin to compile in the 'plugin' step",
-    ) orelse null;
 
     // STEP - build collision viewer c/c++ part
 
@@ -286,23 +302,7 @@ pub fn build(b: *std.Build) void {
     collision_viewer.linkSystemLibrary("Dwmapi");
     collision_viewer.linkSystemLibrary("gdi32");
 
-    const PluginDef = struct { name: []const u8, to_hash: bool = true };
-    const plugins = [_]PluginDef{
-        .{ .name = "test", .to_hash = false },
-        .{ .name = "savestate" },
-        .{ .name = "qol" },
-        .{ .name = "overlay" },
-        .{ .name = "gameplaytweak", .to_hash = false },
-        .{ .name = "cosmetic" },
-        .{ .name = "font" },
-        .{ .name = "multiplayer" },
-        .{ .name = "developer", .to_hash = false },
-        .{ .name = "inputdisplay" },
-        .{ .name = "cam7" },
-        .{ .name = "collision_viewer" },
-    };
-
-    for (plugins) |plugin| {
+    for (PLUGINS, 0..) |plugin, i| {
         const n = std.fmt.allocPrint(alloc, "plugin_{s}", .{plugin.name}) catch continue;
         const p = std.fmt.allocPrint(alloc, "src/patch/dll_{s}.zig", .{plugin.name}) catch continue;
         const dll = b.addSharedLibrary(.{
@@ -325,15 +325,36 @@ pub fn build(b: *std.Build) void {
 
         // TODO: investigate options arg
         var dll_install = b.addInstallArtifact(dll, .{});
-        plugin_step.dependOn(&dll_install.step);
-        if (single_plugin_option != null and std.mem.eql(u8, plugin.name, single_plugin_option.?))
-            single_plugin_step.dependOn(&dll_install.step);
 
+        // output paths for hotcopy
         var bufo = std.fmt.allocPrint(alloc, "-Fplugin_{s}.dll", .{plugin.name}) catch continue;
         var bufop = std.fmt.allocPrint(alloc, "-Fplugin_{s}.pdb", .{plugin.name}) catch continue;
-        if (DEV_MODE and copypath != null)
+
+        //-----------------------------
+        // individual plugin build stuff
+
+        const single_n = std.fmt.allocPrint(alloc, "plugin-{s}", .{plugin.name}) catch continue;
+        const single_d = std.fmt.allocPrint(alloc, "Build {s} plugin DLL", .{plugin.name}) catch continue;
+        var single_plugin_step = b.step(single_n, single_d);
+        single_plugin_step.dependOn(&dll_install.step);
+        hotcopy_move_files_plugin_single[i].step.dependOn(&dll_install.step);
+
+        if (DEV_MODE and copypath != null) {
+            hotcopy_move_files_plugin_single[i].addArg(bufo);
+            hotcopy_move_files_plugin_single[i].addArg(bufop);
+            single_plugin_step.dependOn(&hotcopy_move_files_plugin_single[i].step);
+        }
+
+        //-----------------------------
+        // all plugins build stuff
+
+        plugin_step.dependOn(&dll_install.step);
+
+        if (DEV_MODE and copypath != null) {
             hotcopy_move_files_plugin.addArg(bufo);
-        hotcopy_move_files_plugin.addArg(bufop);
+            hotcopy_move_files_plugin.addArg(bufop);
+        }
+
         if (plugin.to_hash)
             generate_safe_plugin_hash_file_plugin.addArg(bufo);
 
@@ -342,6 +363,7 @@ pub fn build(b: *std.Build) void {
             .pdb_dir = .{ .override = .{ .custom = "release/annodue/plugin" } },
             .implib_dir = .disabled,
         });
+
         if (plugin.to_hash and zip_step != null) zip_step.?.dependOn(&dll_release.step);
     }
 

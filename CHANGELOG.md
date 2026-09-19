@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - QOL: More organized formatting of post-race stats
 - QOL: Quick Reset now auto-closes in-game pause menu
 - QOL: `ms_timer_enable` now acts as a global toggle for the millisecend timers
+- Core: Rolling FPS readout timing more consistent between FPS transitions (algorithm -> exponential decay)
 - MANUAL: Added clearer explanation of settings usage and capabilities
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util

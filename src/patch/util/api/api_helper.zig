@@ -106,3 +106,15 @@ pub fn RAddressPatchToggleGroup(gf: *GlobalFn, handles: []const RAddressHandle, 
     for (handles) |handle| gf.RAddressRangeRestore(handle);
     return false;
 }
+
+//------------------------------------------------------------------------------
+// GDrawText
+
+// TODO: move custom text helpers from here to libannodue
+const rt = @import("racer").Text;
+
+/// convenience function for drawing text with default style, default color, on
+/// the default layer. common case for debug readouts.
+pub fn GDrawTextDefault(gf: *GlobalFn, x: i16, y: i16, comptime fmt: []const u8, args: anytype) bool {
+    return gf.GDrawText(.Default, rt.hMakeText(x, y, fmt, args, null, null) catch return false);
+}

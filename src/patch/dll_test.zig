@@ -5,6 +5,7 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const msg = @import("util/message.zig");
+const GDrawTextDefault = @import("util/api/api.zig").helper.GDrawTextDefault;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -52,5 +53,5 @@ export fn EarlyEngineUpdateA(_: *GlobalFn) callconv(.C) void {
     //if (gf.InputGetKb(.J, .JustOn)) std.debug.assert(false); // does nothing in ReleaseFast, ReleaseSmall
     //if (gf.InputGetKb(.F, .JustOn)) @panic("panic test");
 
-    //_ = gf.GDrawText(.Default, rt.hMakeText(0, 0, "GDrawText Test", .{}, null, null) catch null);
+    //_ = GDrawTextDefault(gf, 0, 20, "GDrawText Test", .{});
 }

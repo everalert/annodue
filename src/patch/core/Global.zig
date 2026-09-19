@@ -305,8 +305,14 @@ pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
 }
 
 pub fn TimerUpdateA(_: *GlobalFunction) callconv(.C) void {
-    const fps_res: f32 = 1 / rti.FRAMETIME.* * 2;
-    GLOBAL_STATE.fps_avg = (GLOBAL_STATE.fps_avg * (fps_res - 1) + (1 / rti.FRAMETIME.*)) / fps_res;
+    // framerate-independent lerp (damp function/exponential decay)
+    const RAW_FPS: f32 = 1 / rti.FRAMETIME.*;
+    const DECAY_FACTOR: f32 = 0.05;
+    GLOBAL_STATE.fps_avg = std.math.lerp(
+        GLOBAL_STATE.fps_avg,
+        RAW_FPS,
+        @as(f32, 1) - std.math.pow(f32, DECAY_FACTOR, rti.FRAMETIME.*),
+    );
 }
 
 pub fn MenuTitleScreenB(_: *GlobalFunction) callconv(.C) void {

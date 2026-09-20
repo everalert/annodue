@@ -136,6 +136,7 @@ pub const GlobalFunction = extern struct {
     RAddressRangeWriteSt: *const fn (handle: RAddressHandle) callconv(.C) bool,
     RAddressRangeWriteEd: *const fn (handle: RAddressHandle) callconv(.C) void,
     RAddressRangeContainsRange: *const fn (handle: RAddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool,
+    RAddressRangeSetFlagRestoreOnRelease: *const fn (handle: RAddressHandle, flag: bool) callconv(.C) void,
     RTerrainRequest: *const fn (
         bit: u16,
         group: u16,

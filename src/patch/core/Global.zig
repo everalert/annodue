@@ -200,6 +200,7 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .RAddressRangeWriteSt = &RAddress.RAddressRangeWriteSt,
     .RAddressRangeWriteEd = &RAddress.RAddressRangeWriteEd,
     .RAddressRangeContainsRange = &RAddress.RAddressRangeContainsRange,
+    .RAddressRangeSetFlagRestoreOnRelease = &RAddress.RAddressRangeSetFlagRestoreOnRelease,
     .RTerrainRequest = &RTerrain.RRequest,
     .RTerrainRelease = &RTerrain.RRelease,
     .RTerrainReleaseAll = &RTerrain.RReleaseAll,

@@ -740,6 +740,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     Cam7.h_ar_fog2.Reserve(gf);
     Cam7.h_ar_fov.Reserve(gf);
     Cam7.h_ar_cam.Reserve(gf);
+    gf.RAddressRangeSetFlagRestoreOnRelease(Cam7.h_ar_cam.Handle, false);
 
     Cam7.settingsInit(gf);
 }

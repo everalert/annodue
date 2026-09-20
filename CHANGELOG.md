@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	- `RenderSceneEndB`
 	- `RenderSceneEndA`
 - Backend(Core): Global state fields `window_in_foreground`, `player.boost_charging`, `player.boost_ready`, `hang_state`, `hang_state_prev`, `hang_state_new`
-- Backend(Core): Global functions `AMemoryGetPermanent`, `AMemoryGetPermanentZero`, `AMemoryGetTemporary`, `AMemoryGetTemporaryZero`, `RAddressRangeAvailable`, `RAddressRangeReserve`, `RAddressRangeRelease`, `RAddressRangeRead`, `RAddressRangeWriteSt`, `RAddressRangeWriteEd`, `RAddressRangeRestore`, `RAddressRangeContainsRange`, `SPlayerBoostCharging`, `SPlayerBoostReady`, `SHangState`, `SHangStatePrev`, `SHangStateNew`
+- Backend(Core): Global functions `AMemoryGetPermanent`, `AMemoryGetPermanentZero`, `AMemoryGetTemporary`, `AMemoryGetTemporaryZero`, `RAddressRangeAvailable`, `RAddressRangeReserve`, `RAddressRangeRelease`, `RAddressRangeRead`, `RAddressRangeWriteSt`, `RAddressRangeWriteEd`, `RAddressRangeRestore`, `RAddressRangeContainsRange`, `RAddressRangeSetFlagRestoreOnRelease`,`SPlayerBoostCharging`, `SPlayerBoostReady`, `SHangState`, `SHangStatePrev`, `SHangStateNew`
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers

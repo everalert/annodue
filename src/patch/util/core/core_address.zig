@@ -134,7 +134,7 @@ pub const RangeManager = struct {
         var p_list = self.RangeListHead;
         while (true) : (p_list = p_list.Next orelse break) {
             for (p_list.Data.items(.Flags), i_start..) |f, i| {
-                if (!f.Used) continue;
+                if (!f.bUsed) continue;
                 const ref = RangeRef{ .Node = p_list, .Index = @intCast(i) };
                 self.RangeReleaseByRef(ref);
             }
@@ -193,7 +193,7 @@ pub const RangeManager = struct {
                 p_list.Data.items(.Flags),
                 0..,
             ) |gen, f, i| {
-                if (gen < AddressHandle.MAX_GENERATION and !f.Used) {
+                if (gen < AddressHandle.MAX_GENERATION and !f.bUsed) {
                     return RangeRef{ .Node = p_list, .Index = @intCast(chunk_start + i) };
                 }
             }
@@ -257,7 +257,7 @@ pub const RangeManager = struct {
     /// returns null handle if the slot associated with the ref cannot produce a valid handle
     fn RangeHandleByRef(self: *const RangeManager, ref: RangeRef) AddressHandle {
         const flags = ref.Node.Data.items(.Flags)[ref.Index % self.OptListCapacity];
-        if (!flags.Used) return AddressHandle.Zero;
+        if (!flags.bUsed) return AddressHandle.Zero;
         const generation = ref.Node.Data.items(.Generation)[ref.Index % self.OptListCapacity];
         return AddressHandle.Init(ref.Index, generation);
     }
@@ -273,7 +273,7 @@ pub const RangeManager = struct {
                 p_list.Data.items(.AddressEd),
                 p_list.Data.items(.Flags),
             ) |st, ed, f| {
-                if (!f.Used) continue;
+                if (!f.bUsed) continue;
                 if (CollisionStrict1D(u32, addr_st, addr_ed, st, ed)) return false;
             }
         }
@@ -316,7 +316,7 @@ pub const RangeManager = struct {
         range.Generation += 1;
         range.AddressSt = addr_st;
         range.AddressEd = addr_ed;
-        range.Flags = .{ .Used = true };
+        range.Flags = .{ .bUsed = true, .bRestoreOnRelease = true };
         range.Owner = owner;
         self.RangeDataSet(ref, range);
 
@@ -333,8 +333,10 @@ pub const RangeManager = struct {
     fn RangeReleaseByRef(self: *RangeManager, ref: RangeRef) void {
         assert(!self.RangeHandleByRef(ref).IsNull()); // range must be in use
 
-        self.RangeRestoreByRef(ref);
-        ref.Node.Data.items(.Flags)[ref.Index % self.OptListCapacity].Used = false;
+        const flags: *AddressFlags = &ref.Node.Data.items(.Flags)[ref.Index % self.OptListCapacity];
+
+        if (flags.bRestoreOnRelease) self.RangeRestoreByRef(ref);
+        flags.bUsed = false;
         self.RangeCount -= 1;
     }
 
@@ -354,7 +356,7 @@ pub const RangeManager = struct {
                 p_list.Data.items(.Flags),
                 i_start..,
             ) |o, f, i| {
-                if (owner != o or !f.Used) continue;
+                if (owner != o or !f.bUsed) continue;
                 const ref = RangeRef{ .Node = p_list, .Index = @intCast(i) };
                 self.RangeReleaseByRef(ref);
             }
@@ -418,6 +420,15 @@ pub const RangeManager = struct {
         self.RangeWriteEdByRef(ref);
     }
 
+    fn RangeSetFlagRestoreOnReleaseByRef(self: *RangeManager, ref: RangeRef, flag: bool) void {
+        ref.Node.Data.items(.Flags)[ref.Index % self.OptListCapacity].bRestoreOnRelease = flag;
+    }
+
+    fn RangeSetFlagRestoreOnReleaseByHandle(self: *RangeManager, handle: AddressHandle, flag: bool) void {
+        const ref = self.RangeRefByHandle(handle) orelse return;
+        self.RangeSetFlagRestoreOnReleaseByRef(ref, flag);
+    }
+
     //--------------------------------------------------------------------------
     // API
 
@@ -473,6 +484,14 @@ pub const RangeManager = struct {
     /// closes an address range for writing and restores its normal permissions.
     pub inline fn AddressRangeWriteEd(self: *RangeManager, handle: AddressHandle) void {
         return self.RangeWriteEdByHandle(handle);
+    }
+
+    /// enable or disable automatically restoring the original contents of a memory
+    /// range when releasing its reservation. useful for cases where the original
+    /// contents are not suitable for restoring at an arbitrary point at runtime,
+    /// such as context-dependent contents in the writable data section.
+    pub inline fn AddressRangeSetFlagRestoreOnRelease(self: *RangeManager, handle: AddressHandle, flag: bool) void {
+        return self.RangeSetFlagRestoreOnReleaseByHandle(handle, flag);
     }
 };
 
@@ -569,8 +588,9 @@ const AddressRange = struct {
 };
 
 const AddressFlags = packed struct(u8) {
-    Used: bool,
-    _: u7 = 0,
+    bUsed: bool,
+    bRestoreOnRelease: bool,
+    _: u6 = 0,
 };
 
 const AddressHandle = packed struct(u32) {
@@ -603,6 +623,7 @@ const AddressHandle = packed struct(u32) {
 //------------------------------------------------------------------------------
 // tests
 
+// TODO: test restore on release: default on, on/off functional
 // TODO: test range release -> range reserve -> handle differs between them
 // TODO: impl more structural approach to test cases
 // TODO: more compact basic usage test that is actually readable as an api reference,

@@ -31,12 +31,12 @@ const ADDRESS_HANDLE_NULL = core_address.ADDRESS_HANDLE_OPAQUE_NULL;
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const AddressState = struct {
-    var Initialized: bool = false;
+    var bInitialized: bool = false;
     var Manager: RangeManager = undefined;
 };
 
 pub fn Init(arena_perm: Allocator) void {
-    AddressState.Initialized = true;
+    AddressState.bInitialized = true;
     AddressState.Manager = RangeManager.Init(
         arena_perm,
         RangeManagerOpts.InitProcess(arena_perm, 1024, 64),
@@ -86,13 +86,13 @@ inline fn AssertAddressValid(addr_st: u32, addr_ed: u32) void {
 }
 
 pub fn RAddressRangeAvailable(addr_st: u32, addr_ed: u32) callconv(.C) bool {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     AssertAddressValid(addr_st, addr_ed);
     return AddressState.Manager.AddressRangeAvailable(addr_st, addr_ed);
 }
 
 pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHandle {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     AssertAddressValid(addr_st, addr_ed);
     const handle = AddressState.Manager.AddressRangeReserve(addr_st, addr_ed, WorkingOwner());
     if (handle.IsNull()) panic(
@@ -103,12 +103,12 @@ pub fn RAddressRangeReserve(addr_st: u32, addr_ed: u32) callconv(.C) AddressHand
 }
 
 pub fn RAddressRangeRelease(handle: AddressHandle) callconv(.C) void {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     AddressState.Manager.AddressRangeRelease(@bitCast(handle));
 }
 
 pub fn RAddressRangeRead(addr_st: u32, addr_ed: u32, buffer: ?[*]u8) callconv(.C) bool {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     AssertAddressValid(addr_st, addr_ed);
     if (buffer == null) return false;
     const buf_sl = buffer.?[0 .. addr_ed - addr_st];
@@ -116,24 +116,29 @@ pub fn RAddressRangeRead(addr_st: u32, addr_ed: u32, buffer: ?[*]u8) callconv(.C
 }
 
 pub fn RAddressRangeWriteSt(handle: AddressHandle) callconv(.C) bool {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     return AddressState.Manager.AddressRangeWriteSt(@bitCast(handle));
 }
 
 pub fn RAddressRangeWriteEd(handle: AddressHandle) callconv(.C) void {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     AddressState.Manager.AddressRangeWriteEd(@bitCast(handle));
 }
 
 pub fn RAddressRangeRestore(handle: AddressHandle) callconv(.C) void {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     AddressState.Manager.AddressRangeRestore(@bitCast(handle));
 }
 
 pub fn RAddressRangeContainsRange(handle: AddressHandle, addr_st: u32, addr_ed: u32) callconv(.C) bool {
-    assert(AddressState.Initialized);
+    assert(AddressState.bInitialized);
     AssertAddressValid(addr_st, addr_ed);
     const span = AddressState.Manager.AddressRangeSpan(@bitCast(handle));
     if (span.IsNull()) return false;
     return addr_st >= span.St and addr_ed <= span.Ed;
+}
+
+pub fn RAddressRangeSetFlagRestoreOnRelease(handle: AddressHandle, flag: bool) callconv(.C) void {
+    assert(AddressState.bInitialized);
+    AddressState.Manager.AddressRangeSetFlagRestoreOnRelease(@bitCast(handle), flag);
 }

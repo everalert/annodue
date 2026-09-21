@@ -17,9 +17,12 @@ const rt = @import("racer").Text;
 const ri = @import("racer").Input;
 const rto = rt.TextStyleOpts;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingHandle = @import("util/core/core_settings.zig").Handle;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
+// FIXME: import from util/api/api.zig; need to migrate
+const Setting = @import("util/core/core_settings.zig").ASettingSent;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_inputdisplay", "annodue/plugin/plugin_inputdisplay.pdb");

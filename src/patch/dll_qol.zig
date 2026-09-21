@@ -40,9 +40,13 @@ const rs = @import("racer").Save;
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
+
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingHandle = @import("util/core/core_settings.zig").Handle;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
+// FIXME: import from util/api/api.zig; need to migrate
+const Setting = @import("util/core/core_settings.zig").ASettingSent;
 
 const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 const RADDRESS_HANDLE_NULL = @import("util/api/api.zig").RADDRESS_HANDLE_NULL;

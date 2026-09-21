@@ -138,8 +138,10 @@ const RAddressPatchToggle = adapi.helper.RAddressPatchToggle;
 const RAddressPatchToggleGroup = adapi.helper.RAddressPatchToggleGroup;
 const RAddressRangeWrite = adapi.helper.RAddressRangeWrite;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingHandle = @import("util/core/core_settings.zig").Handle;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
 
 const ra = @import("racer").Asset;
 const rt = @import("racer").Text;

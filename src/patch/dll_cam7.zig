@@ -11,12 +11,16 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
 const apih = @import("util/api/api_helper.zig");
 const RAddressHandleInfo = apih.RAddressHandleInfo;
 const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
+
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingHandle = @import("util/core/core_settings.zig").Handle;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
+// FIXME: import from util/api/api.zig; need to migrate
+const Setting = @import("util/core/core_settings.zig").ASettingSent;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;

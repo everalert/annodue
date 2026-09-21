@@ -14,9 +14,12 @@ const HandleSOA = @import("../util/handle_map_soa.zig").Handle;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
-const ASettingSent = @import("ASettings.zig").ASettingSent;
-const ASetting = @import("ASettings.zig").Setting;
-const ASettingSection = @import("ASettings.zig").Section;
+// FIXME: import from util/api/api.zig; need to migrate
+const ASettingSent = @import("../util/core/core_settings.zig").ASettingSent;
+// FIXME: import from util/api/api.zig; need to migrate
+const ASetting = @import("../util/core/core_settings.zig").Setting;
+// FIXME: import from util/api/api.zig; need to migrate
+const ASettingSection = @import("../util/core/core_settings.zig").Section;
 const GDrawLayer = @import("GDraw.zig").GDrawLayer;
 const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
 

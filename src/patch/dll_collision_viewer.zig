@@ -28,8 +28,10 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingHandle = @import("util/core/core_settings.zig").Handle;
+// FIXME: import from util/api/api.zig; need to migrate
+const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
 
 const rs = @import("racer").Sound;
 

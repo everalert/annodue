@@ -17,12 +17,10 @@ const rt = @import("racer").Text;
 const ri = @import("racer").Input;
 const rto = rt.TextStyleOpts;
 
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingHandle = @import("util/core/core_settings.zig").Handle;
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
-// FIXME: import from util/api/api.zig; need to migrate
-const Setting = @import("util/core/core_settings.zig").ASettingSent;
+const ADAPI = @import("util/api/api.zig");
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_inputdisplay", "annodue/plugin/plugin_inputdisplay.pdb");
@@ -56,10 +54,10 @@ const InputIcon = struct {
 };
 
 const InputDisplay = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_pos_x: ?SettingHandle = null;
-    var h_s_pos_y: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_pos_x: ?ASettingHandle = null;
+    var h_s_pos_y: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_pos_x: i16 = 420;
     var s_pos_y: i16 = 432;
@@ -351,7 +349,7 @@ const InputDisplay = struct {
     }
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "inputdisplay", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "inputdisplay", settingsUpdate);
         h_s_section = section;
 
         h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
@@ -360,7 +358,7 @@ const InputDisplay = struct {
     }
 
     // TODO: handle updating position without having to reload race
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         for (changed, 0..len) |setting, _| {
             const nlen: usize = std.mem.len(setting.name);
 

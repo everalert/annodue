@@ -16,8 +16,9 @@ const rti = @import("racer").Time;
 const timing = @import("util/timing.zig");
 const ToggleState = @import("util/toggle_state.zig").ToggleState;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const ADAPI = @import("util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_overlay", "annodue/plugin/plugin_overlay.pdb");
@@ -47,18 +48,18 @@ const PLUGIN_NAME: [*:0]const u8 = "Overlay";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const Overlay = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_show_lap_times: ?SettingHandle = null;
-    var h_s_show_heat_timer: ?SettingHandle = null;
-    var h_s_show_death_count: ?SettingHandle = null;
-    var h_s_show_fall_timer: ?SettingHandle = null;
-    var h_s_show_mfg_timer: ?SettingHandle = null;
-    var h_s_show_fps: ?SettingHandle = null;
-    var h_s_show_fps_simple: ?SettingHandle = null;
-    var h_s_show_speed: ?SettingHandle = null;
-    var h_s_show_speed_raw: ?SettingHandle = null;
-    var h_s_show_speed_offsets: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_show_lap_times: ?ASettingHandle = null;
+    var h_s_show_heat_timer: ?ASettingHandle = null;
+    var h_s_show_death_count: ?ASettingHandle = null;
+    var h_s_show_fall_timer: ?ASettingHandle = null;
+    var h_s_show_mfg_timer: ?ASettingHandle = null;
+    var h_s_show_fps: ?ASettingHandle = null;
+    var h_s_show_fps_simple: ?ASettingHandle = null;
+    var h_s_show_speed: ?ASettingHandle = null;
+    var h_s_show_speed_raw: ?ASettingHandle = null;
+    var h_s_show_speed_offsets: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_show_lap_times: bool = true;
     var s_show_heat_timer: bool = true;
@@ -85,7 +86,7 @@ const Overlay = struct {
     var speed_prev: f32 = 0;
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "overlay", null);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "overlay", null);
         h_s_section = section;
 
         h_s_enable =

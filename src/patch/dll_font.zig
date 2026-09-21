@@ -128,20 +128,24 @@ const MiB = @import("util/base/base_memory.zig").MiB;
 const HotReloadFontHandle = u32;
 const HotReloadFont = @import("util/hot_reload.zig").HotReload(HotReloadFontHandle, 1);
 
-const adapi = @import("util/api/api.zig");
-const RAddressHandle = adapi.RAddressHandle;
-const RAddressHandleInfo = adapi.helper.RAddressHandleInfo;
-const AMemoryGetPermanentT = adapi.helper.AMemoryGetPermanentT;
-const AMemoryGetTemporaryT = adapi.helper.AMemoryGetTemporaryT;
-const AMemoryGetTemporaryZeroT = adapi.helper.AMemoryGetTemporaryZeroT;
-const RAddressPatchToggle = adapi.helper.RAddressPatchToggle;
-const RAddressPatchToggleGroup = adapi.helper.RAddressPatchToggleGroup;
-const RAddressRangeWrite = adapi.helper.RAddressRangeWrite;
+const ADAPI = @import("util/api/api.zig");
+const ASettingMValue = ADAPI.ASettingMValue;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const RAddressHandle = ADAPI.RAddressHandle;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const AMemoryGetPermanentT = apih.AMemoryGetPermanentT;
+const AMemoryGetTemporaryT = apih.AMemoryGetTemporaryT;
+const AMemoryGetTemporaryZeroT = apih.AMemoryGetTemporaryZeroT;
+const RAddressPatchToggle = apih.RAddressPatchToggle;
+const RAddressPatchToggleGroup = apih.RAddressPatchToggleGroup;
+const RAddressRangeWrite = apih.RAddressRangeWrite;
 
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingHandle = @import("util/core/core_settings.zig").Handle;
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
+//// FIXME: import from util/api/api.zig; need to migrate
+//const SettingHandle = @import("util/core/core_settings.zig").Handle;
+//// FIXME: import from util/api/api.zig; need to migrate
+//const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
 
 const ra = @import("racer").Asset;
 const rt = @import("racer").Text;
@@ -262,18 +266,18 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
 // plugin state
 
 const FontState = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_font: ?SettingHandle = null;
-    var h_s_can_show_test: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_font: ?ASettingHandle = null;
+    var h_s_can_show_test: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_font: [63:0]u8 = std.mem.zeroes([63:0]u8);
     var s_can_show_test: bool = false;
 
-    var h_s_can_dump_data: ?SettingHandle = null;
-    var h_s_can_dump_glyphs: ?SettingHandle = null;
-    var h_s_can_toggle_system: ?SettingHandle = null;
-    var h_s_can_toggle_custom: ?SettingHandle = null;
+    var h_s_can_dump_data: ?ASettingHandle = null;
+    var h_s_can_dump_glyphs: ?ASettingHandle = null;
+    var h_s_can_toggle_system: ?ASettingHandle = null;
+    var h_s_can_toggle_custom: ?ASettingHandle = null;
     /// dev-only feature
     var s_can_dump_data: bool = false;
     /// dev-only feature
@@ -346,7 +350,7 @@ const FontState = struct {
         // TODO: investigate way to set s_font at comptime after upgrading zig ver
         @memcpy(s_font[0..DEFAULT_FONT.len], DEFAULT_FONT);
 
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), SETTING_SECTION, null);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, SETTING_SECTION, null);
         h_s_section = section;
 
         h_s_enable =
@@ -368,13 +372,13 @@ const FontState = struct {
 
     // TODO: lazily call FontsInit? is it safe wrt game startup timing?
     // WARN: assumes FontsInit has already been called
-    fn SettingEnableUpdate(value: SettingValue) callconv(.C) void {
+    fn SettingEnableUpdate(value: ASettingMValue) callconv(.C) void {
         if (value.b) FontsEnable() else FontsDisable();
     }
 
     // TODO: lazily call FontsInit? is it safe wrt game startup timing?
     // WARN: assumes FontsInit has already been called
-    fn SettingFontUpdate(value: SettingValue) callconv(.C) void {
+    fn SettingFontUpdate(value: ASettingMValue) callconv(.C) void {
         FontLoadAndSet(value.str);
     }
 

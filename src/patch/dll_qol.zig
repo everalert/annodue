@@ -41,15 +41,12 @@ const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingHandle = @import("util/core/core_settings.zig").Handle;
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
-// FIXME: import from util/api/api.zig; need to migrate
-const Setting = @import("util/core/core_settings.zig").ASettingSent;
-
-const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
-const RADDRESS_HANDLE_NULL = @import("util/api/api.zig").RADDRESS_HANDLE_NULL;
+const ADAPI = @import("util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASettingMValue = ADAPI.ASettingMValue;
+const ASettingMessage = ADAPI.ASettingMessage;
+const RAddressHandle = ADAPI.RAddressHandle;
+const RADDRESS_HANDLE_NULL = ADAPI.RADDRESS_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_qol", "annodue/plugin/plugin_qol.pdb");
@@ -164,36 +161,36 @@ const PLUGIN_NAME: [*:0]const u8 = "QualityOfLife";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const QolState = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_quickstart: ?SettingHandle = null;
-    var h_s_quickrace: ?SettingHandle = null;
-    var h_s_default_racers: ?SettingHandle = null;
-    var h_s_default_laps: ?SettingHandle = null;
-    var h_s_default_camera: ?SettingHandle = null;
-    var h_s_default_camera_auto: ?SettingHandle = null;
-    var h_s_ms_timer: ?SettingHandle = null;
-    var h_s_ms_timer_hud: ?SettingHandle = null;
-    var h_s_ms_timer_finish: ?SettingHandle = null;
-    var h_s_fps_limiter: ?SettingHandle = null;
-    var h_s_skip_planet_cutscenes: ?SettingHandle = null;
-    var h_s_skip_podium_cutscene: ?SettingHandle = null;
-    var h_s_fix_viewport_edges: ?SettingHandle = null;
-    var h_s_run_in_background: ?SettingHandle = null;
-    var h_s_autoreset_enable: ?SettingHandle = null;
-    var h_s_autoreset_dead_enable: ?SettingHandle = null;
-    var h_s_autoreset_dead_delay: ?SettingHandle = null;
-    var h_s_autoreset_fire_enable: ?SettingHandle = null;
-    var h_s_autoreset_fire_delay: ?SettingHandle = null;
-    var h_s_autoreset_firstboost_enable: ?SettingHandle = null;
-    var h_s_autoreset_firstboost_delay: ?SettingHandle = null;
-    var h_s_autoreset_underheat_enable: ?SettingHandle = null;
-    var h_s_autoreset_underheat_delay: ?SettingHandle = null;
-    var h_s_trackselect_remember: ?SettingHandle = null;
-    var h_s_trackselect_last: ?SettingHandle = null;
-    var h_s_fast_navigation: ?SettingHandle = null;
-    var h_s_dpad_navigation: ?SettingHandle = null;
-    var h_s_show_postrace_times_hex: ?SettingHandle = null;
-    var h_s_clear_records_enable: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_quickstart: ?ASettingHandle = null;
+    var h_s_quickrace: ?ASettingHandle = null;
+    var h_s_default_racers: ?ASettingHandle = null;
+    var h_s_default_laps: ?ASettingHandle = null;
+    var h_s_default_camera: ?ASettingHandle = null;
+    var h_s_default_camera_auto: ?ASettingHandle = null;
+    var h_s_ms_timer: ?ASettingHandle = null;
+    var h_s_ms_timer_hud: ?ASettingHandle = null;
+    var h_s_ms_timer_finish: ?ASettingHandle = null;
+    var h_s_fps_limiter: ?ASettingHandle = null;
+    var h_s_skip_planet_cutscenes: ?ASettingHandle = null;
+    var h_s_skip_podium_cutscene: ?ASettingHandle = null;
+    var h_s_fix_viewport_edges: ?ASettingHandle = null;
+    var h_s_run_in_background: ?ASettingHandle = null;
+    var h_s_autoreset_enable: ?ASettingHandle = null;
+    var h_s_autoreset_dead_enable: ?ASettingHandle = null;
+    var h_s_autoreset_dead_delay: ?ASettingHandle = null;
+    var h_s_autoreset_fire_enable: ?ASettingHandle = null;
+    var h_s_autoreset_fire_delay: ?ASettingHandle = null;
+    var h_s_autoreset_firstboost_enable: ?ASettingHandle = null;
+    var h_s_autoreset_firstboost_delay: ?ASettingHandle = null;
+    var h_s_autoreset_underheat_enable: ?ASettingHandle = null;
+    var h_s_autoreset_underheat_delay: ?ASettingHandle = null;
+    var h_s_trackselect_remember: ?ASettingHandle = null;
+    var h_s_trackselect_last: ?ASettingHandle = null;
+    var h_s_fast_navigation: ?ASettingHandle = null;
+    var h_s_dpad_navigation: ?ASettingHandle = null;
+    var h_s_show_postrace_times_hex: ?ASettingHandle = null;
+    var h_s_clear_records_enable: ?ASettingHandle = null;
     var s_quickstart: bool = false;
     var s_quickrace: bool = false;
     var s_default_racers: u32 = 12;
@@ -255,7 +252,7 @@ const QolState = struct {
     }
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "qol", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASettingHandle.getNull(), "qol", settingsUpdate);
         h_s_section = section;
 
         h_s_quickstart =
@@ -337,7 +334,7 @@ const QolState = struct {
     }
 
     // TODO: setting to control whether default racers automatically updates
-    fn settingsUpdateRacers(new_value: Setting.Value) callconv(.C) void {
+    fn settingsUpdateRacers(new_value: ASettingMValue) callconv(.C) void {
         s_default_racers = std.math.clamp(new_value.u, 1, 12);
         if (h_s_default_racers) |h| api.ASettingUpdate(h, .{ .u = s_default_racers });
 
@@ -352,7 +349,7 @@ const QolState = struct {
     }
 
     // TODO: setting to control whether default laps automatically updates
-    fn settingsUpdateLaps(new_value: Setting.Value) callconv(.C) void {
+    fn settingsUpdateLaps(new_value: ASettingMValue) callconv(.C) void {
         s_default_laps = std.math.clamp(new_value.u, 1, 5);
         if (h_s_default_laps) |h| QuickRaceMenu.api.ASettingUpdate(h, .{ .u = s_default_laps });
 
@@ -362,7 +359,7 @@ const QolState = struct {
         }
     }
 
-    fn settingsUpdateCamera(new_value: Setting.Value) callconv(.C) void {
+    fn settingsUpdateCamera(new_value: ASettingMValue) callconv(.C) void {
         s_default_camera = std.math.clamp(new_value.u, 1, 5);
         if (s_default_camera == 3) s_default_camera = 1;
         if (h_s_default_camera) |h| api.ASettingUpdate(h, .{ .u = s_default_camera });
@@ -374,7 +371,7 @@ const QolState = struct {
         }
     }
 
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         var update_fast_countdown: bool = false;
 
         for (changed[0..len]) |*setting| {
@@ -941,8 +938,8 @@ fn PatchMenuNavigationSpeedTransitions(enable: bool) void {
 // FAST COUNTDOWN
 
 const FastCountdown = struct {
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_duration: ?SettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_duration: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_duration: f32 = 1.0;
 
@@ -1133,9 +1130,9 @@ fn RenderRaceResultStatUpgrade(gf: *GlobalFn, i: i16, cat: u8, lv: u8, hp: u8) v
 // TODO: set upgrade healths (hold interact to set health instead of level)
 
 const QuickRaceMenu = extern struct {
-    var h_s_fps_default: ?SettingHandle = null;
-    var h_s_favorite_vehicles: ?SettingHandle = null;
-    var h_s_menu_track_order: ?SettingHandle = null;
+    var h_s_fps_default: ?ASettingHandle = null;
+    var h_s_favorite_vehicles: ?ASettingHandle = null;
+    var h_s_menu_track_order: ?ASettingHandle = null;
     var s_fps_default: u32 = 24;
     var s_favorite_vehicles: u32 = 0; // bitfield where vehicle id maps to nth bit
     var s_menu_track_order: [63:0]u8 = std.mem.zeroes([63:0]u8);

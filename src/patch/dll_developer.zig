@@ -20,9 +20,9 @@ const Vec3 = vec.Vec3;
 const rf = r.Font;
 const ra = r.Asset;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
+const ADAPI = @import("util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_developer", "annodue/plugin/plugin_developer.pdb");
@@ -54,12 +54,12 @@ const MatVisState = struct {
 // SETTINGS
 
 const Developer = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_visualize_matrices: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_visualize_matrices: ?ASettingHandle = null;
     var s_visualize_matrices: bool = false;
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "developer", null);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "developer", null);
         h_s_section = section;
 
         h_s_visualize_matrices =

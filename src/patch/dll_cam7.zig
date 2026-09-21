@@ -11,16 +11,21 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
-const apih = @import("util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingHandle = @import("util/core/core_settings.zig").Handle;
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
-// FIXME: import from util/api/api.zig; need to migrate
-const Setting = @import("util/core/core_settings.zig").ASettingSent;
+//// FIXME: import from util/api/api.zig; need to migrate
+//const SettingHandle = @import("util/core/core_settings.zig").Handle;
+//// FIXME: import from util/api/api.zig; need to migrate
+//const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
+//// FIXME: import from util/api/api.zig; need to migrate
+//const Setting = @import("util/core/core_settings.zig").ASettingSent;
+
+const ADAPI = @import("util/api/api.zig");
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const RAddressHandle = ADAPI.RAddressHandle;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -99,26 +104,26 @@ const CamState = enum(u32) {
 
 const Cam7 = extern struct {
     // ini settings
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_flip_look_x: ?SettingHandle = null;
-    var h_s_flip_look_y: ?SettingHandle = null;
-    var h_s_flip_look_x_inverted: ?SettingHandle = null;
-    var h_s_dz_i: ?SettingHandle = null;
-    var h_s_dz_o: ?SettingHandle = null;
-    var h_s_i_mouse_dpi: ?SettingHandle = null;
-    var h_s_i_mouse_cm360: ?SettingHandle = null;
-    var h_s_rot_damp_i_dflt: ?SettingHandle = null;
-    var h_s_rot_spd_i_dflt: ?SettingHandle = null;
-    var h_s_move_damp_i_dflt: ?SettingHandle = null;
-    var h_s_move_spd_i_dflt: ?SettingHandle = null;
-    var h_s_move_planar: ?SettingHandle = null;
-    var h_s_hide_ui: ?SettingHandle = null;
-    var h_s_disable_input: ?SettingHandle = null;
-    var h_s_sfx_volume: ?SettingHandle = null;
-    var h_s_fog_patch: ?SettingHandle = null;
-    var h_s_fog_remove: ?SettingHandle = null;
-    var h_s_visuals_patch: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_flip_look_x: ?ASettingHandle = null;
+    var h_s_flip_look_y: ?ASettingHandle = null;
+    var h_s_flip_look_x_inverted: ?ASettingHandle = null;
+    var h_s_dz_i: ?ASettingHandle = null;
+    var h_s_dz_o: ?ASettingHandle = null;
+    var h_s_i_mouse_dpi: ?ASettingHandle = null;
+    var h_s_i_mouse_cm360: ?ASettingHandle = null;
+    var h_s_rot_damp_i_dflt: ?ASettingHandle = null;
+    var h_s_rot_spd_i_dflt: ?ASettingHandle = null;
+    var h_s_move_damp_i_dflt: ?ASettingHandle = null;
+    var h_s_move_spd_i_dflt: ?ASettingHandle = null;
+    var h_s_move_planar: ?ASettingHandle = null;
+    var h_s_hide_ui: ?ASettingHandle = null;
+    var h_s_disable_input: ?ASettingHandle = null;
+    var h_s_sfx_volume: ?ASettingHandle = null;
+    var h_s_fog_patch: ?ASettingHandle = null;
+    var h_s_fog_remove: ?ASettingHandle = null;
+    var h_s_visuals_patch: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_flip_look_x: bool = false;
     var s_flip_look_y: bool = false;
@@ -261,7 +266,7 @@ const Cam7 = extern struct {
     }
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "cam7", settingsUpdate);
         h_s_section = section;
 
         h_s_enable =
@@ -311,7 +316,7 @@ const Cam7 = extern struct {
     }
 
     // TODO: rethink default -> live setting flow during settings reload, for the relevant settings
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         var update_mouse_sens: bool = false;
         var update_deadzone: bool = false;
 

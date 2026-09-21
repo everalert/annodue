@@ -20,28 +20,29 @@ const app = @import("../appinfo.zig");
 const GlobalFn = app.GLOBAL_FUNCTION;
 const VERSION = app.VERSION;
 
-const SettingHandle = @import("ASettings.zig").Handle;
-const SettingValue = @import("ASettings.zig").ASettingSent.Value;
-const Setting = @import("ASettings.zig").ASettingSent;
-
 const r = @import("racer");
 const rt = r.Text;
 const rg = r.Global;
 
 const msg = @import("../util/message.zig");
-const apih = @import("../util/api/api_helper.zig");
+
+const ADAPI = @import("../util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const apih = ADAPI.helper;
+
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
 // BUSINESS LOGIC
 
 const UpdateState = struct {
     // ini settings
-    var h_s_auto_update: ?SettingHandle = null;
+    var h_s_auto_update: ?ASettingHandle = null;
     var s_auto_update: bool = true;
 
     fn settingsInit(gf: *GlobalFn) void {
         h_s_auto_update =
-            gf.ASettingOccupy(SettingHandle.getNull(), "AUTO_UPDATE", .B, .{ .b = true }, &s_auto_update, null);
+            gf.ASettingOccupy(ASETTING_HANDLE_NULL, "AUTO_UPDATE", .B, .{ .b = true }, &s_auto_update, null);
     }
 };
 

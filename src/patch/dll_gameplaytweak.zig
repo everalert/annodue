@@ -7,16 +7,13 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const mem = @import("util/memory.zig");
-const apih = @import("util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingHandle = @import("util/core/core_settings.zig").Handle;
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
-// FIXME: import from util/api/api.zig; need to migrate
-const Setting = @import("util/core/core_settings.zig").ASettingSent;
+const ADAPI = @import("util/api/api.zig");
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_gameplaytweak", "annodue/plugin/plugin_gameplaytweak.pdb");
@@ -37,11 +34,11 @@ const PLUGIN_NAME: [*:0]const u8 = "GameplayTweak";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const GameplayTweak = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_ds_mod_enable: ?SettingHandle = null;
-    var h_s_ds_min: ?SettingHandle = null;
-    var h_s_ds_drop: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_ds_mod_enable: ?ASettingHandle = null;
+    var h_s_ds_min: ?ASettingHandle = null;
+    var h_s_ds_drop: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_ds_mod_enable: bool = false;
     var s_ds_min: f32 = 325;
@@ -52,7 +49,7 @@ const GameplayTweak = struct {
     var api: *GlobalFn = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "gameplay", settingsUpdate);
         h_s_section = section;
 
         //h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
@@ -65,7 +62,7 @@ const GameplayTweak = struct {
             gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .f = 140 }, &s_ds_drop, null);
     }
 
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         var update_death_speed_mod: bool = false;
 
         for (changed, 0..len) |setting, _| {

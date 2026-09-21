@@ -10,16 +10,14 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
-const apih = @import("util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingHandle = @import("util/core/core_settings.zig").Handle;
-// FIXME: import from util/api/api.zig; need to migrate
-const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
-// FIXME: import from util/api/api.zig; need to migrate
-const Setting = @import("util/core/core_settings.zig").ASettingSent;
+const ADAPI = @import("util/api/api.zig");
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const RAddressHandle = ADAPI.RAddressHandle;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_cosmetic", "annodue/plugin/plugin_cosmetic.pdb");
@@ -48,11 +46,11 @@ const PLUGIN_NAME: [*:0]const u8 = "Cosmetic";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const CosmeticState = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_rb_enable: ?SettingHandle = null;
-    var h_s_rb_value_enable: ?SettingHandle = null;
-    var h_s_rb_label_enable: ?SettingHandle = null;
-    var h_s_rb_speed_enable: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_rb_enable: ?ASettingHandle = null;
+    var h_s_rb_value_enable: ?ASettingHandle = null;
+    var h_s_rb_label_enable: ?ASettingHandle = null;
+    var h_s_rb_speed_enable: ?ASettingHandle = null;
     var s_rb_enable: bool = false;
     var s_rb_value_enable: bool = false;
     var s_rb_label_enable: bool = false;
@@ -62,8 +60,8 @@ const CosmeticState = struct {
     var rb_label = crot.RotatingRGB.new(95, 255, 1);
     var rb_speed = crot.RotatingRGB.new(95, 255, 2);
 
-    var h_s_patch_tga_loader: ?SettingHandle = null;
-    var h_s_patch_audio: ?SettingHandle = null;
+    var h_s_patch_tga_loader: ?ASettingHandle = null;
+    var h_s_patch_audio: ?ASettingHandle = null;
     var s_patch_tga_loader: bool = false;
     var s_patch_audio: bool = false;
 
@@ -79,7 +77,7 @@ const CosmeticState = struct {
     var api: *GlobalFn = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cosmetic", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "cosmetic", settingsUpdate);
         h_s_section = section;
 
         h_s_rb_enable =
@@ -97,7 +95,7 @@ const CosmeticState = struct {
             gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, &s_patch_audio, null);
     }
 
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         var update_rb_value: bool = false;
         var update_rb_label: bool = false;
         var update_rb_speed: bool = false;

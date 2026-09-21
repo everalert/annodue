@@ -1,3 +1,21 @@
+// TODO: ?? change DEFAULT_ID
+// TODO: add global st/fn ptrs to fnOnChange defs?
+// TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
+// TODO: minor cleanup with handle_map 'update owner' fn?
+// TODO: ?? update nomenclature from 'Occupy' -> 'Register', also 'Sent' -> 'Msg'?
+// FIXME: is it necessary to have an explicit default value passed to SettingOccupy
+//  when the default could be derived from the pointer? isn't it a bug to even
+//  allow calling ASettingOccupy without either a value pointer or an update callback?
+
+// SYSTEM OVERVIEW
+// - support for bool, u32, i32, f32, and strings (64 bytes null-terminated)
+// - settings stored as tree, with branch nodes representing sections/categories
+// - tree is expanded on demand; not pre-seeded by design, to maximize flexibility
+// - handle-based ownership of setting and section nodes
+// - setting and section defs merged from different sources as needed, as long as no ownership conflict
+// - callback behaviours available for both individual settings updates and collective section updates
+// - settings hot-loaded from file; game-side changes written to file periodically
+
 const std = @import("std");
 
 const ArrayList = std.ArrayList;
@@ -12,7 +30,7 @@ const ini = @import("zigini");
 const HandleMap = @import("../handle_map.zig").HandleMap;
 const SparseIndex = @import("../handle_map.zig").SparseIndex(u16);
 pub const Handle = @import("../handle_map.zig").Handle(u16);
-pub const NullHandle = Handle.getNull();
+pub const HANDLE_NULL = Handle.getNull();
 
 const MiB = @import("../base/base_memory.zig").MiB;
 
@@ -21,8 +39,10 @@ const HotReloadSettings = @import("../hot_reload.zig").HotReload(HotReloadSettin
 
 // DEFS
 
-pub const SETTINGS_VERSION: u32 = 2;
-pub const DEFAULT_ID = 0xFFFF;
+const SETTINGS_VERSION: u32 = 2;
+const DEFAULT_ID = 0xFFFF;
+
+// TODO: define these in ASettings, not core?
 const FILENAME = "annodue/settings.ini";
 const FILENAME_TEST = "annodue/settings_test.ini";
 const FILENAME_ACTIVE = FILENAME;
@@ -46,8 +66,9 @@ pub const ParentHandle = extern struct {
     }
 };
 
-// TODO: ?? rename: ASettingMessage?
-pub const ASettingSent = extern struct {
+pub const Kind = enum(u8) { None, Str, F, U, I, B };
+
+pub const Message = extern struct {
     name: [*:0]const u8,
     value: Value,
 
@@ -58,7 +79,7 @@ pub const ASettingSent = extern struct {
         i: i32,
         b: bool,
 
-        pub fn fromRaw(value: [*:0]const u8, t: Setting.Type) Value {
+        pub fn fromRaw(value: [*:0]const u8, t: Kind) Value {
             const len = std.mem.len(@as([*:0]const u8, @ptrCast(value)));
             assert(len > 0 and len <= 63);
 
@@ -73,7 +94,7 @@ pub const ASettingSent = extern struct {
             };
         }
 
-        pub fn fromSetting(setting: *const Setting.Value, t: Setting.Type) Value {
+        pub fn fromSetting(setting: *const Setting.Value, t: Kind) Value {
             return switch (t) {
                 .B => .{ .b = setting.b },
                 .I => .{ .i = setting.i },
@@ -87,7 +108,7 @@ pub const ASettingSent = extern struct {
     // FIXME: update all core and plugins with section update functions to use
     //  this in their update loop
     /// convenience function for checking if the setting matches a given handle
-    pub fn IsSetting(self: *const ASettingSent, name: [*:0]const u8) bool {
+    pub fn IsSetting(self: *const Message, name: [*:0]const u8) bool {
         return std.mem.orderZ(u8, self.name, name) == .eq;
     }
 };
@@ -98,12 +119,10 @@ pub const Setting = struct {
     value: Value = .{ .str = std.mem.zeroes([63:0]u8) },
     value_default: Value = .{ .str = std.mem.zeroes([63:0]u8) },
     value_saved: Value = .{ .str = std.mem.zeroes([63:0]u8) },
-    value_type: Type = .None,
+    value_type: Kind = .None,
     value_ptr: ?*anyopaque = null,
     flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
-    fnOnChange: ?*const fn (value: ASettingSent.Value) callconv(.C) void = null,
-
-    pub const Type = enum(u8) { None, Str, F, U, I, B };
+    fnOnChange: ?*const fn (value: Message.Value) callconv(.C) void = null,
 
     pub const Value = extern union {
         str: [63:0]u8,
@@ -112,7 +131,7 @@ pub const Setting = struct {
         i: i32,
         b: bool,
 
-        pub fn fromSent(self: *Value, v: ASettingSent.Value, t: Type) !void {
+        pub fn fromSent(self: *Value, v: Message.Value, t: Kind) !void {
             switch (t) {
                 .F => self.f = v.f,
                 .U => self.u = v.u,
@@ -123,7 +142,7 @@ pub const Setting = struct {
         }
 
         /// raw (string) to value
-        pub fn raw2type(self: *Value, t: Type) !void {
+        pub fn raw2type(self: *Value, t: Kind) !void {
             const len = std.mem.len(@as([*:0]u8, @ptrCast(&self.str)));
             switch (t) {
                 .B => self.b = std.mem.eql(u8, "on", self.str[0..2]) or
@@ -138,7 +157,7 @@ pub const Setting = struct {
         }
 
         /// value to raw (string)
-        pub fn type2raw(self: *Value, t: Type) !void {
+        pub fn type2raw(self: *Value, t: Kind) !void {
             switch (t) {
                 .B => _ = try bufPrintZ(&self.str, "{s}", .{if (self.b) "on" else "off"}),
                 .I => _ = try bufPrintZ(&self.str, "{d}", .{self.i}),
@@ -149,12 +168,12 @@ pub const Setting = struct {
             }
         }
 
-        pub fn type2type(self: *Value, t1: Type, t2: type) !void {
+        pub fn type2type(self: *Value, t1: Kind, t2: type) !void {
             try self.type2raw(t1);
             try self.raw2type(t2);
         }
 
-        pub fn eql(self: *const Value, other: *const Value, t: Type) bool {
+        pub fn eql(self: *const Value, other: *const Value, t: Kind) bool {
             return switch (t) {
                 .B => self.b == other.b,
                 .I => self.i == other.i,
@@ -164,7 +183,7 @@ pub const Setting = struct {
             };
         }
 
-        pub fn eqlSent(self: *const Value, other: ASettingSent.Value, t: Type) bool {
+        pub fn eqlSent(self: *const Value, other: Message.Value, t: Kind) bool {
             return switch (t) {
                 .B => self.b == other.b,
                 .I => self.i == other.i,
@@ -174,7 +193,7 @@ pub const Setting = struct {
             };
         }
 
-        pub fn write(self: *const Value, writer: anytype, t: Type) !void {
+        pub fn write(self: *const Value, writer: anytype, t: Kind) !void {
             switch (t) {
                 .B => try std.fmt.format(writer, "{s}", .{if (self.b) "on" else "off"}),
                 .I => try std.fmt.format(writer, "{d}", .{self.i}),
@@ -184,7 +203,7 @@ pub const Setting = struct {
             }
         }
 
-        pub fn writeToPtr(self: *Value, p: *anyopaque, t: Type) void {
+        pub fn writeToPtr(self: *Value, p: *anyopaque, t: Kind) void {
             return switch (t) {
                 .Str => @as(*[63:0]u8, @alignCast(@ptrCast(p))).* = @as(*[63:0]u8, @ptrCast(&self.str)).*,
                 .F => @as(*f32, @alignCast(@ptrCast(p))).* = @as(*f32, @ptrCast(&self.f)).*,
@@ -217,7 +236,7 @@ pub const Section = struct {
     section: ?ParentHandle = null,
     name: [63:0]u8 = std.mem.zeroes([63:0]u8),
     flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
-    fnOnChange: ?*const fn (changed: [*]ASettingSent, len: usize) callconv(.C) void = null,
+    fnOnChange: ?*const fn (changed: [*]Message, len: usize) callconv(.C) void = null,
 
     const Flags = enum(u32) {
         HasOwner,
@@ -234,7 +253,7 @@ pub const ASettings = struct {
     var hot_reload: HotReloadSettings = undefined;
     var file_exists: bool = false;
     var skip_next_load: bool = false;
-    var section_update_queue: ArrayList(ASettingSent) = undefined;
+    var section_update_queue: ArrayList(Message) = undefined;
 
     var h_section_plugin: ?Handle = null;
     var h_section_core: ?Handle = null;
@@ -258,7 +277,7 @@ pub const ASettings = struct {
 
         data_sections = HandleMap(Section, u16).init(scratch_alloc);
         data_settings = HandleMap(Setting, u16).init(scratch_alloc);
-        section_update_queue = ArrayList(ASettingSent).init(scratch_alloc);
+        section_update_queue = ArrayList(Message).init(scratch_alloc);
 
         HotReloadSettings.Init(&hot_reload, load, unload);
         hot_reload.CheckDelay = 250;
@@ -338,7 +357,7 @@ pub const ASettings = struct {
         owner: u16,
         section: ?Handle,
         name: [*:0]const u8,
-        fnOnChange: ?*const fn ([*]ASettingSent, usize) callconv(.C) void,
+        fnOnChange: ?*const fn ([*]Message, usize) callconv(.C) void,
     ) !Handle {
         assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
@@ -412,9 +431,9 @@ pub const ASettings = struct {
             if (s.value_type == .None) continue;
 
             s.flags.remove(.InSectionUpdateQueue);
-            const send_data = ASettingSent{
+            const send_data = Message{
                 .name = &s.name,
-                .value = ASettingSent.Value.fromSetting(&s.value, s.value_type),
+                .value = Message.Value.fromSetting(&s.value, s.value_type),
             };
             section_update_queue.append(send_data) catch continue;
         }
@@ -520,10 +539,10 @@ pub const ASettings = struct {
         owner: u16,
         section: ?Handle,
         name: [*:0]const u8,
-        value_type: Setting.Type,
-        value_default: ASettingSent.Value,
+        value_type: Kind,
+        value_default: Message.Value,
         value_ptr: ?*anyopaque,
-        fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
+        fnOnChange: ?*const fn (Message.Value) callconv(.C) void,
     ) !Handle {
         assert(value_type != .None);
         assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
@@ -574,7 +593,7 @@ pub const ASettings = struct {
         if (value_ptr) |p| data.value.writeToPtr(p, data.value_type);
 
         data.fnOnChange = fnOnChange;
-        if (fnOnChange) |f| f(ASettingSent.Value.fromSetting(&data.value, data.value_type));
+        if (fnOnChange) |f| f(Message.Value.fromSetting(&data.value, data.value_type));
 
         return handle_new;
     }
@@ -607,7 +626,7 @@ pub const ASettings = struct {
     /// will update value in external pointer callback to run update callback.
     pub fn settingUpdate(
         handle: Handle,
-        value: ASettingSent.Value,
+        value: Message.Value,
     ) void {
         var s: *Setting = data_settings.get(handle) orelse return;
 
@@ -693,7 +712,7 @@ pub const ASettings = struct {
                         if (s.flags.contains(.SavedValueIsSet) and
                             !s.value.eql(&s.value_saved, s.value_type)) continue;
 
-                        const send_val = ASettingSent.Value.fromRaw(kv.value, s.value_type);
+                        const send_val = Message.Value.fromRaw(kv.value, s.value_type);
 
                         if (!s.value_saved.eqlSent(send_val, s.value_type))
                             try s.value_saved.fromSent(send_val, s.value_type);
@@ -844,3 +863,52 @@ pub const ASettings = struct {
         return changed;
     }
 };
+
+// -----------------------------------------------------------------------------
+// DEBUGGING & TESTING
+
+// NOTE: use in testing
+fn testUpdateSet1(_: Message.Value) callconv(.C) void {
+    //dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
+}
+
+// TODO: tests ensuring updated values actually propagate (i.e. the comparison
+//  returns the correct equality), particularly similar strings of different lengths
+//  such as "hd"->"hda"
+// TODO: impl testing in build script; cannot test statically because imports out of scope
+// TODO: move testing stuff to here but commented in meantime
+test {
+    // TODO: move below to commented test block
+    // TODO: add setting occupy -> string type test
+    // TODO: use actual owner IDs that don't clash (or just make sure it's all actually test scoped)
+
+    //const sec_base = ASettings.sectionNew(null, "TestBaseSection") catch NullHandle;
+    //_ = ASettings.sectionNew(sec_base, "Sec1") catch {};
+    //_ = ASettings.sectionNew(sec_base, "Sec2") catch {};
+    //_ = ASettings.sectionNew(sec_base, "Sec2") catch {}; // expect: NameTaken error -> skipped
+    //const sec1 = ASettings.sectionOccupy(0xF000, sec_base, "Sec1", null) catch NullHandle;
+    //const sec2 = ASettings.sectionOccupy(0xF001, sec_base, "Sec2", null) catch NullHandle;
+
+    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.settingNew(null, "Set2", "Val2", false) catch {};
+    //_ = ASettings.settingNew(sec2, "Set3", "Val3", false) catch {};
+    //_ = ASettings.settingNew(null, "Set4", "Val4", false) catch {};
+    //_ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
+    //_ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
+
+    //const occ1 = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, testUpdateSet1) catch NullHandle;
+    //_ = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
+    //const occ2 = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    //_ = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
+
+    //ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
+    //ASettings.settingVacate(occ2); // expect: undefined default, etc.
+
+    //const sec3 = ASettings.sectionOccupy(0xF001, sec2, "Sec3", null) catch NullHandle;
+    //_ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
+    //_ = ASettings.settingOccupy(0xF001, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    //ASettings.sectionVacate(sec3);
+
+    //ASettings.vacateOwner(0xF000); // expect: everything undefined default, etc.
+}

@@ -7,13 +7,13 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const mem = @import("util/memory.zig");
-const apih = @import("util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
+const ADAPI = @import("util/api/api.zig");
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_gameplaytweak", "annodue/plugin/plugin_gameplaytweak.pdb");
@@ -34,11 +34,11 @@ const PLUGIN_NAME: [*:0]const u8 = "GameplayTweak";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const GameplayTweak = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_ds_mod_enable: ?SettingHandle = null;
-    var h_s_ds_min: ?SettingHandle = null;
-    var h_s_ds_drop: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_ds_mod_enable: ?ASettingHandle = null;
+    var h_s_ds_min: ?ASettingHandle = null;
+    var h_s_ds_drop: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_ds_mod_enable: bool = false;
     var s_ds_min: f32 = 325;
@@ -49,28 +49,28 @@ const GameplayTweak = struct {
     var api: *GlobalFn = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "gameplay", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "gameplay", settingsUpdate);
         h_s_section = section;
 
-        //h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+        //h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .B = false }, &s_enable, null);
 
         h_s_ds_mod_enable =
-            gf.ASettingOccupy(section, "death_speed_mod_enable", .B, .{ .b = false }, &s_ds_mod_enable, null);
+            gf.ASettingOccupy(section, "death_speed_mod_enable", .B, .{ .B = false }, &s_ds_mod_enable, null);
         h_s_ds_min =
-            gf.ASettingOccupy(section, "death_speed_min", .F, .{ .f = 325 }, &s_ds_min, null);
+            gf.ASettingOccupy(section, "death_speed_min", .F, .{ .F = 325 }, &s_ds_min, null);
         h_s_ds_drop =
-            gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .f = 140 }, &s_ds_drop, null);
+            gf.ASettingOccupy(section, "death_speed_drop", .F, .{ .F = 140 }, &s_ds_drop, null);
     }
 
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         var update_death_speed_mod: bool = false;
 
         for (changed, 0..len) |setting, _| {
-            const nlen: usize = std.mem.len(setting.name);
+            const nlen: usize = std.mem.len(setting.Name);
 
-            if (nlen == 22 and std.mem.eql(u8, "death_speed_mod_enable", setting.name[0..nlen]) or
-                nlen == 15 and std.mem.eql(u8, "death_speed_min", setting.name[0..nlen]) or
-                nlen == 16 and std.mem.eql(u8, "death_speed_drop", setting.name[0..nlen]))
+            if (nlen == 22 and std.mem.eql(u8, "death_speed_mod_enable", setting.Name[0..nlen]) or
+                nlen == 15 and std.mem.eql(u8, "death_speed_min", setting.Name[0..nlen]) or
+                nlen == 16 and std.mem.eql(u8, "death_speed_drop", setting.Name[0..nlen]))
             {
                 update_death_speed_mod = true;
                 continue;

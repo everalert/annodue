@@ -10,19 +10,18 @@ const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
-const SettingHandle = @import("ASettings.zig").Handle;
-const SettingValue = @import("ASettings.zig").ASettingSent.Value;
-const Setting = @import("ASettings.zig").ASettingSent;
-
-const apih = @import("../util/api/api_helper.zig");
+const ADAPI = @import("../util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const RAddressHandle = ADAPI.RAddressHandle;
+const RADDRESS_HANDLE_NULL = ADAPI.RADDRESS_HANDLE_NULL;
+const apih = ADAPI.helper;
 const RAddressHandleInfo = apih.RAddressHandleInfo;
+
 const MiB = @import("../util/base/base_memory.zig").MiB;
 const Handle = @import("../util/handle_map.zig").Handle;
 const HandleMap = @import("../util/handle_map.zig").HandleMap;
 const x86 = @import("../util/x86.zig");
-
-const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
-const RADDRESS_HANDLE_NULL = @import("../util/api/api.zig").RADDRESS_HANDLE_NULL;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -79,8 +78,8 @@ const CustomTriggerDef = extern struct {
 const CustomTrigger = struct {
     var data: THandleMap = undefined;
 
-    var h_s_section: ?SettingHandle = null;
-    var h_s_notify_trigger: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_notify_trigger: ?ASettingHandle = null;
     var s_notify_trigger: bool = false;
 
     var h_ar_hook = RAddressHandleInfo.InitLen(0x476E80, 5);
@@ -292,11 +291,11 @@ const CustomTrigger = struct {
     }
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "core/RTrigger", null);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "core/RTrigger", null);
         h_s_section = section;
 
         h_s_notify_trigger =
-            gf.ASettingOccupy(section, "notify_trigger", .B, .{ .b = false }, &s_notify_trigger, null);
+            gf.ASettingOccupy(section, "notify_trigger", .B, .{ .B = false }, &s_notify_trigger, null);
     }
 };
 

@@ -14,11 +14,14 @@ const HandleSOA = @import("../util/handle_map_soa.zig").Handle;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
-const ASettingSent = @import("ASettings.zig").ASettingSent;
-const ASetting = @import("ASettings.zig").Setting;
-const ASettingSection = @import("ASettings.zig").Section;
 const GDrawLayer = @import("GDraw.zig").GDrawLayer;
-const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
+
+const ADAPI = @import("../util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASettingKind = ADAPI.ASettingKind;
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingMValue = ADAPI.ASettingMValue;
+const RAddressHandle = ADAPI.RAddressHandle;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
@@ -82,29 +85,29 @@ pub const GlobalFunction = extern struct {
     ASettingSave: *const fn () callconv(.C) void,
     ASettingSaveAuto: *const fn () callconv(.C) void,
     ASettingOccupy: *const fn (
-        section: Handle(u16), // originally nullable
+        section: ASettingHandle, // originally nullable
         name: [*:0]const u8,
-        value_type: ASetting.Type,
-        value_default: ASettingSent.Value,
+        value_type: ASettingKind,
+        value_default: ASettingMValue,
         value_ptr: ?*anyopaque,
-        fnOnChange: ?*const fn (ASettingSent.Value) callconv(.C) void,
-    ) callconv(.C) Handle(u16),
-    ASettingVacate: *const fn (handle: Handle(u16)) callconv(.C) void,
+        fnOnChange: ?*const fn (ASettingMValue) callconv(.C) void,
+    ) callconv(.C) ASettingHandle,
+    ASettingVacate: *const fn (handle: ASettingHandle) callconv(.C) void,
     ASettingVacateAll: *const fn () callconv(.C) void,
-    ASettingUpdate: *const fn (handle: Handle(u16), value: ASettingSent.Value) callconv(.C) void,
+    ASettingUpdate: *const fn (handle: ASettingHandle, value: ASettingMValue) callconv(.C) void,
     ASettingResetAllDefault: *const fn () callconv(.C) void,
     ASettingResetAllFile: *const fn () callconv(.C) void,
     ASettingCleanAll: *const fn () callconv(.C) void,
     ASettingSectionOccupy: *const fn (
-        section: Handle(u16), // originally nullable
+        section: ASettingHandle, // originally nullable
         name: [*:0]const u8,
-        fnOnChange: ?*const fn (arr: [*]ASettingSent, len: usize) callconv(.C) void,
-    ) callconv(.C) Handle(u16),
-    ASettingSectionVacate: *const fn (handle: Handle(u16)) callconv(.C) void,
-    ASettingSectionRunUpdate: *const fn (handle: Handle(u16)) callconv(.C) void,
-    ASettingSectionResetDefault: *const fn (handle: Handle(u16)) callconv(.C) void,
-    ASettingSectionResetFile: *const fn (handle: Handle(u16)) callconv(.C) void,
-    ASettingSectionClean: *const fn (handle: Handle(u16)) callconv(.C) void,
+        fnOnChange: ?*const fn (arr: [*]ASettingMessage, len: usize) callconv(.C) void,
+    ) callconv(.C) ASettingHandle,
+    ASettingSectionVacate: *const fn (handle: ASettingHandle) callconv(.C) void,
+    ASettingSectionRunUpdate: *const fn (handle: ASettingHandle) callconv(.C) void,
+    ASettingSectionResetDefault: *const fn (handle: ASettingHandle) callconv(.C) void,
+    ASettingSectionResetFile: *const fn (handle: ASettingHandle) callconv(.C) void,
+    ASettingSectionClean: *const fn (handle: ASettingHandle) callconv(.C) void,
     // Input
     InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ToggleState) callconv(.C) bool,
     InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) callconv(.C) ToggleState,

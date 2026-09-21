@@ -9,8 +9,9 @@ const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const ADAPI = @import("util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_multiplayer", "annodue/plugin/plugin_multiplayer.pdb");
@@ -34,10 +35,10 @@ const PLUGIN_NAME: [*:0]const u8 = "Multiplayer";
 const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 const MpState = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_patch_guid: ?SettingHandle = null;
-    var h_s_patch_r100: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_patch_guid: ?ASettingHandle = null;
+    var h_s_patch_r100: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_patch_r100: bool = false;
     var s_patch_guid: bool = false;
@@ -49,15 +50,15 @@ const MpState = struct {
     var asm_buf: [64]u8 = undefined;
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "multiplayer", null);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "multiplayer", null);
         h_s_section = section;
 
         h_s_enable = // working? TODO: check collisions
-            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+            gf.ASettingOccupy(section, "enable", .B, .{ .B = false }, &s_enable, null);
         h_s_patch_guid = // working?
-            gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, &s_patch_guid, null);
+            gf.ASettingOccupy(section, "patch_guid", .B, .{ .B = false }, &s_patch_guid, null);
         h_s_patch_r100 = // working
-            gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, &s_patch_r100, null);
+            gf.ASettingOccupy(section, "patch_r100", .B, .{ .B = false }, &s_patch_r100, null);
     }
 };
 

@@ -20,16 +20,17 @@ const Menu = m.Menu;
 const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const st = @import("util/toggle_state.zig");
-const apih = @import("util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
+const ADAPI = @import("util/api/api.zig");
+const ASettingMValue = ADAPI.ASettingMValue;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
 
 const rs = @import("racer").Sound;
 
@@ -54,8 +55,8 @@ const PLUGIN_VERSION: [*:0]const u8 = "0.0.1";
 
 // FIXME: merge with existing state, just like this cuz i cbf earlier
 const AnnodueSettings = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_depth_bias: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_depth_bias: ?ASettingHandle = null;
     var s_depth_bias: i32 = 10;
 
     // NOTE: detour at top of Viewport_RenderViewport__483A90. hooking for this
@@ -64,15 +65,15 @@ const AnnodueSettings = struct {
     var h_ar_hook = RAddressHandleInfo.InitLen(0x483A90, 5);
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "collisionviewer", null);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "collisionviewer", null);
         h_s_section = section;
 
         h_s_depth_bias =
-            gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, &s_depth_bias, updateDepthBias);
+            gf.ASettingOccupy(section, "depth_bias", .I, .{ .I = 10 }, &s_depth_bias, updateDepthBias);
     }
 
-    fn updateDepthBias(changed: SettingValue) callconv(.C) void {
-        state.depth_bias = @as(f32, @floatFromInt(changed.i)) / 100.0;
+    fn updateDepthBias(changed: ASettingMValue) callconv(.C) void {
+        state.depth_bias = @as(f32, @floatFromInt(changed.I)) / 100.0;
     }
 };
 
@@ -346,7 +347,7 @@ const QuickRaceMenu = extern struct {
 
 fn MenuDepthBiasCallback(_: *Menu, _: *MenuItem) callconv(.C) bool {
     if (AnnodueSettings.h_s_depth_bias) |h|
-        QuickRaceMenu.gf.ASettingUpdate(h, .{ .i = @as(i32, @intFromFloat(state.depth_bias * 100.0)) });
+        QuickRaceMenu.gf.ASettingUpdate(h, .{ .I = @as(i32, @intFromFloat(state.depth_bias * 100.0)) });
     return false;
 }
 

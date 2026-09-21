@@ -17,9 +17,10 @@ const rt = @import("racer").Text;
 const ri = @import("racer").Input;
 const rto = rt.TextStyleOpts;
 
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
+const ADAPI = @import("util/api/api.zig");
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_inputdisplay", "annodue/plugin/plugin_inputdisplay.pdb");
@@ -53,10 +54,10 @@ const InputIcon = struct {
 };
 
 const InputDisplay = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_pos_x: ?SettingHandle = null;
-    var h_s_pos_y: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_pos_x: ?ASettingHandle = null;
+    var h_s_pos_y: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_pos_x: i16 = 420;
     var s_pos_y: i16 = 432;
@@ -348,26 +349,26 @@ const InputDisplay = struct {
     }
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "inputdisplay", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "inputdisplay", settingsUpdate);
         h_s_section = section;
 
-        h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
-        h_s_pos_x = gf.ASettingOccupy(section, "pos_x", .I, .{ .i = 420 }, null, null);
-        h_s_pos_y = gf.ASettingOccupy(section, "pos_y", .I, .{ .i = 432 }, null, null);
+        h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .B = false }, &s_enable, null);
+        h_s_pos_x = gf.ASettingOccupy(section, "pos_x", .I, .{ .I = 420 }, null, null);
+        h_s_pos_y = gf.ASettingOccupy(section, "pos_y", .I, .{ .I = 432 }, null, null);
     }
 
     // TODO: handle updating position without having to reload race
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         for (changed, 0..len) |setting, _| {
-            const nlen: usize = std.mem.len(setting.name);
+            const nlen: usize = std.mem.len(setting.Name);
 
-            if (nlen == 5 and std.mem.eql(u8, "pos_x", setting.name[0..nlen])) {
-                s_pos_x = @as(i16, @truncate(setting.value.i));
+            if (nlen == 5 and std.mem.eql(u8, "pos_x", setting.Name[0..nlen])) {
+                s_pos_x = @as(i16, @truncate(setting.Value.I));
                 continue;
             }
 
-            if (nlen == 5 and std.mem.eql(u8, "pos_y", setting.name[0..nlen])) {
-                s_pos_y = @as(i16, @truncate(setting.value.i));
+            if (nlen == 5 and std.mem.eql(u8, "pos_y", setting.Name[0..nlen])) {
+                s_pos_y = @as(i16, @truncate(setting.Value.I));
                 continue;
             }
         }

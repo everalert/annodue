@@ -10,13 +10,17 @@ const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
+const ADAPI = @import("util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const apih = ADAPI.helper;
+
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const st = @import("util/toggle_state.zig");
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const TemporalCompressor = @import("util/temporal_compression.zig").TemporalCompressor;
 const TDataPoint = @import("util/temporal_compression.zig").DataPoint;
-const apih = @import("util/api/api_helper.zig");
 const MiB = @import("util/base/base_memory.zig").MiB;
 
 const rg = @import("racer").Global;
@@ -31,8 +35,6 @@ const rto = rt.TextStyleOpts;
 const InputMap = @import("core/Input.zig").InputMap;
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_savestate", "annodue/plugin/plugin_savestate.pdb");
@@ -97,9 +99,9 @@ const state = struct {
     var initialized: bool = false;
 
     // settings
-    var s_h_section: ?SettingHandle = null;
-    var s_h_enable: ?SettingHandle = null;
-    var s_h_load_delay: ?SettingHandle = null;
+    var s_h_section: ?ASettingHandle = null;
+    var s_h_enable: ?ASettingHandle = null;
+    var s_h_load_delay: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_load_delay: usize = 500; // ms
 
@@ -194,10 +196,10 @@ const state = struct {
     }
 
     fn settingsInit(gf: *GlobalFn) void {
-        s_h_section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "savestate", null);
+        s_h_section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "savestate", null);
 
-        s_h_enable = gf.ASettingOccupy(s_h_section.?, "enable", .B, .{ .b = false }, &s_enable, null);
-        s_h_load_delay = gf.ASettingOccupy(s_h_section.?, "load_delay", .U, .{ .u = 500 }, &s_load_delay, null);
+        s_h_enable = gf.ASettingOccupy(s_h_section.?, "enable", .B, .{ .B = false }, &s_enable, null);
+        s_h_load_delay = gf.ASettingOccupy(s_h_section.?, "load_delay", .U, .{ .U = 500 }, &s_load_delay, null);
     }
 };
 

@@ -11,12 +11,21 @@ const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
 const AxisInputMap = @import("core/Input.zig").AxisInputMap;
-const SettingHandle = @import("core/ASettings.zig").Handle;
-const SettingValue = @import("core/ASettings.zig").ASettingSent.Value;
-const Setting = @import("core/ASettings.zig").ASettingSent;
-const apih = @import("util/api/api_helper.zig");
+
+//// FIXME: import from util/api/api.zig; need to migrate
+//const SettingHandle = @import("util/core/core_settings.zig").Handle;
+//// FIXME: import from util/api/api.zig; need to migrate
+//const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
+//// FIXME: import from util/api/api.zig; need to migrate
+//const Setting = @import("util/core/core_settings.zig").ASettingSent;
+
+const ADAPI = @import("util/api/api.zig");
+const ASettingMessage = ADAPI.ASettingMessage;
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const RAddressHandle = ADAPI.RAddressHandle;
+const apih = ADAPI.helper;
 const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("util/api/api.zig").RAddressHandle;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -95,26 +104,26 @@ const CamState = enum(u32) {
 
 const Cam7 = extern struct {
     // ini settings
-    var h_s_section: ?SettingHandle = null;
-    var h_s_enable: ?SettingHandle = null;
-    var h_s_flip_look_x: ?SettingHandle = null;
-    var h_s_flip_look_y: ?SettingHandle = null;
-    var h_s_flip_look_x_inverted: ?SettingHandle = null;
-    var h_s_dz_i: ?SettingHandle = null;
-    var h_s_dz_o: ?SettingHandle = null;
-    var h_s_i_mouse_dpi: ?SettingHandle = null;
-    var h_s_i_mouse_cm360: ?SettingHandle = null;
-    var h_s_rot_damp_i_dflt: ?SettingHandle = null;
-    var h_s_rot_spd_i_dflt: ?SettingHandle = null;
-    var h_s_move_damp_i_dflt: ?SettingHandle = null;
-    var h_s_move_spd_i_dflt: ?SettingHandle = null;
-    var h_s_move_planar: ?SettingHandle = null;
-    var h_s_hide_ui: ?SettingHandle = null;
-    var h_s_disable_input: ?SettingHandle = null;
-    var h_s_sfx_volume: ?SettingHandle = null;
-    var h_s_fog_patch: ?SettingHandle = null;
-    var h_s_fog_remove: ?SettingHandle = null;
-    var h_s_visuals_patch: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_enable: ?ASettingHandle = null;
+    var h_s_flip_look_x: ?ASettingHandle = null;
+    var h_s_flip_look_y: ?ASettingHandle = null;
+    var h_s_flip_look_x_inverted: ?ASettingHandle = null;
+    var h_s_dz_i: ?ASettingHandle = null;
+    var h_s_dz_o: ?ASettingHandle = null;
+    var h_s_i_mouse_dpi: ?ASettingHandle = null;
+    var h_s_i_mouse_cm360: ?ASettingHandle = null;
+    var h_s_rot_damp_i_dflt: ?ASettingHandle = null;
+    var h_s_rot_spd_i_dflt: ?ASettingHandle = null;
+    var h_s_move_damp_i_dflt: ?ASettingHandle = null;
+    var h_s_move_spd_i_dflt: ?ASettingHandle = null;
+    var h_s_move_planar: ?ASettingHandle = null;
+    var h_s_hide_ui: ?ASettingHandle = null;
+    var h_s_disable_input: ?ASettingHandle = null;
+    var h_s_sfx_volume: ?ASettingHandle = null;
+    var h_s_fog_patch: ?ASettingHandle = null;
+    var h_s_fog_remove: ?ASettingHandle = null;
+    var h_s_visuals_patch: ?ASettingHandle = null;
     var s_enable: bool = false;
     var s_flip_look_x: bool = false;
     var s_flip_look_y: bool = false;
@@ -257,115 +266,115 @@ const Cam7 = extern struct {
     }
 
     fn settingsInit(gf: *GlobalFn) void {
-        const section = gf.ASettingSectionOccupy(SettingHandle.getNull(), "cam7", settingsUpdate);
+        const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "cam7", settingsUpdate);
         h_s_section = section;
 
         h_s_enable =
-            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+            gf.ASettingOccupy(section, "enable", .B, .{ .B = false }, &s_enable, null);
 
         h_s_fog_patch =
-            gf.ASettingOccupy(section, "fog_patch", .B, .{ .b = true }, &s_fog_patch, null);
+            gf.ASettingOccupy(section, "fog_patch", .B, .{ .B = true }, &s_fog_patch, null);
         h_s_fog_remove =
-            gf.ASettingOccupy(section, "fog_remove", .B, .{ .b = false }, &s_fog_remove, null);
+            gf.ASettingOccupy(section, "fog_remove", .B, .{ .B = false }, &s_fog_remove, null);
         h_s_visuals_patch =
-            gf.ASettingOccupy(section, "visuals_patch", .B, .{ .b = true }, &s_visuals_patch, null);
+            gf.ASettingOccupy(section, "visuals_patch", .B, .{ .B = true }, &s_visuals_patch, null);
 
         h_s_flip_look_x =
-            gf.ASettingOccupy(section, "flip_look_x", .B, .{ .b = false }, &s_flip_look_x, null);
+            gf.ASettingOccupy(section, "flip_look_x", .B, .{ .B = false }, &s_flip_look_x, null);
         h_s_flip_look_y =
-            gf.ASettingOccupy(section, "flip_look_y", .B, .{ .b = false }, &s_flip_look_y, null);
+            gf.ASettingOccupy(section, "flip_look_y", .B, .{ .B = false }, &s_flip_look_y, null);
         h_s_flip_look_x_inverted =
-            gf.ASettingOccupy(section, "flip_look_x_inverted", .B, .{ .b = false }, &s_flip_look_x_inverted, null);
+            gf.ASettingOccupy(section, "flip_look_x_inverted", .B, .{ .B = false }, &s_flip_look_x_inverted, null);
 
         h_s_dz_i =
-            gf.ASettingOccupy(section, "stick_deadzone_inner", .F, .{ .f = 0.05 }, &s_dz_i, null);
+            gf.ASettingOccupy(section, "stick_deadzone_inner", .F, .{ .F = 0.05 }, &s_dz_i, null);
         h_s_dz_o =
-            gf.ASettingOccupy(section, "stick_deadzone_outer", .F, .{ .f = 0.95 }, &s_dz_o, null);
+            gf.ASettingOccupy(section, "stick_deadzone_outer", .F, .{ .F = 0.95 }, &s_dz_o, null);
 
         h_s_i_mouse_dpi =
-            gf.ASettingOccupy(section, "mouse_dpi", .U, .{ .u = 1600 }, &s_i_mouse_dpi, null);
+            gf.ASettingOccupy(section, "mouse_dpi", .U, .{ .U = 1600 }, &s_i_mouse_dpi, null);
         h_s_i_mouse_cm360 =
-            gf.ASettingOccupy(section, "mouse_cm360", .F, .{ .f = 24 }, &s_i_mouse_cm360, null);
+            gf.ASettingOccupy(section, "mouse_cm360", .F, .{ .F = 24 }, &s_i_mouse_cm360, null);
 
         h_s_rot_damp_i_dflt =
-            gf.ASettingOccupy(section, "default_rotation_smoothing", .U, .{ .u = 0 }, &s_rot_damp_i_dflt, null);
+            gf.ASettingOccupy(section, "default_rotation_smoothing", .U, .{ .U = 0 }, &s_rot_damp_i_dflt, null);
         h_s_rot_spd_i_dflt =
-            gf.ASettingOccupy(section, "default_rotation_speed", .U, .{ .u = 3 }, &s_rot_spd_i_dflt, null);
+            gf.ASettingOccupy(section, "default_rotation_speed", .U, .{ .U = 3 }, &s_rot_spd_i_dflt, null);
         h_s_move_damp_i_dflt =
-            gf.ASettingOccupy(section, "default_move_smoothing", .U, .{ .u = 2 }, &s_move_damp_i_dflt, null);
+            gf.ASettingOccupy(section, "default_move_smoothing", .U, .{ .U = 2 }, &s_move_damp_i_dflt, null);
         h_s_move_spd_i_dflt =
-            gf.ASettingOccupy(section, "default_move_speed", .U, .{ .u = 3 }, &s_move_spd_i_dflt, null);
+            gf.ASettingOccupy(section, "default_move_speed", .U, .{ .U = 3 }, &s_move_spd_i_dflt, null);
         h_s_move_planar =
-            gf.ASettingOccupy(section, "default_planar_movement", .B, .{ .b = false }, &s_move_planar, null);
+            gf.ASettingOccupy(section, "default_planar_movement", .B, .{ .B = false }, &s_move_planar, null);
 
         h_s_hide_ui =
-            gf.ASettingOccupy(section, "default_hide_ui", .B, .{ .b = false }, &s_hide_ui, null);
+            gf.ASettingOccupy(section, "default_hide_ui", .B, .{ .B = false }, &s_hide_ui, null);
         h_s_disable_input =
-            gf.ASettingOccupy(section, "default_disable_input", .B, .{ .b = false }, &s_disable_input, null);
+            gf.ASettingOccupy(section, "default_disable_input", .B, .{ .B = false }, &s_disable_input, null);
         h_s_sfx_volume =
-            gf.ASettingOccupy(section, "sfx_volume", .F, .{ .f = 0.7 }, &s_sfx_volume, null);
+            gf.ASettingOccupy(section, "sfx_volume", .F, .{ .F = 0.7 }, &s_sfx_volume, null);
     }
 
     // TODO: rethink default -> live setting flow during settings reload, for the relevant settings
-    fn settingsUpdate(changed: [*]Setting, len: usize) callconv(.C) void {
+    fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         var update_mouse_sens: bool = false;
         var update_deadzone: bool = false;
 
         for (changed, 0..len) |setting, _| {
-            const nlen: usize = std.mem.len(setting.name);
+            const nlen: usize = std.mem.len(setting.Name);
 
-            if ((nlen == 9 and std.mem.eql(u8, "fog_patch", setting.name[0..nlen]) or
-                nlen == 10 and std.mem.eql(u8, "fog_remove", setting.name[0..nlen])) and
+            if ((nlen == 9 and std.mem.eql(u8, "fog_patch", setting.Name[0..nlen]) or
+                nlen == 10 and std.mem.eql(u8, "fog_remove", setting.Name[0..nlen])) and
                 cam_state == .FreeCam)
             {
                 patchFog(s_fog_patch);
                 continue;
             }
-            if (nlen == 13 and std.mem.eql(u8, "visuals_patch", setting.name[0..nlen]) and
+            if (nlen == 13 and std.mem.eql(u8, "visuals_patch", setting.Name[0..nlen]) and
                 cam_state == .FreeCam)
             {
                 patchFlags(s_visuals_patch);
                 continue;
             }
 
-            if (nlen == 9 and std.mem.eql(u8, "mouse_dpi", setting.name[0..nlen]) or
-                nlen == 11 and std.mem.eql(u8, "mouse_cm360", setting.name[0..nlen]))
+            if (nlen == 9 and std.mem.eql(u8, "mouse_dpi", setting.Name[0..nlen]) or
+                nlen == 11 and std.mem.eql(u8, "mouse_cm360", setting.Name[0..nlen]))
             {
                 update_mouse_sens = true;
                 continue;
             }
 
-            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_inner", setting.name[0..nlen])) {
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_inner", setting.Name[0..nlen])) {
                 s_dz_i = m.clamp(s_dz_i, 0.000, 0.495);
                 update_deadzone = true;
                 continue;
             }
-            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_outer", setting.name[0..nlen])) {
+            if (nlen == 20 and std.mem.eql(u8, "stick_deadzone_outer", setting.Name[0..nlen])) {
                 s_dz_o = m.clamp(s_dz_o, 0.505, 1.000);
                 update_deadzone = true;
                 continue;
             }
 
             // TODO: keep settings file in sync with these, to remember between sessions (after settings rework)
-            if (nlen == 26 and std.mem.eql(u8, "default_rotation_smoothing", setting.name[0..nlen])) {
+            if (nlen == 26 and std.mem.eql(u8, "default_rotation_smoothing", setting.Name[0..nlen])) {
                 s_rot_damp_i_dflt = m.clamp(s_rot_damp_i_dflt, 0, 4);
                 rot_damp_i = s_rot_damp_i_dflt;
                 rot_damp = rot_damp_val[rot_damp_i];
                 continue;
             }
-            if (nlen == 22 and std.mem.eql(u8, "default_rotation_speed", setting.name[0..nlen])) {
+            if (nlen == 22 and std.mem.eql(u8, "default_rotation_speed", setting.Name[0..nlen])) {
                 s_rot_spd_i_dflt = m.clamp(s_rot_spd_i_dflt, 0, 5);
                 rot_spd_i = s_rot_spd_i_dflt;
                 rot_spd_tgt = rot_spd_val[rot_spd_i];
                 continue;
             }
-            if (nlen == 22 and std.mem.eql(u8, "default_move_smoothing", setting.name[0..nlen])) {
+            if (nlen == 22 and std.mem.eql(u8, "default_move_smoothing", setting.Name[0..nlen])) {
                 s_move_damp_i_dflt = m.clamp(s_move_damp_i_dflt, 0, 3);
                 move_damp_i = s_move_damp_i_dflt;
                 move_damp = move_damp_val[move_damp_i];
                 continue;
             }
-            if (nlen == 18 and std.mem.eql(u8, "default_move_speed", setting.name[0..nlen])) {
+            if (nlen == 18 and std.mem.eql(u8, "default_move_speed", setting.Name[0..nlen])) {
                 s_move_spd_i_dflt = m.clamp(s_move_spd_i_dflt, 0, 6);
                 move_spd_i = s_move_spd_i_dflt;
                 move_spd_xy_tgt = move_spd_xy_val[move_spd_i];
@@ -373,7 +382,7 @@ const Cam7 = extern struct {
                 continue;
             }
 
-            if (nlen == 15 and std.mem.eql(u8, "default_hide_ui", setting.name[0..nlen]) and
+            if (nlen == 15 and std.mem.eql(u8, "default_hide_ui", setting.Name[0..nlen]) and
                 cam_state == .FreeCam)
             {
                 queue_update_hide_ui = true;
@@ -538,13 +547,13 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
 
     if (Cam7.i_hide_ui.gets() == .JustOn) {
         Cam7.s_hide_ui = !Cam7.s_hide_ui;
-        if (Cam7.h_s_hide_ui) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_hide_ui });
+        if (Cam7.h_s_hide_ui) |h| gf.ASettingUpdate(h, .{ .B = Cam7.s_hide_ui });
         UpdateHideUI(gf);
     }
 
     if (Cam7.i_disable_input.gets() == .JustOn) {
         Cam7.s_disable_input = !Cam7.s_disable_input;
-        if (Cam7.h_s_disable_input) |h| gf.ASettingUpdate(h, .{ .b = Cam7.s_disable_input });
+        if (Cam7.h_s_disable_input) |h| gf.ASettingUpdate(h, .{ .B = Cam7.s_disable_input });
     }
 
     const move_sweep: bool = Cam7.i_sweep.gets().on();

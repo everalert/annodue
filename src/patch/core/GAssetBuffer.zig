@@ -3,17 +3,18 @@ const std = @import("std");
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 
 const AMemory = @import("AMemory.zig");
-const Setting = @import("ASettings.zig").Setting;
-const SettingHandle = @import("ASettings.zig").Handle;
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 const x86 = @import("../util/x86.zig");
 const mem = @import("../util/memory.zig");
-const apih = @import("../util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
 
-const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
-const RADDRESS_HANDLE_NULL = @import("../util/api/api.zig").RADDRESS_HANDLE_NULL;
+const ADAPI = @import("../util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const RAddressHandle = ADAPI.RAddressHandle;
+const RADDRESS_HANDLE_NULL = ADAPI.RADDRESS_HANDLE_NULL;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
 
 const ra = @import("racer").Asset;
 
@@ -30,9 +31,9 @@ const ra = @import("racer").Asset;
 const TEXBUF_MAX_ITEMS = 8192;
 
 const GAssetBuffer = struct {
-    var h_s_section: ?SettingHandle = null;
-    var h_s_texbuf_enable: ?SettingHandle = null;
-    var h_s_texbuf_size: ?SettingHandle = null;
+    var h_s_section: ?ASettingHandle = null;
+    var h_s_texbuf_enable: ?ASettingHandle = null;
+    var h_s_texbuf_size: ?ASettingHandle = null;
     var s_texbuf_enable: bool = false;
     var s_texbuf_size: u32 = 5120; // unpatched: 1700
 
@@ -104,13 +105,13 @@ const GAssetBuffer = struct {
     }
 
     fn settings_init() void {
-        const section = api.ASettingSectionOccupy(SettingHandle.getNull(), "core/GAssetBuffer", null);
+        const section = api.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "core/GAssetBuffer", null);
         h_s_section = section;
 
         h_s_texbuf_enable =
-            api.ASettingOccupy(section, "texbuf_enable", .B, .{ .b = false }, &s_texbuf_enable, null);
+            api.ASettingOccupy(section, "texbuf_enable", .B, .{ .B = false }, &s_texbuf_enable, null);
         h_s_texbuf_size =
-            api.ASettingOccupy(section, "texbuf_size", .U, .{ .u = 5120 }, &s_texbuf_size, null);
+            api.ASettingOccupy(section, "texbuf_size", .U, .{ .U = 5120 }, &s_texbuf_size, null);
     }
 };
 

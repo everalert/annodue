@@ -33,9 +33,9 @@ const debug = @import("../util/debug/debug.zig");
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
-const SettingHandle = @import("ASettings.zig").Handle;
-const SettingValue = @import("ASettings.zig").ASettingSent.Value;
-const Setting = @import("ASettings.zig").ASettingSent;
+const ADAPI = @import("../util/api/api.zig");
+const ASettingHandle = ADAPI.ASettingHandle;
+const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 
 // FIXME: anything using this should be moved to api Init; waiting on better core arch
 const RAddress = @import("RAddress.zig");
@@ -237,7 +237,7 @@ pub const PluginState = struct {
     var arena_perm: Allocator = undefined;
     var arena_temp: Allocator = undefined;
 
-    var h_s_hot_reload: ?SettingHandle = null;
+    var h_s_hot_reload: ?ASettingHandle = null;
     var s_hot_reload: bool = true;
 
     var core: ArrayList(Plugin) = undefined;
@@ -619,7 +619,7 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
 
 pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
     PluginState.h_s_hot_reload =
-        gf.ASettingOccupy(SettingHandle.getNull(), "PLUGIN_HOT_RELOAD", .B, .{ .b = true }, &PluginState.s_hot_reload, null);
+        gf.ASettingOccupy(ASETTING_HANDLE_NULL, "PLUGIN_HOT_RELOAD", .B, .{ .B = true }, &PluginState.s_hot_reload, null);
 }
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}

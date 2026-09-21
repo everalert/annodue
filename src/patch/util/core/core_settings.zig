@@ -1,11 +1,7 @@
-// TODO: ?? change DEFAULT_ID
-// TODO: add global st/fn ptrs to fnOnChange defs?
-// TODO: change save_defaults to false once annodue stops releasing Safe builds (also in settingOccupy call)
-// TODO: minor cleanup with handle_map 'update owner' fn?
-// TODO: ?? update nomenclature from 'Occupy' -> 'Register', also 'Sent' -> 'Msg'?
-// FIXME: is it necessary to have an explicit default value passed to SettingOccupy
-//  when the default could be derived from the pointer? isn't it a bug to even
-//  allow calling ASettingOccupy without either a value pointer or an update callback?
+//! simple settings management
+//!
+//! - ini-based
+//! - hot-reloadable
 
 // SYSTEM OVERVIEW
 // - support for bool, u32, i32, f32, and strings (64 bytes null-terminated)
@@ -16,6 +12,16 @@
 // - callback behaviours available for both individual settings updates and collective section updates
 // - settings hot-loaded from file; game-side changes written to file periodically
 
+// TODO: tests and api hardening, prior to reworking settings for sqlite or whatever
+// TODO: ?? change DEFAULT_ID
+// TODO: add global st/fn ptrs to fnOnChange defs?
+// TODO: change save_defaults to false once annodue stops releasing Safe builds (also in SettingOccupy call)
+// TODO: minor cleanup with handle_map 'update owner' fn?
+// TODO: ?? update nomenclature from 'Occupy' -> 'Register', also 'Sent' -> 'Msg'?
+// FIXME: is it necessary to have an explicit default value passed to SettingOccupy
+//  when the default could be derived from the pointer? isn't it a bug to even
+//  allow calling ASettingOccupy without either a value pointer or an update callback?
+
 const std = @import("std");
 
 const ArrayList = std.ArrayList;
@@ -24,6 +30,7 @@ const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 const EnumSet = std.EnumSet;
 const bufPrintZ = std.fmt.bufPrintZ;
 const assert = std.debug.assert;
+const panic = std.debug.panic;
 
 const ini = @import("zigini");
 
@@ -39,24 +46,24 @@ const HotReloader = @import("../hot_reload.zig").HotReload(HotReloaderHandle, 1)
 
 // DEFS
 
-const SETTINGS_VERSION: u32 = 2;
+pub const SETTINGS_VERSION: u32 = 2;
 const DEFAULT_ID = 0xFFFF;
 
-pub const ParentHandle = extern struct {
-    generation: u16,
-    index: u16,
+const ParentHandle = extern struct {
+    Generation: u16,
+    Index: u16,
 
     /// helper to test equality of nullable parent and regular handles
-    fn eql(p: ?ParentHandle, h: ?Handle) bool {
+    fn Eql(p: ?ParentHandle, h: ?Handle) bool {
         if ((p == null) != (h == null)) return false;
-        if (p != null and (p.?.index != h.?.index or p.?.generation != h.?.generation)) return false;
+        if (p != null and (p.?.Index != h.?.index or p.?.Generation != h.?.generation)) return false;
         return true;
     }
 
-    fn fromHandle(h: Handle) ParentHandle {
+    fn FromHandle(h: Handle) ParentHandle {
         return .{
-            .generation = h.generation,
-            .index = h.index,
+            .Generation = h.generation,
+            .Index = h.index,
         };
     }
 };
@@ -64,206 +71,185 @@ pub const ParentHandle = extern struct {
 pub const Kind = enum(u8) { None, Str, F, U, I, B };
 
 pub const Message = extern struct {
-    name: [*:0]const u8,
-    value: Value,
+    Name: [*:0]const u8,
+    Value: MessageValue,
+};
 
-    pub const Value = extern union {
-        str: [*:0]const u8,
-        f: f32,
-        u: u32,
-        i: i32,
-        b: bool,
+pub const MessageValue = extern union {
+    Str: [*:0]const u8,
+    F: f32,
+    U: u32,
+    I: i32,
+    B: bool,
 
-        pub fn fromRaw(value: [*:0]const u8, t: Kind) Value {
-            const len = std.mem.len(@as([*:0]const u8, @ptrCast(value)));
-            assert(len > 0 and len <= 63);
+    pub fn FromRaw(value: [*:0]const u8, t: Kind) MessageValue {
+        const len = std.mem.len(@as([*:0]const u8, @ptrCast(value)));
+        assert(len > 0 and len <= 63);
 
-            return switch (t) {
-                .B => .{ .b = std.mem.eql(u8, "on", value[0..2]) or
-                    std.mem.eql(u8, "true", value[0..4]) or
-                    value[0] == '1' },
-                .I => .{ .i = std.fmt.parseInt(i32, value[0..len], 10) catch @panic("value not i32") },
-                .U => .{ .u = std.fmt.parseInt(u32, value[0..len], 10) catch @panic("value not u32") },
-                .F => .{ .f = std.fmt.parseFloat(f32, value[0..len]) catch @panic("value not f32") },
-                else => .{ .str = value },
-            };
-        }
+        return switch (t) {
+            .B => .{ .B = std.mem.eql(u8, "on", value[0..2]) or
+                std.mem.eql(u8, "true", value[0..4]) or
+                value[0] == '1' },
+            .I => .{ .I = std.fmt.parseInt(i32, value[0..len], 10) catch @panic("value not i32") },
+            .U => .{ .U = std.fmt.parseInt(u32, value[0..len], 10) catch @panic("value not u32") },
+            .F => .{ .F = std.fmt.parseFloat(f32, value[0..len]) catch @panic("value not f32") },
+            else => .{ .Str = value },
+        };
+    }
 
-        pub fn fromSetting(setting: *const Setting.Value, t: Kind) Value {
-            return switch (t) {
-                .B => .{ .b = setting.b },
-                .I => .{ .i = setting.i },
-                .U => .{ .u = setting.u },
-                .F => .{ .f = setting.f },
-                else => .{ .str = &setting.str },
-            };
-        }
-    };
-
-    // FIXME: update all core and plugins with section update functions to use
-    //  this in their update loop
-    /// convenience function for checking if the setting matches a given handle
-    pub fn IsSetting(self: *const Message, name: [*:0]const u8) bool {
-        return std.mem.orderZ(u8, self.name, name) == .eq;
+    pub fn FromSetting(setting: *const SettingValue, t: Kind) MessageValue {
+        return switch (t) {
+            .B => .{ .B = setting.B },
+            .I => .{ .I = setting.I },
+            .U => .{ .U = setting.U },
+            .F => .{ .F = setting.F },
+            else => .{ .Str = &setting.Str },
+        };
     }
 };
 
-pub const Setting = struct {
-    section: ?ParentHandle = null,
-    name: [63:0]u8 = std.mem.zeroes([63:0]u8),
-    value: Value = .{ .str = std.mem.zeroes([63:0]u8) },
-    value_default: Value = .{ .str = std.mem.zeroes([63:0]u8) },
-    value_saved: Value = .{ .str = std.mem.zeroes([63:0]u8) },
-    value_type: Kind = .None,
-    value_ptr: ?*anyopaque = null,
-    flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
-    fnOnChange: ?*const fn (value: Message.Value) callconv(.C) void = null,
+const Setting = struct {
+    Parent: ?ParentHandle = null,
+    Name: [63:0]u8 = std.mem.zeroes([63:0]u8),
+    Value: SettingValue = .{ .Str = std.mem.zeroes([63:0]u8) },
+    ValueDefault: SettingValue = .{ .Str = std.mem.zeroes([63:0]u8) },
+    ValueSaved: SettingValue = .{ .Str = std.mem.zeroes([63:0]u8) },
+    ValueKind: Kind = .None,
+    pValueTarget: ?*anyopaque = null,
+    Flags: EnumSet(SettingFlags) = EnumSet(SettingFlags).initEmpty(),
+    fnOnChange: ?*const fn (value: MessageValue) callconv(.C) void = null,
+};
 
-    pub const Value = extern union {
-        str: [63:0]u8,
-        f: f32,
-        u: u32,
-        i: i32,
-        b: bool,
+const SettingValue = extern union {
+    Str: [63:0]u8,
+    F: f32,
+    U: u32,
+    I: i32,
+    B: bool,
 
-        pub fn fromSent(self: *Value, v: Message.Value, t: Kind) !void {
-            switch (t) {
-                .F => self.f = v.f,
-                .U => self.u = v.u,
-                .I => self.i = v.i,
-                .B => self.b = v.b,
-                else => _ = try bufPrintZ(&self.str, "{s}", .{v.str}),
-            }
+    fn FromMessage(self: *SettingValue, v: MessageValue, t: Kind) !void {
+        switch (t) {
+            .F => self.F = v.F,
+            .U => self.U = v.U,
+            .I => self.I = v.I,
+            .B => self.B = v.B,
+            else => _ = try bufPrintZ(&self.Str, "{s}", .{v.Str}),
         }
+    }
 
-        /// raw (string) to value
-        pub fn raw2type(self: *Value, t: Kind) !void {
-            const len = std.mem.len(@as([*:0]u8, @ptrCast(&self.str)));
-            switch (t) {
-                .B => self.b = std.mem.eql(u8, "on", self.str[0..2]) or
-                    std.mem.eql(u8, "true", self.str[0..4]) or
-                    self.str[0] == '1',
-                .I => self.i = try std.fmt.parseInt(i32, self.str[0..len], 10),
-                .U => self.u = try std.fmt.parseInt(u32, self.str[0..len], 10),
-                .F => self.f = try std.fmt.parseFloat(f32, self.str[0..len]),
-                .Str => {},
-                else => @panic("setting output value type must not be None"),
-            }
+    /// convert internal readable string to typed value
+    fn ValueParse(self: *SettingValue, t: Kind) !void {
+        const len = std.mem.len(@as([*:0]u8, @ptrCast(&self.Str)));
+        switch (t) {
+            .B => self.B = std.mem.eql(u8, "on", self.Str[0..2]) or
+                std.mem.eql(u8, "true", self.Str[0..4]) or
+                self.Str[0] == '1',
+            .I => self.I = try std.fmt.parseInt(i32, self.Str[0..len], 10),
+            .U => self.U = try std.fmt.parseInt(u32, self.Str[0..len], 10),
+            .F => self.F = try std.fmt.parseFloat(f32, self.Str[0..len]),
+            .Str => {},
+            else => @panic("setting output value type must not be None"),
         }
+    }
 
-        /// value to raw (string)
-        pub fn type2raw(self: *Value, t: Kind) !void {
-            switch (t) {
-                .B => _ = try bufPrintZ(&self.str, "{s}", .{if (self.b) "on" else "off"}),
-                .I => _ = try bufPrintZ(&self.str, "{d}", .{self.i}),
-                .U => _ = try bufPrintZ(&self.str, "{d}", .{self.u}),
-                .F => _ = try bufPrintZ(&self.str, "{d:4.2}", .{self.f}),
-                .Str => {},
-                else => @panic("setting input value type must not be None"),
-            }
+    /// convert internal typed value to readable string
+    fn ValuePrint(self: *SettingValue, t: Kind) !void {
+        switch (t) {
+            .B => _ = try bufPrintZ(&self.Str, "{s}", .{if (self.B) "on" else "off"}),
+            .I => _ = try bufPrintZ(&self.Str, "{d}", .{self.I}),
+            .U => _ = try bufPrintZ(&self.Str, "{d}", .{self.U}),
+            .F => _ = try bufPrintZ(&self.Str, "{d:4.2}", .{self.F}),
+            .Str => {},
+            else => @panic("setting input value type must not be None"),
         }
+    }
 
-        pub fn type2type(self: *Value, t1: Kind, t2: type) !void {
-            try self.type2raw(t1);
-            try self.raw2type(t2);
+    fn Eql(self: *const SettingValue, other: *const SettingValue, t: Kind) bool {
+        return switch (t) {
+            .B => self.B == other.B,
+            .I => self.I == other.I,
+            .U => self.U == other.U,
+            .F => self.F == other.F,
+            else => return std.mem.orderZ(u8, &self.Str, &other.Str) == .eq,
+        };
+    }
+
+    fn EqlMessage(self: *const SettingValue, other: MessageValue, t: Kind) bool {
+        return switch (t) {
+            .B => self.B == other.B,
+            .I => self.I == other.I,
+            .U => self.U == other.U,
+            .F => self.F == other.F,
+            else => return std.mem.orderZ(u8, &self.Str, other.Str) == .eq,
+        };
+    }
+
+    fn Write(self: *const SettingValue, writer: anytype, t: Kind) !void {
+        switch (t) {
+            .B => try std.fmt.format(writer, "{s}", .{if (self.B) "on" else "off"}),
+            .I => try std.fmt.format(writer, "{d}", .{self.I}),
+            .U => try std.fmt.format(writer, "{d}", .{self.U}),
+            .F => try std.fmt.format(writer, "{d:4.2}", .{self.F}),
+            else => try std.fmt.format(writer, "{s}", .{@as([*:0]const u8, @ptrCast(&self.Str))}),
         }
+    }
 
-        pub fn eql(self: *const Value, other: *const Value, t: Kind) bool {
-            return switch (t) {
-                .B => self.b == other.b,
-                .I => self.i == other.i,
-                .U => self.u == other.u,
-                .F => self.f == other.f,
-                else => return std.mem.orderZ(u8, &self.str, &other.str) == .eq,
-            };
-        }
+    fn WriteToPtr(self: *SettingValue, p: *anyopaque, t: Kind) void {
+        return switch (t) {
+            .Str => @as(*[63:0]u8, @alignCast(@ptrCast(p))).* = @as(*[63:0]u8, @ptrCast(&self.Str)).*,
+            .F => @as(*f32, @alignCast(@ptrCast(p))).* = @as(*f32, @ptrCast(&self.F)).*,
+            .U => @as(*u32, @alignCast(@ptrCast(p))).* = @as(*u32, @ptrCast(&self.U)).*,
+            .I => @as(*i32, @alignCast(@ptrCast(p))).* = @as(*i32, @ptrCast(&self.I)).*,
+            .B => @as(*bool, @alignCast(@ptrCast(p))).* = @as(*bool, @ptrCast(&self.B)).*,
+            else => @panic("setting value type must not be None"),
+        };
+    }
+};
 
-        pub fn eqlSent(self: *const Value, other: Message.Value, t: Kind) bool {
-            return switch (t) {
-                .B => self.b == other.b,
-                .I => self.i == other.i,
-                .U => self.u == other.u,
-                .F => self.f == other.f,
-                else => return std.mem.orderZ(u8, &self.str, other.str) == .eq,
-            };
-        }
-
-        pub fn write(self: *const Value, writer: anytype, t: Kind) !void {
-            switch (t) {
-                .B => try std.fmt.format(writer, "{s}", .{if (self.b) "on" else "off"}),
-                .I => try std.fmt.format(writer, "{d}", .{self.i}),
-                .U => try std.fmt.format(writer, "{d}", .{self.u}),
-                .F => try std.fmt.format(writer, "{d:4.2}", .{self.f}),
-                else => try std.fmt.format(writer, "{s}", .{@as([*:0]const u8, @ptrCast(&self.str))}),
-            }
-        }
-
-        pub fn writeToPtr(self: *Value, p: *anyopaque, t: Kind) void {
-            return switch (t) {
-                .Str => @as(*[63:0]u8, @alignCast(@ptrCast(p))).* = @as(*[63:0]u8, @ptrCast(&self.str)).*,
-                .F => @as(*f32, @alignCast(@ptrCast(p))).* = @as(*f32, @ptrCast(&self.f)).*,
-                .U => @as(*u32, @alignCast(@ptrCast(p))).* = @as(*u32, @ptrCast(&self.u)).*,
-                .I => @as(*i32, @alignCast(@ptrCast(p))).* = @as(*i32, @ptrCast(&self.i)).*,
-                .B => @as(*bool, @alignCast(@ptrCast(p))).* = @as(*bool, @ptrCast(&self.b)).*,
-                else => @panic("setting value type must not be None"),
-            };
-        }
-    };
-
-    const Flags = enum(u32) {
-        HasOwner,
-        FileUpdatedLastWrite,
-        ChangedSinceLastRead,
-        ProcessedSinceLastRead, // marker to let you know, e.g. don't unset ChangedSinceLastRead
-        ValueIsSet,
-        ValueNotConverted,
-        SavedValueIsSet,
-        SavedValueNotConverted,
-        DefaultValueIsSet,
-        DefaultValueNotConverted,
-        InSectionUpdateQueue, // marked to be added to array that is sent with section update callback
-        InFileWriteQueue, // marked during preprocessing
-    };
+const SettingFlags = enum(u32) {
+    HasOwner,
+    FileUpdatedLastWrite,
+    ChangedSinceLastRead,
+    ProcessedSinceLastRead, // marker to let you know, e.g. don't unset ChangedSinceLastRead
+    ValueIsSet,
+    ValueNotConverted,
+    SavedValueIsSet,
+    SavedValueNotConverted,
+    DefaultValueIsSet,
+    DefaultValueNotConverted,
+    InSectionUpdateQueue, // marked to be added to array that is sent with section update callback
+    InFileWriteQueue, // marked during preprocessing
 };
 
 // reserved settings: AutoSave, UseGlobalAutoSave
-pub const Section = struct {
-    section: ?ParentHandle = null,
-    name: [63:0]u8 = std.mem.zeroes([63:0]u8),
-    flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
+const Section = struct {
+    Parent: ?ParentHandle = null,
+    Name: [63:0]u8 = std.mem.zeroes([63:0]u8),
+    Flags: EnumSet(SectionFlags) = EnumSet(SectionFlags).initEmpty(),
     fnOnChange: ?*const fn (changed: [*]Message, len: usize) callconv(.C) void = null,
+};
 
-    const Flags = enum(u32) {
-        HasOwner,
-        AutoSave,
-        UpdateQueued,
-    };
+const SectionFlags = enum(u32) {
+    HasOwner,
+    AutoSave,
+    UpdateQueued,
 };
 
 // reserved global settings: AutoSave
 pub const SettingManager = struct {
-    data_sections: HandleMap(Section, u16) = undefined,
-    data_settings: HandleMap(Setting, u16) = undefined,
-    flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
-    hot_reload: HotReloader = undefined,
-    file_exists: bool = false,
-    skip_next_load: bool = false,
-    section_update_queue: ArrayList(Message) = undefined,
-    file_name: [:0]const u8 = &.{},
+    DataSections: HandleMap(Section, u16) = undefined,
+    DataSettings: HandleMap(Setting, u16) = undefined,
+    Flags: EnumSet(SettingManagerFlags) = EnumSet(SettingManagerFlags).initEmpty(),
+    HotReload: HotReloader = undefined,
+    bSkipNextLoad: bool = false,
+    SectionUpdateQueue: ArrayList(Message) = undefined,
+    FilePath: [:0]const u8 = &.{},
+    bFileExists: bool = false,
 
-    h_section_plugin: ?Handle = null,
-    h_section_core: ?Handle = null,
-    h_s_settings_version: ?Handle = null,
-    h_s_save_auto: ?Handle = null,
-    h_s_save_defaults: ?Handle = null,
-    s_settings_version: u32 = 1,
-    s_save_auto: bool = true,
-    s_save_defaults: bool = true,
+    ScratchBuffer: FixedBufferAllocator = undefined,
+    ScratchAlloc: Allocator = undefined,
 
-    scratch_fba: FixedBufferAllocator = undefined,
-    scratch_alloc: Allocator = undefined,
-
-    const Flags = enum(u32) {
+    const SettingManagerFlags = enum(u32) {
         AutoSave,
     };
 
@@ -274,40 +260,30 @@ pub const SettingManager = struct {
     ) !void {
         out.* = .{};
 
-        out.file_name = filename;
+        out.FilePath = filename;
 
-        out.scratch_fba = FixedBufferAllocator.init(buf);
-        out.scratch_alloc = out.scratch_fba.allocator();
+        out.ScratchBuffer = FixedBufferAllocator.init(buf);
+        out.ScratchAlloc = out.ScratchBuffer.allocator();
 
-        out.data_sections = HandleMap(Section, u16).init(out.scratch_alloc);
-        out.data_settings = HandleMap(Setting, u16).init(out.scratch_alloc);
-        out.section_update_queue = ArrayList(Message).init(out.scratch_alloc);
+        out.DataSections = HandleMap(Section, u16).init(out.ScratchAlloc);
+        out.DataSettings = HandleMap(Setting, u16).init(out.ScratchAlloc);
+        out.SectionUpdateQueue = ArrayList(Message).init(out.ScratchAlloc);
 
-        HotReloader.Init(&out.hot_reload, iniLoad, iniUnload);
-        out.hot_reload.CheckDelay = 250;
-        out.hot_reload.TrackFileAlways(out.file_name, out);
-
-        out.h_s_settings_version =
-            try out.settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &out.s_settings_version, null);
-        out.h_s_save_auto =
-            try out.settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_AUTO", .B, .{ .b = true }, &out.s_save_auto, null);
-        out.h_s_save_defaults =
-            try out.settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &out.s_save_defaults, null);
-
-        // ensure version is written to file by defaulting to 0 and setting here
-        out.settingUpdate(out.h_s_settings_version.?, .{ .u = SETTINGS_VERSION });
+        HotReloader.Init(&out.HotReload, IniLoad, IniUnload);
+        out.HotReload.CheckDelay = 250;
+        out.HotReload.TrackFileAlways(out.FilePath, out);
     }
 
     pub fn Deinit(self: *SettingManager) void {
-        self.data_sections.deinit();
-        self.data_settings.deinit();
-        self.section_update_queue.deinit();
+        self.DataSections.deinit();
+        self.DataSettings.deinit();
+        self.SectionUpdateQueue.deinit();
     }
 
     /// gets index of data matching name and parenting pattern
     /// index will be valid for map's data and handle arrays, use handle.index
     /// for sparse_indices array index
-    pub fn nodeFind(
+    fn NodeFind(
         self: *SettingManager,
         map: anytype, // handle_map_*
         parent: ?Handle,
@@ -315,13 +291,13 @@ pub const SettingManager = struct {
     ) ?u16 {
         assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
-        if (parent != null and (parent.?.isNull() or !self.data_sections.hasHandle(parent.?))) return null;
+        if (parent != null and (parent.?.isNull() or !self.DataSections.hasHandle(parent.?))) return null;
 
         const name_len = std.mem.len(name) + 1; // include sentinel
 
         for (map.values.items, 0..) |*v, i| {
-            if (!ParentHandle.eql(v.section, parent)) continue;
-            if (!std.mem.eql(u8, v.name[0..name_len], name[0..name_len])) continue;
+            if (!ParentHandle.Eql(v.Parent, parent)) continue;
+            if (!std.mem.eql(u8, v.Name[0..name_len], name[0..name_len])) continue;
             return @intCast(i);
         }
 
@@ -329,8 +305,8 @@ pub const SettingManager = struct {
     }
 
     /// create a new raw section in the data set using a minimal definition. prefer
-    /// sectionOccupy for regular api-facing use.
-    pub fn sectionNew(
+    /// SectionOccupy for regular api-facing use.
+    fn SectionNew(
         self: *SettingManager,
         section: ?Handle,
         name: [*:0]const u8,
@@ -339,23 +315,23 @@ pub const SettingManager = struct {
 
         if (section != null and
             (section.?.isNull() or
-            !self.data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
+            !self.DataSections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
-        if (self.nodeFind(self.data_sections, section, name) != null) return error.NameTaken;
+        if (self.NodeFind(self.DataSections, section, name) != null) return error.NameTaken;
 
         var section_new = Section{};
-        if (section) |s| section_new.section = .{ .generation = s.generation, .index = s.index };
-        _ = try bufPrintZ(&section_new.name, "{s}", .{name});
+        if (section) |s| section_new.Parent = .{ .Generation = s.generation, .Index = s.index };
+        _ = try bufPrintZ(&section_new.Name, "{s}", .{name});
 
-        return try self.data_sections.insert(DEFAULT_ID, section_new);
+        return try self.DataSections.insert(DEFAULT_ID, section_new);
     }
 
-    // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for settingOccupy)
+    // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for SettingOccupy)
     /// assign owner to a section.
     /// will prevent all other owners from creating children to the section.
-    pub fn sectionOccupy(
+    pub fn SectionOccupy(
         self: *SettingManager,
         owner: u16,
         section: ?Handle,
@@ -367,25 +343,25 @@ pub const SettingManager = struct {
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
-            if (!self.data_sections.hasHandle(s)) return error.SectionDoesNotExist;
+            if (s.owner != owner) panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (!self.DataSections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
-        const existing_i = self.nodeFind(self.data_sections, section, name);
+        const existing_i = self.NodeFind(self.DataSections, section, name);
 
         var data: *Section = undefined;
         var handle_new: Handle = undefined;
         if (existing_i) |i| {
-            if (self.data_sections.handles.items[i].owner != DEFAULT_ID) return error.SectionAlreadyOwned;
-            self.data_sections.handles.items[i].owner = owner;
-            self.data_sections.sparse_indices.items[self.data_sections.handles.items[i].index].owner = owner;
-            handle_new = self.data_sections.handles.items[i];
-            data = &self.data_sections.values.items[i];
+            if (self.DataSections.handles.items[i].owner != DEFAULT_ID) return error.SectionAlreadyOwned;
+            self.DataSections.handles.items[i].owner = owner;
+            self.DataSections.sparse_indices.items[self.DataSections.handles.items[i].index].owner = owner;
+            handle_new = self.DataSections.handles.items[i];
+            data = &self.DataSections.values.items[i];
         } else {
-            handle_new = try self.data_sections.insert(owner, .{});
-            data = self.data_sections.get(handle_new).?;
-            data.section = if (section) |s| .{ .generation = s.generation, .index = s.index } else null;
-            _ = try bufPrintZ(&data.name, "{s}", .{name});
+            handle_new = try self.DataSections.insert(owner, .{});
+            data = self.DataSections.get(handle_new).?;
+            data.Parent = if (section) |s| .{ .Generation = s.generation, .Index = s.index } else null;
+            _ = try bufPrintZ(&data.Name, "{s}", .{name});
         }
 
         data.fnOnChange = fnOnChange;
@@ -394,120 +370,120 @@ pub const SettingManager = struct {
     }
 
     /// release ownership of a section node, and all of the children in the settings
-    /// tree below it. calls settingVacate on applicable settings.
-    pub fn sectionVacate(
+    /// tree below it. calls SettingVacate on applicable settings.
+    pub fn SectionVacate(
         self: *SettingManager,
         handle: Handle,
     ) void {
-        var data: *Section = self.data_sections.get(handle) orelse return;
+        var data: *Section = self.DataSections.get(handle) orelse return;
 
-        for (self.data_sections.values.items, 0..) |*s, i| {
-            if (s.section != null and ParentHandle.eql(s.section, handle)) {
-                const h: Handle = self.data_sections.handles.items[i];
-                if (h.owner != DEFAULT_ID and h.owner == handle.owner) self.sectionVacate(h);
+        for (self.DataSections.values.items, 0..) |*s, i| {
+            if (s.Parent != null and ParentHandle.Eql(s.Parent, handle)) {
+                const h: Handle = self.DataSections.handles.items[i];
+                if (h.owner != DEFAULT_ID and h.owner == handle.owner) self.SectionVacate(h);
             }
         }
 
-        for (self.data_settings.values.items, 0..) |*s, i| {
-            if (s.section != null and ParentHandle.eql(s.section, handle)) {
-                const h: Handle = self.data_settings.handles.items[i];
-                if (h.owner != DEFAULT_ID and h.owner == handle.owner) self.settingVacate(h);
+        for (self.DataSettings.values.items, 0..) |*s, i| {
+            if (s.Parent != null and ParentHandle.Eql(s.Parent, handle)) {
+                const h: Handle = self.DataSettings.handles.items[i];
+                if (h.owner != DEFAULT_ID and h.owner == handle.owner) self.SettingVacate(h);
             }
         }
 
         data.fnOnChange = null;
 
-        var s_index: *SparseIndex = &self.data_sections.sparse_indices.items[handle.index];
+        var s_index: *SparseIndex = &self.DataSections.sparse_indices.items[handle.index];
         s_index.owner = DEFAULT_ID;
-        self.data_sections.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
+        self.DataSections.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
     /// run section update callback on the recently updated settings of that group.
-    pub fn sectionRunUpdate(self: *SettingManager, handle: Handle) void {
-        const sec: *Section = self.data_sections.get(handle) orelse return;
+    pub fn SectionRunUpdate(self: *SettingManager, handle: Handle) void {
+        const sec: *Section = self.DataSections.get(handle) orelse return;
         const sec_fn = sec.fnOnChange orelse return;
 
-        self.section_update_queue.clearRetainingCapacity();
+        self.SectionUpdateQueue.clearRetainingCapacity();
 
-        for (self.data_settings.values.items) |*s| {
-            if (s.section == null or !ParentHandle.eql(s.section, handle)) continue;
-            if (!s.flags.contains(.InSectionUpdateQueue)) continue;
-            if (s.value_type == .None) continue;
+        for (self.DataSettings.values.items) |*s| {
+            if (s.Parent == null or !ParentHandle.Eql(s.Parent, handle)) continue;
+            if (!s.Flags.contains(.InSectionUpdateQueue)) continue;
+            if (s.ValueKind == .None) continue;
 
-            s.flags.remove(.InSectionUpdateQueue);
+            s.Flags.remove(.InSectionUpdateQueue);
             const send_data = Message{
-                .name = &s.name,
-                .value = Message.Value.fromSetting(&s.value, s.value_type),
+                .Name = &s.Name,
+                .Value = MessageValue.FromSetting(&s.Value, s.ValueKind),
             };
-            self.section_update_queue.append(send_data) catch continue;
+            self.SectionUpdateQueue.append(send_data) catch continue;
         }
 
-        sec_fn(self.section_update_queue.items.ptr, self.section_update_queue.items.len);
+        sec_fn(self.SectionUpdateQueue.items.ptr, self.SectionUpdateQueue.items.len);
     }
 
     /// run sectionRunUpdate on all sections that are occupied by the given owner.
-    pub fn sectionRunUpdateOwner(self: *SettingManager, owner: u16) void {
-        for (self.data_sections.handles.items) |handle|
-            if (handle.owner == owner) self.sectionRunUpdate(handle);
+    pub fn SectionRunUpdateOwner(self: *SettingManager, owner: u16) void {
+        for (self.DataSections.handles.items) |handle|
+            if (handle.owner == owner) self.SectionRunUpdate(handle);
     }
 
     /// run sectionRunUpdate on all sections.
-    pub fn sectionRunUpdateAll(
+    fn SectionRunUpdateAll(
         self: *SettingManager,
     ) void {
-        for (self.data_sections.handles.items) |handle|
-            self.sectionRunUpdate(handle);
+        for (self.DataSections.handles.items) |handle|
+            self.SectionRunUpdate(handle);
     }
 
     /// restore all settings that are direct children of the section associated
     /// with the give handle to the value loaded frome file.
     /// settings that are not on file are not affected.
-    pub fn sectionResetToSaved(self: *SettingManager, handle: ?Handle) void {
-        for (self.data_settings.values.items) |*s| {
-            if (!ParentHandle.eql(s.section, handle)) continue;
-            if (!s.flags.contains(.SavedValueIsSet)) continue;
+    pub fn SectionResetToSaved(self: *SettingManager, handle: ?Handle) void {
+        for (self.DataSettings.values.items) |*s| {
+            if (!ParentHandle.Eql(s.Parent, handle)) continue;
+            if (!s.Flags.contains(.SavedValueIsSet)) continue;
 
-            s.value = s.value_saved;
-            s.flags.insert(.ValueIsSet);
+            s.Value = s.ValueSaved;
+            s.Flags.insert(.ValueIsSet);
         }
     }
 
     /// restore all settings that are direct children of the section associated
     /// with the give handle to the default value defined by their owner.
     /// settings that do not have an owner are not affected.
-    pub fn sectionResetToDefaults(self: *SettingManager, handle: ?Handle) void {
-        for (self.data_settings.values.items) |*s| {
-            if (!ParentHandle.eql(s.section, handle)) continue;
-            if (!s.flags.contains(.DefaultValueIsSet)) continue;
+    pub fn SectionResetToDefaults(self: *SettingManager, handle: ?Handle) void {
+        for (self.DataSettings.values.items) |*s| {
+            if (!ParentHandle.Eql(s.Parent, handle)) continue;
+            if (!s.Flags.contains(.DefaultValueIsSet)) continue;
 
-            s.value = s.value_default;
-            s.flags.insert(.ValueIsSet);
+            s.Value = s.ValueDefault;
+            s.Flags.insert(.ValueIsSet);
         }
     }
 
     /// scrub all unoccupied settings that are direct children of the section associated
     /// with the given handle, removing their data entirely
-    pub fn sectionRemoveVacant(self: *SettingManager, handle: ?Handle) void {
-        const slices = self.data_settings.values.slice();
+    fn SectionRemoveVacant(self: *SettingManager, handle: ?Handle) void {
+        const slices = self.DataSettings.values.slice();
         const sl_sec = slices.items(.section);
-        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
+        const sl_fl: []EnumSet(Setting.Flags) = slices.items(.Flags);
 
-        const len = self.data_settings.handles.items.len;
+        const len = self.DataSettings.handles.items.len;
         for (0..len) |j| {
             const i = len - j - 1;
-            if (!ParentHandle.eql(sl_sec[i], handle)) continue;
+            if (!ParentHandle.Eql(sl_sec[i], handle)) continue;
             if (sl_fl[i].contains(.DefaultValueIsSet)) continue;
-            _ = self.data_settings.remove(self.data_settings.handles.items[i]);
+            _ = self.DataSettings.remove(self.DataSettings.handles.items[i]);
         }
     }
 
     /// create a new raw setting in the data set using a minimal definition. prefer
-    /// settingOccupy for regular api-facing use.
-    pub fn settingNew(
+    /// SettingOccupy for regular api-facing use.
+    fn SettingNew(
         self: *SettingManager,
         section: ?Handle,
         name: [*:0]const u8,
-        value: [*:0]const u8, // -> value_saved
+        value: [*:0]const u8, // -> ValueSaved
         from_file: bool,
     ) !Handle {
         assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
@@ -515,190 +491,190 @@ pub const SettingManager = struct {
 
         if (section != null and
             (section.?.isNull() or
-            !self.data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
+            !self.DataSections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
-        if (self.nodeFind(self.data_settings, section, name) != null) return error.NameTaken;
+        if (self.NodeFind(self.DataSettings, section, name) != null) return error.NameTaken;
 
         const value_len = std.mem.len(value);
         if (value_len == 0 or value_len > 63) return error.ValueLengthInvalid;
 
         var setting = Setting{};
-        if (section) |s| setting.section = .{ .generation = s.generation, .index = s.index };
-        _ = try bufPrintZ(&setting.name, "{s}", .{name});
-        _ = try bufPrintZ(&setting.value.str, "{s}", .{value});
-        setting.flags.insert(.ValueIsSet);
+        if (section) |s| setting.Parent = .{ .Generation = s.generation, .Index = s.index };
+        _ = try bufPrintZ(&setting.Name, "{s}", .{name});
+        _ = try bufPrintZ(&setting.Value.Str, "{s}", .{value});
+        setting.Flags.insert(.ValueIsSet);
         if (from_file) {
-            _ = try bufPrintZ(&setting.value_saved.str, "{s}", .{value});
-            setting.flags.insert(.SavedValueIsSet);
+            _ = try bufPrintZ(&setting.ValueSaved.Str, "{s}", .{value});
+            setting.Flags.insert(.SavedValueIsSet);
         }
 
-        return try self.data_settings.insert(DEFAULT_ID, setting);
+        return try self.DataSettings.insert(DEFAULT_ID, setting);
     }
 
-    // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for sectionOccupy)
-    // FIXME: test - output handle contains input owner (same for sectionOccupy)
+    // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for SectionOccupy)
+    // FIXME: test - output handle contains input owner (same for SectionOccupy)
     /// assign an owner to a setting and apply a definition, creating the setting
     /// data if needed. will update value in external pointer callback to run update
     /// callback using the initial value (the existing value if available, or the default)
-    pub fn settingOccupy(
+    pub fn SettingOccupy(
         self: *SettingManager,
         owner: u16,
         section: ?Handle,
         name: [*:0]const u8,
-        value_type: Kind,
-        value_default: Message.Value,
-        value_ptr: ?*anyopaque,
-        fnOnChange: ?*const fn (Message.Value) callconv(.C) void,
+        value_kind: Kind,
+        value_default: MessageValue,
+        p_value_target: ?*anyopaque,
+        fnOnChange: ?*const fn (MessageValue) callconv(.C) void,
     ) !Handle {
-        assert(value_type != .None);
+        assert(value_kind != .None);
         assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
         // TODO: return error instead of panic? and move panic to global function?
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
-            if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
-            if (!self.data_sections.hasHandle(s)) return error.SectionDoesNotExist;
+            if (s.owner != owner) panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
+            if (!self.DataSections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
-        const existing_i = self.nodeFind(self.data_settings, section, name);
+        const existing_i = self.NodeFind(self.DataSettings, section, name);
 
         var data: *Setting = undefined;
         var handle_new: Handle = undefined;
         if (existing_i) |i| {
-            if (self.data_settings.handles.items[i].owner != DEFAULT_ID) return error.SettingAlreadyOwned;
-            self.data_settings.handles.items[i].owner = owner;
-            self.data_settings.sparse_indices.items[self.data_settings.handles.items[i].index].owner = owner;
-            handle_new = self.data_settings.handles.items[i];
-            data = &self.data_settings.values.items[i];
+            if (self.DataSettings.handles.items[i].owner != DEFAULT_ID) return error.SettingAlreadyOwned;
+            self.DataSettings.handles.items[i].owner = owner;
+            self.DataSettings.sparse_indices.items[self.DataSettings.handles.items[i].index].owner = owner;
+            handle_new = self.DataSettings.handles.items[i];
+            data = &self.DataSettings.values.items[i];
         } else {
-            handle_new = try self.data_settings.insert(owner, .{});
-            data = self.data_settings.get(handle_new).?;
-            data.section = if (section) |s| ParentHandle.fromHandle(s) else null;
-            _ = try bufPrintZ(&data.name, "{s}", .{name});
+            handle_new = try self.DataSettings.insert(owner, .{});
+            data = self.DataSettings.get(handle_new).?;
+            data.Parent = if (section) |s| ParentHandle.FromHandle(s) else null;
+            _ = try bufPrintZ(&data.Name, "{s}", .{name});
         }
 
         // NOTE: existing data assumed to be raw (new, unprocessed or released)
-        if (data.flags.contains(.ValueIsSet)) {
-            data.value.raw2type(value_type) catch {
+        if (data.Flags.contains(.ValueIsSet)) {
+            data.Value.ValueParse(value_kind) catch {
                 // invalid data = use default, will be cleaned next file write
-                data.value.fromSent(value_default, value_type) catch unreachable; // value_type assertion = OK
+                data.Value.FromMessage(value_default, value_kind) catch unreachable; // value_kind assertion = OK
             };
-            if (!data.value.eqlSent(value_default, value_type))
-                data.flags.insert(.InSectionUpdateQueue);
-            if (data.flags.contains(.SavedValueIsSet))
-                data.value_saved.raw2type(value_type) catch data.flags.insert(.SavedValueNotConverted);
+            if (!data.Value.EqlMessage(value_default, value_kind))
+                data.Flags.insert(.InSectionUpdateQueue);
+            if (data.Flags.contains(.SavedValueIsSet))
+                data.ValueSaved.ValueParse(value_kind) catch data.Flags.insert(.SavedValueNotConverted);
         } else {
-            data.value.fromSent(value_default, value_type) catch unreachable; // value_type assertion = OK
-            data.flags.insert(.ValueIsSet);
+            data.Value.FromMessage(value_default, value_kind) catch unreachable; // value_kind assertion = OK
+            data.Flags.insert(.ValueIsSet);
         }
-        data.value_type = value_type;
-        data.value_default.fromSent(value_default, value_type) catch unreachable; // value_type assertion = OK
-        data.flags.insert(.DefaultValueIsSet);
+        data.ValueKind = value_kind;
+        data.ValueDefault.FromMessage(value_default, value_kind) catch unreachable; // value_kind assertion = OK
+        data.Flags.insert(.DefaultValueIsSet);
 
-        data.value_ptr = value_ptr;
-        if (value_ptr) |p| data.value.writeToPtr(p, data.value_type);
+        data.pValueTarget = p_value_target;
+        if (p_value_target) |p| data.Value.WriteToPtr(p, data.ValueKind);
 
         data.fnOnChange = fnOnChange;
-        if (fnOnChange) |f| f(Message.Value.fromSetting(&data.value, data.value_type));
+        if (fnOnChange) |f| f(MessageValue.FromSetting(&data.Value, data.ValueKind));
 
         return handle_new;
     }
 
     /// remove owner from a setting and clear its definition.
-    pub fn settingVacate(
+    pub fn SettingVacate(
         self: *SettingManager,
         handle: Handle,
     ) void {
-        var data: *Setting = self.data_settings.get(handle) orelse return;
-        assert(data.flags.contains(.ValueIsSet));
+        var data: *Setting = self.DataSettings.get(handle) orelse return;
+        assert(data.Flags.contains(.ValueIsSet));
 
         data.fnOnChange = null;
 
-        data.value_default = .{ .str = std.mem.zeroes([63:0]u8) };
-        data.flags.remove(.DefaultValueIsSet);
+        data.ValueDefault = .{ .Str = std.mem.zeroes([63:0]u8) };
+        data.Flags.remove(.DefaultValueIsSet);
 
-        data.value.type2raw(data.value_type) catch @panic("settingVacate: 'value' invalid");
-        if (!data.flags.contains(.SavedValueNotConverted))
-            data.value_saved.type2raw(data.value_type) catch @panic("settingVacate: 'value_saved' invalid");
-        data.flags.remove(.SavedValueNotConverted);
+        data.Value.ValuePrint(data.ValueKind) catch @panic("SettingVacate: 'value' invalid");
+        if (!data.Flags.contains(.SavedValueNotConverted))
+            data.ValueSaved.ValuePrint(data.ValueKind) catch @panic("SettingVacate: 'ValueSaved' invalid");
+        data.Flags.remove(.SavedValueNotConverted);
 
-        data.value_type = .None;
+        data.ValueKind = .None;
 
-        var s_index: *SparseIndex = &self.data_settings.sparse_indices.items[handle.index];
+        var s_index: *SparseIndex = &self.DataSettings.sparse_indices.items[handle.index];
         s_index.owner = DEFAULT_ID;
-        self.data_settings.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
+        self.DataSettings.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
     /// trigger setting update with new value.
     /// will update value in external pointer callback to run update callback.
-    pub fn settingUpdate(
+    pub fn SettingUpdate(
         self: *SettingManager,
         handle: Handle,
-        value: Message.Value,
+        value: MessageValue,
     ) void {
-        var s: *Setting = self.data_settings.get(handle) orelse return;
+        var s: *Setting = self.DataSettings.get(handle) orelse return;
 
-        if (s.value.eqlSent(value, s.value_type)) return;
+        if (s.Value.EqlMessage(value, s.ValueKind)) return;
 
-        s.value.fromSent(value, s.value_type) catch return;
+        s.Value.FromMessage(value, s.ValueKind) catch return;
 
-        s.flags.insert(.InSectionUpdateQueue);
-        if (s.value_ptr) |p| s.value.writeToPtr(p, s.value_type);
+        s.Flags.insert(.InSectionUpdateQueue);
+        if (s.pValueTarget) |p| s.Value.WriteToPtr(p, s.ValueKind);
         if (s.fnOnChange) |f| f(value);
     }
 
     /// restore all settings to the value loaded from file.
     /// settings that are not on file are not affected.
-    pub fn settingResetAllToSaved(
+    pub fn SettingResetAllToSaved(
         self: *SettingManager,
     ) void {
-        for (self.data_settings.values.items) |*s| {
-            if (!s.flags.contains(.SavedValueIsSet)) continue;
-            s.value = s.value_saved;
-            s.flags.insert(.ValueIsSet);
+        for (self.DataSettings.values.items) |*s| {
+            if (!s.Flags.contains(.SavedValueIsSet)) continue;
+            s.Value = s.ValueSaved;
+            s.Flags.insert(.ValueIsSet);
         }
     }
 
     /// restore all settings to the default value defined by their owner.
     /// settings that do not have an owner are not affected.
-    pub fn settingResetAllToDefaults(
+    pub fn SettingResetAllToDefaults(
         self: *SettingManager,
     ) void {
-        for (self.data_settings.values.items) |*s| {
-            if (!s.flags.contains(.DefaultValueIsSet)) continue;
-            s.value = s.value_default;
-            s.flags.insert(.ValueIsSet);
+        for (self.DataSettings.values.items) |*s| {
+            if (!s.Flags.contains(.DefaultValueIsSet)) continue;
+            s.Value = s.ValueDefault;
+            s.Flags.insert(.ValueIsSet);
         }
     }
 
     /// scrub all unoccupied settings, removing their data entirely
-    pub fn settingRemoveAllVacant(
+    pub fn SettingRemoveAllVacant(
         self: *SettingManager,
     ) void {
-        const len = self.data_settings.handles.items.len;
+        const len = self.DataSettings.handles.items.len;
         for (0..len) |j| {
             const i = len - j - 1;
-            if (self.data_settings.values.items[i].flags.contains(.DefaultValueIsSet)) continue;
-            _ = self.data_settings.remove(self.data_settings.handles.items[i]);
+            if (self.DataSettings.values.items[i].Flags.contains(.DefaultValueIsSet)) continue;
+            _ = self.DataSettings.remove(self.DataSettings.handles.items[i]);
         }
     }
 
     /// free all sections and settings of the given owner, allowing them to be
     /// assigned a new owner
-    pub fn vacateOwner(self: *SettingManager, owner: u16) void {
-        // settings first for better cache use of data_settings processes
-        for (self.data_settings.handles.items) |h|
-            if (h.owner == owner) self.settingVacate(h);
+    pub fn VacateOwner(self: *SettingManager, owner: u16) void {
+        // settings first for better cache use of DataSettings processes
+        for (self.DataSettings.handles.items) |h|
+            if (h.owner == owner) self.SettingVacate(h);
 
-        for (self.data_sections.handles.items) |h|
-            if (h.owner == owner) self.sectionVacate(h);
+        for (self.DataSections.handles.items) |h|
+            if (h.owner == owner) self.SectionVacate(h);
     }
 
     // TODO: convert to reader to match iniWrite?
     /// read ini-formatted settings from file
-    pub fn iniRead(self: *SettingManager, gpa: Allocator, filename: []const u8) !void {
+    fn IniRead(self: *SettingManager, gpa: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
         //var file_br = std.io.bufferedReader(file.reader());
@@ -712,31 +688,31 @@ pub const SettingManager = struct {
         while (try parser.next()) |record| {
             switch (record) {
                 .section => |name| {
-                    const section_i = self.nodeFind(self.data_sections, null, name);
+                    const section_i = self.NodeFind(self.DataSections, null, name);
                     sec_handle = if (section_i) |i|
-                        self.data_sections.handles.items[i]
+                        self.DataSections.handles.items[i]
                     else
-                        self.sectionNew(null, name) catch null;
+                        self.SectionNew(null, name) catch null;
                 },
                 .property => |kv| {
-                    const setting_i = self.nodeFind(self.data_settings, sec_handle, kv.key);
+                    const setting_i = self.NodeFind(self.DataSettings, sec_handle, kv.key);
                     if (setting_i) |i| {
-                        const s = &self.data_settings.values.items[i];
-                        const h = self.data_settings.handles.items[i];
+                        const s = &self.DataSettings.values.items[i];
+                        const h = self.DataSettings.handles.items[i];
 
                         // don't override value that has already been changed by something else
-                        if (s.flags.contains(.SavedValueIsSet) and
-                            !s.value.eql(&s.value_saved, s.value_type)) continue;
+                        if (s.Flags.contains(.SavedValueIsSet) and
+                            !s.Value.Eql(&s.ValueSaved, s.ValueKind)) continue;
 
-                        const send_val = Message.Value.fromRaw(kv.value, s.value_type);
+                        const send_val = MessageValue.FromRaw(kv.value, s.ValueKind);
 
-                        if (!s.value_saved.eqlSent(send_val, s.value_type))
-                            try s.value_saved.fromSent(send_val, s.value_type);
+                        if (!s.ValueSaved.EqlMessage(send_val, s.ValueKind))
+                            try s.ValueSaved.FromMessage(send_val, s.ValueKind);
 
-                        if (!s.value.eqlSent(send_val, s.value_type))
-                            self.settingUpdate(h, send_val);
+                        if (!s.Value.EqlMessage(send_val, s.ValueKind))
+                            self.SettingUpdate(h, send_val);
                     } else {
-                        _ = try self.settingNew(sec_handle, kv.key, kv.value, true);
+                        _ = try self.SettingNew(sec_handle, kv.key, kv.value, true);
                     }
                 },
                 .enumeration => |value| { // FIXME: impl
@@ -745,99 +721,94 @@ pub const SettingManager = struct {
             }
         }
 
-        self.sectionRunUpdateAll();
+        self.SectionRunUpdateAll();
     }
 
     // callback for HotReload(HotReloadHandle)
     // stub because the settings live throughout the whole program lifetime and
     // will only be updated if a reload occurs
-    fn iniUnload(_: ?*SettingManager, _: [:0]const u8, _: [:0]const u8) void {}
+    fn IniUnload(_: ?*SettingManager, _: [:0]const u8, _: [:0]const u8) void {}
 
     // callback for HotReload(HotReloadHandle)
     /// read settings from file
-    fn iniLoad(self: ?*SettingManager, filepath: [:0]const u8, _: [:0]const u8) bool {
+    fn IniLoad(self: ?*SettingManager, filepath: [:0]const u8, _: [:0]const u8) bool {
         assert(self != null);
-        assert(std.mem.eql(u8, self.?.file_name, filepath));
+        assert(std.mem.eql(u8, self.?.FilePath, filepath));
 
-        if (self.?.skip_next_load) {
-            self.?.skip_next_load = false;
+        if (self.?.bSkipNextLoad) {
+            self.?.bSkipNextLoad = false;
             return false; // TODO: should be true or false? no effect in current logic tho
         }
 
-        self.?.iniRead(self.?.scratch_alloc, self.?.file_name) catch return false;
+        self.?.IniRead(self.?.ScratchAlloc, self.?.FilePath) catch return false;
 
-        self.?.file_exists = true;
+        self.?.bFileExists = true;
         return true;
     }
 
     /// write all settings to buffer in ini format
-    pub fn iniWrite(self: *SettingManager, writer: anytype) !void {
-        try self.iniWriteSection(writer, null);
-        for (self.data_sections.handles.items) |h|
-            try self.iniWriteSection(writer, h);
+    fn IniWrite(self: *SettingManager, writer: anytype) !void {
+        try self.IniWriteSection(writer, null);
+        for (self.DataSections.handles.items) |h|
+            try self.IniWriteSection(writer, h);
     }
 
     // TODO: sorting both settings and sections?
     /// write settings section to buffer in ini format
-    fn iniWriteSection(self: *SettingManager, writer: anytype, handle: ?Handle) !void {
+    fn IniWriteSection(self: *SettingManager, writer: anytype, handle: ?Handle) !void {
         if (handle) |h| blk: {
-            const section: *Section = self.data_sections.get(h) orelse break :blk;
-            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&section.name)));
+            const section: *Section = self.DataSections.get(h) orelse break :blk;
+            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&section.Name)));
             _ = try writer.write("[");
-            _ = try writer.write(section.name[0..nlen]);
+            _ = try writer.write(section.Name[0..nlen]);
             _ = try writer.write("]\n");
         }
 
-        for (self.data_settings.values.items) |*s| {
-            if (!s.flags.contains(.InFileWriteQueue) or !ParentHandle.eql(s.section, handle)) continue;
+        for (self.DataSettings.values.items) |*s| {
+            if (!s.Flags.contains(.InFileWriteQueue) or !ParentHandle.Eql(s.Parent, handle)) continue;
 
-            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&s.name)));
-            _ = try writer.write(s.name[0..nlen]);
+            const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&s.Name)));
+            _ = try writer.write(s.Name[0..nlen]);
             _ = try writer.write(" = ");
-            try s.value.write(writer, s.value_type);
+            try s.Value.Write(writer, s.ValueKind);
             _ = try writer.write("\n");
 
-            s.flags.remove(.InFileWriteQueue);
+            s.Flags.remove(.InFileWriteQueue);
         }
 
         _ = writer.write("\n") catch {};
     }
 
     /// write settings to file
-    pub fn save(
+    pub fn Save(
         self: *SettingManager,
+        b_save_defaults: bool,
     ) !void {
-        const changed_settings: u32 = self.savePrepare();
-        if (changed_settings == 0 and (self.s_save_defaults and self.file_exists)) return;
+        const changed_settings: u32 = self.SavePrepare(b_save_defaults);
+        if (changed_settings == 0 and (b_save_defaults and self.bFileExists)) return;
 
-        const file = try std.fs.cwd().createFile(self.file_name, .{}); // .exclusive=true for no file rewrite
+        const file = try std.fs.cwd().createFile(self.FilePath, .{}); // .exclusive=true for no file rewrite
         defer file.close();
         var file_bw = std.io.bufferedWriter(file.writer());
         defer _ = file_bw.flush() catch |e|
-            std.debug.panic("ASettings(save): write buffer flush: {s}", .{@errorName(e)});
+            panic("ASettings(Save): write buffer flush: {s}", .{@errorName(e)});
         const file_w = file_bw.writer();
 
-        try self.iniWrite(file_w);
-        self.skip_next_load = true;
-        self.file_exists = true;
+        try self.IniWrite(file_w);
+        self.bSkipNextLoad = true;
+        self.bFileExists = true;
 
-        self.saveCleanup();
-    }
-
-    /// write settings to file, but only if autosave setting is enabled
-    pub fn saveAuto(self: *SettingManager) !void {
-        if (self.s_save_auto)
-            try self.save();
+        self.SaveCleanup();
     }
 
     /// post-processing of sections and settings, to make settings ready for next write
-    fn saveCleanup(self: *SettingManager) void {
-        for (self.data_settings.values.items) |*s| {
+    fn SaveCleanup(self: *SettingManager) void {
+        for (self.DataSettings.values.items) |*s| {
             // make sure system knows which settings are no longer on file
-            if (!s.flags.contains(.FileUpdatedLastWrite))
-                s.flags.remove(.SavedValueIsSet);
+            if (!s.Flags.contains(.FileUpdatedLastWrite))
+                s.Flags.remove(.SavedValueIsSet);
 
-            s.flags.remove(.FileUpdatedLastWrite);
+            s.Flags.remove(.FileUpdatedLastWrite);
         }
     }
 
@@ -846,40 +817,40 @@ pub const SettingManager = struct {
     /// pre-pass on settings to determine which settings need to be written and how
     /// write functions assume settings are tagged correctly as a result of running this step
     /// @return     number of settings that would actually change in the file as a result of writing
-    fn savePrepare(self: *SettingManager) u32 {
+    fn SavePrepare(self: *SettingManager, b_save_defaults: bool) u32 {
         var changed: u32 = 0;
 
-        changed += self.savePrepareSection(null);
-        for (self.data_sections.handles.items) |h|
-            changed += self.savePrepareSection(h);
+        changed += self.SavePrepareSection(null, b_save_defaults);
+        for (self.DataSections.handles.items) |h|
+            changed += self.SavePrepareSection(h, b_save_defaults);
 
         return changed;
     }
 
     /// see savePrepare for explanation
     /// @return     number of settings that would actually change in the file as a result of writing
-    fn savePrepareSection(self: *SettingManager, handle: ?Handle) u32 {
+    fn SavePrepareSection(self: *SettingManager, handle: ?Handle, b_save_defaults: bool) u32 {
         var changed: u32 = 0;
-        for (self.data_settings.values.items) |*s| {
-            if (!ParentHandle.eql(s.section, handle)) continue;
+        for (self.DataSettings.values.items) |*s| {
+            if (!ParentHandle.Eql(s.Parent, handle)) continue;
 
             // only keep uninitialized settings if they were already on file
-            if (!s.flags.contains(.DefaultValueIsSet) and
-                !s.flags.contains(.SavedValueIsSet)) continue;
+            if (!s.Flags.contains(.DefaultValueIsSet) and
+                !s.Flags.contains(.SavedValueIsSet)) continue;
 
             // only store initialized settings if they are not default
-            if (!self.s_save_defaults and s.flags.contains(.DefaultValueIsSet) and
-                s.value_default.eql(&s.value, s.value_type)) continue;
+            if (!b_save_defaults and s.Flags.contains(.DefaultValueIsSet) and
+                s.ValueDefault.Eql(&s.Value, s.ValueKind)) continue;
 
-            if ((s.flags.contains(.SavedValueIsSet) and !s.value_saved.eql(&s.value, s.value_type)) or
-                (!s.flags.contains(.SavedValueIsSet) and self.s_save_defaults))
+            if ((s.Flags.contains(.SavedValueIsSet) and !s.ValueSaved.Eql(&s.Value, s.ValueKind)) or
+                (!s.Flags.contains(.SavedValueIsSet) and b_save_defaults))
                 changed += 1;
 
-            s.value_saved = s.value;
-            s.flags.insert(.SavedValueIsSet);
-            s.flags.insert(.FileUpdatedLastWrite);
+            s.ValueSaved = s.Value;
+            s.Flags.insert(.SavedValueIsSet);
+            s.Flags.insert(.FileUpdatedLastWrite);
 
-            s.flags.insert(.InFileWriteQueue);
+            s.Flags.insert(.InFileWriteQueue);
         }
         return changed;
     }
@@ -889,7 +860,7 @@ pub const SettingManager = struct {
 // DEBUGGING & TESTING
 
 // NOTE: use in testing
-fn testUpdateSet1(_: Message.Value) callconv(.C) void {
+fn testUpdateSet1(_: MessageValue) callconv(.C) void {
     //dbg.ConsoleOut("set1 changed to {d:4.2}\n", .{value.f}) catch {};
 }
 
@@ -903,33 +874,33 @@ test {
     // TODO: add setting occupy -> string type test
     // TODO: use actual owner IDs that don't clash (or just make sure it's all actually test scoped)
 
-    //const sec_base = ASettings.sectionNew(null, "TestBaseSection") catch NullHandle;
-    //_ = ASettings.sectionNew(sec_base, "Sec1") catch {};
-    //_ = ASettings.sectionNew(sec_base, "Sec2") catch {};
-    //_ = ASettings.sectionNew(sec_base, "Sec2") catch {}; // expect: NameTaken error -> skipped
-    //const sec1 = ASettings.sectionOccupy(0xF000, sec_base, "Sec1", null) catch NullHandle;
-    //const sec2 = ASettings.sectionOccupy(0xF001, sec_base, "Sec2", null) catch NullHandle;
+    //const sec_base = ASettings.SectionNew(null, "TestBaseSection") catch NullHandle;
+    //_ = ASettings.SectionNew(sec_base, "Sec1") catch {};
+    //_ = ASettings.SectionNew(sec_base, "Sec2") catch {};
+    //_ = ASettings.SectionNew(sec_base, "Sec2") catch {}; // expect: NameTaken error -> skipped
+    //const sec1 = ASettings.SectionOccupy(0xF000, sec_base, "Sec1", null) catch NullHandle;
+    //const sec2 = ASettings.SectionOccupy(0xF001, sec_base, "Sec2", null) catch NullHandle;
 
-    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
-    //_ = ASettings.settingNew(sec1, "Set1", "123.456", false) catch {};
-    //_ = ASettings.settingNew(null, "Set2", "Val2", false) catch {};
-    //_ = ASettings.settingNew(sec2, "Set3", "Val3", false) catch {};
-    //_ = ASettings.settingNew(null, "Set4", "Val4", false) catch {};
-    //_ = ASettings.settingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
-    //_ = ASettings.settingNew(null, "Set5", "Val5", false) catch {};
+    //_ = ASettings.SettingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.SettingNew(sec1, "Set1", "123.456", false) catch {};
+    //_ = ASettings.SettingNew(null, "Set2", "Val2", false) catch {};
+    //_ = ASettings.SettingNew(sec2, "Set3", "Val3", false) catch {};
+    //_ = ASettings.SettingNew(null, "Set4", "Val4", false) catch {};
+    //_ = ASettings.SettingNew(null, "Set4", "Val42", false) catch {}; // expect: NameTaken error -> skipped
+    //_ = ASettings.SettingNew(null, "Set5", "Val5", false) catch {};
 
-    //const occ1 = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, testUpdateSet1) catch NullHandle;
-    //_ = ASettings.settingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
-    //const occ2 = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
-    //_ = ASettings.settingOccupy(0xF000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
+    //const occ1 = ASettings.SettingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, testUpdateSet1) catch NullHandle;
+    //_ = ASettings.SettingOccupy(0xF000, sec1, "Set1", .F, .{ .f = 987.654 }, null, null) catch {}; // expect: ignored
+    //const occ2 = ASettings.SettingOccupy(0xF000, null, "Set6", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    //_ = ASettings.SettingOccupy(0xF000, null, "Set6", .F, .{ .f = 876.543 }, null, null) catch {}; // export: ignored
 
-    //ASettings.settingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
-    //ASettings.settingVacate(occ2); // expect: undefined default, etc.
+    //ASettings.SettingUpdate(occ1, .{ .f = 678.543 }); // expect: changed value
+    //ASettings.SettingVacate(occ2); // expect: undefined default, etc.
 
-    //const sec3 = ASettings.sectionOccupy(0xF001, sec2, "Sec3", null) catch NullHandle;
-    //_ = ASettings.settingNew(sec3, "Set7", "Val7", false) catch {};
-    //_ = ASettings.settingOccupy(0xF001, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
-    //ASettings.sectionVacate(sec3);
+    //const sec3 = ASettings.SectionOccupy(0xF001, sec2, "Sec3", null) catch NullHandle;
+    //_ = ASettings.SettingNew(sec3, "Set7", "Val7", false) catch {};
+    //_ = ASettings.SettingOccupy(0xF001, sec3, "Set8", .F, .{ .f = 987.654 }, null, null) catch NullHandle;
+    //ASettings.SectionVacate(sec3);
 
-    //ASettings.vacateOwner(0xF000); // expect: everything undefined default, etc.
+    //ASettings.VacateOwner(0xF000); // expect: everything undefined default, etc.
 }

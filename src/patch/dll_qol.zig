@@ -256,87 +256,87 @@ const QolState = struct {
         h_s_section = section;
 
         h_s_quickstart =
-            gf.ASettingOccupy(section, "quick_restart_enable", .B, .{ .b = false }, &s_quickstart, null);
+            gf.ASettingOccupy(section, "quick_restart_enable", .B, .{ .B = false }, &s_quickstart, null);
         h_s_quickrace =
-            gf.ASettingOccupy(section, "quick_race_menu_enable", .B, .{ .b = false }, &s_quickrace, null);
+            gf.ASettingOccupy(section, "quick_race_menu_enable", .B, .{ .B = false }, &s_quickrace, null);
         h_s_default_racers =
-            gf.ASettingOccupy(section, "default_racers", .U, .{ .u = 12 }, null, settingsUpdateRacers);
+            gf.ASettingOccupy(section, "default_racers", .U, .{ .U = 12 }, null, settingsUpdateRacers);
         h_s_default_laps =
-            gf.ASettingOccupy(section, "default_laps", .U, .{ .u = 3 }, null, settingsUpdateLaps);
+            gf.ASettingOccupy(section, "default_laps", .U, .{ .U = 3 }, null, settingsUpdateLaps);
         h_s_default_camera =
-            gf.ASettingOccupy(section, "default_camera", .U, .{ .u = 1 }, null, settingsUpdateCamera);
+            gf.ASettingOccupy(section, "default_camera", .U, .{ .U = 1 }, null, settingsUpdateCamera);
         h_s_default_camera_auto =
-            gf.ASettingOccupy(section, "default_camera_auto", .B, .{ .b = false }, &s_default_camera_auto, null);
+            gf.ASettingOccupy(section, "default_camera_auto", .B, .{ .B = false }, &s_default_camera_auto, null);
         h_s_ms_timer =
-            gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .b = false }, &s_ms_timer, null);
+            gf.ASettingOccupy(section, "ms_timer_enable", .B, .{ .B = false }, &s_ms_timer, null);
         h_s_ms_timer_hud =
-            gf.ASettingOccupy(section, "ms_timer_hud_enable", .B, .{ .b = false }, &s_ms_timer_hud, null);
+            gf.ASettingOccupy(section, "ms_timer_hud_enable", .B, .{ .B = false }, &s_ms_timer_hud, null);
         h_s_ms_timer_finish =
-            gf.ASettingOccupy(section, "ms_timer_finish_enable", .B, .{ .b = false }, &s_ms_timer_finish, null);
+            gf.ASettingOccupy(section, "ms_timer_finish_enable", .B, .{ .B = false }, &s_ms_timer_finish, null);
         h_s_fps_limiter =
-            gf.ASettingOccupy(section, "fps_limiter_enable", .B, .{ .b = false }, &s_fps_limiter, null);
+            gf.ASettingOccupy(section, "fps_limiter_enable", .B, .{ .B = false }, &s_fps_limiter, null);
         h_s_skip_planet_cutscenes =
-            gf.ASettingOccupy(section, "skip_planet_cutscenes", .B, .{ .b = false }, &s_skip_planet_cutscenes, null);
+            gf.ASettingOccupy(section, "skip_planet_cutscenes", .B, .{ .B = false }, &s_skip_planet_cutscenes, null);
         h_s_skip_podium_cutscene =
-            gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .b = false }, &s_skip_podium_cutscene, null);
+            gf.ASettingOccupy(section, "skip_podium_cutscene", .B, .{ .B = false }, &s_skip_podium_cutscene, null);
         h_s_fix_viewport_edges =
-            gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .b = false }, &s_fix_viewport_edges, null);
+            gf.ASettingOccupy(section, "fix_viewport_edges", .B, .{ .B = false }, &s_fix_viewport_edges, null);
         h_s_run_in_background =
-            gf.ASettingOccupy(section, "run_in_background", .B, .{ .b = false }, &s_run_in_background, null);
+            gf.ASettingOccupy(section, "run_in_background", .B, .{ .B = false }, &s_run_in_background, null);
 
         h_s_autoreset_enable =
-            gf.ASettingOccupy(section, "autoreset_enable", .B, .{ .b = false }, &s_autoreset_enable, null);
+            gf.ASettingOccupy(section, "autoreset_enable", .B, .{ .B = false }, &s_autoreset_enable, null);
         h_s_autoreset_dead_enable =
-            gf.ASettingOccupy(section, "autoreset_dead_enable", .B, .{ .b = false }, &s_autoreset_dead_enable, null);
+            gf.ASettingOccupy(section, "autoreset_dead_enable", .B, .{ .B = false }, &s_autoreset_dead_enable, null);
         h_s_autoreset_dead_delay =
-            gf.ASettingOccupy(section, "autoreset_dead_delay", .F, .{ .f = 0.5 }, &s_autoreset_dead_delay, null);
+            gf.ASettingOccupy(section, "autoreset_dead_delay", .F, .{ .F = 0.5 }, &s_autoreset_dead_delay, null);
         h_s_autoreset_fire_enable =
-            gf.ASettingOccupy(section, "autoreset_fire_enable", .B, .{ .b = false }, &s_autoreset_fire_enable, null);
+            gf.ASettingOccupy(section, "autoreset_fire_enable", .B, .{ .B = false }, &s_autoreset_fire_enable, null);
         h_s_autoreset_fire_delay =
-            gf.ASettingOccupy(section, "autoreset_fire_delay", .F, .{ .f = 3.0 }, &s_autoreset_fire_delay, null);
+            gf.ASettingOccupy(section, "autoreset_fire_delay", .F, .{ .F = 3.0 }, &s_autoreset_fire_delay, null);
         h_s_autoreset_firstboost_enable =
-            gf.ASettingOccupy(section, "autoreset_firstboost_enable", .B, .{ .b = false }, &s_autoreset_firstboost_enable, null);
+            gf.ASettingOccupy(section, "autoreset_firstboost_enable", .B, .{ .B = false }, &s_autoreset_firstboost_enable, null);
         h_s_autoreset_firstboost_delay =
-            gf.ASettingOccupy(section, "autoreset_firstboost_delay", .F, .{ .f = 0.25 }, &s_autoreset_firstboost_delay, null);
+            gf.ASettingOccupy(section, "autoreset_firstboost_delay", .F, .{ .F = 0.25 }, &s_autoreset_firstboost_delay, null);
         h_s_autoreset_underheat_enable =
-            gf.ASettingOccupy(section, "autoreset_underheat_enable", .B, .{ .b = false }, &s_autoreset_underheat_enable, null);
+            gf.ASettingOccupy(section, "autoreset_underheat_enable", .B, .{ .B = false }, &s_autoreset_underheat_enable, null);
         h_s_autoreset_underheat_delay =
-            gf.ASettingOccupy(section, "autoreset_underheat_delay", .F, .{ .f = 3.0 }, &s_autoreset_underheat_delay, null);
+            gf.ASettingOccupy(section, "autoreset_underheat_delay", .F, .{ .F = 3.0 }, &s_autoreset_underheat_delay, null);
 
         h_s_trackselect_remember =
-            gf.ASettingOccupy(section, "trackselect_remember", .B, .{ .b = false }, &s_trackselect_remember, null);
+            gf.ASettingOccupy(section, "trackselect_remember", .B, .{ .B = false }, &s_trackselect_remember, null);
         h_s_trackselect_last =
-            gf.ASettingOccupy(section, "trackselect_last", .U, .{ .u = 0 }, null, null);
+            gf.ASettingOccupy(section, "trackselect_last", .U, .{ .U = 0 }, null, null);
         h_s_fast_navigation =
-            gf.ASettingOccupy(section, "fast_navigation", .B, .{ .b = false }, &s_fast_navigation, null);
+            gf.ASettingOccupy(section, "fast_navigation", .B, .{ .B = false }, &s_fast_navigation, null);
         h_s_dpad_navigation =
-            gf.ASettingOccupy(section, "dpad_navigation", .B, .{ .b = false }, &s_dpad_navigation, null);
+            gf.ASettingOccupy(section, "dpad_navigation", .B, .{ .B = false }, &s_dpad_navigation, null);
 
         h_s_show_postrace_times_hex =
-            gf.ASettingOccupy(section, "show_postrace_times_hex", .B, .{ .b = false }, &s_show_postrace_times_hex, null);
+            gf.ASettingOccupy(section, "show_postrace_times_hex", .B, .{ .B = false }, &s_show_postrace_times_hex, null);
         h_s_clear_records_enable =
-            gf.ASettingOccupy(section, "clear_records_enable", .B, .{ .b = false }, &s_clear_records_enable, null);
+            gf.ASettingOccupy(section, "clear_records_enable", .B, .{ .B = false }, &s_clear_records_enable, null);
 
         FastCountdown.h_s_enable =
-            gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .b = false }, &FastCountdown.s_enable, null);
+            gf.ASettingOccupy(section, "fast_countdown_enable", .B, .{ .B = false }, &FastCountdown.s_enable, null);
         FastCountdown.h_s_duration =
-            gf.ASettingOccupy(section, "fast_countdown_duration", .F, .{ .f = 1.0 }, &FastCountdown.s_duration, null);
+            gf.ASettingOccupy(section, "fast_countdown_duration", .F, .{ .F = 1.0 }, &FastCountdown.s_duration, null);
 
         // FIXME: figure out how to init without this; probably need later zig
         //  version. also, is this even necessary if ASettingOccupy writes it?
         _ = std.fmt.bufPrintZ(&QuickRaceMenu.s_menu_track_order, "PLANET", .{}) catch unreachable;
         QuickRaceMenu.h_s_fps_default =
-            gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .u = 24 }, &QuickRaceMenu.s_fps_default, null);
+            gf.ASettingOccupy(section, "fps_limiter_default", .U, .{ .U = 24 }, &QuickRaceMenu.s_fps_default, null);
         QuickRaceMenu.h_s_favorite_vehicles =
-            gf.ASettingOccupy(section, "favorite_vehicles", .U, .{ .u = 0 }, &QuickRaceMenu.s_favorite_vehicles, null);
+            gf.ASettingOccupy(section, "favorite_vehicles", .U, .{ .U = 0 }, &QuickRaceMenu.s_favorite_vehicles, null);
         QuickRaceMenu.h_s_menu_track_order =
-            gf.ASettingOccupy(section, "menu_track_order", .Str, .{ .str = "PLANET" }, &QuickRaceMenu.s_menu_track_order, null);
+            gf.ASettingOccupy(section, "menu_track_order", .Str, .{ .Str = "PLANET" }, &QuickRaceMenu.s_menu_track_order, null);
     }
 
     // TODO: setting to control whether default racers automatically updates
     fn settingsUpdateRacers(new_value: ASettingMValue) callconv(.C) void {
-        s_default_racers = std.math.clamp(new_value.u, 1, 12);
-        if (h_s_default_racers) |h| api.ASettingUpdate(h, .{ .u = s_default_racers });
+        s_default_racers = std.math.clamp(new_value.U, 1, 12);
+        if (h_s_default_racers) |h| api.ASettingUpdate(h, .{ .U = s_default_racers });
 
         QuickRaceMenu.values.racers = @intCast(s_default_racers);
         if (api.SInitLatePassed()) {
@@ -350,8 +350,8 @@ const QolState = struct {
 
     // TODO: setting to control whether default laps automatically updates
     fn settingsUpdateLaps(new_value: ASettingMValue) callconv(.C) void {
-        s_default_laps = std.math.clamp(new_value.u, 1, 5);
-        if (h_s_default_laps) |h| QuickRaceMenu.api.ASettingUpdate(h, .{ .u = s_default_laps });
+        s_default_laps = std.math.clamp(new_value.U, 1, 5);
+        if (h_s_default_laps) |h| QuickRaceMenu.api.ASettingUpdate(h, .{ .U = s_default_laps });
 
         QuickRaceMenu.values.laps = @intCast(s_default_laps);
         if (QuickRaceMenu.api.SInitLatePassed()) {
@@ -360,9 +360,9 @@ const QolState = struct {
     }
 
     fn settingsUpdateCamera(new_value: ASettingMValue) callconv(.C) void {
-        s_default_camera = std.math.clamp(new_value.u, 1, 5);
+        s_default_camera = std.math.clamp(new_value.U, 1, 5);
         if (s_default_camera == 3) s_default_camera = 1;
-        if (h_s_default_camera) |h| api.ASettingUpdate(h, .{ .u = s_default_camera });
+        if (h_s_default_camera) |h| api.ASettingUpdate(h, .{ .U = s_default_camera });
 
         const handle = QuickRaceMenu.h_ar_camera.Handle;
         if (apih.RAddressPatchToggle(api, handle, true)) {
@@ -375,7 +375,7 @@ const QolState = struct {
         var update_fast_countdown: bool = false;
 
         for (changed[0..len]) |*setting| {
-            const name = std.mem.span(setting.name);
+            const name = std.mem.span(setting.Name);
 
             if (std.mem.eql(u8, "quick_race_menu_enable", name)) {
                 if (!s_quickrace) QuickRaceMenu.close();
@@ -416,7 +416,7 @@ const QolState = struct {
                 continue;
             }
             if (std.mem.eql(u8, "trackselect_last", name)) {
-                s_trackselect_last = if (setting.value.u > 24) 0 else setting.value.u;
+                s_trackselect_last = if (setting.Value.U > 24) 0 else setting.Value.U;
                 continue;
             }
             if (std.mem.eql(u8, "fast_navigation", name)) {
@@ -1302,9 +1302,9 @@ const QuickRaceMenu = extern struct {
     };
 
     fn load_race() void {
-        if (h_s_fps_default) |h| api.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
-        if (QolState.h_s_default_laps) |h| api.ASettingUpdate(h, .{ .u = @intCast(values.laps) });
-        if (QolState.h_s_default_racers) |h| api.ASettingUpdate(h, .{ .u = @intCast(values.racers) });
+        if (h_s_fps_default) |h| api.ASettingUpdate(h, .{ .U = @intCast(values.fps) });
+        if (QolState.h_s_default_laps) |h| api.ASettingUpdate(h, .{ .U = @intCast(values.laps) });
+        if (QolState.h_s_default_racers) |h| api.ASettingUpdate(h, .{ .U = @intCast(values.racers) });
 
         // NOTE: laps, racers handled by settings update fn
         FpsTimer.SetPeriod(@intCast(values.fps));
@@ -1445,7 +1445,7 @@ const QuickRaceMenu = extern struct {
             if (cb[INPUT_INTERACT](.JustOn) and api.SPracticeMode()) {
                 FpsTimer.SetPeriod(@intCast(values.fps));
                 if (h_s_fps_default) |h|
-                    api.ASettingUpdate(h, .{ .u = @intCast(values.fps) });
+                    api.ASettingUpdate(h, .{ .U = @intCast(values.fps) });
 
                 rso.swrSound_PlaySoundMacro(45); // sfx_vox_pdroid_i1.wav
             }
@@ -1486,7 +1486,7 @@ const QuickRaceMenu = extern struct {
             if (cb[INPUT_INTERACT](.JustOn)) {
                 const vehicle_bit: u32 = @as(u32, 1) << @intCast(values.vehicle);
                 if (h_s_favorite_vehicles) |h|
-                    api.ASettingUpdate(h, .{ .u = s_favorite_vehicles ^ vehicle_bit });
+                    api.ASettingUpdate(h, .{ .U = s_favorite_vehicles ^ vehicle_bit });
 
                 var sound_id: i16 = 44; // sfx_vox_pdroid_h2.wav
                 if (s_favorite_vehicles & vehicle_bit > 0) sound_id = 45; // sfx_vox_pdroid_i1.wav
@@ -1560,7 +1560,7 @@ const QuickRaceMenu = extern struct {
                 rso.swrSound_PlaySoundMacro(sound_id);
 
                 if (h_s_menu_track_order) |h|
-                    api.ASettingUpdate(h, .{ .str = if (!using_circuit_track_order) "PLANET" else "CIRCUIT" });
+                    api.ASettingUpdate(h, .{ .Str = if (!using_circuit_track_order) "PLANET" else "CIRCUIT" });
 
                 return false;
             }
@@ -1795,11 +1795,11 @@ export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
 
     const laps: u32 = @intCast(hang.Laps);
     if (QolState.h_s_default_laps != null and laps != QolState.s_default_laps)
-        gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .u = laps });
+        gf.ASettingUpdate(QolState.h_s_default_laps.?, .{ .U = laps });
 
     const racers: u32 = @intCast(mem.Read(0x50C558, i8)); // QuickRaceMenu.h_ar_racers
     if (QolState.h_s_default_racers != null and racers != QolState.s_default_racers)
-        gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .u = racers });
+        gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .U = racers });
 
     // FIXME: convert to mapped inputs
     if (QolState.s_clear_records_enable and gf.InputGetKbRaw(.BACK) == .JustOn) {
@@ -1858,7 +1858,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     const jdge = re.Manager.entity(.Jdge, 0);
 
     if (QolState.h_s_trackselect_last != null and QolState.s_trackselect_last != hang.Track)
-        gf.ASettingUpdate(QolState.h_s_trackselect_last.?, .{ .u = hang.Track });
+        gf.ASettingUpdate(QolState.h_s_trackselect_last.?, .{ .U = hang.Track });
 
     if (gf.SInRace().on()) {
         if (gf.SRaceStateNew() and gf.SRaceState() == .PreRace)
@@ -1871,7 +1871,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
             if (QolState.cam_cman) |cman| {
                 if (cman.mode != QolState.cam_prev and cman.mode != QolState.s_default_camera and
                     (cman.mode == 1 or cman.mode == 2 or cman.mode == 4 or cman.mode == 5))
-                    if (QolState.h_s_default_camera) |h| gf.ASettingUpdate(h, .{ .u = cman.mode });
+                    if (QolState.h_s_default_camera) |h| gf.ASettingUpdate(h, .{ .U = cman.mode });
                 QolState.cam_prev = cman.mode;
             }
         }

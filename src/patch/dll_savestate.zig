@@ -198,8 +198,8 @@ const state = struct {
     fn settingsInit(gf: *GlobalFn) void {
         s_h_section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "savestate", null);
 
-        s_h_enable = gf.ASettingOccupy(s_h_section.?, "enable", .B, .{ .b = false }, &s_enable, null);
-        s_h_load_delay = gf.ASettingOccupy(s_h_section.?, "load_delay", .U, .{ .u = 500 }, &s_load_delay, null);
+        s_h_enable = gf.ASettingOccupy(s_h_section.?, "enable", .B, .{ .B = false }, &s_enable, null);
+        s_h_load_delay = gf.ASettingOccupy(s_h_section.?, "load_delay", .U, .{ .U = 500 }, &s_load_delay, null);
     }
 };
 

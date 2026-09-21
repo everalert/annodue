@@ -109,9 +109,9 @@ const GAssetBuffer = struct {
         h_s_section = section;
 
         h_s_texbuf_enable =
-            api.ASettingOccupy(section, "texbuf_enable", .B, .{ .b = false }, &s_texbuf_enable, null);
+            api.ASettingOccupy(section, "texbuf_enable", .B, .{ .B = false }, &s_texbuf_enable, null);
         h_s_texbuf_size =
-            api.ASettingOccupy(section, "texbuf_size", .U, .{ .u = 5120 }, &s_texbuf_size, null);
+            api.ASettingOccupy(section, "texbuf_size", .U, .{ .U = 5120 }, &s_texbuf_size, null);
     }
 };
 

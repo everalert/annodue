@@ -352,23 +352,23 @@ const InputDisplay = struct {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "inputdisplay", settingsUpdate);
         h_s_section = section;
 
-        h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
-        h_s_pos_x = gf.ASettingOccupy(section, "pos_x", .I, .{ .i = 420 }, null, null);
-        h_s_pos_y = gf.ASettingOccupy(section, "pos_y", .I, .{ .i = 432 }, null, null);
+        h_s_enable = gf.ASettingOccupy(section, "enable", .B, .{ .B = false }, &s_enable, null);
+        h_s_pos_x = gf.ASettingOccupy(section, "pos_x", .I, .{ .I = 420 }, null, null);
+        h_s_pos_y = gf.ASettingOccupy(section, "pos_y", .I, .{ .I = 432 }, null, null);
     }
 
     // TODO: handle updating position without having to reload race
     fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
         for (changed, 0..len) |setting, _| {
-            const nlen: usize = std.mem.len(setting.name);
+            const nlen: usize = std.mem.len(setting.Name);
 
-            if (nlen == 5 and std.mem.eql(u8, "pos_x", setting.name[0..nlen])) {
-                s_pos_x = @as(i16, @truncate(setting.value.i));
+            if (nlen == 5 and std.mem.eql(u8, "pos_x", setting.Name[0..nlen])) {
+                s_pos_x = @as(i16, @truncate(setting.Value.I));
                 continue;
             }
 
-            if (nlen == 5 and std.mem.eql(u8, "pos_y", setting.name[0..nlen])) {
-                s_pos_y = @as(i16, @truncate(setting.value.i));
+            if (nlen == 5 and std.mem.eql(u8, "pos_y", setting.Name[0..nlen])) {
+                s_pos_y = @as(i16, @truncate(setting.Value.I));
                 continue;
             }
         }

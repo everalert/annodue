@@ -7,9 +7,9 @@ const core_settings = @import("../core/core_settings.zig");
 pub const ASettingHandle = core_settings.Handle;
 pub const ASETTING_HANDLE_NULL = core_settings.HANDLE_NULL;
 pub const ASettingMessage = core_settings.Message;
-pub const ASettingMValue = core_settings.Message.Value;
+pub const ASettingMValue = core_settings.MessageValue;
 //pub const ASettingSetting = core_settings.Setting;
-//pub const ASettingSValue = core_settings.Setting.Value;
+//pub const ASettingSValue = core_settings.SettingValue;
 pub const ASettingKind = core_settings.Kind;
 
 //------------------------------------------------------------------------------

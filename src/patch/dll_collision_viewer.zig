@@ -69,11 +69,11 @@ const AnnodueSettings = struct {
         h_s_section = section;
 
         h_s_depth_bias =
-            gf.ASettingOccupy(section, "depth_bias", .I, .{ .i = 10 }, &s_depth_bias, updateDepthBias);
+            gf.ASettingOccupy(section, "depth_bias", .I, .{ .I = 10 }, &s_depth_bias, updateDepthBias);
     }
 
     fn updateDepthBias(changed: ASettingMValue) callconv(.C) void {
-        state.depth_bias = @as(f32, @floatFromInt(changed.i)) / 100.0;
+        state.depth_bias = @as(f32, @floatFromInt(changed.I)) / 100.0;
     }
 };
 
@@ -347,7 +347,7 @@ const QuickRaceMenu = extern struct {
 
 fn MenuDepthBiasCallback(_: *Menu, _: *MenuItem) callconv(.C) bool {
     if (AnnodueSettings.h_s_depth_bias) |h|
-        QuickRaceMenu.gf.ASettingUpdate(h, .{ .i = @as(i32, @intFromFloat(state.depth_bias * 100.0)) });
+        QuickRaceMenu.gf.ASettingUpdate(h, .{ .I = @as(i32, @intFromFloat(state.depth_bias * 100.0)) });
     return false;
 }
 

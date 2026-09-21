@@ -90,27 +90,27 @@ const Overlay = struct {
         h_s_section = section;
 
         h_s_enable =
-            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+            gf.ASettingOccupy(section, "enable", .B, .{ .B = false }, &s_enable, null);
         h_s_show_lap_times =
-            gf.ASettingOccupy(section, "show_lap_times", .B, .{ .b = true }, &s_show_lap_times, null);
+            gf.ASettingOccupy(section, "show_lap_times", .B, .{ .B = true }, &s_show_lap_times, null);
         h_s_show_heat_timer =
-            gf.ASettingOccupy(section, "show_heat_timer", .B, .{ .b = true }, &s_show_heat_timer, null);
+            gf.ASettingOccupy(section, "show_heat_timer", .B, .{ .B = true }, &s_show_heat_timer, null);
         h_s_show_death_count =
-            gf.ASettingOccupy(section, "show_death_count", .B, .{ .b = true }, &s_show_death_count, null);
+            gf.ASettingOccupy(section, "show_death_count", .B, .{ .B = true }, &s_show_death_count, null);
         h_s_show_fall_timer =
-            gf.ASettingOccupy(section, "show_fall_timer", .B, .{ .b = true }, &s_show_fall_timer, null);
+            gf.ASettingOccupy(section, "show_fall_timer", .B, .{ .B = true }, &s_show_fall_timer, null);
         h_s_show_mfg_timer =
-            gf.ASettingOccupy(section, "show_mfg_timer", .B, .{ .b = true }, &s_show_mfg_timer, null);
+            gf.ASettingOccupy(section, "show_mfg_timer", .B, .{ .B = true }, &s_show_mfg_timer, null);
         h_s_show_fps =
-            gf.ASettingOccupy(section, "show_fps", .B, .{ .b = true }, &s_show_fps, null);
+            gf.ASettingOccupy(section, "show_fps", .B, .{ .B = true }, &s_show_fps, null);
         h_s_show_fps_simple =
-            gf.ASettingOccupy(section, "show_fps_simple", .B, .{ .b = false }, &s_show_fps_simple, null);
+            gf.ASettingOccupy(section, "show_fps_simple", .B, .{ .B = false }, &s_show_fps_simple, null);
         h_s_show_speed =
-            gf.ASettingOccupy(section, "show_speed", .B, .{ .b = true }, &s_show_speed, null);
+            gf.ASettingOccupy(section, "show_speed", .B, .{ .B = true }, &s_show_speed, null);
         h_s_show_speed_raw =
-            gf.ASettingOccupy(section, "show_speed_raw", .B, .{ .b = true }, &s_show_speed_raw, null);
+            gf.ASettingOccupy(section, "show_speed_raw", .B, .{ .B = true }, &s_show_speed_raw, null);
         h_s_show_speed_offsets =
-            gf.ASettingOccupy(section, "show_speed_offsets", .B, .{ .b = true }, &s_show_speed_offsets, null);
+            gf.ASettingOccupy(section, "show_speed_offsets", .B, .{ .B = true }, &s_show_speed_offsets, null);
     }
 };
 

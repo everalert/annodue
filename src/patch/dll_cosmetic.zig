@@ -81,18 +81,18 @@ const CosmeticState = struct {
         h_s_section = section;
 
         h_s_rb_enable =
-            gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .b = false }, &s_rb_enable, null);
+            gf.ASettingOccupy(section, "rainbow_enable", .B, .{ .B = false }, &s_rb_enable, null);
         h_s_rb_value_enable =
-            gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .b = false }, &s_rb_value_enable, null);
+            gf.ASettingOccupy(section, "rainbow_value_enable", .B, .{ .B = false }, &s_rb_value_enable, null);
         h_s_rb_label_enable =
-            gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .b = false }, &s_rb_label_enable, null);
+            gf.ASettingOccupy(section, "rainbow_label_enable", .B, .{ .B = false }, &s_rb_label_enable, null);
         h_s_rb_speed_enable =
-            gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .b = false }, &s_rb_speed_enable, null);
+            gf.ASettingOccupy(section, "rainbow_speed_enable", .B, .{ .B = false }, &s_rb_speed_enable, null);
 
         h_s_patch_tga_loader = // FIXME: need tga files to verify with
-            gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .b = false }, &s_patch_tga_loader, null);
+            gf.ASettingOccupy(section, "patch_tga_loader", .B, .{ .B = false }, &s_patch_tga_loader, null);
         h_s_patch_audio = // FIXME: crashes
-            gf.ASettingOccupy(section, "patch_audio", .B, .{ .b = false }, &s_patch_audio, null);
+            gf.ASettingOccupy(section, "patch_audio", .B, .{ .B = false }, &s_patch_audio, null);
     }
 
     fn settingsUpdate(changed: [*]ASettingMessage, len: usize) callconv(.C) void {
@@ -101,23 +101,23 @@ const CosmeticState = struct {
         var update_rb_speed: bool = false;
 
         for (changed, 0..len) |setting, _| {
-            const nlen: usize = std.mem.len(setting.name);
+            const nlen: usize = std.mem.len(setting.Name);
 
-            if (nlen == 14 and std.mem.eql(u8, "rainbow_enable", setting.name[0..nlen])) {
+            if (nlen == 14 and std.mem.eql(u8, "rainbow_enable", setting.Name[0..nlen])) {
                 update_rb_value = true;
                 update_rb_label = true;
                 update_rb_speed = true;
                 continue;
             }
-            if (nlen == 20 and std.mem.eql(u8, "rainbow_value_enable", setting.name[0..nlen])) {
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_value_enable", setting.Name[0..nlen])) {
                 update_rb_value = true;
                 continue;
             }
-            if (nlen == 20 and std.mem.eql(u8, "rainbow_label_enable", setting.name[0..nlen])) {
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_label_enable", setting.Name[0..nlen])) {
                 update_rb_label = true;
                 continue;
             }
-            if (nlen == 20 and std.mem.eql(u8, "rainbow_speed_enable", setting.name[0..nlen])) {
+            if (nlen == 20 and std.mem.eql(u8, "rainbow_speed_enable", setting.Name[0..nlen])) {
                 update_rb_speed = true;
                 continue;
             }

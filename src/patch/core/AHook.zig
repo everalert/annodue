@@ -619,7 +619,7 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
 
 pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
     PluginState.h_s_hot_reload =
-        gf.ASettingOccupy(ASETTING_HANDLE_NULL, "PLUGIN_HOT_RELOAD", .B, .{ .b = true }, &PluginState.s_hot_reload, null);
+        gf.ASettingOccupy(ASETTING_HANDLE_NULL, "PLUGIN_HOT_RELOAD", .B, .{ .B = true }, &PluginState.s_hot_reload, null);
 }
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}

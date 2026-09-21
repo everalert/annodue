@@ -42,7 +42,7 @@ const UpdateState = struct {
 
     fn settingsInit(gf: *GlobalFn) void {
         h_s_auto_update =
-            gf.ASettingOccupy(ASETTING_HANDLE_NULL, "AUTO_UPDATE", .B, .{ .b = true }, &s_auto_update, null);
+            gf.ASettingOccupy(ASETTING_HANDLE_NULL, "AUTO_UPDATE", .B, .{ .B = true }, &s_auto_update, null);
     }
 };
 

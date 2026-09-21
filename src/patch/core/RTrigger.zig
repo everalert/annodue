@@ -295,7 +295,7 @@ const CustomTrigger = struct {
         h_s_section = section;
 
         h_s_notify_trigger =
-            gf.ASettingOccupy(section, "notify_trigger", .B, .{ .b = false }, &s_notify_trigger, null);
+            gf.ASettingOccupy(section, "notify_trigger", .B, .{ .B = false }, &s_notify_trigger, null);
     }
 };
 

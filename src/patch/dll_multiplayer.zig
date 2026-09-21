@@ -54,11 +54,11 @@ const MpState = struct {
         h_s_section = section;
 
         h_s_enable = // working? TODO: check collisions
-            gf.ASettingOccupy(section, "enable", .B, .{ .b = false }, &s_enable, null);
+            gf.ASettingOccupy(section, "enable", .B, .{ .B = false }, &s_enable, null);
         h_s_patch_guid = // working?
-            gf.ASettingOccupy(section, "patch_guid", .B, .{ .b = false }, &s_patch_guid, null);
+            gf.ASettingOccupy(section, "patch_guid", .B, .{ .B = false }, &s_patch_guid, null);
         h_s_patch_r100 = // working
-            gf.ASettingOccupy(section, "patch_r100", .B, .{ .b = false }, &s_patch_r100, null);
+            gf.ASettingOccupy(section, "patch_r100", .B, .{ .B = false }, &s_patch_r100, null);
     }
 };
 

@@ -63,7 +63,7 @@ const Developer = struct {
         h_s_section = section;
 
         h_s_visualize_matrices =
-            gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .b = false }, &s_visualize_matrices, null);
+            gf.ASettingOccupy(section, "visualize_matrices", .B, .{ .B = false }, &s_visualize_matrices, null);
     }
 };
 

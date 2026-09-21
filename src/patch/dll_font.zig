@@ -354,32 +354,32 @@ const FontState = struct {
         h_s_section = section;
 
         h_s_enable =
-            gf.ASettingOccupy(section, SETTING_ENABLE, .B, .{ .b = true }, &s_enable, SettingEnableUpdate);
+            gf.ASettingOccupy(section, SETTING_ENABLE, .B, .{ .B = true }, &s_enable, SettingEnableUpdate);
         h_s_font =
-            gf.ASettingOccupy(section, SETTING_FONT, .Str, .{ .str = DEFAULT_FONT }, &s_font, SettingFontUpdate);
+            gf.ASettingOccupy(section, SETTING_FONT, .Str, .{ .Str = DEFAULT_FONT }, &s_font, SettingFontUpdate);
 
         h_s_can_show_test =
-            gf.ASettingOccupy(section, SETTING_SHOW_TEST, .B, .{ .b = false }, &s_can_show_test, null);
+            gf.ASettingOccupy(section, SETTING_SHOW_TEST, .B, .{ .B = false }, &s_can_show_test, null);
         h_s_can_dump_data =
-            gf.ASettingOccupy(section, SETTING_DUMP_DATA, .B, .{ .b = false }, &s_can_dump_data, null);
+            gf.ASettingOccupy(section, SETTING_DUMP_DATA, .B, .{ .B = false }, &s_can_dump_data, null);
         h_s_can_dump_glyphs =
-            gf.ASettingOccupy(section, SETTING_DUMP_GLYPHS, .B, .{ .b = false }, &s_can_dump_glyphs, null);
+            gf.ASettingOccupy(section, SETTING_DUMP_GLYPHS, .B, .{ .B = false }, &s_can_dump_glyphs, null);
         h_s_can_toggle_system =
-            gf.ASettingOccupy(section, SETTING_TOGGLE_SYSTEM, .B, .{ .b = false }, &s_can_toggle_system, null);
+            gf.ASettingOccupy(section, SETTING_TOGGLE_SYSTEM, .B, .{ .B = false }, &s_can_toggle_system, null);
         h_s_can_toggle_custom =
-            gf.ASettingOccupy(section, SETTING_TOGGLE_CUSTOM, .B, .{ .b = false }, &s_can_toggle_custom, null);
+            gf.ASettingOccupy(section, SETTING_TOGGLE_CUSTOM, .B, .{ .B = false }, &s_can_toggle_custom, null);
     }
 
     // TODO: lazily call FontsInit? is it safe wrt game startup timing?
     // WARN: assumes FontsInit has already been called
     fn SettingEnableUpdate(value: ASettingMValue) callconv(.C) void {
-        if (value.b) FontsEnable() else FontsDisable();
+        if (value.B) FontsEnable() else FontsDisable();
     }
 
     // TODO: lazily call FontsInit? is it safe wrt game startup timing?
     // WARN: assumes FontsInit has already been called
     fn SettingFontUpdate(value: ASettingMValue) callconv(.C) void {
-        FontLoadAndSet(value.str);
+        FontLoadAndSet(value.Str);
     }
 
     //---------------------------------

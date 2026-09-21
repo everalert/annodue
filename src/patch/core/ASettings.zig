@@ -13,6 +13,7 @@ const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 const WorkingOwnerIsSystem = @import("AHook.zig").PluginState.WorkingOwnerIsSystem;
 
 const core_settings = @import("../util/core/core_settings.zig");
+const SettingManager = core_settings.SettingManager;
 
 const ADAPI = @import("../util/api/api.zig");
 const SettingKind = ADAPI.ASettingKind;
@@ -55,20 +56,22 @@ const FILENAME_ACTIVE = FILENAME_WORK;
 
 const SettingsState = struct {
     var bInitialized: bool = false;
-    //var Manager: ASettings = undefined;
+    var Manager: SettingManager = undefined;
 };
 
 // TODO: remove dependency on importing DEFAULT_ID, probably by having anything
 //  taking an id to also take null and use DEFAULT_ID internally if null; i.e.
 //  make it so that users don't need to know the default id
-pub fn init(arena_perm: Allocator, _: Allocator) !void {
+pub fn Init(arena_perm: Allocator) !void {
     var memory = try arena_perm.create([SCRATCH_BUFFER_SIZE]u8);
-    try core_settings.ASettings.init(memory, FILENAME_ACTIVE);
+    try SettingsState.Manager.Init(memory, FILENAME_ACTIVE);
+    SettingsState.bInitialized = true;
 }
 
-pub fn deinit() !void {
-    try core_settings.ASettings.saveAuto();
-    core_settings.ASettings.deinit();
+pub fn Deinit() !void {
+    assert(SettingsState.bInitialized);
+    try SettingsState.Manager.saveAuto();
+    SettingsState.Manager.Deinit();
 }
 
 //------------------------------------------------------------------------------
@@ -81,24 +84,24 @@ pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 
 pub fn OnPluginInitA(owner: u16) callconv(.C) void {
-    core_settings.ASettings.sectionRunUpdateOwner(owner);
+    SettingsState.Manager.sectionRunUpdateOwner(owner);
 }
 
 pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
-    core_settings.ASettings.vacateOwner(owner);
+    SettingsState.Manager.vacateOwner(owner);
 }
 
 pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
     // create settings.ini very early, but late enough that all plugins/subsystems
     // have had a chance to register their settings in either Init or InitLate
     if (rti.FRAMECOUNT.* == 1)
-        core_settings.ASettings.saveAuto() catch {};
+        SettingsState.Manager.saveAuto() catch {};
 
     // keep settings file updated through any load or hang/race state transition
     if (gf.SInRace().new() or gf.SRaceStateNew() or gf.SHangStateNew())
-        core_settings.ASettings.saveAuto() catch {};
+        SettingsState.Manager.saveAuto() catch {};
 
-    core_settings.ASettings.hotReloadUpdate(rti.TIMESTAMP.*);
+    SettingsState.Manager.hot_reload.Update(rti.TIMESTAMP.*);
 }
 
 //------------------------------------------------------------------------------
@@ -127,7 +130,8 @@ pub fn ASectionOccupy(
     name: [*:0]const u8,
     fnOnChange: ?*const fn ([*]SettingMessage, usize) callconv(.C) void,
 ) callconv(.C) SettingHandle {
-    return core_settings.ASettings.sectionOccupy(
+    assert(SettingsState.bInitialized);
+    return SettingsState.Manager.sectionOccupy(
         WorkingOwner(),
         if (section.isNull()) null else section,
         name,
@@ -139,32 +143,37 @@ pub fn ASectionOccupy(
 /// ASettingVacate as needed.
 /// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionVacate(handle: SettingHandle) callconv(.C) void {
-    core_settings.ASettings.sectionVacate(handle);
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.sectionVacate(handle);
 }
 
 /// manually call fnOnChange section callback on any 'changed' settings
 /// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionRunUpdate(handle: SettingHandle) callconv(.C) void {
-    core_settings.ASettings.sectionRunUpdate(handle);
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.sectionRunUpdate(handle);
 }
 
 /// revert entries under the given section back to owner-defined defaults
 /// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionResetDefault(handle: SettingHandle) callconv(.C) void {
-    core_settings.ASettings.sectionResetToDefaults(handle);
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.sectionResetToDefaults(handle);
 }
 
 /// revert entries under the given section back to values on file
 /// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionResetFile(handle: SettingHandle) callconv(.C) void {
-    core_settings.ASettings.sectionResetToSaved(handle);
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.sectionResetToSaved(handle);
 }
 
 /// remove superfluous entries loaded from file under the given section
 /// will be reflected in the settings file on the following save write
 /// @handle     section handle as received from ASettingSectionOccupy
 pub fn ASectionClean(handle: SettingHandle) callconv(.C) void {
-    core_settings.ASettings.sectionResetToDefaults(handle);
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.sectionResetToDefaults(handle);
 }
 
 // FIXME: logging - error before returning NullHandle (do same with ASectionOccupy)
@@ -186,8 +195,9 @@ pub fn ASettingOccupy(
     value_ptr: ?*anyopaque,
     fnOnChange: ?*const fn (SettingMValue) callconv(.C) void,
 ) callconv(.C) SettingHandle {
+    assert(SettingsState.bInitialized);
     if (!WorkingOwnerIsSystem() and section.isNull()) return SETTING_HANDLE_NULL;
-    return core_settings.ASettings.settingOccupy(
+    return SettingsState.Manager.settingOccupy(
         WorkingOwner(),
         if (section.isNull()) null else section,
         name,
@@ -202,7 +212,8 @@ pub fn ASettingOccupy(
 /// returning the value to raw (string-formatted) data.
 /// @handle     setting handle as received from ASettingOccupy
 pub fn ASettingVacate(handle: SettingHandle) callconv(.C) void {
-    core_settings.ASettings.settingVacate(handle);
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.settingVacate(handle);
 }
 
 /// update setting with a new value, passing on the value to the defined
@@ -210,50 +221,57 @@ pub fn ASettingVacate(handle: SettingHandle) callconv(.C) void {
 /// @handle     setting handle as received from ASettingOccupy
 /// @value      union interpreted as the type defined with ASettingOccupy
 pub fn ASettingUpdate(handle: SettingHandle, value: SettingMValue) callconv(.C) void {
-    core_settings.ASettings.settingUpdate(handle, value);
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.settingUpdate(handle, value);
 }
 
 /// release ownership and definitions of all sections and settings associated
 /// with the caller.
 /// for internal use; will do nothing if caller is plugin
 pub fn AVacateAll() callconv(.C) void {
+    assert(SettingsState.bInitialized);
     if (!WorkingOwnerIsSystem()) return;
-    core_settings.ASettings.vacateOwner(WorkingOwner());
+    SettingsState.Manager.vacateOwner(WorkingOwner());
 }
 
 /// revert all entries back to owner-defined defaults
 /// for internal use; will do nothing if caller is plugin
 pub fn ASettingResetAllDefault() callconv(.C) void {
+    assert(SettingsState.bInitialized);
     if (!WorkingOwnerIsSystem()) return;
-    core_settings.ASettings.settingResetAllToDefaults();
+    SettingsState.Manager.settingResetAllToDefaults();
 }
 
 /// revert all entries back to values on file
 /// for internal use; will do nothing if caller is plugin
 pub fn ASettingResetAllFile() callconv(.C) void {
+    assert(SettingsState.bInitialized);
     if (!WorkingOwnerIsSystem()) return;
-    core_settings.ASettings.settingResetAllToSaved();
+    SettingsState.Manager.settingResetAllToSaved();
 }
 
 /// remove all superfluous entries loaded from file
 /// will be reflected in the settings file on the following save write
 /// for internal use; will do nothing if caller is plugin
 pub fn ASettingCleanAll() callconv(.C) void {
+    assert(SettingsState.bInitialized);
     if (!WorkingOwnerIsSystem()) return;
-    core_settings.ASettings.settingRemoveAllVacant();
+    SettingsState.Manager.settingRemoveAllVacant();
 }
 
 /// manually trigger write of settings file
 /// for internal use; will do nothing if caller is plugin
 pub fn ASave() callconv(.C) void {
+    assert(SettingsState.bInitialized);
     if (!WorkingOwnerIsSystem()) return;
-    core_settings.ASettings.save() catch {};
+    SettingsState.Manager.save() catch {};
 }
 
 /// create checkpoint for writing of settings file
 /// file will only be written if user has enabled autosave
 pub fn ASaveAuto() callconv(.C) void {
-    core_settings.ASettings.saveAuto() catch {};
+    assert(SettingsState.bInitialized);
+    SettingsState.Manager.saveAuto() catch {};
 }
 
 // -----------------------------------------------------------------------------
@@ -262,7 +280,7 @@ pub fn ASaveAuto() callconv(.C) void {
 // TODO: maybe adapt for test script/debugging
 // TODO: also maybe adapt for json settings (nesting, etc.)
 fn drawSettings(gf: *GlobalFn, section: ?SettingHandle, x_ref: *i16, y_ref: *i16) void {
-    for (core_settings.ASettings.data_settings.values.items) |value| {
+    for (SettingsState.Manager.data_settings.values.items) |value| {
         if ((section == null) != (value.section == null)) continue;
         if (section != null and
             (value.section.?.generation != section.?.generation or
@@ -288,8 +306,8 @@ fn drawSettings(gf: *GlobalFn, section: ?SettingHandle, x_ref: *i16, y_ref: *i16
         y_ref.* += 10;
     }
 
-    for (0..core_settings.ASettings.data_sections.values.items.len) |i| {
-        const value: *core_settings.Section = &core_settings.ASettings.data_sections.values.items[i];
+    for (0..SettingsState.Manager.data_sections.values.items.len) |i| {
+        const value: *core_settings.Section = &SettingsState.Manager.data_sections.values.items[i];
         if ((section == null) != (value.section == null)) continue;
         if (section != null and
             (value.section.?.generation != section.?.generation or
@@ -300,7 +318,7 @@ fn drawSettings(gf: *GlobalFn, section: ?SettingHandle, x_ref: *i16, y_ref: *i16
         y_ref.* += 10;
 
         x_ref.* += 12;
-        const handle: SettingHandle = core_settings.ASettings.data_sections.handles.items[i];
+        const handle: SettingHandle = SettingsState.Manager.data_sections.handles.items[i];
         drawSettings(gf, handle, x_ref, y_ref);
         x_ref.* -= 12;
     }

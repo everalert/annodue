@@ -34,8 +34,8 @@ pub const HANDLE_NULL = Handle.getNull();
 
 const MiB = @import("../base/base_memory.zig").MiB;
 
-const HotReloadSettingsHandle = u32;
-const HotReloadSettings = @import("../hot_reload.zig").HotReload(HotReloadSettingsHandle, 1);
+const HotReloaderHandle = ?*SettingManager;
+const HotReloader = @import("../hot_reload.zig").HotReload(HotReloaderHandle, 1);
 
 // DEFS
 
@@ -241,78 +241,81 @@ pub const Section = struct {
 };
 
 // reserved global settings: AutoSave
-pub const ASettings = struct {
-    var data_sections: HandleMap(Section, u16) = undefined;
-    var data_settings: HandleMap(Setting, u16) = undefined;
-    var flags: EnumSet(Flags) = EnumSet(Flags).initEmpty();
-    var hot_reload: HotReloadSettings = undefined;
-    var file_exists: bool = false;
-    var skip_next_load: bool = false;
-    var section_update_queue: ArrayList(Message) = undefined;
-    var file_name: [:0]const u8 = &.{};
+pub const SettingManager = struct {
+    data_sections: HandleMap(Section, u16) = undefined,
+    data_settings: HandleMap(Setting, u16) = undefined,
+    flags: EnumSet(Flags) = EnumSet(Flags).initEmpty(),
+    hot_reload: HotReloader = undefined,
+    file_exists: bool = false,
+    skip_next_load: bool = false,
+    section_update_queue: ArrayList(Message) = undefined,
+    file_name: [:0]const u8 = &.{},
 
-    var h_section_plugin: ?Handle = null;
-    var h_section_core: ?Handle = null;
-    var h_s_settings_version: ?Handle = null;
-    var h_s_save_auto: ?Handle = null;
-    var h_s_save_defaults: ?Handle = null;
-    var s_settings_version: u32 = 1;
-    var s_save_auto: bool = true;
-    var s_save_defaults: bool = true;
+    h_section_plugin: ?Handle = null,
+    h_section_core: ?Handle = null,
+    h_s_settings_version: ?Handle = null,
+    h_s_save_auto: ?Handle = null,
+    h_s_save_defaults: ?Handle = null,
+    s_settings_version: u32 = 1,
+    s_save_auto: bool = true,
+    s_save_defaults: bool = true,
 
-    var scratch_fba: FixedBufferAllocator = undefined;
-    var scratch_alloc: Allocator = undefined;
+    scratch_fba: FixedBufferAllocator = undefined,
+    scratch_alloc: Allocator = undefined,
 
     const Flags = enum(u32) {
         AutoSave,
     };
 
-    pub fn init(buf: []u8, filename: [:0]const u8) !void {
-        file_name = filename;
+    pub fn Init(
+        out: *SettingManager,
+        buf: []u8,
+        filename: [:0]const u8,
+    ) !void {
+        out.* = .{};
 
-        scratch_fba = FixedBufferAllocator.init(buf);
-        scratch_alloc = scratch_fba.allocator();
+        out.file_name = filename;
 
-        data_sections = HandleMap(Section, u16).init(scratch_alloc);
-        data_settings = HandleMap(Setting, u16).init(scratch_alloc);
-        section_update_queue = ArrayList(Message).init(scratch_alloc);
+        out.scratch_fba = FixedBufferAllocator.init(buf);
+        out.scratch_alloc = out.scratch_fba.allocator();
 
-        HotReloadSettings.Init(&hot_reload, load, unload);
-        hot_reload.CheckDelay = 250;
-        hot_reload.TrackFileAlways(file_name, 0);
+        out.data_sections = HandleMap(Section, u16).init(out.scratch_alloc);
+        out.data_settings = HandleMap(Setting, u16).init(out.scratch_alloc);
+        out.section_update_queue = ArrayList(Message).init(out.scratch_alloc);
 
-        h_s_settings_version =
-            try settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &s_settings_version, null);
-        h_s_save_auto =
-            try settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_AUTO", .B, .{ .b = true }, &s_save_auto, null);
-        h_s_save_defaults =
-            try settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &s_save_defaults, null);
+        HotReloader.Init(&out.hot_reload, iniLoad, iniUnload);
+        out.hot_reload.CheckDelay = 250;
+        out.hot_reload.TrackFileAlways(out.file_name, out);
+
+        out.h_s_settings_version =
+            try out.settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &out.s_settings_version, null);
+        out.h_s_save_auto =
+            try out.settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_AUTO", .B, .{ .b = true }, &out.s_save_auto, null);
+        out.h_s_save_defaults =
+            try out.settingOccupy(DEFAULT_ID, null, "SETTINGS_SAVE_DEFAULTS", .B, .{ .b = true }, &out.s_save_defaults, null);
 
         // ensure version is written to file by defaulting to 0 and setting here
-        settingUpdate(h_s_settings_version.?, .{ .u = SETTINGS_VERSION });
+        out.settingUpdate(out.h_s_settings_version.?, .{ .u = SETTINGS_VERSION });
     }
 
-    pub fn deinit() void {
-        data_sections.deinit();
-        data_settings.deinit();
-        section_update_queue.deinit();
-    }
-
-    pub fn hotReloadUpdate(t: u32) void {
-        hot_reload.Update(t);
+    pub fn Deinit(self: *SettingManager) void {
+        self.data_sections.deinit();
+        self.data_settings.deinit();
+        self.section_update_queue.deinit();
     }
 
     /// gets index of data matching name and parenting pattern
     /// index will be valid for map's data and handle arrays, use handle.index
     /// for sparse_indices array index
     pub fn nodeFind(
+        self: *SettingManager,
         map: anytype, // handle_map_*
         parent: ?Handle,
         name: [*:0]const u8,
     ) ?u16 {
         assert(std.mem.len(name) > 0 and std.mem.len(name) <= 63);
 
-        if (parent != null and (parent.?.isNull() or !data_sections.hasHandle(parent.?))) return null;
+        if (parent != null and (parent.?.isNull() or !self.data_sections.hasHandle(parent.?))) return null;
 
         const name_len = std.mem.len(name) + 1; // include sentinel
 
@@ -328,6 +331,7 @@ pub const ASettings = struct {
     /// create a new raw section in the data set using a minimal definition. prefer
     /// sectionOccupy for regular api-facing use.
     pub fn sectionNew(
+        self: *SettingManager,
         section: ?Handle,
         name: [*:0]const u8,
     ) !Handle {
@@ -335,23 +339,24 @@ pub const ASettings = struct {
 
         if (section != null and
             (section.?.isNull() or
-            !data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
+            !self.data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
-        if (nodeFind(data_sections, section, name) != null) return error.NameTaken;
+        if (self.nodeFind(self.data_sections, section, name) != null) return error.NameTaken;
 
         var section_new = Section{};
         if (section) |s| section_new.section = .{ .generation = s.generation, .index = s.index };
         _ = try bufPrintZ(&section_new.name, "{s}", .{name});
 
-        return try data_sections.insert(DEFAULT_ID, section_new);
+        return try self.data_sections.insert(DEFAULT_ID, section_new);
     }
 
     // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for settingOccupy)
     /// assign owner to a section.
     /// will prevent all other owners from creating children to the section.
     pub fn sectionOccupy(
+        self: *SettingManager,
         owner: u16,
         section: ?Handle,
         name: [*:0]const u8,
@@ -363,22 +368,22 @@ pub const ASettings = struct {
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
             if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
-            if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
+            if (!self.data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
-        const existing_i = nodeFind(data_sections, section, name);
+        const existing_i = self.nodeFind(self.data_sections, section, name);
 
         var data: *Section = undefined;
         var handle_new: Handle = undefined;
         if (existing_i) |i| {
-            if (data_sections.handles.items[i].owner != DEFAULT_ID) return error.SectionAlreadyOwned;
-            data_sections.handles.items[i].owner = owner;
-            data_sections.sparse_indices.items[data_sections.handles.items[i].index].owner = owner;
-            handle_new = data_sections.handles.items[i];
-            data = &data_sections.values.items[i];
+            if (self.data_sections.handles.items[i].owner != DEFAULT_ID) return error.SectionAlreadyOwned;
+            self.data_sections.handles.items[i].owner = owner;
+            self.data_sections.sparse_indices.items[self.data_sections.handles.items[i].index].owner = owner;
+            handle_new = self.data_sections.handles.items[i];
+            data = &self.data_sections.values.items[i];
         } else {
-            handle_new = try data_sections.insert(owner, .{});
-            data = data_sections.get(handle_new).?;
+            handle_new = try self.data_sections.insert(owner, .{});
+            data = self.data_sections.get(handle_new).?;
             data.section = if (section) |s| .{ .generation = s.generation, .index = s.index } else null;
             _ = try bufPrintZ(&data.name, "{s}", .{name});
         }
@@ -391,39 +396,40 @@ pub const ASettings = struct {
     /// release ownership of a section node, and all of the children in the settings
     /// tree below it. calls settingVacate on applicable settings.
     pub fn sectionVacate(
+        self: *SettingManager,
         handle: Handle,
     ) void {
-        var data: *Section = data_sections.get(handle) orelse return;
+        var data: *Section = self.data_sections.get(handle) orelse return;
 
-        for (data_sections.values.items, 0..) |*s, i| {
+        for (self.data_sections.values.items, 0..) |*s, i| {
             if (s.section != null and ParentHandle.eql(s.section, handle)) {
-                const h: Handle = data_sections.handles.items[i];
-                if (h.owner != DEFAULT_ID and h.owner == handle.owner) sectionVacate(h);
+                const h: Handle = self.data_sections.handles.items[i];
+                if (h.owner != DEFAULT_ID and h.owner == handle.owner) self.sectionVacate(h);
             }
         }
 
-        for (data_settings.values.items, 0..) |*s, i| {
+        for (self.data_settings.values.items, 0..) |*s, i| {
             if (s.section != null and ParentHandle.eql(s.section, handle)) {
-                const h: Handle = data_settings.handles.items[i];
-                if (h.owner != DEFAULT_ID and h.owner == handle.owner) settingVacate(h);
+                const h: Handle = self.data_settings.handles.items[i];
+                if (h.owner != DEFAULT_ID and h.owner == handle.owner) self.settingVacate(h);
             }
         }
 
         data.fnOnChange = null;
 
-        var s_index: *SparseIndex = &data_sections.sparse_indices.items[handle.index];
+        var s_index: *SparseIndex = &self.data_sections.sparse_indices.items[handle.index];
         s_index.owner = DEFAULT_ID;
-        data_sections.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
+        self.data_sections.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
     /// run section update callback on the recently updated settings of that group.
-    pub fn sectionRunUpdate(handle: Handle) void {
-        const sec: *Section = data_sections.get(handle) orelse return;
+    pub fn sectionRunUpdate(self: *SettingManager, handle: Handle) void {
+        const sec: *Section = self.data_sections.get(handle) orelse return;
         const sec_fn = sec.fnOnChange orelse return;
 
-        section_update_queue.clearRetainingCapacity();
+        self.section_update_queue.clearRetainingCapacity();
 
-        for (data_settings.values.items) |*s| {
+        for (self.data_settings.values.items) |*s| {
             if (s.section == null or !ParentHandle.eql(s.section, handle)) continue;
             if (!s.flags.contains(.InSectionUpdateQueue)) continue;
             if (s.value_type == .None) continue;
@@ -433,29 +439,31 @@ pub const ASettings = struct {
                 .name = &s.name,
                 .value = Message.Value.fromSetting(&s.value, s.value_type),
             };
-            section_update_queue.append(send_data) catch continue;
+            self.section_update_queue.append(send_data) catch continue;
         }
 
-        sec_fn(section_update_queue.items.ptr, section_update_queue.items.len);
+        sec_fn(self.section_update_queue.items.ptr, self.section_update_queue.items.len);
     }
 
     /// run sectionRunUpdate on all sections that are occupied by the given owner.
-    pub fn sectionRunUpdateOwner(owner: u16) void {
-        for (data_sections.handles.items) |handle|
-            if (handle.owner == owner) sectionRunUpdate(handle);
+    pub fn sectionRunUpdateOwner(self: *SettingManager, owner: u16) void {
+        for (self.data_sections.handles.items) |handle|
+            if (handle.owner == owner) self.sectionRunUpdate(handle);
     }
 
     /// run sectionRunUpdate on all sections.
-    pub fn sectionRunUpdateAll() void {
-        for (data_sections.handles.items) |handle|
-            sectionRunUpdate(handle);
+    pub fn sectionRunUpdateAll(
+        self: *SettingManager,
+    ) void {
+        for (self.data_sections.handles.items) |handle|
+            self.sectionRunUpdate(handle);
     }
 
     /// restore all settings that are direct children of the section associated
     /// with the give handle to the value loaded frome file.
     /// settings that are not on file are not affected.
-    pub fn sectionResetToSaved(handle: ?Handle) void {
-        for (data_settings.values.items) |*s| {
+    pub fn sectionResetToSaved(self: *SettingManager, handle: ?Handle) void {
+        for (self.data_settings.values.items) |*s| {
             if (!ParentHandle.eql(s.section, handle)) continue;
             if (!s.flags.contains(.SavedValueIsSet)) continue;
 
@@ -467,8 +475,8 @@ pub const ASettings = struct {
     /// restore all settings that are direct children of the section associated
     /// with the give handle to the default value defined by their owner.
     /// settings that do not have an owner are not affected.
-    pub fn sectionResetToDefaults(handle: ?Handle) void {
-        for (data_settings.values.items) |*s| {
+    pub fn sectionResetToDefaults(self: *SettingManager, handle: ?Handle) void {
+        for (self.data_settings.values.items) |*s| {
             if (!ParentHandle.eql(s.section, handle)) continue;
             if (!s.flags.contains(.DefaultValueIsSet)) continue;
 
@@ -479,23 +487,24 @@ pub const ASettings = struct {
 
     /// scrub all unoccupied settings that are direct children of the section associated
     /// with the given handle, removing their data entirely
-    pub fn sectionRemoveVacant(handle: ?Handle) void {
-        const slices = data_settings.values.slice();
+    pub fn sectionRemoveVacant(self: *SettingManager, handle: ?Handle) void {
+        const slices = self.data_settings.values.slice();
         const sl_sec = slices.items(.section);
         const sl_fl: []EnumSet(Setting.Flags) = slices.items(.flags);
 
-        const len = data_settings.handles.items.len;
+        const len = self.data_settings.handles.items.len;
         for (0..len) |j| {
             const i = len - j - 1;
             if (!ParentHandle.eql(sl_sec[i], handle)) continue;
             if (sl_fl[i].contains(.DefaultValueIsSet)) continue;
-            _ = data_settings.remove(data_settings.handles.items[i]);
+            _ = self.data_settings.remove(self.data_settings.handles.items[i]);
         }
     }
 
     /// create a new raw setting in the data set using a minimal definition. prefer
     /// settingOccupy for regular api-facing use.
     pub fn settingNew(
+        self: *SettingManager,
         section: ?Handle,
         name: [*:0]const u8,
         value: [*:0]const u8, // -> value_saved
@@ -506,11 +515,11 @@ pub const ASettings = struct {
 
         if (section != null and
             (section.?.isNull() or
-            !data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
+            !self.data_sections.hasHandle(section.?))) return error.ParentSectionDoesNotExist;
 
         const name_len = std.mem.len(name);
         if (name_len == 0 or name_len > 63) return error.NameLengthInvalid;
-        if (nodeFind(data_settings, section, name) != null) return error.NameTaken;
+        if (self.nodeFind(self.data_settings, section, name) != null) return error.NameTaken;
 
         const value_len = std.mem.len(value);
         if (value_len == 0 or value_len > 63) return error.ValueLengthInvalid;
@@ -525,7 +534,7 @@ pub const ASettings = struct {
             setting.flags.insert(.SavedValueIsSet);
         }
 
-        return try data_settings.insert(DEFAULT_ID, setting);
+        return try self.data_settings.insert(DEFAULT_ID, setting);
     }
 
     // TODO: allow DEFAULT_ID owner even when section is occupied? (and same for sectionOccupy)
@@ -534,6 +543,7 @@ pub const ASettings = struct {
     /// data if needed. will update value in external pointer callback to run update
     /// callback using the initial value (the existing value if available, or the default)
     pub fn settingOccupy(
+        self: *SettingManager,
         owner: u16,
         section: ?Handle,
         name: [*:0]const u8,
@@ -549,22 +559,22 @@ pub const ASettings = struct {
         if (section) |s| blk: {
             if (s.owner == DEFAULT_ID) break :blk; // allow parenting to vacant sections
             if (s.owner != owner) std.debug.panic("owner mismatch:  owner:{d}  s.owner:{d}", .{ owner, s.owner });
-            if (!data_sections.hasHandle(s)) return error.SectionDoesNotExist;
+            if (!self.data_sections.hasHandle(s)) return error.SectionDoesNotExist;
         }
 
-        const existing_i = nodeFind(data_settings, section, name);
+        const existing_i = self.nodeFind(self.data_settings, section, name);
 
         var data: *Setting = undefined;
         var handle_new: Handle = undefined;
         if (existing_i) |i| {
-            if (data_settings.handles.items[i].owner != DEFAULT_ID) return error.SettingAlreadyOwned;
-            data_settings.handles.items[i].owner = owner;
-            data_settings.sparse_indices.items[data_settings.handles.items[i].index].owner = owner;
-            handle_new = data_settings.handles.items[i];
-            data = &data_settings.values.items[i];
+            if (self.data_settings.handles.items[i].owner != DEFAULT_ID) return error.SettingAlreadyOwned;
+            self.data_settings.handles.items[i].owner = owner;
+            self.data_settings.sparse_indices.items[self.data_settings.handles.items[i].index].owner = owner;
+            handle_new = self.data_settings.handles.items[i];
+            data = &self.data_settings.values.items[i];
         } else {
-            handle_new = try data_settings.insert(owner, .{});
-            data = data_settings.get(handle_new).?;
+            handle_new = try self.data_settings.insert(owner, .{});
+            data = self.data_settings.get(handle_new).?;
             data.section = if (section) |s| ParentHandle.fromHandle(s) else null;
             _ = try bufPrintZ(&data.name, "{s}", .{name});
         }
@@ -598,9 +608,10 @@ pub const ASettings = struct {
 
     /// remove owner from a setting and clear its definition.
     pub fn settingVacate(
+        self: *SettingManager,
         handle: Handle,
     ) void {
-        var data: *Setting = data_settings.get(handle) orelse return;
+        var data: *Setting = self.data_settings.get(handle) orelse return;
         assert(data.flags.contains(.ValueIsSet));
 
         data.fnOnChange = null;
@@ -615,18 +626,19 @@ pub const ASettings = struct {
 
         data.value_type = .None;
 
-        var s_index: *SparseIndex = &data_settings.sparse_indices.items[handle.index];
+        var s_index: *SparseIndex = &self.data_settings.sparse_indices.items[handle.index];
         s_index.owner = DEFAULT_ID;
-        data_settings.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
+        self.data_settings.handles.items[s_index.index_or_next].owner = DEFAULT_ID;
     }
 
     /// trigger setting update with new value.
     /// will update value in external pointer callback to run update callback.
     pub fn settingUpdate(
+        self: *SettingManager,
         handle: Handle,
         value: Message.Value,
     ) void {
-        var s: *Setting = data_settings.get(handle) orelse return;
+        var s: *Setting = self.data_settings.get(handle) orelse return;
 
         if (s.value.eqlSent(value, s.value_type)) return;
 
@@ -639,8 +651,10 @@ pub const ASettings = struct {
 
     /// restore all settings to the value loaded from file.
     /// settings that are not on file are not affected.
-    pub fn settingResetAllToSaved() void {
-        for (data_settings.values.items) |*s| {
+    pub fn settingResetAllToSaved(
+        self: *SettingManager,
+    ) void {
+        for (self.data_settings.values.items) |*s| {
             if (!s.flags.contains(.SavedValueIsSet)) continue;
             s.value = s.value_saved;
             s.flags.insert(.ValueIsSet);
@@ -649,8 +663,10 @@ pub const ASettings = struct {
 
     /// restore all settings to the default value defined by their owner.
     /// settings that do not have an owner are not affected.
-    pub fn settingResetAllToDefaults() void {
-        for (data_settings.values.items) |*s| {
+    pub fn settingResetAllToDefaults(
+        self: *SettingManager,
+    ) void {
+        for (self.data_settings.values.items) |*s| {
             if (!s.flags.contains(.DefaultValueIsSet)) continue;
             s.value = s.value_default;
             s.flags.insert(.ValueIsSet);
@@ -658,29 +674,31 @@ pub const ASettings = struct {
     }
 
     /// scrub all unoccupied settings, removing their data entirely
-    pub fn settingRemoveAllVacant() void {
-        const len = data_settings.handles.items.len;
+    pub fn settingRemoveAllVacant(
+        self: *SettingManager,
+    ) void {
+        const len = self.data_settings.handles.items.len;
         for (0..len) |j| {
             const i = len - j - 1;
-            if (data_settings.values.items[i].flags.contains(.DefaultValueIsSet)) continue;
-            _ = data_settings.remove(data_settings.handles.items[i]);
+            if (self.data_settings.values.items[i].flags.contains(.DefaultValueIsSet)) continue;
+            _ = self.data_settings.remove(self.data_settings.handles.items[i]);
         }
     }
 
     /// free all sections and settings of the given owner, allowing them to be
     /// assigned a new owner
-    pub fn vacateOwner(owner: u16) void {
+    pub fn vacateOwner(self: *SettingManager, owner: u16) void {
         // settings first for better cache use of data_settings processes
-        for (ASettings.data_settings.handles.items) |h|
-            if (h.owner == owner) ASettings.settingVacate(h);
+        for (self.data_settings.handles.items) |h|
+            if (h.owner == owner) self.settingVacate(h);
 
-        for (ASettings.data_sections.handles.items) |h|
-            if (h.owner == owner) ASettings.sectionVacate(h);
+        for (self.data_sections.handles.items) |h|
+            if (h.owner == owner) self.sectionVacate(h);
     }
 
     // TODO: convert to reader to match iniWrite?
     /// read ini-formatted settings from file
-    pub fn iniRead(gpa: Allocator, filename: []const u8) !void {
+    pub fn iniRead(self: *SettingManager, gpa: Allocator, filename: []const u8) !void {
         const file = try std.fs.cwd().openFile(filename, .{});
         defer file.close();
         //var file_br = std.io.bufferedReader(file.reader());
@@ -694,17 +712,17 @@ pub const ASettings = struct {
         while (try parser.next()) |record| {
             switch (record) {
                 .section => |name| {
-                    const section_i = nodeFind(data_sections, null, name);
+                    const section_i = self.nodeFind(self.data_sections, null, name);
                     sec_handle = if (section_i) |i|
-                        data_sections.handles.items[i]
+                        self.data_sections.handles.items[i]
                     else
-                        sectionNew(null, name) catch null;
+                        self.sectionNew(null, name) catch null;
                 },
                 .property => |kv| {
-                    const setting_i = nodeFind(data_settings, sec_handle, kv.key);
+                    const setting_i = self.nodeFind(self.data_settings, sec_handle, kv.key);
                     if (setting_i) |i| {
-                        const s = &data_settings.values.items[i];
-                        const h = data_settings.handles.items[i];
+                        const s = &self.data_settings.values.items[i];
+                        const h = self.data_settings.handles.items[i];
 
                         // don't override value that has already been changed by something else
                         if (s.flags.contains(.SavedValueIsSet) and
@@ -716,9 +734,9 @@ pub const ASettings = struct {
                             try s.value_saved.fromSent(send_val, s.value_type);
 
                         if (!s.value.eqlSent(send_val, s.value_type))
-                            settingUpdate(h, send_val);
+                            self.settingUpdate(h, send_val);
                     } else {
-                        _ = try settingNew(sec_handle, kv.key, kv.value, true);
+                        _ = try self.settingNew(sec_handle, kv.key, kv.value, true);
                     }
                 },
                 .enumeration => |value| { // FIXME: impl
@@ -727,47 +745,50 @@ pub const ASettings = struct {
             }
         }
 
-        sectionRunUpdateAll();
+        self.sectionRunUpdateAll();
     }
 
-    // callback for HotReload(HotReloadSettingsContextHandle)
+    // callback for HotReload(HotReloadHandle)
     // stub because the settings live throughout the whole program lifetime and
     // will only be updated if a reload occurs
-    fn unload(_: HotReloadSettingsHandle, _: [:0]const u8, _: [:0]const u8) void {}
+    fn iniUnload(_: ?*SettingManager, _: [:0]const u8, _: [:0]const u8) void {}
 
-    // callback for HotReload(HotReloadSettingsContextHandle)
+    // callback for HotReload(HotReloadHandle)
     /// read settings from file
-    fn load(_: HotReloadSettingsHandle, filepath: [:0]const u8, _: [:0]const u8) bool {
-        if (skip_next_load) {
-            skip_next_load = false;
+    fn iniLoad(self: ?*SettingManager, filepath: [:0]const u8, _: [:0]const u8) bool {
+        assert(self != null);
+        assert(std.mem.eql(u8, self.?.file_name, filepath));
+
+        if (self.?.skip_next_load) {
+            self.?.skip_next_load = false;
             return false; // TODO: should be true or false? no effect in current logic tho
         }
 
-        ASettings.iniRead(ASettings.scratch_alloc, filepath) catch return false;
+        self.?.iniRead(self.?.scratch_alloc, self.?.file_name) catch return false;
 
-        file_exists = true;
+        self.?.file_exists = true;
         return true;
     }
 
     /// write all settings to buffer in ini format
-    pub fn iniWrite(writer: anytype) !void {
-        try iniWriteSection(writer, null);
-        for (data_sections.handles.items) |h|
-            try iniWriteSection(writer, h);
+    pub fn iniWrite(self: *SettingManager, writer: anytype) !void {
+        try self.iniWriteSection(writer, null);
+        for (self.data_sections.handles.items) |h|
+            try self.iniWriteSection(writer, h);
     }
 
     // TODO: sorting both settings and sections?
     /// write settings section to buffer in ini format
-    fn iniWriteSection(writer: anytype, handle: ?Handle) !void {
+    fn iniWriteSection(self: *SettingManager, writer: anytype, handle: ?Handle) !void {
         if (handle) |h| blk: {
-            const section: *Section = data_sections.get(h) orelse break :blk;
+            const section: *Section = self.data_sections.get(h) orelse break :blk;
             const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&section.name)));
             _ = try writer.write("[");
             _ = try writer.write(section.name[0..nlen]);
             _ = try writer.write("]\n");
         }
 
-        for (data_settings.values.items) |*s| {
+        for (self.data_settings.values.items) |*s| {
             if (!s.flags.contains(.InFileWriteQueue) or !ParentHandle.eql(s.section, handle)) continue;
 
             const nlen = std.mem.len(@as([*:0]const u8, @ptrCast(&s.name)));
@@ -783,33 +804,35 @@ pub const ASettings = struct {
     }
 
     /// write settings to file
-    pub fn save() !void {
-        const changed_settings: u32 = savePrepare();
-        if (changed_settings == 0 and (s_save_defaults and file_exists)) return;
+    pub fn save(
+        self: *SettingManager,
+    ) !void {
+        const changed_settings: u32 = self.savePrepare();
+        if (changed_settings == 0 and (self.s_save_defaults and self.file_exists)) return;
 
-        const file = try std.fs.cwd().createFile(file_name, .{}); // .exclusive=true for no file rewrite
+        const file = try std.fs.cwd().createFile(self.file_name, .{}); // .exclusive=true for no file rewrite
         defer file.close();
         var file_bw = std.io.bufferedWriter(file.writer());
         defer _ = file_bw.flush() catch |e|
             std.debug.panic("ASettings(save): write buffer flush: {s}", .{@errorName(e)});
         const file_w = file_bw.writer();
 
-        try iniWrite(file_w);
-        skip_next_load = true;
-        file_exists = true;
+        try self.iniWrite(file_w);
+        self.skip_next_load = true;
+        self.file_exists = true;
 
-        saveCleanup();
+        self.saveCleanup();
     }
 
     /// write settings to file, but only if autosave setting is enabled
-    pub fn saveAuto() !void {
-        if (s_save_auto)
-            try save();
+    pub fn saveAuto(self: *SettingManager) !void {
+        if (self.s_save_auto)
+            try self.save();
     }
 
     /// post-processing of sections and settings, to make settings ready for next write
-    fn saveCleanup() void {
-        for (data_settings.values.items) |*s| {
+    fn saveCleanup(self: *SettingManager) void {
+        for (self.data_settings.values.items) |*s| {
             // make sure system knows which settings are no longer on file
             if (!s.flags.contains(.FileUpdatedLastWrite))
                 s.flags.remove(.SavedValueIsSet);
@@ -823,21 +846,21 @@ pub const ASettings = struct {
     /// pre-pass on settings to determine which settings need to be written and how
     /// write functions assume settings are tagged correctly as a result of running this step
     /// @return     number of settings that would actually change in the file as a result of writing
-    fn savePrepare() u32 {
+    fn savePrepare(self: *SettingManager) u32 {
         var changed: u32 = 0;
 
-        changed += savePrepareSection(null);
-        for (data_sections.handles.items) |h|
-            changed += savePrepareSection(h);
+        changed += self.savePrepareSection(null);
+        for (self.data_sections.handles.items) |h|
+            changed += self.savePrepareSection(h);
 
         return changed;
     }
 
     /// see savePrepare for explanation
     /// @return     number of settings that would actually change in the file as a result of writing
-    fn savePrepareSection(handle: ?Handle) u32 {
+    fn savePrepareSection(self: *SettingManager, handle: ?Handle) u32 {
         var changed: u32 = 0;
-        for (data_settings.values.items) |*s| {
+        for (self.data_settings.values.items) |*s| {
             if (!ParentHandle.eql(s.section, handle)) continue;
 
             // only keep uninitialized settings if they were already on file
@@ -845,11 +868,11 @@ pub const ASettings = struct {
                 !s.flags.contains(.SavedValueIsSet)) continue;
 
             // only store initialized settings if they are not default
-            if (!s_save_defaults and s.flags.contains(.DefaultValueIsSet) and
+            if (!self.s_save_defaults and s.flags.contains(.DefaultValueIsSet) and
                 s.value_default.eql(&s.value, s.value_type)) continue;
 
             if ((s.flags.contains(.SavedValueIsSet) and !s.value_saved.eql(&s.value, s.value_type)) or
-                (!s.flags.contains(.SavedValueIsSet) and s_save_defaults))
+                (!s.flags.contains(.SavedValueIsSet) and self.s_save_defaults))
                 changed += 1;
 
             s.value_saved = s.value;

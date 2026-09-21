@@ -49,6 +49,10 @@ const rti = r.Time;
 
 const SCRATCH_BUFFER_SIZE = MiB(u32, 2);
 
+const FILENAME_WORK = "annodue/settings.ini";
+const FILENAME_TEST = "annodue/settings_test.ini";
+const FILENAME_ACTIVE = FILENAME_WORK;
+
 const SettingsState = struct {
     var bInitialized: bool = false;
     //var Manager: ASettings = undefined;
@@ -59,7 +63,7 @@ const SettingsState = struct {
 //  make it so that users don't need to know the default id
 pub fn init(arena_perm: Allocator, _: Allocator) !void {
     var memory = try arena_perm.create([SCRATCH_BUFFER_SIZE]u8);
-    try core_settings.ASettings.init(memory);
+    try core_settings.ASettings.init(memory, FILENAME_ACTIVE);
 }
 
 pub fn deinit() !void {

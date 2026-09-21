@@ -42,11 +42,6 @@ const HotReloadSettings = @import("../hot_reload.zig").HotReload(HotReloadSettin
 const SETTINGS_VERSION: u32 = 2;
 const DEFAULT_ID = 0xFFFF;
 
-// TODO: define these in ASettings, not core?
-const FILENAME = "annodue/settings.ini";
-const FILENAME_TEST = "annodue/settings_test.ini";
-const FILENAME_ACTIVE = FILENAME;
-
 pub const ParentHandle = extern struct {
     generation: u16,
     index: u16,
@@ -254,6 +249,7 @@ pub const ASettings = struct {
     var file_exists: bool = false;
     var skip_next_load: bool = false;
     var section_update_queue: ArrayList(Message) = undefined;
+    var file_name: [:0]const u8 = &.{};
 
     var h_section_plugin: ?Handle = null;
     var h_section_core: ?Handle = null;
@@ -271,7 +267,9 @@ pub const ASettings = struct {
         AutoSave,
     };
 
-    pub fn init(buf: []u8) !void {
+    pub fn init(buf: []u8, filename: [:0]const u8) !void {
+        file_name = filename;
+
         scratch_fba = FixedBufferAllocator.init(buf);
         scratch_alloc = scratch_fba.allocator();
 
@@ -281,7 +279,7 @@ pub const ASettings = struct {
 
         HotReloadSettings.Init(&hot_reload, load, unload);
         hot_reload.CheckDelay = 250;
-        hot_reload.TrackFileAlways(FILENAME_ACTIVE, 0);
+        hot_reload.TrackFileAlways(file_name, 0);
 
         h_s_settings_version =
             try settingOccupy(DEFAULT_ID, null, "SETTINGS_VERSION", .U, .{ .u = 0 }, &s_settings_version, null);
@@ -789,7 +787,7 @@ pub const ASettings = struct {
         const changed_settings: u32 = savePrepare();
         if (changed_settings == 0 and (s_save_defaults and file_exists)) return;
 
-        const file = try std.fs.cwd().createFile(FILENAME_ACTIVE, .{}); // .exclusive=true for no file rewrite
+        const file = try std.fs.cwd().createFile(file_name, .{}); // .exclusive=true for no file rewrite
         defer file.close();
         var file_bw = std.io.bufferedWriter(file.writer());
         defer _ = file_bw.flush() catch |e|

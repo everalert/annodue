@@ -26,7 +26,7 @@ pub const Testing = @import("Testing.zig");
 
 // plugin-facing 'game' functions
 pub const GAssetBuffer = @import("GAssetBuffer.zig");
-pub const Draw = @import("GDraw.zig");
+pub const GDraw = @import("GDraw.zig"); // depends on AMemory, Global (practice mode check)
 pub const Freeze = @import("GFreeze.zig");
 pub const HideRaceUI = @import("GHideRaceUI.zig");
 

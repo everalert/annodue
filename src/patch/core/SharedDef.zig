@@ -14,7 +14,6 @@ const HandleSOA = @import("../util/handle_map_soa.zig").Handle;
 
 const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
-const GDrawLayer = @import("GDraw.zig").GDrawLayer;
 
 const ADAPI = @import("../util/api/api.zig");
 const ASettingHandle = ADAPI.ASettingHandle;
@@ -22,6 +21,7 @@ const ASettingKind = ADAPI.ASettingKind;
 const ASettingMessage = ADAPI.ASettingMessage;
 const ASettingMValue = ADAPI.ASettingMValue;
 const RAddressHandle = ADAPI.RAddressHandle;
+const GDrawLayer = ADAPI.GDrawLayer;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;

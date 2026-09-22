@@ -8,7 +8,7 @@ pub const COMPATIBILITY_VERSION =
     AHook.PLUGIN_FUNCTION_VERSION +
     SharedDef.GLOBAL_STATE_VERSION +
     SharedDef.GLOBAL_FUNCTION_VERSION +
-    @import("util/core/core_draw.zig").GDRAW_VERSION;
+    @import("util/core/core_draw.zig").DRAW_VERSION;
 
 pub const VERSION = SemVer{
     .major = 0,

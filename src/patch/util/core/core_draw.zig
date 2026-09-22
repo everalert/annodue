@@ -1,8 +1,9 @@
 const std = @import("std");
-
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const FixedBufferAllocator = std.heap.FixedBufferAllocator;
+const panic = std.debug.panic;
+const assert = std.debug.assert;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -10,97 +11,90 @@ const rq = r.Quad;
 const TextDef = rt.TextDef;
 const ResetMaterial = r.Quad.ResetMaterial;
 
-pub const GDRAW_VERSION = 4;
-
-// NOTE: anything above around 256 characters seems pointless even with excessive formatting
-// characters, but may be worth reconsidering down the line if e.g. higher res viewport
+pub const DRAW_VERSION = 4;
 
 // NOTE: system always last (on top)
-pub const GDrawLayer = enum(u32) { Default, DefaultP, Overlay, OverlayP, System, SystemP, Debug };
-
-// TODO: assert/test sizeof = 256 bytes
-const GDrawTextDef = extern struct {
-    x: i16,
-    y: i16,
-    color: u32, // alpha 0 = default color (i.e. 0 = no color)
-    string: [247:0]u8, // fit to 64-byte cache line boundary
-};
-
-// TODO: assert/test sizeof = 12 bytes
-// TODO: merge with generalized sprite drawing down the line
-const GDrawRectDef = extern struct {
-    x: i16,
-    y: i16,
-    w: i16,
-    h: i16,
-    color: u32, // 0 = default color (i.e. 0 = no color)
-};
+pub const Layer = enum(u32) { Default, DefaultP, Overlay, OverlayP, System, SystemP, Debug };
 
 // TODO: insertPanel, insertButton, etc. (after adding sprite drawing)
-pub const GDraw = struct {
-    var text_data: ArrayList(GDrawTextDef) = undefined;
-    var text_layers: ArrayList(GDrawLayer) = undefined;
-    var text_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
-    var rect_data: ArrayList(GDrawRectDef) = undefined;
-    var rect_layers: ArrayList(GDrawLayer) = undefined;
-    var rect_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
-    var rect_sprite: ?*rq.Sprite = null;
+pub const DrawSystem = struct {
+    const LayerCountBufferT = [@typeInfo(Layer).Enum.fields.len]u32;
 
-    var scratch_fba: FixedBufferAllocator = undefined;
-    var scratch_alloc: Allocator = undefined;
+    TextData: ArrayList(TextEntry),
+    TextLayers: ArrayList(Layer),
+    TextCounts: LayerCountBufferT,
 
-    pub fn init(buf: []u8) !void {
-        scratch_fba = FixedBufferAllocator.init(buf);
-        scratch_alloc = scratch_fba.allocator();
-        text_data = try ArrayList(GDrawTextDef).initCapacity(scratch_alloc, 128);
-        text_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 128);
-        rect_data = try ArrayList(GDrawRectDef).initCapacity(scratch_alloc, 32);
-        rect_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 32);
+    RectData: ArrayList(RectEntry),
+    RectLayers: ArrayList(Layer),
+    RectCounts: LayerCountBufferT,
+    RectSprite: ?*rq.Sprite,
+
+    ScratchBuffer: FixedBufferAllocator = undefined,
+    ScratchAlloc: Allocator = undefined,
+
+    const DEFAULT_RECT_COLOR: u32 = 0x00000080;
+
+    pub fn Init(buf: []u8) !DrawSystem {
+        var scratch_fba = FixedBufferAllocator.init(buf);
+        const scratch_alloc = scratch_fba.allocator();
+
+        return DrawSystem{
+            .TextData = try ArrayList(TextEntry).initCapacity(scratch_alloc, 128),
+            .TextLayers = try ArrayList(Layer).initCapacity(scratch_alloc, 128),
+            .TextCounts = std.mem.zeroes(LayerCountBufferT),
+            .RectData = try ArrayList(RectEntry).initCapacity(scratch_alloc, 32),
+            .RectLayers = try ArrayList(Layer).initCapacity(scratch_alloc, 32),
+            .RectCounts = std.mem.zeroes(LayerCountBufferT),
+            .RectSprite = null,
+            .ScratchBuffer = scratch_fba,
+            .ScratchAlloc = scratch_alloc,
+        };
     }
 
-    pub fn deinit() void {
-        clear();
-        text_data.deinit();
-        text_layers.deinit();
-        rect_data.deinit();
-        rect_layers.deinit();
+    pub fn Deinit(self: *DrawSystem) void {
+        self.Clear();
+        self.TextData.deinit();
+        self.TextLayers.deinit();
+        self.RectData.deinit();
+        self.RectLayers.deinit();
+        self.* = undefined;
     }
 
-    pub fn clear() void {
-        text_data.clearRetainingCapacity();
-        text_layers.clearRetainingCapacity();
-        text_refs = std.mem.zeroes(@TypeOf(text_refs));
-        rect_data.clearRetainingCapacity();
-        rect_layers.clearRetainingCapacity();
-        rect_refs = std.mem.zeroes(@TypeOf(text_refs));
+    pub fn Clear(self: *DrawSystem) void {
+        self.TextData.clearRetainingCapacity();
+        self.TextLayers.clearRetainingCapacity();
+        self.TextCounts = std.mem.zeroes(LayerCountBufferT);
+        self.RectData.clearRetainingCapacity();
+        self.RectLayers.clearRetainingCapacity();
+        self.RectCounts = std.mem.zeroes(LayerCountBufferT);
     }
 
     // TODO: return index, not success
-    pub fn insertText(layer: GDrawLayer, text: *TextDef) !void {
-        std.debug.assert(std.mem.len(@as([*:0]u8, @ptrCast(&text.string))) <= 247);
+    pub fn TextInsert(self: *DrawSystem, layer: Layer, text: *TextDef) !void {
+        assert(std.mem.len(@as([*:0]u8, @ptrCast(&text.string))) <= 247);
 
-        try text_layers.append(layer);
-        errdefer _ = text_layers.pop();
+        try self.TextLayers.append(layer);
+        errdefer _ = self.TextLayers.pop();
 
-        var data = try text_data.addOne();
+        var data = try self.TextData.addOne();
         @memcpy(@as(*[256]u8, @ptrCast(data)), @as(*[256]u8, @ptrCast(text)));
 
-        text_refs[@intFromEnum(layer)] += 1;
+        self.TextCounts[@intFromEnum(layer)] += 1;
     }
 
     // TODO: return index, not success
-    pub fn insertRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) !void {
-        try rect_layers.append(layer);
-        errdefer _ = rect_layers.pop();
+    pub fn RectInsert(self: *DrawSystem, layer: Layer, x: i16, y: i16, w: i16, h: i16, color: u32) !void {
+        try self.RectLayers.append(layer);
+        errdefer _ = self.RectLayers.pop();
 
-        try rect_data.append(.{ .x = x, .y = y, .w = w, .h = h, .color = color });
+        try self.RectData.append(.{ .x = x, .y = y, .w = w, .h = h, .color = color });
 
-        rect_refs[@intFromEnum(layer)] += 1;
+        self.RectCounts[@intFromEnum(layer)] += 1;
     }
 
-    pub fn setRectSpriteFromGameId(i: u32) bool {
+    fn RectSetSpriteFromGameId(self: *DrawSystem, i: u32) bool {
         if (r.Quad.MapGet(i)) |sp| {
-            rect_sprite = sp;
+            self.RectSprite = sp;
             return true;
         }
 
@@ -108,16 +102,14 @@ pub const GDraw = struct {
             return false;
 
         if (r.Quad.MapGet(i)) |sp| {
-            rect_sprite = sp;
+            self.RectSprite = sp;
             return true;
         }
 
         unreachable;
     }
 
-    const DEFAULT_RECT_COLOR: u32 = 0x00000080;
-
-    pub fn drawLayer(layer: GDrawLayer, default_color: u32) void {
+    pub fn LayerDraw(self: *DrawSystem, layer: Layer, default_color: u32) void {
         //if (quad_refs[@intFromEnum(layer)] > 0) {
         //    ResetMaterial();
         //    for (quad_data) |*q| {
@@ -125,13 +117,16 @@ pub const GDraw = struct {
         //    }
         //}
 
-        if (rect_sprite != null and rect_refs[@intFromEnum(layer)] > 0) {
+        if (self.RectSprite != null and
+            self.RectCounts[@intFromEnum(layer)] > 0 and
+            self.RectSetSpriteFromGameId(26)) // white square texture
+        {
             ResetMaterial();
-            for (rect_layers.items, rect_data.items) |l, *rect| {
+            for (self.RectLayers.items, self.RectData.items) |l, *rect| {
                 if (l != layer) continue;
                 const color: u32 = if (rect.color & 0xFF > 0) rect.color else DEFAULT_RECT_COLOR;
                 rq.DrawSprite(
-                    GDraw.rect_sprite,
+                    self.RectSprite,
                     rect.x,
                     rect.y,
                     @as(f32, @floatFromInt(rect.w)) / 8,
@@ -148,9 +143,9 @@ pub const GDraw = struct {
             }
         }
 
-        if (text_refs[@intFromEnum(layer)] > 0) {
+        if (self.TextCounts[@intFromEnum(layer)] > 0) {
             ResetMaterial();
-            for (text_layers.items, text_data.items) |l, *t| {
+            for (self.TextLayers.items, self.TextData.items) |l, *t| {
                 if (l != layer) continue;
                 const color: u32 = if (t.color & 0xFF > 0) t.color else default_color;
                 rt.fnRenderSetColor(
@@ -164,4 +159,25 @@ pub const GDraw = struct {
             }
         }
     }
+};
+
+// TODO: assert/test sizeof = 256 bytes
+// NOTE: strings above around 256 characters seems pointless even with excessive
+//  formatting characters, but may be worth reconsidering down the line for things
+//  like higher res viewport
+const TextEntry = extern struct {
+    x: i16,
+    y: i16,
+    color: u32, // alpha 0 = default color (i.e. 0 = no color)
+    string: [247:0]u8, // fit to 64-byte cache line boundary
+};
+
+// TODO: assert/test sizeof = 12 bytes
+// TODO: merge with generalized sprite drawing down the line
+const RectEntry = extern struct {
+    x: i16,
+    y: i16,
+    w: i16,
+    h: i16,
+    color: u32, // 0 = default color (i.e. 0 = no color)
 };

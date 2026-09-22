@@ -1,9 +1,5 @@
 const std = @import("std");
 
-const w32 = @import("zigwin32");
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
-const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
-
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 const VERSION_STR = @import("appinfo.zig").VERSION_STR;
@@ -19,18 +15,17 @@ const m = @import("util/menu.zig");
 const Menu = m.Menu;
 const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
-const st = @import("util/toggle_state.zig");
-
-const InputMap = @import("core/Input.zig").InputMap;
-const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
-const AxisInputMap = @import("core/Input.zig").AxisInputMap;
+const ToggleState = @import("util/toggle_state.zig").ToggleState;
 
 const ADAPI = @import("util/api/api.zig");
 const ASettingMValue = ADAPI.ASettingMValue;
 const ASettingHandle = ADAPI.ASettingHandle;
 const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const AInputXInputButton = ADAPI.AInputXInputButton;
+const AInputVirtualKey = ADAPI.AInputVirtualKey;
 const apih = ADAPI.helper;
 const RAddressHandleInfo = apih.RAddressHandleInfo;
+const AInputButtonMap = apih.AInputButtonMap;
 
 const rs = @import("racer").Sound;
 
@@ -77,11 +72,11 @@ const AnnodueSettings = struct {
     }
 };
 
-var input_enable_data = ButtonInputMap{ .kb = .@"8", .xi = null };
-var input_enable = input_enable_data.inputMap();
+var input_enable_data = AInputButtonMap{ .Kb = .@"8", .Xi = null };
+var input_enable = input_enable_data.InputMap();
 
-var input_pause_data = ButtonInputMap{ .kb = .@"9", .xi = null };
-var input_pause = input_pause_data.inputMap();
+var input_pause_data = AInputButtonMap{ .Kb = .@"9", .Xi = null };
+var input_pause = input_pause_data.InputMap();
 
 var presets: [5]CollisionViewerSettings = .{
     .{
@@ -158,9 +153,9 @@ var preset_index: i32 = 0;
 // QUICK RACE MENU
 
 const QuickRaceMenuInput = extern struct {
-    kb: VIRTUAL_KEY,
-    xi: XINPUT_GAMEPAD_BUTTON_INDEX,
-    state: st.ToggleState = undefined,
+    kb: AInputVirtualKey,
+    xi: AInputXInputButton,
+    state: ToggleState = undefined,
 };
 
 const ConvertedMenuItem = struct {
@@ -201,7 +196,7 @@ const QuickRaceMenu = extern struct {
 
     fn get_input(comptime input: *QuickRaceMenuInput) InputGetFnType {
         const s = struct {
-            fn gi(i: st.ToggleState) callconv(.C) bool {
+            fn gi(i: ToggleState) callconv(.C) bool {
                 return input.state == i;
             }
         };
@@ -210,7 +205,7 @@ const QuickRaceMenu = extern struct {
 
     inline fn update_input() void {
         for (&inputs) |*i|
-            i.state.update(gf.InputGetKbRaw(i.kb).on() or gf.InputGetXInputButton(i.xi).on());
+            i.state.update(gf.AInputKbGetRaw(i.kb).on() or gf.AInputXInputGetButton(i.xi).on());
     }
 
     var data: Menu = .{
@@ -310,10 +305,10 @@ const QuickRaceMenu = extern struct {
             return;
         }
 
-        if (input_enable.gets() == .JustOn)
+        if (input_enable.GetSt() == .JustOn)
             state.enabled = !state.enabled;
 
-        if (input_pause.gets() == .JustOn) {
+        if (input_pause.GetSt() == .JustOn) {
             if (menu_active) close() else open();
         }
 
@@ -386,8 +381,8 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 // HOOKS
 
 export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
-    input_enable.update(gf);
-    input_pause.update(gf);
+    input_enable.Update(gf);
+    input_pause.Update(gf);
     QuickRaceMenu.update_input();
 }
 

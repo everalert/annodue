@@ -5,8 +5,6 @@ const assert = std.debug.assert;
 
 const w32 = @import("zigwin32");
 const ShowCursor = w32.ui.windows_and_messaging.ShowCursor;
-const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
 
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
@@ -19,10 +17,8 @@ const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
-const st = @import("util/toggle_state.zig");
+const ToggleState = @import("util/toggle_state.zig").ToggleState;
 const bmem = @import("util/base/base_memory.zig");
-const apih = @import("util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
 
 const rg = @import("racer").Global;
 const rti = @import("racer").Time;
@@ -37,16 +33,17 @@ const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
 const rs = @import("racer").Save;
 
-const InputMap = @import("core/Input.zig").InputMap;
-const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
-const AxisInputMap = @import("core/Input.zig").AxisInputMap;
-
 const ADAPI = @import("util/api/api.zig");
 const ASettingHandle = ADAPI.ASettingHandle;
 const ASettingMValue = ADAPI.ASettingMValue;
 const ASettingMessage = ADAPI.ASettingMessage;
 const RAddressHandle = ADAPI.RAddressHandle;
 const RADDRESS_HANDLE_NULL = ADAPI.RADDRESS_HANDLE_NULL;
+const AInputVirtualKey = ADAPI.AInputVirtualKey;
+const AInputXInputButton = ADAPI.AInputXInputButton;
+const apih = ADAPI.helper;
+const RAddressHandleInfo = apih.RAddressHandleInfo;
+const AInputButtonMap = apih.AInputButtonMap;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_qol", "annodue/plugin/plugin_qol.pdb");
@@ -224,18 +221,18 @@ const QolState = struct {
     var h_ar_esc1 = RAddressHandleInfo.InitLen(ri.RAW_STATE_ON_ADDR + 4, 4); // start_on
     var h_ar_esc2 = RAddressHandleInfo.InitLen(ri.RAW_STATE_JUST_ON_ADDR + 4, 4); // start_just_on
 
-    var input_pause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .START };
-    var input_unpause_data = ButtonInputMap{ .kb = .ESCAPE, .xi = .B };
-    var input_quickstart_data = ButtonInputMap{ .kb = .TAB, .xi = .BACK };
-    var input_pause = input_pause_data.inputMap();
-    var input_unpause = input_unpause_data.inputMap();
-    var input_quickstart = input_quickstart_data.inputMap();
+    var input_pause_data = AInputButtonMap{ .Kb = .ESCAPE, .Xi = .START };
+    var input_unpause_data = AInputButtonMap{ .Kb = .ESCAPE, .Xi = .B };
+    var input_quickstart_data = AInputButtonMap{ .Kb = .TAB, .Xi = .BACK };
+    var input_pause = input_pause_data.InputMap();
+    var input_unpause = input_unpause_data.InputMap();
+    var input_quickstart = input_quickstart_data.InputMap();
 
     var fcam_buf: []u8 = &.{};
     var cam_prev: u32 = 0xFFFFFFFF;
     var cam_cman: ?*re.cMan.cMan = null;
 
-    var autoreset_dead: st.ToggleState = .Off;
+    var autoreset_dead: ToggleState = .Off;
     var autoreset_dead_timer: f32 = 0;
     var autoreset_fire_timer: f32 = 0;
     var autoreset_has_boost_charged: bool = false;
@@ -246,9 +243,9 @@ const QolState = struct {
     var api: *GlobalFn = undefined;
 
     fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
-        input_pause.update(gf);
-        input_unpause.update(gf);
-        input_quickstart.update(gf);
+        input_pause.Update(gf);
+        input_unpause.Update(gf);
+        input_quickstart.Update(gf);
     }
 
     fn settingsInit(gf: *GlobalFn) void {
@@ -1189,7 +1186,7 @@ const QuickRaceMenu = extern struct {
     var h_ar_loadrace1 = RAddressHandleInfo.InitLen(0xE35A84, 4); // file slot 0 character
 
     const open_threshold: f32 = 0.75;
-    var menu_active: st.ToggleState = .Off;
+    var menu_active: ToggleState = .Off;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
     var api: *GlobalFn = undefined;
@@ -1212,9 +1209,9 @@ const QuickRaceMenu = extern struct {
     };
 
     const MenuInput = extern struct {
-        kb: VIRTUAL_KEY,
-        xi: XINPUT_GAMEPAD_BUTTON_INDEX,
-        state: st.ToggleState = undefined,
+        kb: AInputVirtualKey,
+        xi: AInputXInputButton,
+        state: ToggleState = undefined,
     };
 
     var inputs = [_]MenuInput{
@@ -1242,7 +1239,7 @@ const QuickRaceMenu = extern struct {
 
     fn get_input(comptime input: *MenuInput) InputGetFnType {
         const s = struct {
-            fn gi(i: st.ToggleState) callconv(.C) bool {
+            fn gi(i: ToggleState) callconv(.C) bool {
                 return input.state == i;
             }
         };
@@ -1251,7 +1248,7 @@ const QuickRaceMenu = extern struct {
 
     inline fn update_input() void {
         for (&inputs) |*i|
-            i.state.update(api.InputGetKbRaw(i.kb).on() or api.InputGetXInputButton(i.xi).on());
+            i.state.update(api.AInputKbGetRaw(i.kb).on() or api.AInputXInputGetButton(i.xi).on());
     }
 
     var data: Menu = .{
@@ -1384,11 +1381,11 @@ const QuickRaceMenu = extern struct {
             menu_active.update(menu_active.on());
         }
 
-        const upi = QolState.input_unpause.gets();
+        const upi = QolState.input_unpause.GetSt();
         if (menu_active.on() and upi == .JustOn)
             return close();
 
-        const pi = QolState.input_pause.gets();
+        const pi = QolState.input_pause.GetSt();
         if (rg.PAUSE_STATE.* == 2 and pi == .JustOn)
             return open();
         if (rg.PAUSE_STATE.* == 2 and rg.PAUSE_SCROLLINOUT.* >= open_threshold and pi == .On)
@@ -1774,8 +1771,8 @@ export fn InputUpdateKeyboardA(_: *GlobalFn) callconv(.C) void {
     const handles = [_]RAddressHandle{ QolState.h_ar_esc1.Handle, QolState.h_ar_esc2.Handle };
     if (!apih.RAddressPatchToggleGroup(api, &handles, true)) {
         // map xinput start to esc
-        const start_on: u32 = @intFromBool(QolState.input_pause.gets() == .On);
-        const start_just_on: u32 = @intFromBool(QolState.input_pause.gets() == .JustOn);
+        const start_on: u32 = @intFromBool(QolState.input_pause.GetSt() == .On);
+        const start_just_on: u32 = @intFromBool(QolState.input_pause.GetSt() == .JustOn);
         _ = apih.RAddressRangeWrite(QolState.api, handles[0], ri.RAW_STATE_ON_ADDR + 4, u32, start_on);
         _ = apih.RAddressRangeWrite(QolState.api, handles[1], ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
     }
@@ -1802,14 +1799,14 @@ export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
         gf.ASettingUpdate(QolState.h_s_default_racers.?, .{ .U = racers });
 
     // FIXME: convert to mapped inputs
-    if (QolState.s_clear_records_enable and gf.InputGetKbRaw(.BACK) == .JustOn) {
-        if (gf.InputGetKbRaw(.@"1").on()) blk: {
+    if (QolState.s_clear_records_enable and gf.AInputKbGetRaw(.BACK) == .JustOn) {
+        if (gf.AInputKbGetRaw(.@"1").on()) blk: {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 1, hang.Mirror != 0);
             var buf = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
             _ = std.fmt.bufPrintZ(buf, "{s} Best Lap cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
             _ = gf.ToastNew(buf, rt.ColorRGB.Red.rgba(0));
         }
-        if (gf.InputGetKbRaw(.@"3").on()) blk: {
+        if (gf.AInputKbGetRaw(.@"3").on()) blk: {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 3, hang.Mirror != 0);
             var buf = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
             _ = std.fmt.bufPrintZ(buf, "{s} 3-Lap Record cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
@@ -1834,8 +1831,8 @@ export fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
     if (gf.SInRace().on() and
         QolState.s_quickstart and
         !QuickRaceMenu.menu_active.on() and
-        ((QolState.input_quickstart.gets().on() and QolState.input_pause.gets() == .JustOn) or
-        (QolState.input_quickstart.gets() == .JustOn and QolState.input_pause.gets().on())))
+        ((QolState.input_quickstart.GetSt().on() and QolState.input_pause.GetSt() == .JustOn) or
+        (QolState.input_quickstart.GetSt() == .JustOn and QolState.input_pause.GetSt().on())))
     {
         RestartRace(true);
         return; // skip quick race menu

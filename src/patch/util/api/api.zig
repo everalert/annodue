@@ -20,6 +20,15 @@ pub const RAddressHandle = core_address.AddressHandleOpaque;
 pub const RADDRESS_HANDLE_NULL = core_address.ADDRESS_HANDLE_OPAQUE_NULL;
 
 //------------------------------------------------------------------------------
+// AInput
+
+const core_input = @import("../core/core_input.zig");
+pub const AInputXInputAxis = core_input.XInputAxis;
+pub const AInputXInputButton = core_input.XInputButton;
+pub const AInputPoint = core_input.Point;
+pub const AInputVirtualKey = core_input.VirtualKey;
+
+//------------------------------------------------------------------------------
 // GDraw
 
 const core_draw = @import("../core/core_draw.zig");

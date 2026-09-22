@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(RacerLib): `Save`, `Asset`, `3D`, `Debug`, `Font`, `Meta` utils
 - Backend(RacerLib): `Input`, `Matrix`, `Camera`, `Text` util defs
 - Backend(Util): Detour- and calling convention-related x86 helpers
-- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `api/api_helper`, `base/base_memory`, `base/base_arena`, `base/base_math`, `debug/debug_pdbparse`, `core/core_settings`, `core/core_address`, `core/core_draw` utils
+- Backend(Util): `color_format`, `gif`, `png`, `tga`, `hot_reload`, `api/api_helper`, `base/base_memory`, `base/base_arena`, `base/base_math`, `debug/debug_pdbparse`, `core/core_settings`, `core/core_address`, `core/core_draw`, `core/core_input` utils
 - Backend(Util): Entry point for running module-wide tests
 
 ### Changed
@@ -80,11 +80,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend(ASettings): Migrate to new hot reloading util
 - Backend(Hook): Migrate to new hot reloading util
 - Backend(Core): Global State version `5` to `10`
-- Backend(Core): Global Function version `29` to `34`
+- Backend(Core): Global Function version `29` to `36`
+- Backend(Core): global functions: renamed `Input*` family to `AInput*` with SOV naming scheme
 - Backend(Core): Settings now also autosave on game load, race reset and during menu and race state transitions
-- Backend(Core): Core impls moved to Util: ASettings, GDraw
+- Backend(Core): Core impls moved to Util: ASettings, GDraw, AInput
 - Backend(Core): All global state migrated to getter functions in Global Function API
 - Backend(Core): Hook renamed to AHook
+- Backend(Core): Input renamed to AInput
 - Backend(Core): Replaced Allocator with AMemory
     - Arena-based memory accessible both internally and to plugins
     - All memory management migrated to this system project-wide

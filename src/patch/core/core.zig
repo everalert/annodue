@@ -10,12 +10,12 @@
 pub const AMemory = @import("AMemory.zig");
 
 // ring 1
-pub const ASettings = @import("ASettings.zig"); // depends on AMemory
-pub const RAddress = @import("RAddress.zig"); // depends on AMemory
+pub const ASettings = @import("ASettings.zig"); // depends on: AMemory
+pub const RAddress = @import("RAddress.zig"); // depends on: AMemory
 
 // this stuff was outside core and hooked in this order before making this file
-pub const AHook = @import("AHook.zig"); // depends on AMemory, RAddress
-pub const Input = @import("Input.zig");
+pub const AHook = @import("AHook.zig"); // depends on: AMemory, RAddress
+pub const AInput = @import("AInput.zig"); // depends on: (none)
 pub const Global = @import("Global.zig");
 pub const Practice = @import("Practice.zig");
 
@@ -26,7 +26,7 @@ pub const Testing = @import("Testing.zig");
 
 // plugin-facing 'game' functions
 pub const GAssetBuffer = @import("GAssetBuffer.zig");
-pub const GDraw = @import("GDraw.zig"); // depends on AMemory, Global (practice mode check)
+pub const GDraw = @import("GDraw.zig"); // depends on: AMemory, Global (practice mode check)
 pub const Freeze = @import("GFreeze.zig");
 pub const HideRaceUI = @import("GHideRaceUI.zig");
 

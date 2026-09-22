@@ -11,7 +11,7 @@ const GDraw = @import("GDraw.zig");
 const GFreeze = @import("GFreeze.zig");
 const GHideRaceUI = @import("GHideRaceUI.zig");
 const toast = @import("Toast.zig");
-const input = @import("Input.zig");
+const AInput = @import("AInput.zig");
 const ASettings = @import("ASettings.zig");
 const AMemory = @import("AMemory.zig");
 const RTerrain = @import("RTerrain.zig");
@@ -20,8 +20,6 @@ const RAddress = @import("RAddress.zig");
 
 const st = @import("../util/toggle_state.zig");
 const ToggleState = st.ToggleState;
-const xinput = @import("../util/xinput.zig");
-const msg = @import("../util/message.zig");
 
 const app = @import("../appinfo.zig");
 const VERSION = app.VERSION;
@@ -170,14 +168,14 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
     .ASettingSectionResetFile = &ASettings.ASettingSectionResetFile,
     .ASettingSectionClean = &ASettings.ASettingSectionClean,
     // Input
-    .InputGetKb = &input.get_kb,
-    .InputGetKbRaw = &input.get_kb_raw,
-    .InputGetMouse = &input.get_mouse_raw,
-    .InputGetMouseDelta = &input.get_mouse_raw_d,
-    .InputLockMouse = &input.lock_mouse,
-    //InputGetMouseInWindow= &input.get_mouse_inside,
-    .InputGetXInputButton = &input.get_xinput_button,
-    .InputGetXInputAxis = &input.get_xinput_axis,
+    .AInputKbGet = AInput.AInputKbGet,
+    .AInputKbGetRaw = AInput.AInputKbGetRaw,
+    .AInputMouseGet = AInput.AInputMouseGet,
+    .AInputMouseGetDelta = AInput.AInputMouseGetDelta,
+    .AInputMouseLock = AInput.AInputMouseLock,
+    //.AInputMouseIsInWindow=AInput.AInputMouseIsInWindow,
+    .AInputXInputGetButton = AInput.AInputXInputGetButton,
+    .AInputXInputGetAxis = AInput.AInputXInputGetAxis,
     // Game
     .GDrawText = &GDraw.GDrawText,
     //.GDrawTextBox = &draw.GDrawTextBox,
@@ -232,18 +230,12 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
 
 const style_practice_label = rt.hMakeTextHeadStyle(.Default, true, .Yellow, .Right, .{rto.ToggleShadow}) catch "";
 
-fn DrawMenuPracticeModeLabel() void {
-    _ = GLOBAL_FUNCTION.GDrawText(
-        .SystemP,
-        rt.hMakeText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch null,
-    );
+fn DrawMenuPracticeModeLabel(gf: *GlobalFunction) void {
+    _ = gf.GDrawText(.SystemP, rt.hMakeText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch null);
 }
 
-fn DrawVersionString() void {
-    _ = GLOBAL_FUNCTION.GDrawText(
-        .System,
-        rt.hMakeText(36, 480 - 24, "{s}", .{VERSION_STR}, 0xFFFFFFFF, null) catch null,
-    );
+fn DrawVersionString(gf: *GlobalFunction) void {
+    _ = gf.GDrawText(.System, rt.hMakeText(36, 480 - 24, "{s}", .{VERSION_STR}, 0xFFFFFFFF, null) catch null);
 }
 
 // INIT
@@ -316,24 +308,24 @@ pub fn TimerUpdateA(_: *GlobalFunction) callconv(.C) void {
     );
 }
 
-pub fn MenuTitleScreenB(_: *GlobalFunction) callconv(.C) void {
+pub fn MenuTitleScreenB(gf: *GlobalFunction) callconv(.C) void {
     // TODO: make text only appear on the actual title screen, i.e. remove from file select etc.
-    DrawVersionString();
-    DrawMenuPracticeModeLabel();
+    DrawVersionString(gf);
+    DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuStartRaceB(_: *GlobalFunction) callconv(.C) void {
-    DrawMenuPracticeModeLabel();
+pub fn MenuStartRaceB(gf: *GlobalFunction) callconv(.C) void {
+    DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuRaceResultsB(_: *GlobalFunction) callconv(.C) void {
-    DrawMenuPracticeModeLabel();
+pub fn MenuRaceResultsB(gf: *GlobalFunction) callconv(.C) void {
+    DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuTrackSelectB(_: *GlobalFunction) callconv(.C) void {
-    DrawMenuPracticeModeLabel();
+pub fn MenuTrackSelectB(gf: *GlobalFunction) callconv(.C) void {
+    DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuTrackB(_: *GlobalFunction) callconv(.C) void {
-    DrawMenuPracticeModeLabel();
+pub fn MenuTrackB(gf: *GlobalFunction) callconv(.C) void {
+    DrawMenuPracticeModeLabel(gf);
 }

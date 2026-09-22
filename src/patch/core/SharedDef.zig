@@ -1,8 +1,6 @@
 const std = @import("std");
 
 const w32 = @import("zigwin32");
-const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
-const POINT = w32.foundation.POINT;
 const BOOL = w32.foundation.BOOL;
 const HWND = w32.foundation.HWND;
 const HINSTANCE = w32.foundation.HINSTANCE;
@@ -12,9 +10,6 @@ const Handle = @import("../util/handle_map.zig").Handle;
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 const HandleSOA = @import("../util/handle_map_soa.zig").Handle;
 
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
-const XINPUT_GAMEPAD_AXIS_INDEX = @import("Input.zig").XINPUT_GAMEPAD_AXIS_INDEX;
-
 const ADAPI = @import("../util/api/api.zig");
 const ASettingHandle = ADAPI.ASettingHandle;
 const ASettingKind = ADAPI.ASettingKind;
@@ -22,6 +17,10 @@ const ASettingMessage = ADAPI.ASettingMessage;
 const ASettingMValue = ADAPI.ASettingMValue;
 const RAddressHandle = ADAPI.RAddressHandle;
 const GDrawLayer = ADAPI.GDrawLayer;
+const AInputXInputAxis = ADAPI.AInputXInputAxis;
+const AInputXInputButton = ADAPI.AInputXInputButton;
+const AInputPoint = ADAPI.AInputPoint;
+const AInputVirtualKey = ADAPI.AInputVirtualKey;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
@@ -68,7 +67,7 @@ pub const GlobalState = extern struct {
     } = .{},
 };
 
-pub const GLOBAL_FUNCTION_VERSION = 35;
+pub const GLOBAL_FUNCTION_VERSION = 36;
 
 // TODO: fnptr for nullable handles, or handles in general?
 pub const GlobalFunction = extern struct {
@@ -109,14 +108,14 @@ pub const GlobalFunction = extern struct {
     ASettingSectionResetFile: *const fn (handle: ASettingHandle) callconv(.C) void,
     ASettingSectionClean: *const fn (handle: ASettingHandle) callconv(.C) void,
     // Input
-    InputGetKb: *const fn (keycode: VIRTUAL_KEY, state: ToggleState) callconv(.C) bool,
-    InputGetKbRaw: *const fn (keycode: VIRTUAL_KEY) callconv(.C) ToggleState,
-    InputGetMouse: *const fn () callconv(.C) POINT,
-    InputGetMouseDelta: *const fn () callconv(.C) POINT,
-    InputLockMouse: *const fn () callconv(.C) void,
-    //InputGetMouseInWindow: *const fn () callconv(.C) ToggleState,
-    InputGetXInputButton: *const fn (button: XINPUT_GAMEPAD_BUTTON_INDEX) callconv(.C) ToggleState,
-    InputGetXInputAxis: *const fn (axis: XINPUT_GAMEPAD_AXIS_INDEX) callconv(.C) f32,
+    AInputKbGet: *const fn (keycode: AInputVirtualKey, state: ToggleState) callconv(.C) bool,
+    AInputKbGetRaw: *const fn (keycode: AInputVirtualKey) callconv(.C) ToggleState,
+    AInputMouseGet: *const fn () callconv(.C) AInputPoint,
+    AInputMouseGetDelta: *const fn () callconv(.C) AInputPoint,
+    AInputMouseLock: *const fn () callconv(.C) void,
+    //AInputMouseIsInWindow: *const fn () callconv(.C) ToggleState,
+    AInputXInputGetButton: *const fn (button: AInputXInputButton) callconv(.C) ToggleState,
+    AInputXInputGetAxis: *const fn (axis: AInputXInputAxis) callconv(.C) f32,
     // Game
     GDrawText: *const fn (layer: GDrawLayer, text: ?*TextDef) callconv(.C) bool,
     //GDrawTextBox: *const fn (layer: GDrawLayer, text: ?*TextDef, pad_x: i16, pad_y: i16, rect_color: u32) bool,

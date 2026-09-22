@@ -14,9 +14,9 @@ const ADAPI = @import("util/api/api.zig");
 const ASettingHandle = ADAPI.ASettingHandle;
 const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 const apih = ADAPI.helper;
+const AInputButtonMap = apih.AInputButtonMap;
 
-const XINPUT_GAMEPAD_BUTTON_INDEX = @import("core/Input.zig").XINPUT_GAMEPAD_BUTTON_INDEX;
-const st = @import("util/toggle_state.zig");
+const ToggleState = @import("util/toggle_state.zig").ToggleState;
 const scroll = @import("util/scroll_control.zig");
 const msg = @import("util/message.zig");
 const TemporalCompressor = @import("util/temporal_compression.zig").TemporalCompressor;
@@ -31,10 +31,6 @@ const rr = @import("racer").Random;
 const rti = @import("racer").Time;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
-
-const InputMap = @import("core/Input.zig").InputMap;
-const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
-const AxisInputMap = @import("core/Input.zig").AxisInputMap;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_savestate", "annodue/plugin/plugin_savestate.pdb");
@@ -128,10 +124,10 @@ const state = struct {
     var load_count: usize = 0;
 
     // TODO: some kind of unified mapping thing, once dinput is implemented
-    var save_input_st_data = ButtonInputMap{ .kb = .@"1", .xi = .DPAD_DOWN };
-    var save_input_ld_data = ButtonInputMap{ .kb = .@"2", .xi = .DPAD_UP };
-    var save_input_st = save_input_st_data.inputMap();
-    var save_input_ld = save_input_ld_data.inputMap();
+    var save_input_st_data = AInputButtonMap{ .Kb = .@"1", .Xi = .DPAD_DOWN };
+    var save_input_ld_data = AInputButtonMap{ .Kb = .@"2", .Xi = .DPAD_UP };
+    var save_input_st = save_input_st_data.InputMap();
+    var save_input_ld = save_input_ld_data.InputMap();
 
     var scrub: scroll.ScrollControl = .{
         .scroll_time = 3,
@@ -140,17 +136,17 @@ const state = struct {
         .input_inc = scrub_inc,
     };
     var scrub_frame: i32 = 0;
-    var scrub_input_dec_data = ButtonInputMap{ .kb = .@"3", .xi = .DPAD_LEFT };
-    var scrub_input_inc_data = ButtonInputMap{ .kb = .@"4", .xi = .DPAD_RIGHT };
-    var scrub_input_dec = scrub_input_dec_data.inputMap();
-    var scrub_input_inc = scrub_input_inc_data.inputMap();
+    var scrub_input_dec_data = AInputButtonMap{ .Kb = .@"3", .Xi = .DPAD_LEFT };
+    var scrub_input_inc_data = AInputButtonMap{ .Kb = .@"4", .Xi = .DPAD_RIGHT };
+    var scrub_input_dec = scrub_input_dec_data.InputMap();
+    var scrub_input_inc = scrub_input_inc_data.InputMap();
 
-    fn scrub_dec(s: st.ToggleState) callconv(.C) bool {
-        return scrub_input_dec.gets() == s;
+    fn scrub_dec(s: ToggleState) callconv(.C) bool {
+        return scrub_input_dec.GetSt() == s;
     }
 
-    fn scrub_inc(s: st.ToggleState) callconv(.C) bool {
-        return scrub_input_inc.gets() == s;
+    fn scrub_inc(s: ToggleState) callconv(.C) bool {
+        return scrub_input_inc.GetSt() == s;
     }
 
     fn reset() void {
@@ -209,10 +205,10 @@ fn DoStateRecording(gf: *GlobalFn) LoadState {
     if (state.saveable(gf))
         state.rec_data.save(rti.FRAMECOUNT.*);
 
-    if (state.save_input_st.gets() == .JustOn) {
+    if (state.save_input_st.GetSt() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
-    if (state.save_input_ld.gets() == .JustOn and state.rec_data.frames > 0) {
+    if (state.save_input_ld.GetSt() == .JustOn and state.rec_data.frames > 0) {
         state.load_time = state.s_load_delay + rti.TIMESTAMP.*;
         return .Loading;
     }
@@ -224,7 +220,7 @@ fn DoStateLoading(gf: *GlobalFn) LoadState {
     if (state.saveable(gf))
         state.rec_data.save(rti.FRAMECOUNT.*);
 
-    if (state.save_input_ld.gets() == .JustOn) {
+    if (state.save_input_ld.GetSt() == .JustOn) {
         state.scrub_frame = std.math.cast(i32, state.rec_data.frame).? - 1;
         state.rec_data.frame_total = state.rec_data.frame;
         return .Scrubbing;
@@ -241,10 +237,10 @@ fn DoStateLoading(gf: *GlobalFn) LoadState {
 }
 
 fn DoStateScrubbing(gf: *GlobalFn) LoadState {
-    if (state.save_input_st.gets() == .JustOn) {
+    if (state.save_input_st.GetSt() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
-    if (state.save_input_ld.gets() == .JustOn) {
+    if (state.save_input_ld.GetSt() == .JustOn) {
         state.load_frame = @min(state.load_frame, std.math.cast(u32, state.scrub_frame).?);
         state.load_time = state.s_load_delay + rti.TIMESTAMP.*;
         state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
@@ -266,7 +262,7 @@ fn DoStateScrubExiting(gf: *GlobalFn) LoadState {
     if (state.loadable(gf))
         state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
 
-    if (state.save_input_st.gets() == .JustOn) {
+    if (state.save_input_st.GetSt() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
 
@@ -331,10 +327,10 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 //}
 
 export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
-    state.scrub_input_dec.update(gf);
-    state.scrub_input_inc.update(gf);
-    state.save_input_st.update(gf);
-    state.save_input_ld.update(gf);
+    state.scrub_input_dec.Update(gf);
+    state.scrub_input_inc.Update(gf);
+    state.save_input_st.Update(gf);
+    state.save_input_ld.Update(gf);
 }
 
 export fn EngineEntityUpdateB(gf: *GlobalFn) callconv(.C) void {

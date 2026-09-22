@@ -9,16 +9,6 @@ const POINT = w32.foundation.POINT;
 const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
-const ButtonInputMap = @import("core/Input.zig").ButtonInputMap;
-const AxisInputMap = @import("core/Input.zig").AxisInputMap;
-
-//// FIXME: import from util/api/api.zig; need to migrate
-//const SettingHandle = @import("util/core/core_settings.zig").Handle;
-//// FIXME: import from util/api/api.zig; need to migrate
-//const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
-//// FIXME: import from util/api/api.zig; need to migrate
-//const Setting = @import("util/core/core_settings.zig").ASettingSent;
-
 const ADAPI = @import("util/api/api.zig");
 const ASettingMessage = ADAPI.ASettingMessage;
 const ASettingHandle = ADAPI.ASettingHandle;
@@ -26,6 +16,8 @@ const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
 const RAddressHandle = ADAPI.RAddressHandle;
 const apih = ADAPI.helper;
 const RAddressHandleInfo = apih.RAddressHandleInfo;
+const AInputButtonMap = apih.AInputButtonMap;
+const AInputAxisMap = apih.AInputAxisMap;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -185,42 +177,42 @@ const Cam7 = extern struct {
     var move_d: Vec3 = .{};
     var move_d_tgt: Vec3 = .{};
 
-    var i_toggle_data = ButtonInputMap{ .kb = .@"0", .xi = .BACK };
-    var i_look_x_data = AxisInputMap{ .kb_dec = .LEFT, .kb_inc = .RIGHT, .xi_inc = .StickRX };
-    var i_look_y_data = AxisInputMap{ .kb_dec = .DOWN, .kb_inc = .UP, .xi_inc = .StickRY };
-    var i_move_x_data = AxisInputMap{ .kb_dec = .A, .kb_inc = .D, .xi_inc = .StickLX };
-    var i_move_y_data = AxisInputMap{ .kb_dec = .S, .kb_inc = .W, .xi_inc = .StickLY };
-    var i_move_z_data = AxisInputMap{ .kb_dec = .SHIFT, .kb_inc = .SPACE, .xi_dec = .TriggerR, .xi_inc = .TriggerL };
-    var i_movement_dec_data = ButtonInputMap{ .kb = .Q, .xi = .LEFT_SHOULDER };
-    var i_movement_inc_data = ButtonInputMap{ .kb = .E, .xi = .RIGHT_SHOULDER };
-    var i_rotation_dec_data = ButtonInputMap{ .kb = .Z, .xi = .LEFT_THUMB };
-    var i_rotation_inc_data = ButtonInputMap{ .kb = .C, .xi = .RIGHT_THUMB };
-    var i_damp_data = ButtonInputMap{ .kb = .X, .xi = .Y };
-    var i_planar_data = ButtonInputMap{ .kb = .TAB, .xi = .B };
-    var i_sweep_data = ButtonInputMap{ .kb = .RCONTROL, .xi = .X };
-    //var i_mpan_data = ButtonInputMap{ .kb = .LBUTTON };
-    //var i_morbit_data = ButtonInputMap{ .kb = .RBUTTON };
-    var i_hide_ui_data = ButtonInputMap{ .kb = .@"6" };
-    var i_disable_input_data = ButtonInputMap{ .kb = .@"7" };
-    var i_move_vehicle_data = ButtonInputMap{ .kb = .BACK, .xi = .X };
-    var i_look_at_vehicle_data = ButtonInputMap{ .kb = .OEM_5 }; // backslash
-    var i_toggle = i_toggle_data.inputMap();
-    var i_look_x = i_look_x_data.inputMap();
-    var i_look_y = i_look_y_data.inputMap();
-    var i_move_x = i_move_x_data.inputMap();
-    var i_move_y = i_move_y_data.inputMap();
-    var i_move_z = i_move_z_data.inputMap();
-    var i_movement_dec = i_movement_dec_data.inputMap();
-    var i_movement_inc = i_movement_inc_data.inputMap();
-    var i_rotation_dec = i_rotation_dec_data.inputMap();
-    var i_rotation_inc = i_rotation_inc_data.inputMap();
-    var i_damp = i_damp_data.inputMap();
-    var i_planar = i_planar_data.inputMap();
-    var i_sweep = i_sweep_data.inputMap();
-    var i_hide_ui = i_hide_ui_data.inputMap();
-    var i_disable_input = i_disable_input_data.inputMap();
-    var i_move_vehicle = i_move_vehicle_data.inputMap();
-    var i_look_at_vehicle = i_look_at_vehicle_data.inputMap();
+    var i_toggle_data = AInputButtonMap{ .Kb = .@"0", .Xi = .BACK };
+    var i_look_x_data = AInputAxisMap{ .KbDec = .LEFT, .KbInc = .RIGHT, .XiInc = .StickRX };
+    var i_look_y_data = AInputAxisMap{ .KbDec = .DOWN, .KbInc = .UP, .XiInc = .StickRY };
+    var i_move_x_data = AInputAxisMap{ .KbDec = .A, .KbInc = .D, .XiInc = .StickLX };
+    var i_move_y_data = AInputAxisMap{ .KbDec = .S, .KbInc = .W, .XiInc = .StickLY };
+    var i_move_z_data = AInputAxisMap{ .KbDec = .SHIFT, .KbInc = .SPACE, .XiDec = .TriggerR, .XiInc = .TriggerL };
+    var i_movement_dec_data = AInputButtonMap{ .Kb = .Q, .Xi = .LEFT_SHOULDER };
+    var i_movement_inc_data = AInputButtonMap{ .Kb = .E, .Xi = .RIGHT_SHOULDER };
+    var i_rotation_dec_data = AInputButtonMap{ .Kb = .Z, .Xi = .LEFT_THUMB };
+    var i_rotation_inc_data = AInputButtonMap{ .Kb = .C, .Xi = .RIGHT_THUMB };
+    var i_damp_data = AInputButtonMap{ .Kb = .X, .Xi = .Y };
+    var i_planar_data = AInputButtonMap{ .Kb = .TAB, .Xi = .B };
+    var i_sweep_data = AInputButtonMap{ .Kb = .RCONTROL, .Xi = .X };
+    //var i_mpan_data = AInputButtonMap{ .Kb = .LBUTTON };
+    //var i_morbit_data = AInputButtonMap{ .Kb = .RBUTTON };
+    var i_hide_ui_data = AInputButtonMap{ .Kb = .@"6" };
+    var i_disable_input_data = AInputButtonMap{ .Kb = .@"7" };
+    var i_move_vehicle_data = AInputButtonMap{ .Kb = .BACK, .Xi = .X };
+    var i_look_at_vehicle_data = AInputButtonMap{ .Kb = .OEM_5 }; // backslash
+    var i_toggle = i_toggle_data.InputMap();
+    var i_look_x = i_look_x_data.InputMap();
+    var i_look_y = i_look_y_data.InputMap();
+    var i_move_x = i_move_x_data.InputMap();
+    var i_move_y = i_move_y_data.InputMap();
+    var i_move_z = i_move_z_data.InputMap();
+    var i_movement_dec = i_movement_dec_data.InputMap();
+    var i_movement_inc = i_movement_inc_data.InputMap();
+    var i_rotation_dec = i_rotation_dec_data.InputMap();
+    var i_rotation_inc = i_rotation_inc_data.InputMap();
+    var i_damp = i_damp_data.InputMap();
+    var i_planar = i_planar_data.InputMap();
+    var i_sweep = i_sweep_data.InputMap();
+    var i_hide_ui = i_hide_ui_data.InputMap();
+    var i_disable_input = i_disable_input_data.InputMap();
+    var i_move_vehicle = i_move_vehicle_data.InputMap();
+    var i_look_at_vehicle = i_look_at_vehicle_data.InputMap();
     var i_mouse_d_x: f32 = 0;
     var i_mouse_d_y: f32 = 0;
 
@@ -236,30 +228,30 @@ const Cam7 = extern struct {
 
     // TODO: maybe normalizing XY stuff (or do it at input system level)
     fn update_input(gf: *GlobalFn) void {
-        i_toggle.update(gf);
-        i_look_x.update(gf);
-        i_look_y.update(gf);
-        i_move_x.update(gf);
-        i_move_y.update(gf);
-        i_move_z.update(gf);
-        i_movement_dec.update(gf);
-        i_movement_inc.update(gf);
-        i_rotation_dec.update(gf);
-        i_rotation_inc.update(gf);
-        i_damp.update(gf);
-        i_planar.update(gf);
-        i_sweep.update(gf);
-        i_hide_ui.update(gf);
-        i_disable_input.update(gf);
-        i_move_vehicle.update(gf);
-        i_look_at_vehicle.update(gf);
+        i_toggle.Update(gf);
+        i_look_x.Update(gf);
+        i_look_y.Update(gf);
+        i_move_x.Update(gf);
+        i_move_y.Update(gf);
+        i_move_z.Update(gf);
+        i_movement_dec.Update(gf);
+        i_movement_inc.Update(gf);
+        i_rotation_dec.Update(gf);
+        i_rotation_inc.Update(gf);
+        i_damp.Update(gf);
+        i_planar.Update(gf);
+        i_sweep.Update(gf);
+        i_hide_ui.Update(gf);
+        i_disable_input.Update(gf);
+        i_move_vehicle.Update(gf);
+        i_look_at_vehicle.Update(gf);
 
         i_mouse_d_x = 0;
         i_mouse_d_y = 0;
         if (cam_state == .FreeCam and rg.PAUSE_STATE.* == 0 and gf.SWindowInForeground()) {
-            gf.InputLockMouse();
+            gf.AInputMouseLock();
             // TODO: move to InputMap (after input customization)
-            const mouse_d: POINT = gf.InputGetMouseDelta();
+            const mouse_d: POINT = gf.AInputMouseGetDelta();
             i_mouse_d_x = @as(f32, @floatFromInt(mouse_d.x)) / i_mouse_sens;
             i_mouse_d_y = @as(f32, @floatFromInt(mouse_d.y)) / i_mouse_sens;
         }
@@ -501,7 +493,7 @@ fn UpdateHideUI(gf: *GlobalFn) void {
 // STATE MACHINE
 
 fn DoStateNone(gf: *GlobalFn) CamState {
-    if (Cam7.i_toggle.gets() == .JustOn and Cam7.s_enable) {
+    if (Cam7.i_toggle.GetSt() == .JustOn and Cam7.s_enable) {
         SaveSavedCam();
         if (Cam7.s_hide_ui) _ = gf.GHideRaceUIOn();
         return .FreeCam;
@@ -510,8 +502,8 @@ fn DoStateNone(gf: *GlobalFn) CamState {
 }
 
 fn DoStateFreeCam(gf: *GlobalFn) CamState {
-    if (Cam7.i_toggle.gets() == .JustOn or !Cam7.s_enable) {
-        if (gf.SRaceState() != .None and Cam7.i_move_vehicle.gets().on()) {
+    if (Cam7.i_toggle.GetSt() == .JustOn or !Cam7.s_enable) {
+        if (gf.SRaceState() != .None and Cam7.i_move_vehicle.GetSt().on()) {
             re.Test.DoRespawn(re.Test.pPlayer.*.?, 0);
             re.Test.pPlayer.*.?._collision_toggles = 0xFFFFFFFF;
             re.Test.pPlayer.*.?.transform = Cam7.xf;
@@ -542,22 +534,22 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
 
     // input
 
-    if (Cam7.i_planar.gets() == .JustOn)
+    if (Cam7.i_planar.GetSt() == .JustOn)
         Cam7.s_move_planar = !Cam7.s_move_planar;
 
-    if (Cam7.i_hide_ui.gets() == .JustOn) {
+    if (Cam7.i_hide_ui.GetSt() == .JustOn) {
         Cam7.s_hide_ui = !Cam7.s_hide_ui;
         if (Cam7.h_s_hide_ui) |h| gf.ASettingUpdate(h, .{ .B = Cam7.s_hide_ui });
         UpdateHideUI(gf);
     }
 
-    if (Cam7.i_disable_input.gets() == .JustOn) {
+    if (Cam7.i_disable_input.GetSt() == .JustOn) {
         Cam7.s_disable_input = !Cam7.s_disable_input;
         if (Cam7.h_s_disable_input) |h| gf.ASettingUpdate(h, .{ .B = Cam7.s_disable_input });
     }
 
-    const move_sweep: bool = Cam7.i_sweep.gets().on();
-    if (Cam7.i_sweep.gets() == .JustOn) {
+    const move_sweep: bool = Cam7.i_sweep.GetSt().on();
+    if (Cam7.i_sweep.GetSt() == .JustOn) {
         Cam7.orbit_dist = 200;
         Cam7.orbit_dist_d = 0;
         var fwd: Vec3 = .{ .y = Cam7.orbit_dist };
@@ -565,11 +557,11 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
         rv.Vec3_Add(&Cam7.orbit_pos, @ptrCast(&Cam7.xf.T), &fwd);
     }
 
-    const move_dec: bool = Cam7.i_movement_dec.gets() == .JustOn;
-    const move_inc: bool = Cam7.i_movement_inc.gets() == .JustOn;
-    const move_both: bool = (move_dec and Cam7.i_movement_inc.gets().on()) or
-        (move_inc and Cam7.i_movement_dec.gets().on());
-    if (Cam7.i_damp.gets().on()) {
+    const move_dec: bool = Cam7.i_movement_dec.GetSt() == .JustOn;
+    const move_inc: bool = Cam7.i_movement_inc.GetSt() == .JustOn;
+    const move_both: bool = (move_dec and Cam7.i_movement_inc.GetSt().on()) or
+        (move_inc and Cam7.i_movement_dec.GetSt().on());
+    if (Cam7.i_damp.GetSt().on()) {
         if (move_dec and Cam7.move_damp_i > 0) Cam7.move_damp_i -= 1;
         if (move_inc and Cam7.move_damp_i < 3) Cam7.move_damp_i += 1;
         if (move_both) Cam7.move_damp_i = Cam7.s_move_damp_i_dflt;
@@ -584,11 +576,11 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
     Cam7.move_spd_xy = sp.f32_damp(Cam7.move_spd_xy, Cam7.move_spd_xy_tgt, Cam7.move_change_damp, rti.FRAMETIME.*);
     Cam7.move_spd_z = sp.f32_damp(Cam7.move_spd_z, Cam7.move_spd_z_tgt, Cam7.move_change_damp, rti.FRAMETIME.*);
 
-    const rot_dec: bool = Cam7.i_rotation_dec.gets() == .JustOn;
-    const rot_inc: bool = Cam7.i_rotation_inc.gets() == .JustOn;
-    const rot_both: bool = (rot_dec and Cam7.i_rotation_inc.gets().on()) or
-        (rot_inc and Cam7.i_rotation_dec.gets().on());
-    if (Cam7.i_damp.gets().on()) {
+    const rot_dec: bool = Cam7.i_rotation_dec.GetSt() == .JustOn;
+    const rot_inc: bool = Cam7.i_rotation_inc.GetSt() == .JustOn;
+    const rot_both: bool = (rot_dec and Cam7.i_rotation_inc.GetSt().on()) or
+        (rot_inc and Cam7.i_rotation_dec.GetSt().on());
+    if (Cam7.i_damp.GetSt().on()) {
         if (rot_dec and Cam7.rot_damp_i > 0) Cam7.rot_damp_i -= 1;
         if (rot_inc and Cam7.rot_damp_i < 4) Cam7.rot_damp_i += 1;
         if (rot_both) Cam7.rot_damp_i = Cam7.s_rot_damp_i_dflt;
@@ -609,8 +601,8 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
     const flip_x: bool = Cam7.s_flip_look_x != (Cam7.s_flip_look_x_inverted and upside_down);
 
     var rot_scale: f32 = m.pi * 2;
-    Cam7.rot_d.x = if (using_mouse) -Cam7.i_mouse_d_x else -Cam7.i_look_x.getf();
-    Cam7.rot_d.y = if (using_mouse) -Cam7.i_mouse_d_y else Cam7.i_look_y.getf();
+    Cam7.rot_d.x = if (using_mouse) -Cam7.i_mouse_d_x else -Cam7.i_look_x.GetF();
+    Cam7.rot_d.y = if (using_mouse) -Cam7.i_mouse_d_y else Cam7.i_look_y.GetF();
     if (flip_x) Cam7.rot_d.x = -Cam7.rot_d.x;
     if (Cam7.s_flip_look_y) Cam7.rot_d.y = -Cam7.rot_d.y;
     if (!using_mouse) {
@@ -647,12 +639,12 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
 
     var xf_fwd_ref: *Mat4x4 = &Cam7.xf;
 
-    Cam7.move_d_tgt.z = Cam7.i_move_z.getf();
+    Cam7.move_d_tgt.z = Cam7.i_move_z.GetF();
     dz.f32_applyDeadzoneSq(&Cam7.move_d_tgt.z, Cam7.s_dz_i, Cam7.dz_range, Cam7.dz_fact);
     Cam7.move_d_tgt.z = nt.smooth4(Cam7.move_d_tgt.z);
 
-    Cam7.move_d_tgt.x = Cam7.i_move_x.getf();
-    Cam7.move_d_tgt.y = Cam7.i_move_y.getf();
+    Cam7.move_d_tgt.x = Cam7.i_move_x.GetF();
+    Cam7.move_d_tgt.y = Cam7.i_move_y.GetF();
     dz.vec2_applyDeadzoneSq(@ptrCast(&Cam7.move_d_tgt), Cam7.s_dz_i, Cam7.dz_range, Cam7.dz_fact);
 
     // TODO: state machine enum, probably
@@ -693,7 +685,7 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
 
     // LOOK TO HOME
 
-    if (Cam7.i_look_at_vehicle.gets().on()) blk: {
+    if (Cam7.i_look_at_vehicle.GetSt().on()) blk: {
         var dir: Vec3 = undefined;
         rv.Vec3_Sub(&dir, @ptrCast(&re.Test.pPlayer.*.?.transform.T), @ptrCast(&Cam7.xf.T));
         if (!sp.vec3_norm(&dir)) break :blk;

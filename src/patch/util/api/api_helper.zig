@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const api = @import("api.zig");
+const ToggleState = @import("../toggle_state.zig").ToggleState;
 
 const GlobalFn = @import("../../core/SharedDef.zig").GlobalFunction;
 
@@ -27,8 +28,8 @@ pub inline fn AMemoryGetTemporaryZeroT(gf: *GlobalFn, comptime T: type) ?*T {
 //------------------------------------------------------------------------------
 // RAddress
 
-pub const RAddressHandle = api.RAddressHandle;
-pub const RADDRESS_HANDLE_NULL = api.RADDRESS_HANDLE_NULL;
+const RAddressHandle = api.RAddressHandle;
+const RADDRESS_HANDLE_NULL = api.RADDRESS_HANDLE_NULL;
 
 // TODO: reservation for common types of memory that figure out the end address
 //  for you, e.g. addr+5 bytes for a callsite
@@ -108,7 +109,98 @@ pub fn RAddressPatchToggleGroup(gf: *GlobalFn, handles: []const RAddressHandle, 
 }
 
 //------------------------------------------------------------------------------
-// GDrawText
+// AInput
+
+const AInputVirtualKey = api.AInputVirtualKey;
+const AInputXInputAxis = api.AInputXInputAxis;
+const AInputXInputButton = api.AInputXInputButton;
+
+// TODO: add 'dominant' field, as a way of communicating which device is 'active'
+/// abstract interface for a single input. used mainly for reading a group of
+/// inputs as a single input, such as when multiple physical inputs map to the
+/// same logical input.
+pub const AInputMap = struct {
+    pCtx: *anyopaque,
+    ValueSt: ?*ToggleState = null,
+    ValueF: ?*f32 = null,
+    fnUpdate: *const fn (ptr: *anyopaque, gf: *GlobalFn) void,
+
+    pub fn Update(self: *AInputMap, gf: *GlobalFn) void {
+        self.fnUpdate(self.pCtx, gf);
+    }
+
+    pub fn GetSt(self: *AInputMap) ToggleState {
+        return if (self.ValueSt) |v| v.* else .Off;
+    }
+
+    pub fn GetF(self: *AInputMap) f32 {
+        return if (self.ValueF) |v| v.* else 0;
+    }
+};
+
+// TODO: StickInputMap, with deadzone inbuilt, and remove kb_scale in lieu of 'dominant' field on InputMap
+
+// TODO: inbuilt deadzone, remove kb_scale in lieu of 'dominant' field on InputMap
+/// map for combining keyboard keys and (an) xinput axis as sources for a single "axis" input
+pub const AInputAxisMap = struct {
+    State: f32 = 0,
+    KbDec: ?AInputVirtualKey = null,
+    KbInc: ?AInputVirtualKey = null,
+    KbScale: f32 = 1,
+    XiDec: ?AInputXInputAxis = null,
+    XiInc: ?AInputXInputAxis = null,
+
+    fn Update(ctx: *anyopaque, gf: *GlobalFn) void {
+        const self: *AInputAxisMap = @ptrCast(@alignCast(ctx));
+
+        const kb_dec: f32 = if (self.KbDec) |k| @floatFromInt(@intFromBool(gf.AInputKbGetRaw(k).on())) else 0;
+        const kb_inc: f32 = if (self.KbInc) |k| @floatFromInt(@intFromBool(gf.AInputKbGetRaw(k).on())) else 0;
+        const xi_dec: f32 = if (self.XiDec) |x| gf.AInputXInputGetAxis(x) else 0;
+        const xi_inc: f32 = if (self.XiInc) |x| gf.AInputXInputGetAxis(x) else 0;
+
+        self.State = std.math.clamp(xi_inc - xi_dec + (kb_inc - kb_dec) * self.KbScale, -1, 1);
+
+        // NOTE: device-dominant version
+        //const kb: f32 = std.math.clamp((kb_inc - kb_dec) * self.kb_scale, -1, 1);
+        //const xi: f32 = std.math.clamp(xi_inc - xi_dec, -1, 1);
+        //self.state = if (@fabs(kb) > @fabs(xi)) kb else xi;
+    }
+
+    pub fn InputMap(self: *AInputAxisMap) AInputMap {
+        return .{
+            .pCtx = self,
+            .ValueF = &self.State,
+            .fnUpdate = Update,
+        };
+    }
+};
+
+/// map for combining a keyboard key and an xinput button as sources for a "button" input
+pub const AInputButtonMap = struct {
+    State: ToggleState = .Off,
+    Kb: ?AInputVirtualKey = null,
+    Xi: ?AInputXInputButton = null,
+
+    fn Update(ctx: *anyopaque, gf: *GlobalFn) void {
+        const self: *AInputButtonMap = @ptrCast(@alignCast(ctx));
+
+        const kb: bool = if (self.Kb) |k| gf.AInputKbGetRaw(k).on() else false;
+        const xi: bool = if (self.Xi) |x| gf.AInputXInputGetButton(x).on() else false;
+
+        self.State.update(kb or xi);
+    }
+
+    pub fn InputMap(self: *AInputButtonMap) AInputMap {
+        return .{
+            .pCtx = self,
+            .ValueSt = &self.State,
+            .fnUpdate = Update,
+        };
+    }
+};
+
+//------------------------------------------------------------------------------
+// GDraw
 
 // TODO: move custom text helpers from here to libannodue
 const rt = @import("racer").Text;

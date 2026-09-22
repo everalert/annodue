@@ -126,7 +126,7 @@ pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
 // it would be on permanently. also, do a pass on everything to integrate/migrate
 // to global practice_mode.
 pub fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
-    const toggle_input: bool = gf.InputGetKb(.P, .JustOn);
+    const toggle_input: bool = gf.AInputKbGet(.P, .JustOn);
 
     // TODO: convert gs.practice_mode to ToggleState
     // TODO: queue toggling off for next reset from in race

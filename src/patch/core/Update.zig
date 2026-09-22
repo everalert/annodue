@@ -203,10 +203,10 @@ pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
 // FIXME: remove, or convert to proper system for manual updating
 pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
     if (BuildOptions.BUILD_MODE == .Developer) {
-        if (gf.InputGetKb(.U, .JustOn))
+        if (gf.AInputKbGet(.U, .JustOn))
             OnInitLate(gf);
 
-        if (gf.InputGetKb(.J, .JustOn)) blk: {
+        if (gf.AInputKbGet(.J, .JustOn)) blk: {
             var memory = apih.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse break :blk;
             var scratch_fba = FixedBufferAllocator.init(memory);
             var scratch_alloc = scratch_fba.allocator();

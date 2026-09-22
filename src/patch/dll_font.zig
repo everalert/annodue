@@ -223,25 +223,25 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
     FontState.font_reloader.Update(rti.TIMESTAMP.*);
 
     // toggle custom fonts system
-    if (IS_DEV_MODE and FontState.s_can_toggle_system and gf.InputGetKbRaw(.K) == .JustOn) {
+    if (IS_DEV_MODE and FontState.s_can_toggle_system and gf.AInputKbGetRaw(.K) == .JustOn) {
         if (FontState.s_enable)
             FontState.FontsSystemToggle(null);
     }
 
     // toggle showing user-custom font
-    if (IS_DEV_MODE and FontState.s_can_toggle_custom and gf.InputGetKbRaw(.L) == .JustOn) {
+    if (IS_DEV_MODE and FontState.s_can_toggle_custom and gf.AInputKbGetRaw(.L) == .JustOn) {
         if (FontState.FontsShowable())
             FontState.FontCustomToggle(null);
     }
 
     // font data dump
-    if (IS_DEV_MODE and FontState.s_can_dump_data and gf.InputGetKbRaw(.I) == .JustOn) {
+    if (IS_DEV_MODE and FontState.s_can_dump_data and gf.AInputKbGetRaw(.I) == .JustOn) {
         FontState.FontDump();
         _ = gf.ToastNew("Font data dumped to /annodue/developer", 0xFFFFFFFF);
     }
 
     // font glyph binary data dump
-    if (IS_DEV_MODE and FontState.s_can_dump_glyphs and FontState.FontsShowable() and gf.InputGetKbRaw(.E) == .JustOn) blk: {
+    if (IS_DEV_MODE and FontState.s_can_dump_glyphs and FontState.FontsShowable() and gf.AInputKbGetRaw(.E) == .JustOn) blk: {
         // stock-custom font containing glyph fixes relevant to base font
         FontState.font_stock_fixed.GlyphBinDump("annodue/developer/fontcustom_glyphs_fixed.bin") catch {
             _ = gf.ToastNew("Error dumping font fixed glyphs", rt.ColorRGB.Red.rgba(0xFF));
@@ -257,7 +257,7 @@ export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
         _ = gf.ToastNew("Font custom glyphs dumped to /annodue/developer", rt.ColorRGB.White.rgba(0xFF));
     }
 
-    if (FontState.s_can_show_test and gf.InputGetKbRaw(.O).on()) {
+    if (FontState.s_can_show_test and gf.AInputKbGetRaw(.O).on()) {
         FontState.ShowFontTest();
     }
 }

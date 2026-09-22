@@ -1,8 +1,6 @@
 const std = @import("std");
-
-const ArrayList = std.ArrayList;
-const Allocator = std.mem.Allocator;
-const FixedBufferAllocator = std.heap.FixedBufferAllocator;
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 
 const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
 // FIXME: ?? should these ownership checks not be in some api? not necessarily
@@ -14,150 +12,151 @@ const MiB = @import("../util/base/base_memory.zig").MiB;
 
 const r = @import("racer");
 const rt = r.Text;
-const rq = r.Quad;
 const TextDef = rt.TextDef;
-const ResetMaterial = r.Quad.ResetMaterial;
 
-pub const GDRAW_VERSION = 4;
+const core_draw = @import("../util/core/core_draw.zig");
+const GDrawLayer = core_draw.GDrawLayer;
 
 const PATCH_BUFFER_SIZE = MiB(u32, 2);
 
-// NOTE: anything above around 256 characters seems pointless even with excessive formatting
-// characters, but may be worth reconsidering down the line if e.g. higher res viewport
-
-// NOTE: system always last (on top)
-pub const GDrawLayer = enum(u32) { Default, DefaultP, Overlay, OverlayP, System, SystemP, Debug };
-
-// TODO: assert/test sizeof = 256 bytes
-const GDrawTextDef = extern struct {
-    x: i16,
-    y: i16,
-    color: u32, // alpha 0 = default color (i.e. 0 = no color)
-    string: [247:0]u8, // fit to 64-byte cache line boundary
-};
-
-// TODO: assert/test sizeof = 12 bytes
-// TODO: merge with generalized sprite drawing down the line
-const GDrawRectDef = extern struct {
-    x: i16,
-    y: i16,
-    w: i16,
-    h: i16,
-    color: u32, // 0 = default color (i.e. 0 = no color)
-};
-
-// TODO: insertPanel, insertButton, etc. (after adding sprite drawing)
-const GDraw = struct {
-    var text_data: ArrayList(GDrawTextDef) = undefined;
-    var text_layers: ArrayList(GDrawLayer) = undefined;
-    var text_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
-    var rect_data: ArrayList(GDrawRectDef) = undefined;
-    var rect_layers: ArrayList(GDrawLayer) = undefined;
-    var rect_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
-    var rect_sprite: ?*rq.Sprite = null;
-
-    var scratch_fba: FixedBufferAllocator = undefined;
-    var scratch_alloc: Allocator = undefined;
-
-    pub fn init(buf: []u8) !void {
-        scratch_fba = FixedBufferAllocator.init(buf);
-        scratch_alloc = scratch_fba.allocator();
-        text_data = try ArrayList(GDrawTextDef).initCapacity(scratch_alloc, 128);
-        text_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 128);
-        rect_data = try ArrayList(GDrawRectDef).initCapacity(scratch_alloc, 32);
-        rect_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 32);
-    }
-
-    pub fn deinit() void {
-        clear();
-        text_data.deinit();
-        text_layers.deinit();
-        rect_data.deinit();
-        rect_layers.deinit();
-    }
-
-    pub fn clear() void {
-        text_data.clearRetainingCapacity();
-        text_layers.clearRetainingCapacity();
-        text_refs = std.mem.zeroes(@TypeOf(text_refs));
-        rect_data.clearRetainingCapacity();
-        rect_layers.clearRetainingCapacity();
-        rect_refs = std.mem.zeroes(@TypeOf(text_refs));
-    }
-
-    // TODO: return index, not success
-    pub fn insertText(layer: GDrawLayer, text: *TextDef) !void {
-        std.debug.assert(std.mem.len(@as([*:0]u8, @ptrCast(&text.string))) <= 247);
-
-        try text_layers.append(layer);
-        errdefer _ = text_layers.pop();
-
-        var data = try text_data.addOne();
-        @memcpy(@as(*[256]u8, @ptrCast(data)), @as(*[256]u8, @ptrCast(text)));
-
-        text_refs[@intFromEnum(layer)] += 1;
-    }
-
-    // TODO: return index, not success
-    pub fn insertRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) !void {
-        try rect_layers.append(layer);
-        errdefer _ = rect_layers.pop();
-
-        try rect_data.append(.{ .x = x, .y = y, .w = w, .h = h, .color = color });
-
-        rect_refs[@intFromEnum(layer)] += 1;
-    }
-
-    const DEFAULT_RECT_COLOR: u32 = 0x00000080;
-
-    pub fn drawLayer(layer: GDrawLayer, default_color: u32) void {
-        //if (quad_refs[@intFromEnum(layer)] > 0) {
-        //    ResetMaterial();
-        //    for (quad_data) |*q| {
-        //        rq.DrawQuad(@ptrFromInt(0xE9BA80), -1, 0.5, 0.5);
-        //    }
-        //}
-
-        if (rect_sprite != null and rect_refs[@intFromEnum(layer)] > 0) {
-            ResetMaterial();
-            for (rect_layers.items, rect_data.items) |l, *rect| {
-                if (l != layer) continue;
-                const color: u32 = if (rect.color & 0xFF > 0) rect.color else DEFAULT_RECT_COLOR;
-                rq.DrawSprite(
-                    GDraw.rect_sprite,
-                    rect.x,
-                    rect.y,
-                    @as(f32, @floatFromInt(rect.w)) / 8,
-                    @as(f32, @floatFromInt(rect.h)) / 8,
-                    0,
-                    0,
-                    0,
-                    0,
-                    @as(u8, @truncate(color >> 24)),
-                    @as(u8, @truncate(color >> 16)),
-                    @as(u8, @truncate(color >> 8)),
-                    @as(u8, @truncate(color >> 0)),
-                );
-            }
-        }
-
-        if (text_refs[@intFromEnum(layer)] > 0) {
-            ResetMaterial();
-            for (text_layers.items, text_data.items) |l, *t| {
-                if (l != layer) continue;
-                const color: u32 = if (t.color & 0xFF > 0) t.color else default_color;
-                rt.fnRenderSetColor(
-                    @as(u8, @truncate(color >> 24)),
-                    @as(u8, @truncate(color >> 16)),
-                    @as(u8, @truncate(color >> 8)),
-                    @as(u8, @truncate(color >> 0)),
-                );
-                rt.fnRenderSetPosition(t.x, t.y);
-                rt.fnRenderString(&t.string);
-            }
-        }
-    }
-};
+//pub const GDRAW_VERSION = 4;
+//
+//// NOTE: anything above around 256 characters seems pointless even with excessive formatting
+//// characters, but may be worth reconsidering down the line if e.g. higher res viewport
+//
+//// NOTE: system always last (on top)
+//pub const GDrawLayer = enum(u32) { Default, DefaultP, Overlay, OverlayP, System, SystemP, Debug };
+//
+//// TODO: assert/test sizeof = 256 bytes
+//const GDrawTextDef = extern struct {
+//    x: i16,
+//    y: i16,
+//    color: u32, // alpha 0 = default color (i.e. 0 = no color)
+//    string: [247:0]u8, // fit to 64-byte cache line boundary
+//};
+//
+//// TODO: assert/test sizeof = 12 bytes
+//// TODO: merge with generalized sprite drawing down the line
+//const GDrawRectDef = extern struct {
+//    x: i16,
+//    y: i16,
+//    w: i16,
+//    h: i16,
+//    color: u32, // 0 = default color (i.e. 0 = no color)
+//};
+//
+//// TODO: insertPanel, insertButton, etc. (after adding sprite drawing)
+//const GDraw = struct {
+//    var text_data: ArrayList(GDrawTextDef) = undefined;
+//    var text_layers: ArrayList(GDrawLayer) = undefined;
+//    var text_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
+//    var rect_data: ArrayList(GDrawRectDef) = undefined;
+//    var rect_layers: ArrayList(GDrawLayer) = undefined;
+//    var rect_refs = std.mem.zeroes([@typeInfo(GDrawLayer).Enum.fields.len]u32);
+//    var rect_sprite: ?*rq.Sprite = null;
+//
+//    var scratch_fba: FixedBufferAllocator = undefined;
+//    var scratch_alloc: Allocator = undefined;
+//
+//    pub fn init(buf: []u8) !void {
+//        scratch_fba = FixedBufferAllocator.init(buf);
+//        scratch_alloc = scratch_fba.allocator();
+//        text_data = try ArrayList(GDrawTextDef).initCapacity(scratch_alloc, 128);
+//        text_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 128);
+//        rect_data = try ArrayList(GDrawRectDef).initCapacity(scratch_alloc, 32);
+//        rect_layers = try ArrayList(GDrawLayer).initCapacity(scratch_alloc, 32);
+//    }
+//
+//    pub fn deinit() void {
+//        clear();
+//        text_data.deinit();
+//        text_layers.deinit();
+//        rect_data.deinit();
+//        rect_layers.deinit();
+//    }
+//
+//    pub fn clear() void {
+//        text_data.clearRetainingCapacity();
+//        text_layers.clearRetainingCapacity();
+//        text_refs = std.mem.zeroes(@TypeOf(text_refs));
+//        rect_data.clearRetainingCapacity();
+//        rect_layers.clearRetainingCapacity();
+//        rect_refs = std.mem.zeroes(@TypeOf(text_refs));
+//    }
+//
+//    // TODO: return index, not success
+//    pub fn insertText(layer: GDrawLayer, text: *TextDef) !void {
+//        std.debug.assert(std.mem.len(@as([*:0]u8, @ptrCast(&text.string))) <= 247);
+//
+//        try text_layers.append(layer);
+//        errdefer _ = text_layers.pop();
+//
+//        var data = try text_data.addOne();
+//        @memcpy(@as(*[256]u8, @ptrCast(data)), @as(*[256]u8, @ptrCast(text)));
+//
+//        text_refs[@intFromEnum(layer)] += 1;
+//    }
+//
+//    // TODO: return index, not success
+//    pub fn insertRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) !void {
+//        try rect_layers.append(layer);
+//        errdefer _ = rect_layers.pop();
+//
+//        try rect_data.append(.{ .x = x, .y = y, .w = w, .h = h, .color = color });
+//
+//        rect_refs[@intFromEnum(layer)] += 1;
+//    }
+//
+//    const DEFAULT_RECT_COLOR: u32 = 0x00000080;
+//
+//    pub fn drawLayer(layer: GDrawLayer, default_color: u32) void {
+//        //if (quad_refs[@intFromEnum(layer)] > 0) {
+//        //    ResetMaterial();
+//        //    for (quad_data) |*q| {
+//        //        rq.DrawQuad(@ptrFromInt(0xE9BA80), -1, 0.5, 0.5);
+//        //    }
+//        //}
+//
+//        if (rect_sprite != null and rect_refs[@intFromEnum(layer)] > 0) {
+//            ResetMaterial();
+//            for (rect_layers.items, rect_data.items) |l, *rect| {
+//                if (l != layer) continue;
+//                const color: u32 = if (rect.color & 0xFF > 0) rect.color else DEFAULT_RECT_COLOR;
+//                rq.DrawSprite(
+//                    GDraw.rect_sprite,
+//                    rect.x,
+//                    rect.y,
+//                    @as(f32, @floatFromInt(rect.w)) / 8,
+//                    @as(f32, @floatFromInt(rect.h)) / 8,
+//                    0,
+//                    0,
+//                    0,
+//                    0,
+//                    @as(u8, @truncate(color >> 24)),
+//                    @as(u8, @truncate(color >> 16)),
+//                    @as(u8, @truncate(color >> 8)),
+//                    @as(u8, @truncate(color >> 0)),
+//                );
+//            }
+//        }
+//
+//        if (text_refs[@intFromEnum(layer)] > 0) {
+//            ResetMaterial();
+//            for (text_layers.items, text_data.items) |l, *t| {
+//                if (l != layer) continue;
+//                const color: u32 = if (t.color & 0xFF > 0) t.color else default_color;
+//                rt.fnRenderSetColor(
+//                    @as(u8, @truncate(color >> 24)),
+//                    @as(u8, @truncate(color >> 16)),
+//                    @as(u8, @truncate(color >> 8)),
+//                    @as(u8, @truncate(color >> 0)),
+//                );
+//                rt.fnRenderSetPosition(t.x, t.y);
+//                rt.fnRenderString(&t.string);
+//            }
+//        }
+//    }
+//};
 
 // GLOBAL EXPORTS
 
@@ -169,7 +168,7 @@ const GDraw = struct {
 pub fn GDrawText(layer: GDrawLayer, text: ?*TextDef) callconv(.C) bool {
     if (text == null) return false;
     if ((layer == .System or layer == .SystemP) and !WorkingOwnerIsSystem()) return false;
-    GDraw.insertText(layer, text.?) catch return false;
+    core_draw.GDraw.insertText(layer, text.?) catch return false;
     return true;
 }
 
@@ -185,12 +184,12 @@ pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_
     if (text == null) return false;
     if ((layer == .System or layer == .SystemP or layer == .Debug) and !WorkingOwnerIsSystem()) return false;
 
-    GDraw.insertText(layer, text.?) catch return false;
+    core_draw.GDraw.insertText(layer, text.?) catch return false;
 
     const d = rt.hTextGetDimensions(@ptrCast(&text.?.string));
     const a = rt.hTextGetAlignment(@ptrCast(&text.?.string));
     const offset_x = if (a == .Center) @divTrunc(-d.w, 2) else if (a == .Right) -d.w else 0;
-    GDraw.insertRect(
+    core_draw.GDraw.insertRect(
         layer,
         text.?.x - padding_x - offset_x,
         text.?.y - padding_y,
@@ -207,7 +206,7 @@ pub fn GDrawTextBox(layer: GDrawLayer, text: ?*TextDef, padding_x: i16, padding_
 /// @return     true if rect successfully added to queue
 pub fn GDrawRect(layer: GDrawLayer, x: i16, y: i16, w: i16, h: i16, color: u32) callconv(.C) bool {
     if ((layer == .System or layer == .SystemP or layer == .Debug) and !WorkingOwnerIsSystem()) return false;
-    GDraw.insertRect(layer, x, y, w, h, color) catch return false;
+    core_draw.GDraw.insertRect(layer, x, y, w, h, color) catch return false;
     return true;
 }
 
@@ -227,11 +226,11 @@ pub fn GDrawRectBdr(
 ) callconv(.C) bool {
     if ((layer == .System or layer == .SystemP or layer == .Debug) and !WorkingOwnerIsSystem()) return false;
     const bw = bdr_w;
-    GDraw.insertRect(layer, x + bw, y + bw, w - bw * 2, h - bw * 2, color) catch return false;
-    GDraw.insertRect(layer, x, y, w, bw, bdr_col) catch return false; // T
-    GDraw.insertRect(layer, x, y + h - bw, w, bw, bdr_col) catch return false; // B
-    GDraw.insertRect(layer, x, y + bw, bw, h - bw * 2, bdr_col) catch return false; // L
-    GDraw.insertRect(layer, x + w - bw, y + bw, bw, h - bw * 2, bdr_col) catch return false; // R
+    core_draw.GDraw.insertRect(layer, x + bw, y + bw, w - bw * 2, h - bw * 2, color) catch return false;
+    core_draw.GDraw.insertRect(layer, x, y, w, bw, bdr_col) catch return false; // T
+    core_draw.GDraw.insertRect(layer, x, y + h - bw, w, bw, bdr_col) catch return false; // B
+    core_draw.GDraw.insertRect(layer, x, y + bw, bw, h - bw * 2, bdr_col) catch return false; // L
+    core_draw.GDraw.insertRect(layer, x + w - bw, y + bw, bw, h - bw * 2, bdr_col) catch return false; // R
     return true;
 }
 
@@ -239,33 +238,29 @@ pub fn GDrawRectBdr(
 
 pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
     var memory = apih.AMemoryGetPermanentT(gf, [PATCH_BUFFER_SIZE]u8) orelse @panic("GDraw: API OutOfMemory");
-    GDraw.init(memory) catch |e| std.debug.panic("GDraw: {s}", .{@errorName(e)});
+    core_draw.GDraw.init(memory) catch |e| panic("GDraw: {s}", .{@errorName(e)});
 }
 
 pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
 
 pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
-    GDraw.deinit();
+    core_draw.GDraw.deinit();
 }
 
 pub fn Draw2DA(gf: *GlobalFn) callconv(.C) void {
-    GDraw.rect_sprite = r.Quad.MapGet(26);
-    if (GDraw.rect_sprite == null) {
-        _ = r.Quad.MapLoad(26, null);
-        GDraw.rect_sprite = r.Quad.MapGet(26);
-    }
+    if (!core_draw.GDraw.setRectSpriteFromGameId(26)) return;
 
-    GDraw.drawLayer(.Default, rt.DEFAULT_COLOR);
-    if (gf.SPracticeMode()) GDraw.drawLayer(.DefaultP, rt.DEFAULT_COLOR);
+    core_draw.GDraw.drawLayer(.Default, rt.DEFAULT_COLOR);
+    if (gf.SPracticeMode()) core_draw.GDraw.drawLayer(.DefaultP, rt.DEFAULT_COLOR);
 
     // TODO: 'show overlay' user setting
-    GDraw.drawLayer(.Overlay, rt.DEFAULT_COLOR);
-    if (gf.SPracticeMode()) GDraw.drawLayer(.OverlayP, rt.DEFAULT_COLOR);
+    core_draw.GDraw.drawLayer(.Overlay, rt.DEFAULT_COLOR);
+    if (gf.SPracticeMode()) core_draw.GDraw.drawLayer(.OverlayP, rt.DEFAULT_COLOR);
 
-    GDraw.drawLayer(.System, rt.DEFAULT_COLOR);
-    if (gf.SPracticeMode()) GDraw.drawLayer(.SystemP, rt.DEFAULT_COLOR);
+    core_draw.GDraw.drawLayer(.System, rt.DEFAULT_COLOR);
+    if (gf.SPracticeMode()) core_draw.GDraw.drawLayer(.SystemP, rt.DEFAULT_COLOR);
 
-    GDraw.drawLayer(.Debug, rt.DEFAULT_COLOR);
+    core_draw.GDraw.drawLayer(.Debug, rt.DEFAULT_COLOR);
 
-    GDraw.clear();
+    core_draw.GDraw.clear();
 }

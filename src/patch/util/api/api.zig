@@ -18,3 +18,9 @@ pub const ASettingKind = core_settings.Kind;
 const core_address = @import("../core/core_address.zig");
 pub const RAddressHandle = core_address.AddressHandleOpaque;
 pub const RADDRESS_HANDLE_NULL = core_address.ADDRESS_HANDLE_OPAQUE_NULL;
+
+//------------------------------------------------------------------------------
+// GDraw
+
+const core_draw = @import("../core/core_draw.zig");
+pub const GDrawLayer = core_draw.GDrawLayer;

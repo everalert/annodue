@@ -2,9 +2,8 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const rrd = @import("racer").RaceData;
 const rete = @import("racer").Entity.Test;
@@ -16,9 +15,9 @@ const rti = @import("racer").Time;
 const timing = @import("util/timing.zig");
 const ToggleState = @import("util/toggle_state.zig").ToggleState;
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_overlay", "annodue/plugin/plugin_overlay.pdb");
@@ -85,7 +84,7 @@ const Overlay = struct {
     var speed: f32 = 0;
     var speed_prev: f32 = 0;
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "overlay", null);
         h_s_section = section;
 
@@ -128,13 +127,13 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     Overlay.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 // HOOKS
 
@@ -147,7 +146,7 @@ const lbx: i16 = 48;
 const lby: i16 = 128 + 16 * 6;
 const sty: i16 = 12;
 
-export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gf: *PluginAPI) callconv(.C) void {
     if (!Overlay.s_enable) return;
 
     if (gf.SInRace().on() and !gf.GHideRaceUIIsOn()) {

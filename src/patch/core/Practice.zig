@@ -2,17 +2,15 @@ pub const Self = @This();
 
 const std = @import("std");
 
-const app = @import("../appinfo.zig");
-const GlobalFn = app.GLOBAL_FUNCTION;
-const core = @import("core.zig");
-const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
+const GLOBAL_STATE = &@import("core.zig").Global.GLOBAL_STATE;
+
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const fl = @import("../util/flash.zig");
-const st = @import("../util/toggle_state.zig");
+const ToggleState = @import("../util/toggle_state.zig").ToggleState;
 const nt = @import("../util/normalized_transform.zig");
 
 const rq = @import("racer").Quad;
-const rc = @import("racer").constants;
 const rt = @import("racer").Text;
 const rto = rt.TextStyleOpts;
 const rti = @import("racer").Time;
@@ -76,23 +74,23 @@ const mode_vis = struct {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn InitRaceQuadsA(_: *GlobalFn) callconv(.C) void {
+pub fn InitRaceQuadsA(_: *PluginAPI) callconv(.C) void {
     mode_vis.init();
 }
 
 // FIXME: corners not rendering in pre-race unless manually toggling practice mode
-pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
+pub fn TextRenderB(gf: *PluginAPI) callconv(.C) void {
     const f = struct {
         const vis_time: f32 = 0.15;
         var start: ?u32 = null;
         var vis: f32 = 0;
-        var prac: st.ToggleState = .Off;
+        var prac: ToggleState = .Off;
     };
 
     f.prac.update(gf.SPracticeMode());
@@ -125,7 +123,7 @@ pub fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
 // some things, primarily to do with lifecycle, because the past setting assumed
 // it would be on permanently. also, do a pass on everything to integrate/migrate
 // to global practice_mode.
-pub fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateA(gf: *PluginAPI) callconv(.C) void {
     const toggle_input: bool = gf.AInputKbGet(.P, .JustOn);
 
     // TODO: convert gs.practice_mode to ToggleState

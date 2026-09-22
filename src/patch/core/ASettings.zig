@@ -26,7 +26,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
-const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 const WorkingOwnerIsSystem = @import("AHook.zig").PluginState.WorkingOwnerIsSystem;
@@ -35,12 +35,12 @@ const core_settings = @import("../util/core/core_settings.zig");
 const SettingManager = core_settings.SettingManager;
 const SETTINGS_VERSION = core_settings.SETTINGS_VERSION;
 
-const ADAPI = @import("../util/api/api.zig");
-const SettingKind = ADAPI.ASettingKind;
-const SettingMessage = ADAPI.ASettingMessage;
-const SettingMValue = ADAPI.ASettingMValue;
-const SettingHandle = ADAPI.ASettingHandle;
-const SETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const plug = @import("../util/plugin/plugin.zig");
+const SettingKind = plug.ASettingKind;
+const SettingMessage = plug.ASettingMessage;
+const SettingMValue = plug.ASettingMValue;
+const SettingHandle = plug.ASettingHandle;
+const SETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
@@ -94,11 +94,11 @@ pub fn Deinit() !void {
 //------------------------------------------------------------------------------
 // annodue hooks
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 pub fn OnPluginInitA(owner: u16) callconv(.C) void {
     SettingsState.Manager.SectionRunUpdateOwner(owner);
@@ -108,15 +108,15 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     SettingsState.Manager.VacateOwner(owner);
 }
 
-pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
+pub fn GameLoopB(api: *PluginAPI) callconv(.C) void {
     // create settings.ini very early, but late enough that all plugins/subsystems
     // have had a chance to register their settings in either Init or InitLate
     if (rti.FRAMECOUNT.* == 1)
-        gf.ASettingSaveAuto();
+        api.ASettingSaveAuto();
 
     // keep settings file updated through any load or hang/race state transition
-    if (gf.SInRace().new() or gf.SRaceStateNew() or gf.SHangStateNew())
-        gf.ASettingSaveAuto();
+    if (api.SInRace().new() or api.SRaceStateNew() or api.SHangStateNew())
+        api.ASettingSaveAuto();
 
     SettingsState.Manager.HotReload.Update(rti.TIMESTAMP.*);
 }
@@ -297,7 +297,7 @@ pub fn ASettingSaveAuto() callconv(.C) void {
 
 // TODO: maybe adapt for test script/debugging
 // TODO: also maybe adapt for json settings (nesting, etc.)
-fn drawSettings(gf: *GlobalFn, section: ?SettingHandle, x_ref: *i16, y_ref: *i16) void {
+fn drawSettings(gf: *PluginAPI, section: ?SettingHandle, x_ref: *i16, y_ref: *i16) void {
     for (SettingsState.Manager.data_settings.values.items) |value| {
         if ((section == null) != (value.section == null)) continue;
         if (section != null and
@@ -343,7 +343,7 @@ fn drawSettings(gf: *GlobalFn, section: ?SettingHandle, x_ref: *i16, y_ref: *i16
 }
 
 // TODO: adapt for debug features
-fn drawSettingsDebugPanel(gf: *GlobalFn) void {
+fn drawSettingsDebugPanel(gf: *PluginAPI) void {
     if (!gf.InputGetKbRaw(.RSHIFT).on()) return;
 
     const s = struct {

@@ -4,8 +4,7 @@ const RingBuffer = @import("../util/ring_buffer.zig").RingBuffer;
 const nxf = @import("../util/normalized_transform.zig");
 const fl = @import("../util/flash.zig");
 
-const app = @import("../appinfo.zig");
-const GlobalFn = app.GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -49,13 +48,13 @@ pub const ToastSystem = extern struct {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
+pub fn Draw2DB(gf: *PluginAPI) callconv(.C) void {
     const num_vis: *u32 = &ToastSystem.n_visible;
     const num_items: *const u32 = &ToastSystem.buffer.items.len;
 

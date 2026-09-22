@@ -2,16 +2,15 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_multiplayer", "annodue/plugin/plugin_multiplayer.pdb");
@@ -49,7 +48,7 @@ const MpState = struct {
     // rewritten and should not be enabled by the user anyway
     var asm_buf: [64]u8 = undefined;
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "multiplayer", null);
         h_s_section = section;
 
@@ -188,7 +187,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     MpState.settingsInit(gf);
 
     // TODO: both PatchNetworkUpgrades and PatchNetworkCollisions are doing some
@@ -213,8 +212,8 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     //gs.patch_offset = off;
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 // HOOKS

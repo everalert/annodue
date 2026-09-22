@@ -1,9 +1,5 @@
 const std = @import("std");
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
-const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
-
 const c = @cImport({
     @cInclude("collision_viewer.h");
 });
@@ -17,15 +13,18 @@ const MenuItem = m.MenuItem;
 const InputGetFnType = @import("util/menu.zig").InputGetFnType;
 const ToggleState = @import("util/toggle_state.zig").ToggleState;
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingMValue = ADAPI.ASettingMValue;
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const AInputXInputButton = ADAPI.AInputXInputButton;
-const AInputVirtualKey = ADAPI.AInputVirtualKey;
-const apih = ADAPI.helper;
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const AInputButtonMap = apih.AInputButtonMap;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingMValue = plug.ASettingMValue;
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const AInputXInputButton = plug.AInputXInputButton;
+const AInputVirtualKey = plug.AInputVirtualKey;
+const plugh = plug.helper;
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
+const AInputButtonMap = plugh.AInputButtonMap;
+
+const PluginAPI = @import("util/root.zig").PluginAPI;
+const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const rs = @import("racer").Sound;
 
@@ -59,7 +58,7 @@ const AnnodueSettings = struct {
     //  for the sake of avoiding collisions
     var h_ar_hook = RAddressHandleInfo.InitLen(0x483A90, 5);
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "collisionviewer", null);
         h_s_section = section;
 
@@ -181,7 +180,7 @@ const QuickRaceMenu = extern struct {
     var menu_active: bool = false;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
-    var gf: *GlobalFn = undefined;
+    var gf: *PluginAPI = undefined;
 
     var inputs = [_]QuickRaceMenuInput{
         .{ .kb = .UP, .xi = .DPAD_UP },
@@ -360,7 +359,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     // FIXME: stop doing this
     QuickRaceMenu.gf = gf;
 
@@ -371,21 +370,21 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     init_collision_viewer(&state);
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     QuickRaceMenu.close();
     deinit_collision_viewer();
 }
 
 // HOOKS
 
-export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *PluginAPI) callconv(.C) void {
     input_enable.Update(gf);
     input_pause.Update(gf);
     QuickRaceMenu.update_input();
 }
 
-export fn EarlyEngineUpdateB(_: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateB(_: *PluginAPI) callconv(.C) void {
     QuickRaceMenu.update();
 }

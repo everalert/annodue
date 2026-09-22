@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
+
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const rg = @import("racer").Global;
@@ -71,11 +72,11 @@ pub fn GFreezeIsOn() callconv(.C) bool {
 
 // HOOKS
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     if (Freeze.owner) |o|
         _ = Freeze.unfreeze(o);
 }

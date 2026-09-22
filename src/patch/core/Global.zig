@@ -1,10 +1,5 @@
 const Self = @This();
 
-const GlobalState = @import("SharedDef.zig").GlobalState;
-const GlobalFunction = @import("SharedDef.zig").GlobalFunction;
-const RaceState = @import("SharedDef.zig").RaceState;
-const HangState = @import("SharedDef.zig").HangState;
-
 const std = @import("std");
 
 const GDraw = @import("GDraw.zig");
@@ -21,9 +16,13 @@ const RAddress = @import("RAddress.zig");
 const st = @import("../util/toggle_state.zig");
 const ToggleState = st.ToggleState;
 
-const app = @import("../appinfo.zig");
-const VERSION = app.VERSION;
-const VERSION_STR = app.VERSION_STR;
+const GlobalState = @import("SharedDef.zig").GlobalState;
+const RaceState = @import("../util/plugin/plugin_api.zig").RaceState;
+const HangState = @import("../util/plugin/plugin_api.zig").HangState;
+
+const PluginAPI = @import("../util/root.zig").PluginAPI;
+const VERSION = @import("../util/root.zig").VERSION;
+const VERSION_STR = @import("../util/root.zig").VERSION_STR;
 
 const rti = @import("racer").Time;
 const rg = @import("racer").Global;
@@ -145,7 +144,7 @@ fn SPlayerDeaths() callconv(.C) u32 {
 
 // GLOBAL FUNCTIONS
 
-pub var GLOBAL_FUNCTION: GlobalFunction = .{
+pub var GLOBAL_FUNCTION: PluginAPI = .{
     // Memory
     .AMemoryGetPermanent = &AMemory.AMemoryGetPermanent,
     .AMemoryGetPermanentZero = &AMemory.AMemoryGetPermanentZero,
@@ -230,11 +229,11 @@ pub var GLOBAL_FUNCTION: GlobalFunction = .{
 
 const style_practice_label = rt.hMakeTextHeadStyle(.Default, true, .Yellow, .Right, .{rto.ToggleShadow}) catch "";
 
-fn DrawMenuPracticeModeLabel(gf: *GlobalFunction) void {
+fn DrawMenuPracticeModeLabel(gf: *PluginAPI) void {
     _ = gf.GDrawText(.SystemP, rt.hMakeText(640 - 20, 16, "Practice Mode", .{}, 0xFFFFFFFF, style_practice_label) catch null);
 }
 
-fn DrawVersionString(gf: *GlobalFunction) void {
+fn DrawVersionString(gf: *PluginAPI) void {
     _ = gf.GDrawText(.System, rt.hMakeText(36, 480 - 24, "{s}", .{VERSION_STR}, 0xFFFFFFFF, null) catch null);
 }
 
@@ -251,21 +250,21 @@ pub fn init() bool {
 
 // HOOK CALLS
 
-pub fn OnInit(_: *GlobalFunction) callconv(.C) void {}
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalFunction) callconv(.C) void {
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {
     GLOBAL_STATE.init_late_passed = true;
 }
 
-pub fn OnDeinit(_: *GlobalFunction) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn EarlyEngineUpdateB(_: *GlobalFunction) callconv(.C) void {
+pub fn EarlyEngineUpdateB(_: *PluginAPI) callconv(.C) void {
     const hwnd_racer: u32 = @intFromPtr(rg.WINDOW_HWND.*);
     const hwnd_fg: u32 = if (GetForegroundWindow()) |h| @intFromPtr(h) else 0;
     GLOBAL_STATE.window_in_foreground = hwnd_racer == hwnd_fg;
 }
 
-pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
+pub fn EngineUpdateStage14A(_: *PluginAPI) callconv(.C) void {
     const player_ready: bool = rrd.pPlayer.* != null and rrd.pPlayer.*.?.pTestEntity != null;
     GLOBAL_STATE.in_race.update(player_ready);
 
@@ -297,7 +296,7 @@ pub fn EngineUpdateStage14A(_: *GlobalFunction) callconv(.C) void {
     if (GLOBAL_STATE.in_race.on()) global_player_update(&GLOBAL_STATE);
 }
 
-pub fn TimerUpdateA(_: *GlobalFunction) callconv(.C) void {
+pub fn TimerUpdateA(_: *PluginAPI) callconv(.C) void {
     // framerate-independent lerp (damp function/exponential decay)
     const RAW_FPS: f32 = 1 / rti.FRAMETIME.*;
     const DECAY_FACTOR: f32 = 0.05;
@@ -308,24 +307,24 @@ pub fn TimerUpdateA(_: *GlobalFunction) callconv(.C) void {
     );
 }
 
-pub fn MenuTitleScreenB(gf: *GlobalFunction) callconv(.C) void {
+pub fn MenuTitleScreenB(gf: *PluginAPI) callconv(.C) void {
     // TODO: make text only appear on the actual title screen, i.e. remove from file select etc.
     DrawVersionString(gf);
     DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuStartRaceB(gf: *GlobalFunction) callconv(.C) void {
+pub fn MenuStartRaceB(gf: *PluginAPI) callconv(.C) void {
     DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuRaceResultsB(gf: *GlobalFunction) callconv(.C) void {
+pub fn MenuRaceResultsB(gf: *PluginAPI) callconv(.C) void {
     DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuTrackSelectB(gf: *GlobalFunction) callconv(.C) void {
+pub fn MenuTrackSelectB(gf: *PluginAPI) callconv(.C) void {
     DrawMenuPracticeModeLabel(gf);
 }
 
-pub fn MenuTrackB(gf: *GlobalFunction) callconv(.C) void {
+pub fn MenuTrackB(gf: *PluginAPI) callconv(.C) void {
     DrawMenuPracticeModeLabel(gf);
 }

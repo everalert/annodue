@@ -3,9 +3,8 @@ const Self = @This();
 const std = @import("std");
 const assert = std.debug.assert;
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -20,9 +19,9 @@ const Vec3 = vec.Vec3;
 const rf = r.Font;
 const ra = r.Asset;
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_developer", "annodue/plugin/plugin_developer.pdb");
@@ -58,7 +57,7 @@ const Developer = struct {
     var h_s_visualize_matrices: ?ASettingHandle = null;
     var s_visualize_matrices: bool = false;
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "developer", null);
         h_s_section = section;
 
@@ -81,19 +80,19 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalFn) callconv(.C) void {}
+export fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
+export fn OnInitLate(gf: *PluginAPI) callconv(.C) void {
     // NOTE: moved from OnInit due to stack overflow that only occurs if running
     // this while annodue is loading
     Developer.settingsInit(gf);
 }
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 // HOOKS
 
-export fn EngineUpdateStage20A(gf: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage20A(gf: *PluginAPI) callconv(.C) void {
     m44vis: {
         if (!gf.SInRace().on() or !Developer.s_visualize_matrices) break :m44vis;
 

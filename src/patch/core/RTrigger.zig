@@ -6,17 +6,17 @@ const FixedBufferAllocator = std.heap.FixedBufferAllocator;
 const w32 = @import("zigwin32");
 const BOOL = w32.foundation.BOOL;
 
-const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
-const ADAPI = @import("../util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const RAddressHandle = ADAPI.RAddressHandle;
-const RADDRESS_HANDLE_NULL = ADAPI.RADDRESS_HANDLE_NULL;
-const apih = ADAPI.helper;
-const RAddressHandleInfo = apih.RAddressHandleInfo;
+const plug = @import("../util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const RAddressHandle = plug.RAddressHandle;
+const RADDRESS_HANDLE_NULL = plug.RADDRESS_HANDLE_NULL;
+const plugh = plug.helper;
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 const Handle = @import("../util/handle_map.zig").Handle;
@@ -220,13 +220,13 @@ const CustomTrigger = struct {
 
     // TODO: verify intergity of hooks; in particular, not 100% on init, but seems
     // fine since it has the same pattern as destroy; may also want save_esi on destroy
-    pub fn init(api: *GlobalFn) void {
+    pub fn init(api: *PluginAPI) void {
         h_ar_hook.Reserve(api);
         h_ar_init.Reserve(api);
         h_ar_destroy.Reserve(api);
         h_ar_update.Reserve(api);
 
-        var buf = apih.AMemoryGetPermanentT(api, [PATCH_BUFFER_SIZE]u8) orelse @panic("RTrigger: API OutOfMemory");
+        var buf = plugh.AMemoryGetPermanentT(api, [PATCH_BUFFER_SIZE]u8) orelse @panic("RTrigger: API OutOfMemory");
         scratch_fba = FixedBufferAllocator.init(buf);
         scratch_alloc = scratch_fba.allocator();
 
@@ -244,7 +244,7 @@ const CustomTrigger = struct {
             h_ar_hook.Handle,    h_ar_init.Handle,
             h_ar_destroy.Handle, h_ar_update.Handle,
         };
-        if (!apih.RAddressPatchToggleGroup(api, &handles, true)) return;
+        if (!plugh.RAddressPatchToggleGroup(api, &handles, true)) return;
 
         // triggers
         // 0x476E7C -> 0x476E88 (0x0C)
@@ -290,7 +290,7 @@ const CustomTrigger = struct {
         data.deinit();
     }
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "core/RTrigger", null);
         h_s_section = section;
 
@@ -331,14 +331,14 @@ pub fn RReleaseAll() callconv(.C) void {
 
 // HOOKS
 
-pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
+pub fn OnInit(gf: *PluginAPI) callconv(.C) void {
     CustomTrigger.init(gf);
     CustomTrigger.settingsInit(gf);
 }
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     CustomTrigger.deinit();
 }
 
@@ -348,7 +348,7 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 
 // TODO: reintroduce when 'debug readout' thing is done
 //const rt = r.Text;
-//pub fn Draw2DB(_: *GlobalFn) callconv(.C) void {
+//pub fn Draw2DB(_: *PluginAPI) callconv(.C) void {
 //    rt.DrawText(0, 0, "TRIGGERS: {d}", .{CustomTrigger.data.values.items.len}, null, null) catch {};
 //    for (CustomTrigger.data.handles.items, 0..) |h, i|
 //        rt.DrawText(0, @intCast(8 + 8 * i), "{X:0>4} o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{

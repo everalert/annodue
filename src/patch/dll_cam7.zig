@@ -6,18 +6,18 @@ const rad2deg = m.radiansToDegrees;
 const w32 = @import("zigwin32");
 const POINT = w32.foundation.POINT;
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingMessage = ADAPI.ASettingMessage;
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const RAddressHandle = ADAPI.RAddressHandle;
-const apih = ADAPI.helper;
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const AInputButtonMap = apih.AInputButtonMap;
-const AInputAxisMap = apih.AInputAxisMap;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingMessage = plug.ASettingMessage;
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const RAddressHandle = plug.RAddressHandle;
+const plugh = plug.helper;
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
+const AInputButtonMap = plugh.AInputButtonMap;
+const AInputAxisMap = plugh.AInputAxisMap;
 
 const rin = @import("racer").Input;
 const rc = @import("racer").Camera;
@@ -224,10 +224,10 @@ const Cam7 = extern struct {
     var h_ar_fov = RAddressHandleInfo.Init(0x4528E9, 0x4528F3);
     var h_ar_cam = RAddressHandleInfo.InitLen(camstate_ref_addr, 4);
 
-    var api: *GlobalFn = undefined;
+    var api: *PluginAPI = undefined;
 
     // TODO: maybe normalizing XY stuff (or do it at input system level)
-    fn update_input(gf: *GlobalFn) void {
+    fn update_input(gf: *PluginAPI) void {
         i_toggle.Update(gf);
         i_look_x.Update(gf);
         i_look_y.Update(gf);
@@ -257,7 +257,7 @@ const Cam7 = extern struct {
         }
     }
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "cam7", settingsUpdate);
         h_s_section = section;
 
@@ -394,7 +394,7 @@ const Cam7 = extern struct {
 
 fn patchFlags(enable: bool) void {
     const handle = Cam7.h_ar_flags.Handle;
-    if (!apih.RAddressPatchToggle(Cam7.api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(Cam7.api, handle, enable)) return;
 
     if (Cam7.api.RAddressRangeWriteSt(handle)) {
         defer Cam7.api.RAddressRangeWriteEd(handle);
@@ -407,7 +407,7 @@ fn patchFog(enable: bool) void {
         Cam7.h_ar_fog1.Handle,
         Cam7.h_ar_fog2.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(Cam7.api, &handles, enable)) return;
+    if (!plugh.RAddressPatchToggleGroup(Cam7.api, &handles, enable)) return;
 
     const dist = if (Cam7.s_fog_remove) comptime m.pow(f32, 10, 10) else Cam7.fog_dist;
     if (Cam7.api.RAddressRangeWriteSt(handles[0])) {
@@ -423,9 +423,9 @@ fn patchFog(enable: bool) void {
 
 fn patchFOV(enable: bool) void {
     const handle = Cam7.h_ar_fov.Handle;
-    if (!apih.RAddressPatchToggle(Cam7.api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(Cam7.api, handle, enable)) return;
 
-    _ = apih.RAddressRangeWrite(Cam7.api, handle, 0x4528EF, f32, 100); // first-person internal cam fov
+    _ = plugh.RAddressRangeWrite(Cam7.api, handle, 0x4528EF, f32, 100); // first-person internal cam fov
 }
 
 inline fn CamTransitionOut() void {
@@ -439,7 +439,7 @@ inline fn CamTransitionOut() void {
 
 fn SaveSavedCam() void {
     const handle = Cam7.h_ar_cam.Handle;
-    if (!apih.RAddressPatchToggle(Cam7.api, handle, true)) return;
+    if (!plugh.RAddressPatchToggle(Cam7.api, handle, true)) return;
 
     if (Cam7.saved_camstate_index != null) return;
     Cam7.saved_camstate_index = mem.Read(Cam7.camstate_ref_addr, u32);
@@ -454,23 +454,23 @@ fn SaveSavedCam() void {
     patchFOV(true);
 
     re.Manager.entity(.cMan, 0).CamStateIndex = 31; // TODO: use RAddress
-    _ = apih.RAddressRangeWrite(Cam7.api, handle, Cam7.camstate_ref_addr, u32, 31);
+    _ = plugh.RAddressRangeWrite(Cam7.api, handle, Cam7.camstate_ref_addr, u32, 31);
 }
 
 fn RestoreSavedCam() void {
     const handle = Cam7.h_ar_cam.Handle;
-    if (!apih.RAddressPatchToggle(Cam7.api, handle, true)) return;
+    if (!plugh.RAddressPatchToggle(Cam7.api, handle, true)) return;
 
     if (Cam7.saved_camstate_index) |i| {
-        _ = apih.RAddressRangeWrite(Cam7.api, handle, Cam7.camstate_ref_addr, u32, i);
+        _ = plugh.RAddressRangeWrite(Cam7.api, handle, Cam7.camstate_ref_addr, u32, i);
         re.Manager.entity(.cMan, 0).CamStateIndex = i; // TODO: use RAddress
         CamTransitionOut();
     }
 }
 
-fn CheckAndResetSavedCam(gf: *GlobalFn) void {
+fn CheckAndResetSavedCam(gf: *PluginAPI) void {
     const handle = Cam7.h_ar_cam.Handle;
-    if (!apih.RAddressPatchToggle(Cam7.api, handle, true)) return;
+    if (!plugh.RAddressPatchToggle(Cam7.api, handle, true)) return;
 
     if (Cam7.saved_camstate_index == null) return;
     if (mem.Read(Cam7.camstate_ref_addr, u32) == 31) return;
@@ -481,7 +481,7 @@ fn CheckAndResetSavedCam(gf: *GlobalFn) void {
     _ = gf.GHideRaceUIOff();
 }
 
-fn UpdateHideUI(gf: *GlobalFn) void {
+fn UpdateHideUI(gf: *PluginAPI) void {
     if (Cam7.s_hide_ui and Cam7.cam_state == .FreeCam) {
         _ = gf.GHideRaceUIOn();
         return;
@@ -492,7 +492,7 @@ fn UpdateHideUI(gf: *GlobalFn) void {
 
 // STATE MACHINE
 
-fn DoStateNone(gf: *GlobalFn) CamState {
+fn DoStateNone(gf: *PluginAPI) CamState {
     if (Cam7.i_toggle.GetSt() == .JustOn and Cam7.s_enable) {
         SaveSavedCam();
         if (Cam7.s_hide_ui) _ = gf.GHideRaceUIOn();
@@ -501,7 +501,7 @@ fn DoStateNone(gf: *GlobalFn) CamState {
     return .None;
 }
 
-fn DoStateFreeCam(gf: *GlobalFn) CamState {
+fn DoStateFreeCam(gf: *PluginAPI) CamState {
     if (Cam7.i_toggle.GetSt() == .JustOn or !Cam7.s_enable) {
         if (gf.SRaceState() != .None and Cam7.i_move_vehicle.GetSt().on()) {
             re.Test.DoRespawn(re.Test.pPlayer.*.?, 0);
@@ -710,7 +710,7 @@ fn DoStateFreeCam(gf: *GlobalFn) CamState {
     return .FreeCam;
 }
 
-fn UpdateState(gf: *GlobalFn) void {
+fn UpdateState(gf: *PluginAPI) void {
     CheckAndResetSavedCam(gf); // handle transition in and out of race scene
     Cam7.cam_state = switch (Cam7.cam_state) {
         .None => DoStateNone(gf),
@@ -732,7 +732,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     // FIXME: stop doing this
     Cam7.api = gf;
 
@@ -746,22 +746,22 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     Cam7.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {
     rc.swrCam_CamState_InitMainMat4(31, 1, @intFromPtr(&Cam7.xf), 0);
 }
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     RestoreSavedCam();
     rc.swrCam_CamState_InitMainMat4(31, 0, 0, 0);
 }
 
 // HOOKS
 
-export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *PluginAPI) callconv(.C) void {
     Cam7.update_input(gf);
 }
 
-export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
+export fn InputUpdateA(_: *PluginAPI) callconv(.C) void {
     // TODO: use RAddress
     if (Cam7.cam_state == .FreeCam and Cam7.s_disable_input and rg.PAUSE_STATE.* == 0) { // kill race input
         // NOTE: unk block starting at 0xEC8820 still written to, but no observable ill-effects
@@ -775,6 +775,6 @@ export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
 //    HandleSettings(gf);
 //}
 
-export fn EngineUpdateStage1CA(gf: *GlobalFn) callconv(.C) void {
+export fn EngineUpdateStage1CA(gf: *PluginAPI) callconv(.C) void {
     UpdateState(gf);
 }

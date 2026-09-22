@@ -16,9 +16,8 @@ const LocHeader = zzip.LocalFileHeader.Header;
 const w32 = @import("zigwin32");
 const w32wm = w32.ui.windows_and_messaging;
 
-const app = @import("../appinfo.zig");
-const GlobalFn = app.GLOBAL_FUNCTION;
-const VERSION = app.VERSION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
+const VERSION = @import("../util/root.zig").VERSION;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -26,10 +25,10 @@ const rg = r.Global;
 
 const msg = @import("../util/message.zig");
 
-const ADAPI = @import("../util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const apih = ADAPI.helper;
+const plug = @import("../util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const plugh = plug.helper;
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
@@ -40,7 +39,7 @@ const UpdateState = struct {
     var h_s_auto_update: ?ASettingHandle = null;
     var s_auto_update: bool = true;
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         h_s_auto_update =
             gf.ASettingOccupy(ASETTING_HANDLE_NULL, "AUTO_UPDATE", .B, .{ .B = true }, &s_auto_update, null);
     }
@@ -93,7 +92,7 @@ const Update = struct {
 // FIXME: do we even need AnnodueUpdateTagEF struct?
 const UPDATE_TAG_EXTRA_FIELD_ID: u16 = 0x5055; // UP
 
-fn updateToastAvailable(gpa: Allocator, gf: *GlobalFn, ver: []const u8) void {
+fn updateToastAvailable(gpa: Allocator, gf: *PluginAPI, ver: []const u8) void {
     const new_update_text = std.fmt.allocPrintZ(gpa, "Update Available: {s}", .{ver}) catch return;
     defer gpa.free(new_update_text);
     _ = gf.ToastNew(new_update_text, rt.ColorRGB.Red.rgba(0));
@@ -101,11 +100,11 @@ fn updateToastAvailable(gpa: Allocator, gf: *GlobalFn, ver: []const u8) void {
 
 // HOOK FUNCTIONS
 
-pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
+pub fn OnInit(gf: *PluginAPI) callconv(.C) void {
     UpdateState.settingsInit(gf);
 }
 
-pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
+pub fn OnInitLate(gf: *PluginAPI) callconv(.C) void {
     const s = struct {
         const retry_delay: u32 = 5 * 60 * 1000; // 5min
         var last_try: u32 = 0;
@@ -124,7 +123,7 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
     if (s.init or r.Time.TIMESTAMP.* + s.retry_delay < s.last_try) return;
     s.last_try = r.Time.TIMESTAMP.*;
 
-    var memory = apih.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse return;
+    var memory = plugh.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse return;
     var scratch_fba = FixedBufferAllocator.init(memory);
     var scratch_alloc = scratch_fba.allocator();
 
@@ -198,16 +197,16 @@ pub fn OnInitLate(gf: *GlobalFn) callconv(.C) void {
     _ = w32wm.PostMessageA(@ptrCast(rg.WINDOW_HWND.*), w32wm.WM_CLOSE, 0, 0);
 }
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 // FIXME: remove, or convert to proper system for manual updating
-pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateB(gf: *PluginAPI) callconv(.C) void {
     if (BuildOptions.BUILD_MODE == .Developer) {
         if (gf.AInputKbGet(.U, .JustOn))
             OnInitLate(gf);
 
         if (gf.AInputKbGet(.J, .JustOn)) blk: {
-            var memory = apih.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse break :blk;
+            var memory = plugh.AMemoryGetTemporaryT(gf, [SCRATCH_BUFFER_SIZE]u8) orelse break :blk;
             var scratch_fba = FixedBufferAllocator.init(memory);
             var scratch_alloc = scratch_fba.allocator();
             const fp = std.fmt.allocPrint(scratch_alloc, "{s}/{s}", .{ ANNODUE_PATH, "autoupdate.zip" }) catch return;

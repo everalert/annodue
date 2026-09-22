@@ -18,29 +18,30 @@ const LoadLibraryA = w32.system.library_loader.LoadLibraryA;
 const FreeLibrary = w32.system.library_loader.FreeLibrary;
 const GetProcAddress = w32.system.library_loader.GetProcAddress;
 
+// NOTE: the actual implementations of PluginAPI and "global state"
 const core = @import("core.zig");
 const GLOBAL_STATE = &core.Global.GLOBAL_STATE;
 const GLOBAL_FUNCTION = &core.Global.GLOBAL_FUNCTION;
 
 const app = @import("../appinfo.zig");
-const GlobalFn = app.GLOBAL_FUNCTION;
-const COMPATIBILITY_VERSION = app.COMPATIBILITY_VERSION;
+const COMPATIBILITY_VERSION = @import("../appinfo.zig").COMPATIBILITY_VERSION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const hot_reload = @import("../util/hot_reload.zig");
 const hook = @import("../util/hooking.zig");
-const apih = @import("../util/api/api_helper.zig");
+const plugh = @import("../util/plugin/plugin_helper.zig");
 const debug = @import("../util/debug/debug.zig");
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
-const ADAPI = @import("../util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const plug = @import("../util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
 
 // FIXME: anything using this should be moved to api Init; waiting on better core arch
 const RAddress = @import("RAddress.zig");
-const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
-const RADDRESS_HANDLE_NULL = @import("../util/api/api.zig").RADDRESS_HANDLE_NULL;
+const RAddressHandle = @import("../util/plugin/plugin.zig").RAddressHandle;
+const RADDRESS_HANDLE_NULL = @import("../util/plugin/plugin.zig").RADDRESS_HANDLE_NULL;
 
 const r = @import("racer");
 const reh = r.Entity.Hang;
@@ -77,6 +78,8 @@ const plugin_hashes: *align(1) const [plugin_hashes_len][64]u8 = std.mem.bytesAs
 
 pub const PLUGIN_FUNCTION_VERSION = 1;
 
+// TODO: nomenclature for this will be PluginEntry (as in a list of entry points
+//  for plugins), to differentiate from the API vtable
 const Plugin = plugin: {
     const stdf = .{
         .{ "Handle", ?HINSTANCE },
@@ -119,7 +122,7 @@ fn PluginExportFnType(comptime f: PluginExportFn) type {
         .PluginCompatibilityVersion => ?*const fn () callconv(.C) u32,
         //.PluginCategoryFlags => *const fn () callconv(.C) u32,
         .OnPluginInitA, .OnPluginInitLateA, .OnPluginDeinitA => ?*const fn (OwnerOpaque) callconv(.C) void,
-        else => ?*const fn (*GlobalFn) callconv(.C) void,
+        else => ?*const fn (*PluginAPI) callconv(.C) void,
     };
 }
 
@@ -565,12 +568,12 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
                     debug.PCompileError("'{s}' missing OnInit, OnInitLate or OnDeinit", .{cd.name});
             }
         }
-        if (this_p) |plug| {
+        if (this_p) |plugin| {
             PluginState.owner_count_core += 1;
             PluginState.owner_current = Owner.Init(.Core, PluginState.owner_count_core);
-            plug.OwnerId = PluginState.owner_current;
-            plug.OnInit.?(GLOBAL_FUNCTION);
-            PluginFnOnPluginInit(.OnPluginInitA, plug.OwnerId);
+            plugin.OwnerId = PluginState.owner_current;
+            plugin.OnInit.?(GLOBAL_FUNCTION);
+            PluginFnOnPluginInit(.OnPluginInitA, plugin.OwnerId);
         }
     }
 
@@ -617,28 +620,28 @@ pub fn init(arena_perm: Allocator, arena_temp: Allocator) !void {
 
 // HOOKS
 
-pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
+pub fn OnInit(api: *PluginAPI) callconv(.C) void {
     PluginState.h_s_hot_reload =
-        gf.ASettingOccupy(ASETTING_HANDLE_NULL, "PLUGIN_HOT_RELOAD", .B, .{ .B = true }, &PluginState.s_hot_reload, null);
+        api.ASettingOccupy(ASETTING_HANDLE_NULL, "PLUGIN_HOT_RELOAD", .B, .{ .B = true }, &PluginState.s_hot_reload, null);
 }
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn GameLoopB(gf: *GlobalFn) callconv(.C) void {
+pub fn GameLoopB(api: *PluginAPI) callconv(.C) void {
     if (PluginState.s_hot_reload) blk: {
         PluginState.plugins_reloader.Update(rti.TIMESTAMP.*);
 
         defer PluginState.plugins_toast_count = 0;
-        var buf_toast = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
+        var buf_toast = plugh.AMemoryGetTemporaryZeroT(api, [127:0]u8) orelse break :blk;
         for (0..PluginState.plugins_toast_count) |i| {
             const handle = PluginState.plugins_toast[i];
             assert(PluginState.plugins_used[handle]);
 
             const p: *const Plugin = &PluginState.plugins[handle];
             _ = std.fmt.bufPrintZ(buf_toast, "Plugin Loaded: {s}", .{p.PluginName.?()}) catch continue;
-            _ = gf.ToastNew(buf_toast, r.Text.ColorRGB.Green.rgba(0));
+            _ = api.ToastNew(buf_toast, r.Text.ColorRGB.Green.rgba(0));
         }
     }
 }

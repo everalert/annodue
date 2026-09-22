@@ -12,7 +12,7 @@ const WriteConsoleA = w32.system.console.WriteConsoleA;
 // FIXME: remove this and use win32 function to get process handle
 const rg = @import("racer").Global;
 
-const ANNODUE_VER = @import("../../appinfo.zig").VERSION_STR;
+const ANNODUE_VER = @import("../root.zig").VERSION_STR;
 
 const DebugConsole = struct {
     var initialized: bool = false;

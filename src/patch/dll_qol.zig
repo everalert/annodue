@@ -6,7 +6,7 @@ const assert = std.debug.assert;
 const w32 = @import("zigwin32");
 const ShowCursor = w32.ui.windows_and_messaging.ShowCursor;
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
 
 const timing = @import("util/timing.zig");
@@ -33,17 +33,17 @@ const re = @import("racer").Entity;
 const rto = rt.TextStyleOpts;
 const rs = @import("racer").Save;
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASettingMValue = ADAPI.ASettingMValue;
-const ASettingMessage = ADAPI.ASettingMessage;
-const RAddressHandle = ADAPI.RAddressHandle;
-const RADDRESS_HANDLE_NULL = ADAPI.RADDRESS_HANDLE_NULL;
-const AInputVirtualKey = ADAPI.AInputVirtualKey;
-const AInputXInputButton = ADAPI.AInputXInputButton;
-const apih = ADAPI.helper;
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const AInputButtonMap = apih.AInputButtonMap;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASettingMValue = plug.ASettingMValue;
+const ASettingMessage = plug.ASettingMessage;
+const RAddressHandle = plug.RAddressHandle;
+const RADDRESS_HANDLE_NULL = plug.RADDRESS_HANDLE_NULL;
+const AInputVirtualKey = plug.AInputVirtualKey;
+const AInputXInputButton = plug.AInputXInputButton;
+const plugh = plug.helper;
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
+const AInputButtonMap = plugh.AInputButtonMap;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_qol", "annodue/plugin/plugin_qol.pdb");
@@ -240,15 +240,15 @@ const QolState = struct {
     var autoreset_has_boost_boosted: bool = false;
     var autoreset_underheat_timer: f32 = 0;
 
-    var api: *GlobalFn = undefined;
+    var api: *PluginAPI = undefined;
 
-    fn UpdateInput(gf: *GlobalFn) callconv(.C) void {
+    fn UpdateInput(gf: *PluginAPI) callconv(.C) void {
         input_pause.Update(gf);
         input_unpause.Update(gf);
         input_quickstart.Update(gf);
     }
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASettingHandle.getNull(), "qol", settingsUpdate);
         h_s_section = section;
 
@@ -338,9 +338,9 @@ const QolState = struct {
         QuickRaceMenu.values.racers = @intCast(s_default_racers);
         if (api.SInitLatePassed()) {
             const handle = QuickRaceMenu.h_ar_racers.Handle;
-            if (!apih.RAddressPatchToggle(api, handle, true)) return;
+            if (!plugh.RAddressPatchToggle(api, handle, true)) return;
 
-            _ = apih.RAddressRangeWrite(api, handle, 0x50C558, i8, @as(i8, @intCast(s_default_racers)));
+            _ = plugh.RAddressRangeWrite(api, handle, 0x50C558, i8, @as(i8, @intCast(s_default_racers)));
             re.Manager.entity(.Hang, 0).Racers = @intCast(s_default_racers);
         }
     }
@@ -362,9 +362,9 @@ const QolState = struct {
         if (h_s_default_camera) |h| api.ASettingUpdate(h, .{ .U = s_default_camera });
 
         const handle = QuickRaceMenu.h_ar_camera.Handle;
-        if (apih.RAddressPatchToggle(api, handle, true)) {
+        if (plugh.RAddressPatchToggle(api, handle, true)) {
             // patch CMan_SetNewCamera_451D60 call at end of CMan_HandlePreRaceSweepCam_451EF0
-            _ = apih.RAddressRangeWrite(api, handle, 0x4525AE, u8, @as(u8, @intCast(s_default_camera)));
+            _ = plugh.RAddressRangeWrite(api, handle, 0x4525AE, u8, @as(u8, @intCast(s_default_camera)));
         }
     }
 
@@ -427,7 +427,7 @@ const QolState = struct {
                 continue;
             }
             if (std.mem.eql(u8, "menu_track_order", name)) {
-                var buf = apih.AMemoryGetTemporaryT(QuickRaceMenu.api, [64]u8) orelse continue;
+                var buf = plugh.AMemoryGetTemporaryT(QuickRaceMenu.api, [64]u8) orelse continue;
                 const s = std.ascii.upperString(buf, std.mem.span(@as([*:0]const u8, &QuickRaceMenu.s_menu_track_order)));
                 const use_circuit_order = std.mem.eql(u8, "CIRCUIT", s);
                 QuickRaceMenu.set_track_order(use_circuit_order);
@@ -463,7 +463,7 @@ const fcam_src_asm = [7]u8{
 fn PatchCameraFKeys(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_fcamera.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -483,7 +483,7 @@ fn PatchRaceTimerMsHud(enable: bool) void {
         QuickRaceMenu.h_ar_ms_hud1.Handle, QuickRaceMenu.h_ar_ms_hud2.Handle,
         QuickRaceMenu.h_ar_ms_hud3.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, enable)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, enable)) return;
 
     // hudDrawRaceHud
     if (api.RAddressRangeWriteSt(handles[0])) {
@@ -508,7 +508,7 @@ fn PatchRaceTimerMsFinish(enable: bool) void {
         QuickRaceMenu.h_ar_ms_fin5.Handle, QuickRaceMenu.h_ar_ms_fin6.Handle,
         QuickRaceMenu.h_ar_ms_fin7.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, enable)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, enable)) return;
 
     // hudDrawRaceResults
     if (api.RAddressRangeWriteSt(handles[0])) {
@@ -519,11 +519,11 @@ fn PatchRaceTimerMsFinish(enable: bool) void {
         defer api.RAddressRangeWriteEd(handles[1]);
         _ = x86.call(0x462660, @intFromPtr(rt.fnDrawTime3));
     }
-    _ = apih.RAddressRangeWrite(api, handles[2], 0x4623D7, u8, 8 + 91);
-    _ = apih.RAddressRangeWrite(api, handles[3], 0x4623F1, u8, 8 + 105);
-    _ = apih.RAddressRangeWrite(api, handles[4], 0x46240B, u8, 8 + 115);
-    _ = apih.RAddressRangeWrite(api, handles[5], 0x46241E, u8, 8 + 125);
-    _ = apih.RAddressRangeWrite(api, handles[6], 0x46242D, u8, 8 + 135);
+    _ = plugh.RAddressRangeWrite(api, handles[2], 0x4623D7, u8, 8 + 91);
+    _ = plugh.RAddressRangeWrite(api, handles[3], 0x4623F1, u8, 8 + 105);
+    _ = plugh.RAddressRangeWrite(api, handles[4], 0x46240B, u8, 8 + 115);
+    _ = plugh.RAddressRangeWrite(api, handles[5], 0x46241E, u8, 8 + 125);
+    _ = plugh.RAddressRangeWrite(api, handles[6], 0x46242D, u8, 8 + 135);
 }
 
 // PLANET CUTSCENES
@@ -531,7 +531,7 @@ fn PatchRaceTimerMsFinish(enable: bool) void {
 fn PatchPlanetCutscenes(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_planet_cs.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -545,7 +545,7 @@ fn PatchPlanetCutscenes(enable: bool) void {
 fn PatchPodiumCutscene(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_podium_cs.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -566,10 +566,10 @@ fn PatchPodiumCutscene(enable: bool) void {
 fn PatchN64Pitch(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_n64_pitch.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
-    _ = apih.RAddressRangeWrite(api, handle, @intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
-    _ = apih.RAddressRangeWrite(api, handle, @intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
+    _ = plugh.RAddressRangeWrite(api, handle, @intFromPtr(ri.PITCH_SCALE_MAX), f32, 1.0);
+    _ = plugh.RAddressRangeWrite(api, handle, @intFromPtr(ri.PITCH_SCALE_MIN), f32, -1.0);
 }
 
 // VIEWPORT
@@ -580,7 +580,7 @@ fn PatchN64Pitch(enable: bool) void {
 fn PatchViewportEdges(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_view_edges.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -597,7 +597,7 @@ fn PatchViewportEdges(enable: bool) void {
 fn PatchWindowBackgroundActivity(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_bg_activity.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -615,7 +615,7 @@ fn PatchWindowBackgroundActivity(enable: bool) void {
 fn PatchJinnReesoCheat(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_reeso1.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -628,7 +628,7 @@ fn ToggleJinnReeso() callconv(.C) void {
     const handles = [_]RAddressHandle{
         QuickRaceMenu.h_ar_reeso2.Handle, QuickRaceMenu.h_ar_reeso3.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, true)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, true)) return;
 
     const state = struct {
         var initialized: bool = false;
@@ -674,7 +674,7 @@ fn ToggleJinnReeso() callconv(.C) void {
 fn PatchCyYungaCheat(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_yunga1.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -687,7 +687,7 @@ fn ToggleCyYunga() callconv(.C) void {
     const handles = [_]RAddressHandle{
         QuickRaceMenu.h_ar_yunga2.Handle, QuickRaceMenu.h_ar_yunga3.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, true)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, true)) return;
 
     const state = struct {
         var initialized: bool = false;
@@ -729,7 +729,7 @@ fn ToggleCyYunga() callconv(.C) void {
 fn PatchCyYungaCheatAudio(enable: bool) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_yunga4.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, enable)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, enable)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -743,9 +743,9 @@ fn PatchTrugutsCheat(enable: bool) void {
     const handles = [_]RAddressHandle{
         QuickRaceMenu.h_ar_truguts1.Handle, QuickRaceMenu.h_ar_truguts2.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, enable)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, enable)) return;
 
-    _ = apih.RAddressRangeWrite(api, handles[0], 0x410706, u32, 10000); // amount: 1000 -> 10000
+    _ = plugh.RAddressRangeWrite(api, handles[0], 0x410706, u32, 10000); // amount: 1000 -> 10000
     if (api.RAddressRangeWriteSt(handles[1])) {
         defer api.RAddressRangeWriteEd(handles[1]);
         var off: u32 = 0x410F8C;
@@ -762,7 +762,7 @@ fn PatchTrackSelectEntry(enable: bool) void {
     const handles = [_]RAddressHandle{
         QuickRaceMenu.h_ar_tracksel1.Handle, QuickRaceMenu.h_ar_tracksel2.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, enable)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, enable)) return;
 
     // - 0043B29A -> 88 5E 5E (mov [esi+5E], bl; pHang->Circuit = 0)
     //   could start as early as 43B28D and include if statement in nop'ing
@@ -782,14 +782,14 @@ fn PatchTrackSelectEntry(enable: bool) void {
 fn CallbackTrackSelectEntry() callconv(.C) void {
     const api = QuickRaceMenu.api;
     const handle = QuickRaceMenu.h_ar_tracksel3.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, true)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, true)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
 
     // MenuPosX = track id
     const hang = re.Manager.entity(.Hang, 0);
-    _ = apih.RAddressRangeWrite(api, handle, 0xE295D0, i32, rtr.TrackCircuitNthTrackMap[hang.Track]);
+    _ = plugh.RAddressRangeWrite(api, handle, 0xE295D0, i32, rtr.TrackCircuitNthTrackMap[hang.Track]);
 }
 
 // FAST MENU NAVIGATION
@@ -809,7 +809,7 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
         QuickRaceMenu.h_ar_fastnav15.Handle, QuickRaceMenu.h_ar_fastnav16.Handle,
         QuickRaceMenu.h_ar_fastnav17.Handle, QuickRaceMenu.h_ar_fastnav18.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, enable)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, enable)) return;
 
     var off: u32 = 0;
 
@@ -851,8 +851,8 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // inspect vehicle: camera angle change speed (input lockout)
     // TODO: fix animation snapping on repetitive inputs
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
-    _ = apih.RAddressRangeWrite(api, handles[5], 0x43921E + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (left)
-    _ = apih.RAddressRangeWrite(api, handles[6], 0x4392E4 + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (right)
+    _ = plugh.RAddressRangeWrite(api, handles[5], 0x43921E + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (left)
+    _ = plugh.RAddressRangeWrite(api, handles[6], 0x4392E4 + 2, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check (right)
     if (api.RAddressRangeWriteSt(handles[7])) {
         defer api.RAddressRangeWriteEd(handles[7]);
         _ = x86.nop_until(0x439233, 0x439233 + 6); // camera is animating check (left)
@@ -866,7 +866,7 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     // TODO: convert asm reroute into x86 macro function
     // TODO: reimpl hold+timeout (original behaviour) in addition to fast manual scrolling
     var d: x86.Detour = undefined;
-    _ = apih.RAddressRangeWrite(api, handles[9], 0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
+    _ = plugh.RAddressRangeWrite(api, handles[9], 0x43AE9D + 1, u32, @intFromPtr(ri.MENU_JUST_ON)); // input raw -> JustOn check
     if (api.RAddressRangeWriteSt(handles[10])) {
         defer api.RAddressRangeWriteEd(handles[10]);
         _ = x86.nop_until(0x43AF93, 0x43AF93 + 2); // camera is animating check
@@ -895,9 +895,9 @@ fn PatchMenuNavigationSpeed(enable: bool) void {
     }
 
     // general: horizontal hold scroll speed (pod, track, watto shop)
-    _ = apih.RAddressRangeWrite(api, handles[13], 0x469D46 + 6, f32, 0.24); // hold initial delay (left)
-    _ = apih.RAddressRangeWrite(api, handles[14], 0x469CBC + 6, f32, 0.24); // hold initial delay (right)
-    _ = apih.RAddressRangeWrite(api, handles[15], 0x4AD588, f32, 0.04); // hold fast delay (both)
+    _ = plugh.RAddressRangeWrite(api, handles[13], 0x469D46 + 6, f32, 0.24); // hold initial delay (left)
+    _ = plugh.RAddressRangeWrite(api, handles[14], 0x469CBC + 6, f32, 0.24); // hold initial delay (right)
+    _ = plugh.RAddressRangeWrite(api, handles[15], 0x4AD588, f32, 0.04); // hold fast delay (both)
 
     // general: cutscene speed (affects several camera transitions)
     PatchMenuNavigationSpeedTransitions(enable);
@@ -925,11 +925,11 @@ fn PatchMenuNavigationSpeedTransitions(enable: bool) void {
         QuickRaceMenu.h_ar_fastnav17.Handle,
         QuickRaceMenu.h_ar_fastnav18.Handle,
     };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, actually_enable)) return;
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, actually_enable)) return;
 
     // increase last arg of calls to Hang__45C560 in Hang_DoCameraTransition__45C3C0
-    _ = apih.RAddressRangeWrite(api, handles[0], 0x45C44D + 1, f32, 30.0); // push 30.0
-    _ = apih.RAddressRangeWrite(api, handles[1], 0x45C471 + 1, f32, 20.0); // push 20.0
+    _ = plugh.RAddressRangeWrite(api, handles[0], 0x45C44D + 1, f32, 30.0); // push 30.0
+    _ = plugh.RAddressRangeWrite(api, handles[1], 0x45C471 + 1, f32, 20.0); // push 20.0
 }
 
 // FAST COUNTDOWN
@@ -946,7 +946,7 @@ const FastCountdown = struct {
     var h_ar_range3 = RAddressHandleInfo.InitLen(0x4AD254, 4); // boost_window_min
     var h_ar_range4 = RAddressHandleInfo.InitLen(0x4AD258, 4); // boost_window_max
 
-    var api: *GlobalFn = undefined;
+    var api: *PluginAPI = undefined;
 
     var CountDuration: f32 = 1.0;
     var CountRatio: f32 = 3 / 1.0;
@@ -968,12 +968,12 @@ const FastCountdown = struct {
             h_ar_range1.Handle, h_ar_range2.Handle,
             h_ar_range3.Handle, h_ar_range4.Handle,
         };
-        if (!apih.RAddressPatchToggleGroup(api, &handles, enable)) return;
+        if (!plugh.RAddressPatchToggleGroup(api, &handles, enable)) return;
 
-        _ = apih.RAddressRangeWrite(api, handles[0], 0x45E628, u32, @intFromPtr(&CurrentFrametime));
-        _ = apih.RAddressRangeWrite(api, handles[1], 0x45E2D5, u32, @as(u32, @bitCast(9.10 + CountDif)));
-        _ = apih.RAddressRangeWrite(api, handles[2], 0x4AD254, u32, @as(u32, @bitCast(0.05 * CountRatio)));
-        _ = apih.RAddressRangeWrite(api, handles[3], 0x4AD258, u32, @as(u32, @bitCast(0.30 * CountRatio)));
+        _ = plugh.RAddressRangeWrite(api, handles[0], 0x45E628, u32, @intFromPtr(&CurrentFrametime));
+        _ = plugh.RAddressRangeWrite(api, handles[1], 0x45E2D5, u32, @as(u32, @bitCast(9.10 + CountDif)));
+        _ = plugh.RAddressRangeWrite(api, handles[2], 0x4AD254, u32, @as(u32, @bitCast(0.05 * CountRatio)));
+        _ = plugh.RAddressRangeWrite(api, handles[3], 0x4AD258, u32, @as(u32, @bitCast(0.30 * CountRatio)));
     }
 };
 
@@ -1083,26 +1083,26 @@ const race = struct {
 
 const s_head = rt.hMakeTextHeadStyle(.Default, true, null, .Center, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultHeader(gf: *GlobalFn, i: i16, comptime fmt: []const u8, args: anytype) void {
+fn RenderRaceResultHeader(gf: *PluginAPI, i: i16, comptime fmt: []const u8, args: anytype) void {
     _ = gf.GDrawText(.Default, rt.hMakeText(640 - race.stat_x, race.stat_y + i * race.stat_h, fmt, args, race.stat_col, s_head) catch null);
 }
 
 const s_stat = rt.hMakeTextHeadStyle(.Default, true, null, .Right, .{rto.ToggleShadow}) catch "";
 
-fn RenderRaceResultStat(gf: *GlobalFn, i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
+fn RenderRaceResultStat(gf: *PluginAPI, i: i16, label: [*:0]const u8, comptime value_fmt: []const u8, value_args: anytype) void {
     _ = gf.GDrawText(.Default, rt.hMakeText(640 - race.stat_x - 8, race.stat_y + i * race.stat_h, "{s}", .{label}, race.stat_col, s_stat) catch null);
     _ = gf.GDrawText(.Default, rt.hMakeText(640 - race.stat_x + 8, race.stat_y + i * race.stat_h, value_fmt, value_args, race.stat_col, null) catch null);
 }
 
-fn RenderRaceResultStatU(gf: *GlobalFn, i: i16, label: [*:0]const u8, value: u32) void {
+fn RenderRaceResultStatU(gf: *PluginAPI, i: i16, label: [*:0]const u8, value: u32) void {
     RenderRaceResultStat(gf, i, label, "{d: <7}", .{value});
 }
 
-fn RenderRaceResultStatF(gf: *GlobalFn, i: i16, label: [*:0]const u8, value: f32) void {
+fn RenderRaceResultStatF(gf: *PluginAPI, i: i16, label: [*:0]const u8, value: f32) void {
     RenderRaceResultStat(gf, i, label, "{d:4.3}", .{value});
 }
 
-fn RenderRaceResultStatTime(gf: *GlobalFn, i: i16, label: [*:0]const u8, time: f32) void {
+fn RenderRaceResultStatTime(gf: *PluginAPI, i: i16, label: [*:0]const u8, time: f32) void {
     const t = timing.RaceTimeFromFloat(time);
     RenderRaceResultStat(gf, i, label, "{d}:{d:0>2}.{d:0>3}", .{ t.min, t.sec, t.ms });
 }
@@ -1110,7 +1110,7 @@ fn RenderRaceResultStatTime(gf: *GlobalFn, i: i16, label: [*:0]const u8, time: f
 const s_upg_full = rt.hMakeTextStyle(.Green, null, .{}) catch "";
 const s_upg_dmg = rt.hMakeTextStyle(.Red, null, .{}) catch "";
 
-fn RenderRaceResultStatUpgrade(gf: *GlobalFn, i: i16, cat: u8, lv: u8, hp: u8) void {
+fn RenderRaceResultStatUpgrade(gf: *PluginAPI, i: i16, cat: u8, lv: u8, hp: u8) void {
     RenderRaceResultStat(gf, i, rv.UpgradeNames[cat], "{s}{d:0>3} ~1{s}", .{
         if (hp < 255) s_upg_dmg else s_upg_full, hp, rv.PartNameS(cat)[lv],
     });
@@ -1189,7 +1189,7 @@ const QuickRaceMenu = extern struct {
     var menu_active: ToggleState = .Off;
     var initialized: bool = false;
     // TODO: figure out if these can be removed, currently blocked by quick race menu callbacks
-    var api: *GlobalFn = undefined;
+    var api: *PluginAPI = undefined;
 
     var FpsTimer: timing.TimeSpinlock = .{};
 
@@ -1615,7 +1615,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     // FIXME find a better solution than this shi
     // NOTE: keep at top
     QolState.api = gf;
@@ -1682,8 +1682,8 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     FastCountdown.h_ar_range4.Reserve(gf);
 
     // FIXME: handle nullptr cases properly
-    nav_asm = apih.AMemoryGetPermanentT(gf, [96]u8) orelse @panic("QOL(nav_asm): API OutOfMemory");
-    QolState.fcam_buf = apih.AMemoryGetPermanentT(gf, [32]u8) orelse @panic("QOL(fcam_buf): API OutOfMemory");
+    nav_asm = plugh.AMemoryGetPermanentT(gf, [96]u8) orelse @panic("QOL(nav_asm): API OutOfMemory");
+    QolState.fcam_buf = plugh.AMemoryGetPermanentT(gf, [32]u8) orelse @panic("QOL(fcam_buf): API OutOfMemory");
 
     _ = ShowCursor(0); // cursor fix
     QolState.settingsInit(gf);
@@ -1696,7 +1696,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     PatchTrugutsCheat(true);
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {
     var hang = re.Manager.entity(.Hang, 0);
 
     // TODO: look into using in-game default setter as hook, see fn_45BD90
@@ -1704,8 +1704,8 @@ export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     // else like this that might have been affected by new Hang stuff
     hang.Laps = @intCast(QolState.s_default_laps);
     const handle_racers = QuickRaceMenu.h_ar_racers.Handle;
-    if (apih.RAddressPatchToggle(QuickRaceMenu.api, handle_racers, true)) {
-        _ = apih.RAddressRangeWrite(QuickRaceMenu.api, handle_racers, 0x50C558, i8, @as(i8, @intCast(QolState.s_default_racers))); // racers
+    if (plugh.RAddressPatchToggle(QuickRaceMenu.api, handle_racers, true)) {
+        _ = plugh.RAddressRangeWrite(QuickRaceMenu.api, handle_racers, 0x50C558, i8, @as(i8, @intCast(QolState.s_default_racers))); // racers
     }
 
     if (QolState.s_trackselect_remember) {
@@ -1714,7 +1714,7 @@ export fn OnInitLate(_: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     QuickRaceMenu.FpsTimer.End();
     QuickRaceMenu.close();
     PatchN64Pitch(false);
@@ -1740,12 +1740,12 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 
 // HOOKS
 
-export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *PluginAPI) callconv(.C) void {
     QolState.UpdateInput(gf);
     QuickRaceMenu.update_input();
 }
 
-export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
+export fn InputUpdateA(_: *PluginAPI) callconv(.C) void {
     // add dpad input to menu navigation
     if (QolState.s_dpad_navigation and ri.JOYSTICK_DEVICE_COUNT.* > 0) {
         // TODO: convert to object ref instead of building joy_index manually, after
@@ -1766,28 +1766,28 @@ export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn InputUpdateKeyboardA(_: *GlobalFn) callconv(.C) void {
+export fn InputUpdateKeyboardA(_: *PluginAPI) callconv(.C) void {
     const api = QuickRaceMenu.api;
     const handles = [_]RAddressHandle{ QolState.h_ar_esc1.Handle, QolState.h_ar_esc2.Handle };
-    if (!apih.RAddressPatchToggleGroup(api, &handles, true)) {
+    if (!plugh.RAddressPatchToggleGroup(api, &handles, true)) {
         // map xinput start to esc
         const start_on: u32 = @intFromBool(QolState.input_pause.GetSt() == .On);
         const start_just_on: u32 = @intFromBool(QolState.input_pause.GetSt() == .JustOn);
-        _ = apih.RAddressRangeWrite(QolState.api, handles[0], ri.RAW_STATE_ON_ADDR + 4, u32, start_on);
-        _ = apih.RAddressRangeWrite(QolState.api, handles[1], ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
+        _ = plugh.RAddressRangeWrite(QolState.api, handles[0], ri.RAW_STATE_ON_ADDR + 4, u32, start_on);
+        _ = plugh.RAddressRangeWrite(QolState.api, handles[1], ri.RAW_STATE_JUST_ON_ADDR + 4, u32, start_just_on);
     }
 }
 
-export fn TimerUpdateB(gf: *GlobalFn) callconv(.C) void {
+export fn TimerUpdateB(gf: *PluginAPI) callconv(.C) void {
     if (gf.SInRace().on() and QolState.s_fps_limiter and rti.STOPPED.* == 0)
         QuickRaceMenu.FpsTimer.Sleep();
 }
 
-export fn TimerUpdateA(_: *GlobalFn) callconv(.C) void {
+export fn TimerUpdateA(_: *PluginAPI) callconv(.C) void {
     FastCountdown.update();
 }
 
-export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
+export fn MenuTrackB(gf: *PluginAPI) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
 
     const laps: u32 = @intCast(hang.Laps);
@@ -1802,20 +1802,20 @@ export fn MenuTrackB(gf: *GlobalFn) callconv(.C) void {
     if (QolState.s_clear_records_enable and gf.AInputKbGetRaw(.BACK) == .JustOn) {
         if (gf.AInputKbGetRaw(.@"1").on()) blk: {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 1, hang.Mirror != 0);
-            var buf = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
+            var buf = plugh.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
             _ = std.fmt.bufPrintZ(buf, "{s} Best Lap cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
             _ = gf.ToastNew(buf, rt.ColorRGB.Red.rgba(0));
         }
         if (gf.AInputKbGetRaw(.@"3").on()) blk: {
             rs.BestTimeClear(rs.GameSaveData, hang.Track, 3, hang.Mirror != 0);
-            var buf = apih.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
+            var buf = plugh.AMemoryGetTemporaryZeroT(gf, [127:0]u8) orelse break :blk;
             _ = std.fmt.bufPrintZ(buf, "{s} 3-Lap Record cleared", .{rtr.TrackNameById[hang.Track]}) catch return;
             _ = gf.ToastNew(buf, rt.ColorRGB.Red.rgba(0));
         }
     }
 }
 
-export fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateB(gf: *PluginAPI) callconv(.C) void {
     // Fast Menu Navigation
     if (QolState.s_fast_navigation) {
         const hang = re.Manager.entity(.Hang, 0);
@@ -1850,7 +1850,7 @@ export fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
 //  post-race camera is still counted as racing state
 // FIXME: investigate - used to be TextRenderB, but that doesn't run every frame
 //  however, the text flushing DOES run on those frames, apparently from a different callsite
-export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(gf: *PluginAPI) callconv(.C) void {
     const hang = re.Manager.entity(.Hang, 0);
     const jdge = re.Manager.entity(.Jdge, 0);
 
@@ -2036,7 +2036,7 @@ export fn EarlyEngineUpdateA(gf: *GlobalFn) callconv(.C) void {
     }
 }
 
-export fn MapRenderB(_: *GlobalFn) callconv(.C) void {
+export fn MapRenderB(_: *PluginAPI) callconv(.C) void {
     // TODO: move to core? since it only matters with running annodue
     rt.bTextHiRes.* = 0;
 }

@@ -1,14 +1,15 @@
 const std = @import("std");
 
-const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
+
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const HandleStatic = @import("../util/handle_map_static.zig").Handle;
 const HandleMapStatic = @import("../util/handle_map_static.zig").HandleMapStatic;
 const x86 = @import("../util/x86.zig");
-const apih = @import("../util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
+const plugh = @import("../util/plugin/plugin_helper.zig");
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
+const RAddressHandle = @import("../util/plugin/plugin.zig").RAddressHandle;
 
 const r = @import("racer");
 const Test = r.Entity.Test.Test;
@@ -88,7 +89,7 @@ const CustomTerrain = struct {
         }
     }
 
-    pub fn init(api: *GlobalFn) void {
+    pub fn init(api: *PluginAPI) void {
         data = THandleMap.init() catch unreachable;
 
         h_ar_hook.Reserve(api);
@@ -133,13 +134,13 @@ pub fn RReleaseAll() callconv(.C) void {
 
 // HOOKS
 
-pub fn OnInit(api: *GlobalFn) callconv(.C) void {
+pub fn OnInit(api: *PluginAPI) callconv(.C) void {
     CustomTerrain.init(api);
 }
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
     CustomTerrain.removeAll(owner);
@@ -147,7 +148,7 @@ pub fn OnPluginDeinitA(owner: u16) callconv(.C) void {
 
 // TODO: reintroduce when 'debug readout' thing is done
 //const rt = r.Text;
-//pub fn Draw2DB(_: *GlobalFn) callconv(.C) void {
+//pub fn Draw2DB(_: *PluginAPI) callconv(.C) void {
 //    rt.DrawText(320, 0, "TERRAINS: {d}", .{CustomTerrain.data.values.len}, null, null) catch {};
 //    for (CustomTerrain.data.handles.constSlice(), 0..) |h, i|
 //        rt.DrawText(320, @intCast(8 + 8 * i), "{X:0>4} o:{X:0>4} g:{X:0>4} i:{X:0>4}", .{

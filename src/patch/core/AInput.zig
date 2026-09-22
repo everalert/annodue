@@ -8,16 +8,15 @@ const assert = std.debug.assert;
 const core_input = @import("../util/core/core_input.zig");
 const InputState = core_input.InputState;
 
-const ADAPI = @import("../util/api/api.zig");
-const AInputXInputAxis = ADAPI.AInputXInputAxis;
-const AInputXInputButton = ADAPI.AInputXInputButton;
-const AInputPoint = ADAPI.AInputPoint;
-const AInputVirtualKey = ADAPI.AInputVirtualKey;
+const plug = @import("../util/plugin/plugin.zig");
+const AInputXInputAxis = plug.AInputXInputAxis;
+const AInputXInputButton = plug.AInputXInputButton;
+const AInputPoint = plug.AInputPoint;
+const AInputVirtualKey = plug.AInputVirtualKey;
 
 const ToggleState = @import("../util/toggle_state.zig").ToggleState;
 
-const app = @import("../appinfo.zig");
-const GlobalFn = app.GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const Input = struct {
     var bInitialized: bool = false;
@@ -27,16 +26,16 @@ const Input = struct {
 //------------------------------------------------------------------------------
 // annodue hooks
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {
     Input.State = InputState.Init();
     Input.bInitialized = true;
 }
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn InputUpdateB(_: *GlobalFn) callconv(.C) void {
+pub fn InputUpdateB(_: *PluginAPI) callconv(.C) void {
     assert(Input.bInitialized);
     Input.State.Update();
 }

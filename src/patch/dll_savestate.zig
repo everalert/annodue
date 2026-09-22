@@ -6,15 +6,14 @@ const assert = std.debug.assert;
 const w32 = @import("zigwin32");
 const VIRTUAL_KEY = w32.ui.input.keyboard_and_mouse.VIRTUAL_KEY;
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const apih = ADAPI.helper;
-const AInputButtonMap = apih.AInputButtonMap;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const plugh = plug.helper;
+const AInputButtonMap = plugh.AInputButtonMap;
 
 const ToggleState = @import("util/toggle_state.zig").ToggleState;
 const scroll = @import("util/scroll_control.zig");
@@ -69,7 +68,7 @@ pub const panic = debug_panic.PanicFromContext("plugin_savestate", "annodue/plug
 // up the frame history
 // TODO: self-expanding frame memory for infinite recording time; likely need to split
 // the memory allocation for this
-// TODO: convert all allocations to global allocator once part of GlobalFn
+// TODO: convert all allocations to global allocator once part of PluginAPI
 // FIXME: stop recording when quitting, pausing, etc.
 // TODO: recording during the opening cutscene, to account for world animations (SMR, etc.)
 // TODO: recording Jdge entity; needed for minimap mode etc., iirc this was taken
@@ -166,13 +165,13 @@ const state = struct {
 
     // FIXME: better new-frame checking that doesn't only account for tabbing out
     // i.e. also when pausing, physics frozen with ingame feature, etc.
-    fn saveable(gf: *GlobalFn) bool {
+    fn saveable(gf: *PluginAPI) bool {
         return gf.SInRace().on() and rec_data.canSave();
     }
 
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
-    fn loadable(gf: *GlobalFn) bool {
+    fn loadable(gf: *PluginAPI) bool {
         const race_ok = gf.SInRace().on();
         const loading_ok = re.Jdge.LOAD_QUEUED.* == 0;
         return race_ok and loading_ok;
@@ -180,7 +179,7 @@ const state = struct {
 
     // FIXME: check if you're actually in the racing part, also integrate with global
     // apis like Freeze (same for saveable())
-    fn updateable(gf: *GlobalFn) bool {
+    fn updateable(gf: *PluginAPI) bool {
         if (!gf.SPracticeMode()) return false;
 
         const tabbed_out = rti.STOPPED.* != 0;
@@ -191,7 +190,7 @@ const state = struct {
         return race_ok and !tabbed_out and !paused and loading_ok;
     }
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         s_h_section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "savestate", null);
 
         s_h_enable = gf.ASettingOccupy(s_h_section.?, "enable", .B, .{ .B = false }, &s_enable, null);
@@ -201,7 +200,7 @@ const state = struct {
 
 // LOADER LOGIC
 
-fn DoStateRecording(gf: *GlobalFn) LoadState {
+fn DoStateRecording(gf: *PluginAPI) LoadState {
     if (state.saveable(gf))
         state.rec_data.save(rti.FRAMECOUNT.*);
 
@@ -216,7 +215,7 @@ fn DoStateRecording(gf: *GlobalFn) LoadState {
     return .Recording;
 }
 
-fn DoStateLoading(gf: *GlobalFn) LoadState {
+fn DoStateLoading(gf: *PluginAPI) LoadState {
     if (state.saveable(gf))
         state.rec_data.save(rti.FRAMECOUNT.*);
 
@@ -236,7 +235,7 @@ fn DoStateLoading(gf: *GlobalFn) LoadState {
     return .Loading;
 }
 
-fn DoStateScrubbing(gf: *GlobalFn) LoadState {
+fn DoStateScrubbing(gf: *PluginAPI) LoadState {
     if (state.save_input_st.GetSt() == .JustOn) {
         state.load_frame = state.rec_data.frame - 1;
     }
@@ -258,7 +257,7 @@ fn DoStateScrubbing(gf: *GlobalFn) LoadState {
     return .Scrubbing;
 }
 
-fn DoStateScrubExiting(gf: *GlobalFn) LoadState {
+fn DoStateScrubExiting(gf: *PluginAPI) LoadState {
     if (state.loadable(gf))
         state.rec_data.restore(std.math.cast(u32, state.scrub_frame).?);
 
@@ -272,11 +271,11 @@ fn DoStateScrubExiting(gf: *GlobalFn) LoadState {
     return .Recording;
 }
 
-fn UpdateState(gf: *GlobalFn) void {
+fn UpdateState(gf: *PluginAPI) void {
     if (!state.updateable(gf)) return;
 
     if (!state.initialized) {
-        var memory = apih.AMemoryGetPermanentT(gf, [SAVESTATE_BUFFER_SIZE]u8) orelse return;
+        var memory = plugh.AMemoryGetPermanentT(gf, [SAVESTATE_BUFFER_SIZE]u8) orelse return;
         state.reset();
         state.rec_data.sources = &state.rec_sources;
         state.rec_data.init(memory, SAVESTATE_FRAME_MAX);
@@ -310,36 +309,36 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     state.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     state.rec_data.deinit();
 }
 
 // HOOKS
 
-//export fn OnSettingsLoad(gf: *GlobalFn) callconv(.C) void {
+//export fn OnSettingsLoad(gf: *PluginAPI) callconv(.C) void {
 //    state.handle_settings(gf);
 //}
 
-export fn InputUpdateB(gf: *GlobalFn) callconv(.C) void {
+export fn InputUpdateB(gf: *PluginAPI) callconv(.C) void {
     state.scrub_input_dec.Update(gf);
     state.scrub_input_inc.Update(gf);
     state.save_input_st.Update(gf);
     state.save_input_ld.Update(gf);
 }
 
-export fn EngineEntityUpdateB(gf: *GlobalFn) callconv(.C) void {
+export fn EngineEntityUpdateB(gf: *PluginAPI) callconv(.C) void {
     if (!state.s_enable) return;
 
     UpdateState(gf);
 }
 
-export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
+export fn Draw2DB(gf: *PluginAPI) callconv(.C) void {
     if (!state.s_enable) return;
 
     // TODO: build checks for GHideRaceUIIsHidden into drawtext api when that's done

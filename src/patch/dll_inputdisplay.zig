@@ -3,9 +3,8 @@ pub const Self = @This();
 const std = @import("std");
 const m = std.math;
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const nt = @import("util/normalized_transform.zig");
 const msg = @import("util/message.zig");
@@ -17,10 +16,10 @@ const rt = @import("racer").Text;
 const ri = @import("racer").Input;
 const rto = rt.TextStyleOpts;
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingMessage = ADAPI.ASettingMessage;
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingMessage = plug.ASettingMessage;
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_inputdisplay", "annodue/plugin/plugin_inputdisplay.pdb");
@@ -86,7 +85,7 @@ const InputDisplay = struct {
         return InputDisplay.digital[@intFromEnum(input)];
     }
 
-    fn UpdateIcons(gf: *GlobalFn) void {
+    fn UpdateIcons(gf: *PluginAPI) void {
         UpdateIconSteering(gf, &icons[0], &icons[1], .Steering);
         UpdateIconPitch(gf, &icons[2], &icons[3], .Pitch);
         UpdateIconThrust(gf, &icons[2 + ri.BUTTON_ACCELERATION], &icons[2 + ri.BUTTON_BRAKE], .Thrust, .Acceleration, .Brake);
@@ -233,7 +232,7 @@ const InputDisplay = struct {
         InitSingle(&i.bg_idx, p_square.?, i.x, i.y, x_scale, y_scale, true);
     }
 
-    fn UpdateIconSteering(gf: *GlobalFn, left: *InputIcon, right: *InputIcon, input: ri.AXIS) void {
+    fn UpdateIconSteering(gf: *PluginAPI, left: *InputIcon, right: *InputIcon, input: ri.AXIS) void {
         const axis = InputDisplay.GetStick(input);
         const side = if (axis < 0) left else if (axis > 0) right else null;
 
@@ -266,7 +265,7 @@ const InputDisplay = struct {
         }
     }
 
-    fn UpdateIconPitch(gf: *GlobalFn, top: *InputIcon, bot: *InputIcon, input: ri.AXIS) void {
+    fn UpdateIconPitch(gf: *PluginAPI, top: *InputIcon, bot: *InputIcon, input: ri.AXIS) void {
         const axis = InputDisplay.GetStick(input);
         const side = if (axis < 0) top else if (axis > 0) bot else null;
 
@@ -299,7 +298,7 @@ const InputDisplay = struct {
         }
     }
 
-    fn UpdateIconThrust(gf: *GlobalFn, top: *InputIcon, bot: *InputIcon, in_thrust: ri.AXIS, in_accel: ri.BUTTON, in_brake: ri.BUTTON) void {
+    fn UpdateIconThrust(gf: *PluginAPI, top: *InputIcon, bot: *InputIcon, in_thrust: ri.AXIS, in_accel: ri.BUTTON, in_brake: ri.BUTTON) void {
         const thrust: f32 = InputDisplay.GetStick(in_thrust);
         const accel: bool = InputDisplay.GetButton(in_accel) > 0;
         const brake: bool = InputDisplay.GetButton(in_brake) > 0;
@@ -348,7 +347,7 @@ const InputDisplay = struct {
         rq.swrQuad_SetActive(i.fg_idx.?, InputDisplay.digital[@intFromEnum(input)]);
     }
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "inputdisplay", settingsUpdate);
         h_s_section = section;
 
@@ -389,29 +388,29 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     InputDisplay.settingsInit(gf);
 
     if ((gf.SRaceState() == .Countdown or gf.SRaceState() == .Racing) and InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     InputDisplay.Deinit();
 }
 
 // HOOK FUNCTIONS
 
-export fn InitRaceQuadsA(_: *GlobalFn) callconv(.C) void {
+export fn InitRaceQuadsA(_: *PluginAPI) callconv(.C) void {
     if (InputDisplay.s_enable)
         InputDisplay.Init();
 }
 
 // TODO: probably cleaner with a state machine
-//export fn InputUpdateA(_: *GlobalFn) callconv(.C) void {
-export fn Draw2DB(gf: *GlobalFn) callconv(.C) void {
+//export fn InputUpdateA(_: *PluginAPI) callconv(.C) void {
+export fn Draw2DB(gf: *PluginAPI) callconv(.C) void {
     if (gf.SInRace().on()) {
         if (InputDisplay.s_enable and !InputDisplay.initialized)
             InputDisplay.Init();

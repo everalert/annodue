@@ -6,7 +6,8 @@ const std = @import("std");
 const assert = std.debug.assert;
 const panic = std.debug.panic;
 
-const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
+
 // FIXME: ?? should these ownership checks not be in some api? not necessarily
 //  the public api but at least organized
 const WorkingOwnerIsSystem = @import("AHook.zig").PluginState.WorkingOwnerIsSystem;
@@ -14,9 +15,9 @@ const WorkingOwnerIsSystem = @import("AHook.zig").PluginState.WorkingOwnerIsSyst
 const core_draw = @import("../util/core/core_draw.zig");
 const DrawSystem = core_draw.DrawSystem;
 
-const ADAPI = @import("../util/api/api.zig");
-const GDrawLayer = ADAPI.GDrawLayer;
-const AMemoryGetPermanentT = ADAPI.helper.AMemoryGetPermanentT;
+const plug = @import("../util/plugin/plugin.zig");
+const GDrawLayer = plug.GDrawLayer;
+const AMemoryGetPermanentT = plug.helper.AMemoryGetPermanentT;
 
 const MiB = @import("../util/base/base_memory.zig").MiB;
 
@@ -34,20 +35,20 @@ const DrawState = struct {
 //------------------------------------------------------------------------------
 // annodue hooks
 
-pub fn OnInit(gf: *GlobalFn) callconv(.C) void {
+pub fn OnInit(gf: *PluginAPI) callconv(.C) void {
     var memory = AMemoryGetPermanentT(gf, [PATCH_BUFFER_SIZE]u8) orelse @panic("GDraw: API OutOfMemory");
     DrawState.System = DrawSystem.Init(memory) catch |e| panic("GDraw: {s}", .{@errorName(e)});
     DrawState.bInitialized = true;
 }
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     assert(DrawState.bInitialized);
     DrawState.System.Deinit();
 }
 
-pub fn Draw2DA(gf: *GlobalFn) callconv(.C) void {
+pub fn Draw2DA(gf: *PluginAPI) callconv(.C) void {
     assert(DrawState.bInitialized);
 
     DrawState.System.LayerDraw(.Default, rt.DEFAULT_COLOR);

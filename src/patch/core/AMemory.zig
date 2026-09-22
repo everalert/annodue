@@ -2,8 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
-const app = @import("../appinfo.zig");
-const GlobalFn = app.GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const BaseArena = @import("../util/base/base_arena.zig");
 const MiB = @import("../util/base/base_memory.zig").MiB;
@@ -50,17 +49,17 @@ pub fn TemporaryAllocator() Allocator {
 //------------------------------------------------------------------------------
 // annodue hooks
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {
     //if (!AllocatorState.Init()) @panic("AMemory(OnInit): OutOfMemory");
 }
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     //AllocatorState.Deinit();
 }
 
-pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
+pub fn GameLoopB(_: *PluginAPI) callconv(.C) void {
     AllocatorState.ArenaTemporary.Pop();
 }
 

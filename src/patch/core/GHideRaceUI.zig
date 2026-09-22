@@ -1,8 +1,7 @@
 const std = @import("std");
 
-const app = @import("../appinfo.zig");
-const GlobalFn = app.GLOBAL_FUNCTION;
-const GLOBAL_STATE = &@import("Global.zig").GLOBAL_STATE;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
+
 const WorkingOwner = @import("AHook.zig").PluginState.WorkingOwner;
 
 const rq = @import("racer").Quad;
@@ -10,9 +9,9 @@ const rg = @import("racer").Global;
 
 const mem = @import("../util/memory.zig");
 const ToggleState = @import("../util/toggle_state.zig").ToggleState;
-const apih = @import("../util/api/api_helper.zig");
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const RAddressHandle = @import("../util/api/api.zig").RAddressHandle;
+const plugh = @import("../util/plugin/plugin_helper.zig");
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
+const RAddressHandle = @import("../util/plugin/plugin.zig").RAddressHandle;
 
 // FIXME: resolve clashing with practice mode indicators (should not hide them
 // even when everything else is). also makes lighting effects disappear
@@ -27,7 +26,7 @@ pub const HideRaceUI = extern struct {
     var h_ar_hide = RAddressHandleInfo.InitLen(0x463580, 1);
     var h_ar_quadskip = RAddressHandleInfo.InitLen(@intFromPtr(rq.QUAD_SKIP_RENDERING), 4);
 
-    var api: *GlobalFn = undefined;
+    var api: *PluginAPI = undefined;
 
     pub fn hide(o: u16) bool {
         if (hidden or owner != null) return false;
@@ -49,9 +48,9 @@ pub const HideRaceUI = extern struct {
         if (disable and !api.SInRace().on()) return;
 
         const handles = [_]RAddressHandle{ h_ar_hide.Handle, h_ar_quadskip.Handle };
-        if (!apih.RAddressPatchToggleGroup(api, &handles, disable)) return;
+        if (!plugh.RAddressPatchToggleGroup(api, &handles, disable)) return;
 
-        _ = apih.RAddressRangeWrite(api, handles[0], 0x463580, u8, 0xC3); // insert RETN at top of Jdge0x20
+        _ = plugh.RAddressRangeWrite(api, handles[0], 0x463580, u8, 0xC3); // insert RETN at top of Jdge0x20
         rq.QUAD_SKIP_RENDERING.* = @intFromBool(disable);
     }
 };
@@ -75,7 +74,7 @@ pub fn GHideRaceUIIsOn() callconv(.C) bool {
 
 // HOOKS
 
-pub fn OnInit(api: *GlobalFn) callconv(.C) void {
+pub fn OnInit(api: *PluginAPI) callconv(.C) void {
     // FIXME: don't do this
     HideRaceUI.api = api;
 
@@ -83,14 +82,14 @@ pub fn OnInit(api: *GlobalFn) callconv(.C) void {
     HideRaceUI.h_ar_quadskip.Reserve(api);
 }
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     if (HideRaceUI.owner) |o|
         _ = HideRaceUI.unhide(o);
 }
 
-pub fn EarlyEngineUpdateB(gf: *GlobalFn) callconv(.C) void {
+pub fn EarlyEngineUpdateB(gf: *PluginAPI) callconv(.C) void {
     HideRaceUI.paused.update(rg.PAUSE_STATE.* > 0);
     if (!HideRaceUI.hidden) return;
 

@@ -12,7 +12,7 @@ const assert = std.debug.assert;
 const panic = std.debug.panic;
 const Allocator = std.mem.Allocator;
 
-const GlobalFn = @import("../appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("../util/root.zig").PluginAPI;
 
 const core_address = @import("../util/core/core_address.zig");
 const RangeManagerOpts = core_address.RangeManagerOpts;
@@ -46,13 +46,13 @@ pub fn Init(arena_perm: Allocator) void {
 //------------------------------------------------------------------------------
 // annodue hooks
 
-pub fn OnInit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+pub fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-pub fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+pub fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
-pub fn GameLoopB(_: *GlobalFn) callconv(.C) void {
+pub fn GameLoopB(_: *PluginAPI) callconv(.C) void {
     const handle = AddressState.Manager.AddressWriting;
     if (!handle.IsNull()) {
         const span = AddressState.Manager.AddressRangeSpan(handle);

@@ -115,9 +115,8 @@ const assert = std.debug.assert;
 const BuildOptions = @import("BuildOptions");
 const IS_DEV_MODE = BuildOptions.BUILD_MODE == .Developer;
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const cf = @import("util/color_format.zig");
 const mem = @import("util/memory.zig");
@@ -128,23 +127,23 @@ const MiB = @import("util/base/base_memory.zig").MiB;
 const HotReloadFontHandle = u32;
 const HotReloadFont = @import("util/hot_reload.zig").HotReload(HotReloadFontHandle, 1);
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingMValue = ADAPI.ASettingMValue;
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const RAddressHandle = ADAPI.RAddressHandle;
-const apih = ADAPI.helper;
-const RAddressHandleInfo = apih.RAddressHandleInfo;
-const AMemoryGetPermanentT = apih.AMemoryGetPermanentT;
-const AMemoryGetTemporaryT = apih.AMemoryGetTemporaryT;
-const AMemoryGetTemporaryZeroT = apih.AMemoryGetTemporaryZeroT;
-const RAddressPatchToggle = apih.RAddressPatchToggle;
-const RAddressPatchToggleGroup = apih.RAddressPatchToggleGroup;
-const RAddressRangeWrite = apih.RAddressRangeWrite;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingMValue = plug.ASettingMValue;
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const RAddressHandle = plug.RAddressHandle;
+const plugh = plug.helper;
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
+const AMemoryGetPermanentT = plugh.AMemoryGetPermanentT;
+const AMemoryGetTemporaryT = plugh.AMemoryGetTemporaryT;
+const AMemoryGetTemporaryZeroT = plugh.AMemoryGetTemporaryZeroT;
+const RAddressPatchToggle = plugh.RAddressPatchToggle;
+const RAddressPatchToggleGroup = plugh.RAddressPatchToggleGroup;
+const RAddressRangeWrite = plugh.RAddressRangeWrite;
 
-//// FIXME: import from util/api/api.zig; need to migrate
+//// FIXME: import from util/plugin/plugin.zig; need to migrate
 //const SettingHandle = @import("util/core/core_settings.zig").Handle;
-//// FIXME: import from util/api/api.zig; need to migrate
+//// FIXME: import from util/plugin/plugin.zig; need to migrate
 //const SettingValue = @import("util/core/core_settings.zig").ASettingSent.Value;
 
 const ra = @import("racer").Asset;
@@ -191,7 +190,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     // TODO: fonts_initialized asserted throughout, must fail here or just not
     //  patch the text clipping bug; latter preferable?
     text_clip_fix_buf = AMemoryGetPermanentT(gf, [128]u8) orelse return;
@@ -205,9 +204,9 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     FontState.SettingsInit(); // after `FontsInit` because it may call `FontsEnable`
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {
     FontState.FontsDeinit();
 }
 
@@ -219,7 +218,7 @@ export fn OnDeinit(_: *GlobalFn) callconv(.C) void {
 //  on-demand to handle hot setting changes
 // TODO: bring back scrolling through installed custom fonts, after core menu done
 // swap between fully-custom font and stock-custom font
-export fn TextRenderB(gf: *GlobalFn) callconv(.C) void {
+export fn TextRenderB(gf: *PluginAPI) callconv(.C) void {
     FontState.font_reloader.Update(rti.TIMESTAMP.*);
 
     // toggle custom fonts system
@@ -326,7 +325,7 @@ const FontState = struct {
     var toggle_custom: bool = true;
 
     // FIXME: need to stop doing this
-    var gf: *GlobalFn = undefined;
+    var gf: *PluginAPI = undefined;
 
     // TODO: memory-efficient GIF/LZW implementation -> small buffer
     const SCRATCH_SIZE = MiB(u32, 48);

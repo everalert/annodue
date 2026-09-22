@@ -36,7 +36,7 @@ const StackTrace = std.builtin.StackTrace;
 const PDBParse = @import("debug_pdbparse.zig");
 const PDBLineInfo = PDBParse.LineInfo;
 
-const ANNODUE_VER = @import("../../appinfo.zig").VERSION_STR;
+const ANNODUE_VER = @import("../root.zig").VERSION_STR;
 
 const PanicFnT = @TypeOf(std.builtin.default_panic);
 

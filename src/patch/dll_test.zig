@@ -1,11 +1,10 @@
 const std = @import("std");
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const msg = @import("util/message.zig");
-const GDrawTextDefault = @import("util/api/api.zig").helper.GDrawTextDefault;
+const GDrawTextDefault = @import("util/plugin/plugin.zig").helper.GDrawTextDefault;
 
 const r = @import("racer");
 const rt = r.Text;
@@ -41,15 +40,15 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(_: *GlobalFn) callconv(.C) void {}
+export fn OnInit(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 // HOOKS
 
-export fn EarlyEngineUpdateA(_: *GlobalFn) callconv(.C) void {
+export fn EarlyEngineUpdateA(_: *PluginAPI) callconv(.C) void {
     //if (gf.InputGetKb(.J, .JustOn)) std.debug.assert(false); // does nothing in ReleaseFast, ReleaseSmall
     //if (gf.InputGetKb(.F, .JustOn)) @panic("panic test");
 

@@ -3,21 +3,20 @@ const Self = @This();
 const std = @import("std");
 const assert = std.debug.assert;
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const crot = @import("util/color.zig");
 const mem = @import("util/memory.zig");
 const x86 = @import("util/x86.zig");
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingMessage = ADAPI.ASettingMessage;
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const RAddressHandle = ADAPI.RAddressHandle;
-const apih = ADAPI.helper;
-const RAddressHandleInfo = apih.RAddressHandleInfo;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingMessage = plug.ASettingMessage;
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const RAddressHandle = plug.RAddressHandle;
+const plugh = plug.helper;
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_cosmetic", "annodue/plugin/plugin_cosmetic.pdb");
@@ -38,7 +37,7 @@ pub const panic = debug_panic.PanicFromContext("plugin_cosmetic", "annodue/plugi
 // TODO: ?? custom static color as an option for the rainbow stuff?
 // TODO: ?? realtime-based color scrolling (rather than frame-based)
 // TODO: ?? tighter rotation of colors, so they look like they're following each other
-// TODO: convert all allocations to global allocator once part of GlobalFn
+// TODO: convert all allocations to global allocator once part of PluginAPI
 // TODO: all settings hot-reloadable
 // TODO: convert trigger display to our notification system
 
@@ -74,9 +73,9 @@ const CosmeticState = struct {
     var h_ar_label3 = RAddressHandleInfo.InitLen(0x461067, 8);
     var h_ar_speed = RAddressHandleInfo.InitLen(0x460A6C, 8); // in-race speedo number
 
-    var api: *GlobalFn = undefined;
+    var api: *PluginAPI = undefined;
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "cosmetic", settingsUpdate);
         h_s_section = section;
 
@@ -148,7 +147,7 @@ const CosmeticState = struct {
             h_ar_label1.Handle, h_ar_label2.Handle, h_ar_label3.Handle,
             h_ar_speed.Handle,
         };
-        if (!apih.RAddressPatchToggleGroup(api, &handles, true)) return;
+        if (!plugh.RAddressPatchToggleGroup(api, &handles, true)) return;
 
         rb_value.update();
         rb_label.update();
@@ -296,7 +295,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     // FIXME: stop doing this
     CosmeticState.api = gf;
 
@@ -310,7 +309,7 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
 
     CosmeticState.settingsInit(gf);
 
-    // TODO: convert to use global allocator once it is part of the GlobalFn interface;
+    // TODO: convert to use global allocator once it is part of the PluginAPI interface;
     // then we can properly deinit it when the plugin unloads or the user setting changes.
     // could also statically allocate space on the DLL and include them in the binary
     // at comptime, in the format racer expects them.
@@ -332,13 +331,13 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     //gs.patch_offset = off;
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {}
 
 // HOOKS
 
-export fn TextRenderB(_: *GlobalFn) callconv(.C) void {
+export fn TextRenderB(_: *PluginAPI) callconv(.C) void {
     if (CosmeticState.s_rb_enable) {
         CosmeticState.PatchHudColRotate(
             CosmeticState.s_rb_value_enable,

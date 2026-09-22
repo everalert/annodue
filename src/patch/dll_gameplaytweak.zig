@@ -2,18 +2,17 @@ const Self = @This();
 
 const std = @import("std");
 
-const GlobalFn = @import("appinfo.zig").GLOBAL_FUNCTION;
+const PluginAPI = @import("util/root.zig").PluginAPI;
 const COMPATIBILITY_VERSION = @import("appinfo.zig").COMPATIBILITY_VERSION;
-const VERSION_STR = @import("appinfo.zig").VERSION_STR;
 
 const mem = @import("util/memory.zig");
 
-const ADAPI = @import("util/api/api.zig");
-const ASettingMessage = ADAPI.ASettingMessage;
-const ASettingHandle = ADAPI.ASettingHandle;
-const ASETTING_HANDLE_NULL = ADAPI.ASETTING_HANDLE_NULL;
-const apih = ADAPI.helper;
-const RAddressHandleInfo = apih.RAddressHandleInfo;
+const plug = @import("util/plugin/plugin.zig");
+const ASettingMessage = plug.ASettingMessage;
+const ASettingHandle = plug.ASettingHandle;
+const ASETTING_HANDLE_NULL = plug.ASETTING_HANDLE_NULL;
+const plugh = plug.helper;
+const RAddressHandleInfo = plugh.RAddressHandleInfo;
 
 const debug_panic = @import("util/debug/debug_panic.zig");
 pub const panic = debug_panic.PanicFromContext("plugin_gameplaytweak", "annodue/plugin/plugin_gameplaytweak.pdb");
@@ -46,9 +45,9 @@ const GameplayTweak = struct {
 
     var h_ar_deathspeed = RAddressHandleInfo.InitLen(0x4C7BB8, 8); // deathspeedmin, deathspeeddrop
 
-    var api: *GlobalFn = undefined;
+    var api: *PluginAPI = undefined;
 
-    fn settingsInit(gf: *GlobalFn) void {
+    fn settingsInit(gf: *PluginAPI) void {
         const section = gf.ASettingSectionOccupy(ASETTING_HANDLE_NULL, "gameplay", settingsUpdate);
         h_s_section = section;
 
@@ -89,9 +88,9 @@ const GameplayTweak = struct {
 
 // DEATHSPEED
 
-fn PatchDeathSpeed(api: *GlobalFn, min: f32, drop: f32) void {
+fn PatchDeathSpeed(api: *PluginAPI, min: f32, drop: f32) void {
     const handle = GameplayTweak.h_ar_deathspeed.Handle;
-    if (!apih.RAddressPatchToggle(api, handle, true)) return;
+    if (!plugh.RAddressPatchToggle(api, handle, true)) return;
 
     if (!api.RAddressRangeWriteSt(handle)) return;
     defer api.RAddressRangeWriteEd(handle);
@@ -114,7 +113,7 @@ export fn PluginCompatibilityVersion() callconv(.C) u32 {
     return COMPATIBILITY_VERSION;
 }
 
-export fn OnInit(gf: *GlobalFn) callconv(.C) void {
+export fn OnInit(gf: *PluginAPI) callconv(.C) void {
     // FIXME: stop doing this
     GameplayTweak.api = gf;
 
@@ -123,6 +122,6 @@ export fn OnInit(gf: *GlobalFn) callconv(.C) void {
     GameplayTweak.settingsInit(gf);
 }
 
-export fn OnInitLate(_: *GlobalFn) callconv(.C) void {}
+export fn OnInitLate(_: *PluginAPI) callconv(.C) void {}
 
-export fn OnDeinit(_: *GlobalFn) callconv(.C) void {}
+export fn OnDeinit(_: *PluginAPI) callconv(.C) void {}

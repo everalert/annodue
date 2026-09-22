@@ -1,4 +1,7 @@
-pub const helper = @import("api_helper.zig");
+pub const helper = @import("plugin_helper.zig");
+
+pub const PluginAPI = @import("plugin_api.zig").PluginAPI;
+pub const PLUGIN_API_VERSION = @import("plugin_api.zig").PLUGIN_API_VERSION;
 
 //------------------------------------------------------------------------------
 // ASettings
